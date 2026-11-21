@@ -1,0 +1,6 @@
+# All research stays out of Git: the baseline research and the trial systems (owner, 2026-11-21).
+research/
+
+node_modules/
+dist/
+*.tgz
