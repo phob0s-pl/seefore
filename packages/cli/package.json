@@ -1,0 +1,21 @@
+{
+  "name": "seefore",
+  "version": "0.1.0",
+  "description": "Design software architecture on the C4 model, kept as files in Git.",
+  "type": "module",
+  "bin": {
+    "seefore": "dist/seefore.cjs"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "devDependencies": {
+    "@seefore/core": "*"
+  }
+}
