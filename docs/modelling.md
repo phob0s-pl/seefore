@@ -251,16 +251,23 @@ all that is inside it. It answers in four lists, and counts records:
   with no connection".
 - For an owner it also says how many parts take it from what they are in, since their files
   hold no `owner` to change.
-- A mention points at the key, `name` or `description`, and gives the words found. A name or
-  an id of fewer than three characters is not looked for.
+- A mention points at the key, `name` or `description`, and gives the words found. A name of
+  one or two characters is looked for as it is written, capitals and all, and an id that
+  short is not looked for.
+- Records that go with the thing and speak of it are listed apart: a rename leaves them, so
+  they are to be read then.
 - When the directory has errors it prints what is known, says that other uses may exist, and
   names nothing as left behind.
 - With `--json` it prints the same as data: `goes`, `changes`, `left`, `inherited`, `mentions`,
-  and `complete`, which is false when not every file could be read.
+  each mention saying whether its record goes, and `complete`, which is false when not every
+  file could be read.
 - A path is given from where the command was run, and in full when that would start with
   `..`. The same holds for `seefore check`.
 - An id that names no record ends with exit code 2, and with `error.code` `no-such-record`
-  under `--json`.
+  under `--json`. So does an id that two records share, with `id-twice`: one of them must get
+  another id before a removal or a rename can be looked at.
+- Where a message names another `seefore` command to run, it gives the `--workdir` that makes
+  the command work from where the person stands.
 
 ## The skill
 
@@ -333,7 +340,8 @@ Eleven kinds: seven of an app and four of a store. Two commands, `seefore list` 
 `seefore uses`, and one flag, `--full`. One skill, `model`. One problem code more in stage 3's
 list, `yaml-comment`, and six of this stage: `reference-unknown`, `reference-wrong-kind`,
 `store-acts`, `connection-twice`, `connection-repeated-above`, and `no-such-record` for a
-command that could not start.
+command that could not start. `id-twice`, a problem code of stage 3, is now also a reason for
+`seefore uses` not to start.
 
 ## Leaves out
 

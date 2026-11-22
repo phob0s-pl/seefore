@@ -243,8 +243,8 @@ stores, then components, then connections. Run the check after each whole batch.
 ## 6. Change, move, split and remove
 
 - **Rename.** First run `seefore uses <id> --workdir=<folder>`. Change `name`; the id and the
-  file's name stay. Then show each record that may speak of the thing, and offer to mend its
-  text.
+  file's name stay. Then show each record that may speak of the thing, those that stay and
+  those that go with it, and offer to mend its text.
 - **Move.** Change `in`. What is inside the thing follows it. So may the owner: a part with no
   `owner` of its own takes it from what it is in. Look in `ownership` of `seefore list --json`
   for what the thing and the parts inside it take from above, and say whose each will be after
