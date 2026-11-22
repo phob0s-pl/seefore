@@ -154,11 +154,11 @@ describe.each([
     const files = [...AROUND, { path: 'apps/order-api.yaml', text: `name: Order API\nin: shop\n${folded as string}` }];
     const loaded = load(files);
     expect(loaded.problems).toEqual([]);
-    expect(loaded.model.apps[0]?.description).toBe('Takes orders and says how far each has got. Only in the hosted edition: see issue #5377.');
+    expect(loaded.model.apps[0]?.description).toBe('Takes orders and says how far each has got. Turns away a basket over the limit: see issue #5377.');
   });
 });
 
-describe('the examples of the spec of stage 6a', () => {
+describe('the examples of the spec of stages 6a and 6b', () => {
   it('are records the engine reads with no problem', () => {
     const around: SourceFile[] = [
       { path: 'seefore.yaml', text: 'format: 1\nname: Archive\n' },
@@ -169,10 +169,26 @@ describe('the examples of the spec of stage 6a', () => {
       { path: 'technologies/https.yaml', text: 'name: HTTPS\n' },
     ];
     const found = examples(hardCases);
-    expect(found.map((file) => file.path)).toEqual(['infrastructure/proxy.yaml', 'connections/staff-browser-asks-desk.yaml', 'systems/card-provider.yaml']);
+    expect(found.map((file) => file.path)).toEqual([
+      'infrastructure/proxy.yaml',
+      'connections/staff-browser-asks-desk.yaml',
+      'systems/card-provider.yaml',
+      'stores/drafts.yaml',
+      'connections/desk-keeps-drafts.yaml',
+      'infrastructure/office-proxy.yaml',
+      'connections/desk-tells-staff-browser.yaml',
+    ]);
     const loaded = load([...around, ...found]);
     expect(loaded.problems).toEqual([]);
-    expect(loaded.model.connections[0]?.via).toEqual(['proxy']);
+    const connection = (id: string) => loaded.model.connections.find((one) => one.id === id);
+    expect(connection('staff-browser-asks-desk')?.via).toEqual(['proxy']);
     expect(loaded.model.systems.find((system) => system.id === 'card-provider')?.external).toBe(true);
+    expect(loaded.model.stores.find((store) => store.id === 'drafts')?.in).toBe('desk');
+    expect(connection('desk-keeps-drafts')?.access).toBe('read-write');
+    expect(connection('desk-tells-staff-browser')?.opens).toBe('to');
+    expect(connection('desk-tells-staff-browser')?.via).toEqual(['proxy', 'office-proxy']);
+    const office = loaded.model.infrastructure.find((piece) => piece.id === 'office-proxy');
+    expect(office?.in).toBe('archive');
+    expect(office?.only).toBe('in the head office');
   });
 });

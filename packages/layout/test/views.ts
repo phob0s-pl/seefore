@@ -16,12 +16,17 @@ export function box(id: string, family: BoxFamily, more: Partial<ViewBox> = {}):
   const words = id.replaceAll('-', ' ');
   const name = words.charAt(0).toUpperCase() + words.slice(1);
   const look = more.scope === true ? 'system-scope' : LOOKS[family];
-  return { id, family, look, name, line: `[${KINDS[family]}]`, scope: false, inside: false, loops: [], within: [], passing: [], ...more };
+  return { id, family, look, name, line: `[${KINDS[family]}]`, scope: false, inside: false, loops: [], within: [], passing: [], kept: [], ...more };
 }
 
-/** A route, as `viewsOf` gives it: the names when every connection of the arrow has the same, or how many of `of` have one. */
+/**
+ * A route, as `viewsOf` gives it: the names when every connection of the arrow has the same, or
+ * how many of `of` have one. A name written in brackets, `(Office proxy)`, is a thing with a
+ * condition.
+ */
 export function route(names: string[], count = 1, of = count): ViewRoute {
-  return { count, names, line: names.length > 0 ? `via ${names.join(', ')}` : `via on ${count} of ${of}` };
+  const hops = names.map((name) => (name.startsWith('(') && name.endsWith(')') ? { name: name.slice(1, -1), bracketed: true } : { name, bracketed: false }));
+  return { count, hops, bracketed: hops.some((hop) => hop.bracketed), line: names.length > 0 ? `via ${names.join(', ')}` : `via on ${count} of ${of}` };
 }
 
 /** A box inside the boundary. */

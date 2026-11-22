@@ -3,7 +3,19 @@ import { describe, expect, it } from 'vitest';
 import { graphOf, sorted, straightened } from '../src/graph.ts';
 import { layOut } from '../src/index.ts';
 import { ELLIPSIS, widthOf } from '../src/measure.ts';
-import { BOUNDARY_PADDING, BOX_HEIGHT, BOX_PADDING, BOX_TEXT_WIDTH, BOX_WIDTH, LABEL_LINE_HEIGHT, NAME_FONT, ROUTE_LINE_HEIGHT, TECHNOLOGY_LINE_HEIGHT, TITLE_FONT } from '../src/sizes.ts';
+import {
+  BOUNDARY_PADDING,
+  BOX_HEIGHT,
+  BOX_PADDING,
+  BOX_TEXT_WIDTH,
+  BOX_WIDTH,
+  CONDITION_LINE_HEIGHT,
+  LABEL_LINE_HEIGHT,
+  NAME_FONT,
+  ROUTE_LINE_HEIGHT,
+  TECHNOLOGY_LINE_HEIGHT,
+  TITLE_FONT,
+} from '../src/sizes.ts';
 import { onEdge, troubles, within } from './geometry.ts';
 import { arrow, box, containerView, contextView, crowded, fan, inside, route, shopContainers, shopContext } from './views.ts';
 
@@ -167,6 +179,39 @@ describe('the layout of a view', () => {
     const picture = await drawn(view);
     expect(placeOf(picture, 'proxy')).toMatchObject({ width: BOX_WIDTH, height: BOX_HEIGHT, line: '[Infrastructure · nginx]' });
     expect(within(placeOf(picture, 'proxy'), picture.boundary ?? { x: 0, y: 0, width: 0, height: 0 })).toBe(false);
+    expect(troubles(picture)).toEqual([]);
+  });
+
+  it('gives a piece of infrastructure that is part of the system its box inside the boundary', async () => {
+    const view = containerView('shop', [inside('order-api', 'apps'), box('gate', 'infrastructure', { inside: true })], [arrow('gate', 'order-api', ['Checks that it answers'])]);
+    const picture = await drawn(view);
+    expect(within(placeOf(picture, 'gate'), picture.boundary ?? { x: 0, y: 0, width: 0, height: 0 })).toBe(true);
+    expect(troubles(picture)).toEqual([]);
+  });
+
+  it('gives the `only` line and the line of who opened the channel their place in the label, between the route and the technology', async () => {
+    const view = shopContainers();
+    const marked: View = {
+      ...view,
+      arrows: view.arrows.map((each) =>
+        each.id === 'order-api~card-provider'
+          ? { ...each, route: route(['(Office proxy)']), only: { count: 1, all: false, line: 'only on 1 of 2' }, opened: { count: 1, all: false, line: 'far side opened on 1 of 2' } }
+          : each,
+      ),
+      boxes: view.boxes.map((each) => (each.id === 'shipping' ? { ...each, only: 'in the hosted edition' } : each)),
+    };
+    const picture = await drawn(marked);
+    const label = picture.arrows.find((each) => each.id === 'order-api~card-provider')?.label;
+    expect(label).toMatchObject({
+      lines: ['Takes the payment', 'Refunds a payment'],
+      route: 'via (Office proxy)',
+      only: ['only on 1 of 2'],
+      opened: 'far side opened on 1 of 2',
+      technology: '[HTTPS]',
+    });
+    expect(label?.height).toBe(2 * LABEL_LINE_HEIGHT + ROUTE_LINE_HEIGHT + 2 * CONDITION_LINE_HEIGHT + TECHNOLOGY_LINE_HEIGHT);
+    expect(placeOf(picture, 'shipping')).toMatchObject({ height: BOX_HEIGHT, only: 'only in the hosted edition' });
+    expect(placeOf(picture, 'storefront')).not.toHaveProperty('only');
     expect(troubles(picture)).toEqual([]);
   });
 

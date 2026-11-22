@@ -338,11 +338,56 @@ describe('a reading of the source directory', () => {
     expect(JSON.stringify(reading.views)).not.toMatch(/operator-reloads-proxy|proxy-checks-peer|proxy-syncs-proxy/);
     expect(reading.outline.connections.flatMap((group) => group.connections)).toEqual(expect.arrayContaining(unseen));
     expect(reading.model.connections.map((one) => one.id)).toEqual(expect.arrayContaining(unseen));
-    // Once the proxy stands beside the system, what it does with the operator is left out there, and its copies are its mark.
+    // Once the proxy stands beside the system, its copies are its mark; what it does with the operator is left out there, and still in no picture.
     write({ 'connections/proxy-checks-api.yaml': 'from: proxy\nto: api\n' });
-    expect(readingOf(join(root, 'arch')).inNoView).toEqual(['proxy-checks-peer']);
+    expect(readingOf(join(root, 'arch')).inNoView).toEqual(['operator-reloads-proxy', 'proxy-checks-peer']);
     // With no model there is nothing in no view.
     expect(readingOf(join(root, 'gone')).inNoView).toEqual([]);
+  });
+
+  it('gives the conditions each record is under, its own first, so that the page need not work them out', () => {
+    write({
+      'seefore.yaml': 'format: 1\nname: Archive\n',
+      'systems/archive.yaml': 'name: Archive\nonly: in the hosted edition\n',
+      'apps/desk.yaml': 'name: Desk\nin: archive\n',
+      'stores/drafts.yaml': 'name: Drafts\nin: desk\nonly: on a laptop\n',
+      'people/staff.yaml': 'name: Staff\n',
+      'connections/staff-opens-drafts.yaml': 'from: staff\nto: drafts\nonly: by hand\n',
+    });
+    const reading = readingOf(join(root, 'arch'));
+    expect(reading.conditions).toEqual({
+      archive: [{ only: 'in the hosted edition', from: 'archive' }],
+      desk: [{ only: 'in the hosted edition', from: 'archive' }],
+      drafts: [
+        { only: 'on a laptop', from: 'drafts' },
+        { only: 'in the hosted edition', from: 'archive' },
+      ],
+      'staff-opens-drafts': [
+        { only: 'by hand', from: 'staff-opens-drafts' },
+        { only: 'on a laptop', from: 'drafts' },
+        { only: 'in the hosted edition', from: 'archive' },
+      ],
+    });
+    expect(readingOf(join(root, 'gone')).conditions).toEqual({});
+  });
+
+  it('holds, for a record whose id every object has a property of, only what was put there, as the page reads it', () => {
+    write({
+      'seefore.yaml': 'format: 1\nname: Review\n',
+      'people/constructor.yaml': 'name: Constructor\n',
+      'people/tostring.yaml': 'name: To string\nonly: on weekdays\n',
+      'systems/shelf.yaml': 'name: Shelf\nowner: team\n',
+      'owners/team.yaml': 'name: Team\n',
+      'connections/constructor-uses-shelf.yaml': 'from: constructor\nto: shelf\n',
+    });
+    const reading = readingOf(join(root, 'arch'));
+    expect(reading.problems).toEqual([]);
+    // As the page gets it: JSON, read back as plain objects.
+    const sent = JSON.parse(JSON.stringify(reading)) as typeof reading;
+    expect(Object.keys(sent.conditions)).toEqual(['tostring']);
+    expect(Object.hasOwn(sent.conditions, 'constructor')).toBe(false);
+    expect(Object.hasOwn(sent.ownership, 'constructor')).toBe(false);
+    expect(Object.keys(sent.ownership)).toEqual(['shelf']);
   });
 
   it('says that the directory is gone, when it is', () => {

@@ -49,6 +49,12 @@ export const HEAD_LENGTH = 10;
 /** Half the width of an arrow's head, in CSS pixels. */
 export const HEAD_HALF_WIDTH = 5;
 
+/** The radius of the ring on an arrow whose channel the far side opened, in CSS pixels: small, and clear of the head. */
+export const RING_RADIUS = 4;
+
+/** The room between the ring and the head of an arrow, in CSS pixels. */
+export const RING_GAP = 3;
+
 /** A place less the place of its parent: where React Flow wants a child. */
 export function relativeTo(place: Point, parent: Point): Point {
   return { x: place.x - parent.x, y: place.y - parent.y };
@@ -75,22 +81,39 @@ function connections(count: number): string {
   return `${count} ${count === 1 ? 'connection' : 'connections'}`;
 }
 
-/** What a screen reader says for a box: its whole name, kind line and first sentence, and its marks. */
+/** What a screen reader says for a box: its whole name, kind line, own `only` and first sentence, and its marks. */
 export function boxSaid(box: ViewBox): string {
   const parts = [`${box.name}, ${box.line}`];
+  if (box.only !== undefined) parts.push(`Only ${box.only}`);
   if (box.sentence !== undefined) parts.push(box.sentence);
+  if (box.kept.length > 0) parts.push(`It keeps ${box.kept.length} ${box.kept.length === 1 ? 'store' : 'stores'}, drawn at it`);
   if (box.loops.length > 0) parts.push(`${connections(box.loops.length)} between its copies`);
   if (box.passing.length > 0) parts.push(`${connections(box.passing.length)} of this view ${box.passing.length === 1 ? 'passes' : 'pass'} through it`);
   return parts.map(sentence).join(' ');
 }
 
-/** What a screen reader says for an arrow: its two ends, the whole name of every connection it stands for, its route and its technology. */
+/**
+ * What a screen reader says for an arrow: its two ends, the whole name of every connection it
+ * stands for, its route, when its connections are there, whether the far side opened their
+ * channel, and its technology.
+ */
 export function arrowSaid(arrow: ViewArrow, names: ReadonlyMap<string, string>): string {
   const from = names.get(arrow.from) ?? arrow.from;
   const to = names.get(arrow.to) ?? arrow.to;
   const route = arrow.route === undefined ? '' : `, ${arrow.route.line}`;
+  const only = arrow.only === undefined ? '' : `, ${arrow.only.line}`;
+  const opened = arrow.opened === undefined ? '' : `, ${arrow.opened.line ?? 'down a channel the far side opened'}`;
   const technology = arrow.technology.length > 0 ? ` [${arrow.technology.join(', ')}]` : '';
-  return `${from} to ${to}: ${arrow.names.join('; ')}${route}${technology}`;
+  return `${from} to ${to}: ${arrow.names.join('; ')}${route}${only}${opened}${technology}`;
+}
+
+/**
+ * What a screen reader says for something passed through that has no box: its name, the words
+ * of each condition it is under, its own and those from what it is in, whether it is the
+ * system's own, and how many pass through it.
+ */
+export function passedSaid(name: string, conditions: readonly string[], own: string | undefined, passing: string): string {
+  return [name, ...conditions.map((only) => `only ${only}`), own === undefined ? undefined : `part of ${own}`].filter((part) => part !== undefined).join(', ') + `: ${passing}`;
 }
 
 /** The name of each box and of the boundary of a view, by id. */
@@ -117,7 +140,8 @@ export function toFlow(view: View, drawn: Drawn): { nodes: PictureNode[]; edges:
       height: boundary.height,
       data: { boundary: view.boundary, placed: boundary, titleAt: relativeTo(boundary.titleAt, boundary) },
       handles: handlesOf(boundary.width, boundary.height),
-      ariaLabel: `${boundary.title}, the boundary of the system`,
+      // The whole title, which the picture may have cut to the boundary's width.
+      ariaLabel: `${view.boundary.title}, the boundary of the system`,
       draggable: false,
       connectable: false,
       selectable: false,
@@ -223,16 +247,19 @@ export interface LabelLine {
   text: string;
   /** The middle of the line, from the top of the picture. */
   y: number;
-  /** A line of names, the route line or the technology line. */
-  kind: 'name' | 'route' | 'technology';
+  /** A line of names, the route line, the `only` line, the line that says the far side opened the channel of some, or the technology line. */
+  kind: 'name' | 'route' | 'only' | 'opened' | 'technology';
 }
 
-/** The lines of a label as given, stacked in the middle of the label's place: the names, then the route, then the technology. */
+/** The lines of a label as given, stacked in the middle of the label's place: the names, the route, the `only` line in one or two, the line of who opened, then the technology. */
 export function labelLines(label: PlacedLabel): LabelLine[] {
+  const one = (text: string | undefined, kind: LabelLine['kind'], height: number) => (text === undefined ? [] : [{ text, kind, height }]);
   const given: { text: string; kind: LabelLine['kind']; height: number }[] = [
     ...label.lines.map((text) => ({ text, kind: 'name' as const, height: LINE_HEIGHT.label })),
-    ...(label.route === undefined ? [] : [{ text: label.route, kind: 'route' as const, height: LINE_HEIGHT.route }]),
-    ...(label.technology === undefined ? [] : [{ text: label.technology, kind: 'technology' as const, height: LINE_HEIGHT.technology }]),
+    ...one(label.route, 'route', LINE_HEIGHT.route),
+    ...(label.only ?? []).map((text) => ({ text, kind: 'only' as const, height: LINE_HEIGHT.condition })),
+    ...one(label.opened, 'opened', LINE_HEIGHT.condition),
+    ...one(label.technology, 'technology', LINE_HEIGHT.technology),
   ];
   let top = label.y + (label.height - given.reduce((sum, line) => sum + line.height, 0)) / 2;
   return given.map(({ text, kind, height }) => {
@@ -240,4 +267,22 @@ export function labelLines(label: PlacedLabel): LabelLine[] {
     top += height;
     return line;
   });
+}
+
+/**
+ * Where the ring of an arrow whose channel the far side opened stands: on its line, just before
+ * its head, measured back along the route from the tip so that it keeps to the line round a
+ * bend. None when the route is too short to hold it.
+ */
+export function ringOf(sections: readonly (readonly Point[])[]): Point | undefined {
+  const points = sections.flat();
+  let left = HEAD_LENGTH + RING_GAP + RING_RADIUS;
+  for (let at = points.length - 1; at > 0; at--) {
+    const [to, from] = [points[at], points[at - 1]];
+    if (to === undefined || from === undefined) continue;
+    const length = Math.hypot(to.x - from.x, to.y - from.y);
+    if (length >= left) return { x: to.x + ((from.x - to.x) * left) / length, y: to.y + ((from.y - to.y) * left) / length };
+    left -= length;
+  }
+  return undefined;
 }

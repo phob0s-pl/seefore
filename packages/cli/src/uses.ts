@@ -71,6 +71,7 @@ function report(result: UsesResult, unread: number, here: Here): string {
   };
   const blocks = [
     [head(result.record)],
+    conditioned(result, here),
     goesWith(result, head),
     ...mustChange(result, path, here),
     inherited(result.inherited),
@@ -82,6 +83,31 @@ function report(result: UsesResult, unread: number, here: Here): string {
     .filter((block) => block.length > 0)
     .map((block) => block.join('\n'))
     .join('\n\n');
+}
+
+/**
+ * How many records have its condition from it, when it has one of its own and any do: the parts
+ * inside it, and the connections that start or end at it or at something inside it. Said first,
+ * since a change to its `only`, a removal and a new end each change what they have. A connection
+ * that gets another end may have the same words from that end or from what that is in, so the
+ * advice is to read what the model then says, not to copy the words at once.
+ */
+function conditioned(result: UsesResult, here: Here): string[] {
+  const condition = result.condition;
+  if (condition === undefined) return [];
+  const p = condition.parts.length;
+  const c = condition.connections.length;
+  if (p + c === 0) return [];
+  const where = holdsOthers(result.record.family) ? 'at it or at something inside it' : 'at it';
+  const who = [
+    ...(p === 0 ? [] : [`${count(p, 'record')} inside it`]),
+    ...(c === 0 ? [] : [`${count(c, 'connection')} that ${c === 1 ? 'starts or ends' : 'start or end'} ${where}`]),
+  ];
+  const has = `${joined(who, 'and')} ${p + c === 1 ? 'has' : 'have'} its condition from it: only ${condition.only}.`;
+  const another =
+    'A connection that gets another end may still have this condition, from that end or from what it is in. ' +
+    `Look at what \`${seefore('list --full', here)}\` says of it afterwards, before any words are copied.`;
+  return [c === 0 ? has : `${has} ${another}`];
 }
 
 /** What is inside it, as a tree, and each connection with both ends in it. */
@@ -249,9 +275,9 @@ function leftBehind(result: UsesResult, head: Head): string[][] {
 }
 
 /**
- * Which records may speak of it: first each name and description of a record that stays, with
- * the words found, then those of the records that go with it, which a rename leaves. Last, when
- * a name or an id was short, how it was looked for.
+ * Which records may speak of it: first each name, `only` and description of a record that
+ * stays, with the words found, then those of the records that go with it, which a rename leaves.
+ * Last, when a name or an id was short, how it was looked for.
  */
 function maySpeak(result: UsesResult, path: Path): string[][] {
   const staying = result.mentions.filter((mention) => !mention.goes);
@@ -270,7 +296,7 @@ function maySpeak(result: UsesResult, path: Path): string[][] {
   return blocks;
 }
 
-/** Each name and description of a record that stays and may speak of it. `more` is true when records that go speak of it too. */
+/** Each name, `only` and description of a record that stays and may speak of it. `more` is true when records that go speak of it too. */
 function stayingSpeak(result: UsesResult, mentions: readonly Mention[], more: boolean, path: Path): string[] {
   const searched = wordsFor(result.record).map((words) => `"${words}"`);
   const inside = result.inside.length > 0;
@@ -279,7 +305,7 @@ function stayingSpeak(result: UsesResult, mentions: readonly Mention[], more: bo
   if (records === 0) {
     if (searched.length === 0 && !inside) return ['It has no name to look for in text.'];
     const what = [...(searched.length > 0 ? [joined(searched, 'or')] : []), ...(inside ? ['the name or the id of anything inside it'] : [])];
-    return [`No ${more ? 'name or description of a record that stays' : "other record's name or description"} holds ${what.join(', or ')}.`];
+    return [`No ${more ? 'name, `only` or description of a record that stays' : "other record's name, `only` or description"} holds ${what.join(', or ')}.`];
   }
 
   const of = searched.length === 0 ? 'something inside it' : `it (${searched.join(', ')})${inside ? ' or of something inside it' : ''}`;

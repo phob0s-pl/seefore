@@ -10,6 +10,9 @@ export const NAME_MAX = 100;
 /** The most characters a record's description may have. */
 export const DESCRIPTION_MAX = 2000;
 
+/** The most characters the words of a condition may have: what reads after "only". */
+export const ONLY_MAX = 100;
+
 /** The sentence rules of the platform, for English. */
 const SENTENCES = new Intl.Segmenter('en', { granularity: 'sentence' });
 

@@ -1,8 +1,8 @@
 import { randomBytes } from 'node:crypto';
 import { statSync, watch } from 'node:fs';
 import type { FSWatcher } from 'node:fs';
-import { connectionsInNoView, emptyModel, outlineOf, ownership, viewsOf } from '@seefore/core';
-import type { Model, Problem, View, ViewerState } from '@seefore/core';
+import { conditionsOf, connectionsInNoView, emptyModel, outlineOf, ownership, viewsOf } from '@seefore/core';
+import type { Condition, Model, Problem, View, ViewerState } from '@seefore/core';
 import { readSource } from '../check.ts';
 
 /** What one reading of the source directory found: the state, before it is given a revision. */
@@ -21,8 +21,9 @@ const FORMAT_UNKNOWN = new Set(['marker-missing', 'format-unknown', 'format-not-
 
 /**
  * Reads the source directory as `seefore check` does, with the same problems, and works out
- * the model's views, its listing and the connections that no view holds. When the directory is
- * gone, or its marker cannot say which format it is in, there is no model and there are no views.
+ * the model's views, its listing, the conditions each record is under and the connections that
+ * no view holds. When the directory is gone, or its marker cannot say which format it is in,
+ * there is no model and there are no views.
  */
 export function readingOf(directory: string, views: (model: Model) => View[] = viewsOf): Reading {
   if (identityOf(directory) === undefined) {
@@ -50,10 +51,18 @@ export function readingOf(directory: string, views: (model: Model) => View[] = v
     problems,
     model,
     ownership: Object.fromEntries(ownership(model)),
+    conditions: conditionsByRecord(model),
     outline: outlineOf(model),
     views: drawn,
     inNoView: connectionsInNoView(model, drawn),
   };
+}
+
+/** The conditions of each part and connection of a model that is under any, by id, so that the page need not work them out. */
+function conditionsByRecord(model: Model): Record<string, Condition[]> {
+  const records = [model.people, model.systems, model.apps, model.stores, model.components, model.infrastructure, model.connections].flat();
+  const found = records.map((record): [string, Condition[]] => [record.id, conditionsOf(model, record.id)]);
+  return Object.fromEntries(found.filter(([, conditions]) => conditions.length > 0));
 }
 
 /** A reading with no model, and the one problem that says why. */
@@ -70,6 +79,7 @@ function unavailable(directory: string, problem: Problem): Reading {
     problems: [problem],
     model,
     ownership: {},
+    conditions: {},
     outline: outlineOf(model),
     views: [],
     inNoView: [],

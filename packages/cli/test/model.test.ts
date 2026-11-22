@@ -133,8 +133,11 @@ describe('seefore list', () => {
       'owners',
       'technologies',
       'ownership',
+      'conditions',
     ]);
     expect(data).toMatchObject({ directory: root, name: 'Shop', format: 1, records: 27, errors: 0, warnings: 0 });
+    // No record of the shop says when it is there.
+    expect(data.conditions).toEqual({});
     expect(data.people).toEqual([
       { id: 'customer', file: 'people/customer.yaml', name: 'Customer', description: 'Buys from the shop.' },
       { id: 'warehouse-clerk', file: 'people/warehouse-clerk.yaml', name: 'Warehouse clerk', description: 'Packs the orders that are ready to ship.' },
@@ -182,6 +185,7 @@ describe('seefore list', () => {
       owners: [],
       technologies: [],
       ownership: {},
+      conditions: {},
     });
   });
 
@@ -354,7 +358,7 @@ describe('seefore uses', () => {
       'If the record left with no connection goes too, 1 more record is named by nothing:',
       '  owner card-provider-company: The card provider (owners/card-provider-company.yaml)',
       '',
-      'No other record\'s name or description holds "order api", or the name or the id of anything inside it.',
+      'No other record\'s name, `only` or description holds "order api", or the name or the id of anything inside it.',
     ]);
   });
 
@@ -383,7 +387,7 @@ describe('seefore uses', () => {
       '1 record names it in `technology`. It must name another in its place, or leave it out:',
       '  architecture/apps/order-api.yaml:5:14: `technology`',
       '',
-      'No other record\'s name or description holds "Go".',
+      'No other record\'s name, `only` or description holds "Go".',
       '',
       'A name of one or two characters is looked for as it is written, capitals and all, and an id that short is not looked for.',
     ]);
@@ -400,7 +404,7 @@ describe('seefore uses', () => {
     expect(run(['uses', 'lonely']).out.split('\n').slice(-3)).toEqual([
       'No connection has one end in it.',
       '',
-      'No other record\'s name or description holds "lonely", or the name or the id of anything inside it.',
+      'No other record\'s name, `only` or description holds "lonely", or the name or the id of anything inside it.',
     ]);
   });
 

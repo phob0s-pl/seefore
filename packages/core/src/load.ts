@@ -1,4 +1,4 @@
-import { isScalar, isSeq } from 'yaml';
+import { isNode, isScalar, isSeq } from 'yaml';
 import { CURRENT_FORMAT } from './format.ts';
 import type { Family, Format, ReferenceField } from './format.ts';
 import { idProblem, isId } from './id.ts';
@@ -7,9 +7,21 @@ import type { Marker, MarkerRead } from './marker.ts';
 import { emptyModel } from './model.ts';
 import type { Model, ModelRecord } from './model.ts';
 import { START, compareProblems, error, list, quote, warning } from './problem.ts';
-import type { Problem } from './problem.ts';
+import type { Position, Problem } from './problem.ts';
 import type { Connection, Store, Technology } from './records.ts';
-import { brokerProblems, byId, connectionProblems, parentsOf, passesOnOnlyProblems, referenceProblems, viaProblems } from './rules.ts';
+import {
+  accessOpensProblems,
+  brokerProblems,
+  byId,
+  connectionProblems,
+  keptStoreProblems,
+  onlySaidAgainProblems,
+  parentsOf,
+  passesOnOnlyProblems,
+  referenceProblems,
+  viaProblems,
+} from './rules.ts';
+import type { PlaceOf } from './rules.ts';
 import { checkShape } from './shape.ts';
 import { readYaml } from './yaml.ts';
 import type { YamlFile } from './yaml.ts';
@@ -57,7 +69,7 @@ export interface Reference {
   names: string;
 }
 
-/** A record's name or description, with the place of its key. */
+/** A record's name, condition or description, with the place of its key. */
 export interface RecordText {
   /** The file of the record. */
   file: string;
@@ -69,14 +81,20 @@ export interface RecordText {
   column: number;
   /** The id of the record. */
   record: string;
-  /** `name` or `description`. */
+  /** `name`, `only` or `description`. */
   field: string;
   /** The text as read. */
   text: string;
 }
 
-/** The keys whose text `RecordText` keeps. */
-const TEXT_FIELDS = ['name', 'description'];
+/** The keys whose text `RecordText` keeps: the words a person writes, which may speak of another record. */
+const TEXT_FIELDS = ['name', 'only', 'description'];
+
+/**
+ * The keys whose values the checks across records point at, where the value names no record: a
+ * reference has its own place, and these are told where theirs is.
+ */
+const VALUE_FIELDS = ['opens', 'access', 'only'];
 
 /** A source directory after reading: what could be read, and everything that is wrong. */
 export interface Loaded {
@@ -255,6 +273,7 @@ export function loadAs(format: Format, files: readonly SourceFile[]): Loaded {
   const typed: ModelRecord<unknown>[] = [];
   const references: Reference[] = [];
   const texts: RecordText[] = [];
+  const values = new Map<string, Map<string, Position>>();
   for (const { record, yaml, family } of readRecords) {
     const kind = family.record;
     if (!kind) continue;
@@ -263,19 +282,25 @@ export function loadAs(format: Format, files: readonly SourceFile[]): Loaded {
     if (shape.value !== undefined) typed.push({ id: record.id, file: record.file, ...(shape.value as object) });
     references.push(...referencesIn(record, yaml, kind.references));
     texts.push(...textsIn(record, yaml));
+    values.set(record.file, valuesIn(yaml));
   }
   references.sort(compareReferences);
+  const placeOf: PlaceOf = (file, field) => values.get(file)?.get(field) ?? START;
 
   problems.push(...referenceProblems(format, everyRecord, references));
+  problems.push(...accessOpensProblems(format, everyRecord, references, records, placeOf));
   // The checks of the conventions look at the records of the right shape, and at what every record names.
   const parents = parentsOf(format, everyRecord, references);
   problems.push(...connectionProblems(format, everyRecord, parents, references, ofFamily<Connection>(typed, 'connections')));
   problems.push(...viaProblems(format, everyRecord, parents, references));
   problems.push(...brokerProblems(everyRecord, ofFamily<Store>(typed, 'stores'), ofFamily<Technology>(typed, 'technologies')));
-  // Every error is known by now, so the model is too. The check of what only passes on reads
-  // the connections of the model alone; it adds warnings, which leave the model as it is.
+  // Every error is known by now, so the model is too. The checks that follow read the model,
+  // since a record with an error in its file is not read right; they add warnings, which leave
+  // the model as it is.
   const model = modelOf(typed, problems);
   problems.push(...passesOnOnlyProblems(format, everyRecord, parents, model));
+  problems.push(...keptStoreProblems(format, everyRecord, parents, references, model));
+  problems.push(...onlySaidAgainProblems(format, everyRecord, model, placeOf));
 
   records.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : a.file < b.file ? -1 : 1));
   unread.sort((a, b) => (a.file < b.file ? -1 : 1));
@@ -350,6 +375,17 @@ function textsIn(record: SourceRecord, yaml: YamlFile): RecordText[] {
     // A value that is not text is a matter for the shape, and says nothing here.
     if (!isScalar(pair.value) || typeof pair.value.value !== 'string') continue;
     found.push({ file: record.file, ...yaml.at(pair.key), record: record.id, field: pair.key.value, text: pair.value.value });
+  }
+  return found;
+}
+
+/** Where the value of each key the checks across records point at is written in a record's file, by the key. */
+function valuesIn(yaml: YamlFile): Map<string, Position> {
+  const found = new Map<string, Position>();
+  for (const pair of yaml.map?.items ?? []) {
+    if (!isScalar(pair.key) || typeof pair.key.value !== 'string' || !VALUE_FIELDS.includes(pair.key.value)) continue;
+    // A key with no value has no place of its own; the key's place stands for it.
+    found.set(pair.key.value, isNode(pair.value) ? yaml.at(pair.value) : yaml.at(pair.key));
   }
   return found;
 }

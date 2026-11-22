@@ -25,21 +25,24 @@ Usage:
 
 Commands:
   check    Read the source directory and report what is wrong with it.
-  list     List the model: people, systems with what is in them, infrastructure,
-           connections under what they start from, owners and technologies. Each
-           description shows its first sentence. A record with an error in its file
-           is left out.
-  uses     Show what removing or renaming a record would touch: what goes with it,
-           what must go or change, what would be left behind, and which records may
-           speak of it in their text.
+  list     List the model: people, systems with what is in them, infrastructure in
+           no system, connections under what they start from, owners, technologies
+           and each wording of a condition. Each description shows its first
+           sentence. A record with an error in its file is left out.
+  uses     Show what removing or renaming a record would touch: what has its
+           condition, what goes with it, what must go or change, what would be left
+           behind, and which records may speak of it in their text.
   --server Show the model in the browser: a page on this machine that draws the
            views of each system and lists the model and its problems. It follows
            the files as they change, and only reads. Press Ctrl+C to stop it.
 
 Options:
   --workdir=<directory>   Where to start looking. Without it, the current directory.
-  --full                  For list: show each description whole, beneath its record.
-  --json                  Print the result as data.
+  --full                  For list: show each description whole, beneath its record,
+                          and each condition a record has from another.
+  --json                  Print the result as data. For list: the records of each
+                          family, and by id who answers for each part and the
+                          conditions each record is under, its own first.
   --port=<number>         For --server: the port to listen on. Without it, ${FIRST_PORT},
                           or the next free one.
   --no-open               For --server: do not open the browser.

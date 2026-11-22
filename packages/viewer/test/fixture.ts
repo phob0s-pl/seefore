@@ -81,7 +81,7 @@ export const MODEL: Model = {
 export const OUTLINE: Outline = {
   people: ['customer'],
   withParts: [{ id: 'shop', apps: [{ id: 'order-api', components: ['checkout', 'order-status'] }], stores: ['orders-database'] }],
-  others: ['card-provider'],
+  others: [{ id: 'card-provider', apps: [], stores: [] }],
   infrastructure: [],
   connections: [
     { start: 'customer', known: true, connections: ['customer-pays-card-provider', 'customer-uses-shop'] },
@@ -101,6 +101,7 @@ export const OUTLINE: Outline = {
   ],
   owners: ['card-provider-company', 'shop-team'],
   technologies: ['go', 'https', 'postgresql', 'sql'],
+  conditions: [],
   loose: [],
 };
 
@@ -136,8 +137,8 @@ export const CONTEXT: View = {
   scope: 'shop',
   title: 'Context view: Shop',
   boxes: [
-    { id: 'card-provider', family: 'systems', look: 'system', name: 'Card provider', line: '[System]', sentence: 'Takes card payments.', scope: false, inside: false, loops: [], within: [], passing: [] },
-    { id: 'customer', family: 'people', look: 'person', name: 'Customer', line: '[Person]', sentence: 'Buys from the shop.', scope: false, inside: false, loops: [], within: [], passing: [] },
+    { id: 'card-provider', family: 'systems', look: 'system', name: 'Card provider', line: '[System]', sentence: 'Takes card payments.', scope: false, inside: false, loops: [], within: [], passing: [], kept: [] },
+    { id: 'customer', family: 'people', look: 'person', name: 'Customer', line: '[Person]', sentence: 'Buys from the shop.', scope: false, inside: false, loops: [], within: [], passing: [], kept: [] },
     {
       id: 'shop',
       family: 'systems',
@@ -150,6 +151,7 @@ export const CONTEXT: View = {
       loops: [],
       within: ['checkout-asks-status', 'checkout-writes-orders', 'order-api-shares-locks'],
       passing: [],
+      kept: [],
     },
   ],
   arrows: [
@@ -180,8 +182,8 @@ export const CONTAINERS: View = {
   scope: 'shop',
   title: 'Container view: Shop',
   boxes: [
-    { id: 'card-provider', family: 'systems', look: 'system', name: 'Card provider', line: '[System]', sentence: 'Takes card payments.', scope: false, inside: false, loops: [], within: [], passing: [] },
-    { id: 'customer', family: 'people', look: 'person', name: 'Customer', line: '[Person]', sentence: 'Buys from the shop.', scope: false, inside: false, loops: [], within: [], passing: [] },
+    { id: 'card-provider', family: 'systems', look: 'system', name: 'Card provider', line: '[System]', sentence: 'Takes card payments.', scope: false, inside: false, loops: [], within: [], passing: [], kept: [] },
+    { id: 'customer', family: 'people', look: 'person', name: 'Customer', line: '[Person]', sentence: 'Buys from the shop.', scope: false, inside: false, loops: [], within: [], passing: [], kept: [] },
     {
       id: 'order-api',
       family: 'apps',
@@ -194,6 +196,7 @@ export const CONTAINERS: View = {
       loops: ['order-api-shares-locks'],
       within: ['checkout-asks-status'],
       passing: [],
+      kept: [],
     },
     {
       id: 'orders-database',
@@ -207,6 +210,7 @@ export const CONTAINERS: View = {
       loops: [],
       within: [],
       passing: [],
+      kept: [],
     },
   ],
   boundary: { id: 'shop', name: 'Shop', line: '[System]', title: 'Shop [System]' },
@@ -235,9 +239,9 @@ export const CARD_CONTEXT: View = {
   scope: 'card-provider',
   title: 'Context view: Card provider',
   boxes: [
-    { id: 'card-provider', family: 'systems', look: 'system-scope', name: 'Card provider', line: '[System]', sentence: 'Takes card payments.', scope: true, inside: false, loops: [], within: [], passing: [] },
-    { id: 'customer', family: 'people', look: 'person', name: 'Customer', line: '[Person]', sentence: 'Buys from the shop.', scope: false, inside: false, loops: [], within: [], passing: [] },
-    { id: 'shop', family: 'systems', look: 'system', name: 'Shop', line: '[System]', sentence: 'Sells goods and ships them.', scope: false, inside: false, loops: [], within: [], passing: [] },
+    { id: 'card-provider', family: 'systems', look: 'system-scope', name: 'Card provider', line: '[System]', sentence: 'Takes card payments.', scope: true, inside: false, loops: [], within: [], passing: [], kept: [] },
+    { id: 'customer', family: 'people', look: 'person', name: 'Customer', line: '[Person]', sentence: 'Buys from the shop.', scope: false, inside: false, loops: [], within: [], passing: [], kept: [] },
+    { id: 'shop', family: 'systems', look: 'system', name: 'Shop', line: '[System]', sentence: 'Sells goods and ships them.', scope: false, inside: false, loops: [], within: [], passing: [], kept: [] },
   ],
   arrows: [
     { id: 'customer~card-provider', from: 'customer', to: 'card-provider', connections: ['customer-pays-card-provider'], names: ['Pays by card'], technology: [] },
@@ -353,6 +357,7 @@ export const STATE: ViewerState = {
     'orders-database': { owner: 'shop-team', from: 'shop' },
     shop: { owner: 'shop-team', from: 'shop' },
   },
+  conditions: {},
   outline: OUTLINE,
   views: [CONTEXT, CONTAINERS, CARD_CONTEXT],
   inNoView: [],
@@ -413,7 +418,7 @@ export const HARD_MODEL: Model = {
 export const HARD_OUTLINE: Outline = {
   people: ['clerk'],
   withParts: [{ id: 'desk', apps: [{ id: 'gateway', components: [] }, { id: 'web', components: [] }], stores: ['events'] }],
-  others: ['cards'],
+  others: [{ id: 'cards', apps: [], stores: [] }],
   infrastructure: ['balancer', 'proxy'],
   connections: [
     { start: 'clerk', known: true, connections: ['clerk-uses-web'] },
@@ -422,12 +427,13 @@ export const HARD_OUTLINE: Outline = {
   ],
   owners: [],
   technologies: ['https', 'kafka', 'nginx'],
+  conditions: [],
   loose: [],
 };
 
 /** A box of the hard cases' container view, with nothing in its marks unless given. */
-function hardBox(box: Omit<ViewBox, 'scope' | 'loops' | 'within' | 'passing'> & Partial<ViewBox>): ViewBox {
-  return { scope: false, loops: [], within: [], passing: [], ...box };
+function hardBox(box: Omit<ViewBox, 'scope' | 'loops' | 'within' | 'passing' | 'kept'> & Partial<ViewBox>): ViewBox {
+  return { scope: false, loops: [], within: [], passing: [], kept: [], ...box };
 }
 
 export const HARD_CONTAINERS: View = {
@@ -439,7 +445,7 @@ export const HARD_CONTAINERS: View = {
     hardBox({ id: 'cards', family: 'systems', look: 'system-external', name: 'Card provider', line: '[System: external]', sentence: 'Takes card payments.', inside: false }),
     hardBox({ id: 'clerk', family: 'people', look: 'person', name: 'Clerk', line: '[Person]', sentence: 'Answers the tickets.', inside: false }),
     hardBox({ id: 'events', family: 'stores', look: 'queue-or-topic', name: 'Ticket events', line: '[Store: topic · Kafka]', sentence: 'What changed on a ticket.', inside: true }),
-    hardBox({ id: 'gateway', family: 'apps', look: 'app', name: 'Gateway', line: '[App: service]', sentence: 'Signs the calls that leave the desk.', inside: true, passing: ['web-calls-cards'] }),
+    hardBox({ id: 'gateway', family: 'apps', look: 'app', name: 'Gateway', line: '[App: service]', sentence: 'Signs the calls that leave the desk.', inside: true, passing: ['web-calls-cards'], kept: [] }),
     hardBox({
       id: 'proxy',
       family: 'infrastructure',
@@ -449,6 +455,7 @@ export const HARD_CONTAINERS: View = {
       sentence: "Ends HTTPS on the desk's host and passes requests on.",
       inside: false,
       passing: ['clerk-uses-web'],
+      kept: [],
     }),
     hardBox({ id: 'web', family: 'apps', look: 'app', name: 'Web', line: '[App: service]', sentence: 'The pages of the desk.', inside: true }),
   ],
@@ -461,7 +468,7 @@ export const HARD_CONTAINERS: View = {
       connections: ['clerk-uses-web'],
       names: ['Asks for pages'],
       technology: ['HTTPS'],
-      route: { count: 1, names: ['HTTPS proxy'], line: 'via HTTPS proxy' },
+      route: { count: 1, hops: [{ name: 'HTTPS proxy', bracketed: false }], bracketed: false, line: 'via HTTPS proxy' },
     },
     { id: 'proxy~web', from: 'proxy', to: 'web', connections: ['proxy-checks-web'], names: ['Checks that it answers'], technology: [] },
     {
@@ -471,7 +478,7 @@ export const HARD_CONTAINERS: View = {
       connections: ['web-asks-cards', 'web-calls-cards'],
       names: ['Asks for a refund', 'Takes a payment'],
       technology: [],
-      route: { count: 1, names: [], line: 'via on 1 of 2' },
+      route: { count: 1, hops: [], bracketed: false, line: 'via on 1 of 2' },
     },
     { id: 'web~events', from: 'web', to: 'events', connections: ['web-publishes-events'], names: ['Says what changed'], technology: [] },
   ],
@@ -488,7 +495,7 @@ export const HARD_CONTAINERS: View = {
     { key: 'route', text: 'Route: what the connections pass through, in order; “via on 2 of 5” when they differ' },
     { key: 'passing', text: "Passing through: how many of this view's connections pass through it" },
   ],
-  passed: [{ id: 'balancer', name: 'Load balancer', connections: ['web-calls-cards'], arrows: ['web~cards'] }],
+  passed: [{ id: 'balancer', name: 'Load balancer', conditions: [], own: false, connections: ['web-calls-cards'], arrows: ['web~cards'] }],
 };
 
 export const HARD_PICTURE: Drawn = {
@@ -548,6 +555,7 @@ export const HARD_STATE: ViewerState = {
   problems: [],
   model: HARD_MODEL,
   ownership: {},
+  conditions: {},
   outline: HARD_OUTLINE,
   views: [HARD_CONTAINERS],
   inNoView: [],
@@ -564,5 +572,5 @@ export const BROKEN_HOP_STATE: ViewerState = {
   problems: [{ file: 'infrastructure/balancer.yaml', line: 2, column: 1, severity: 'error', code: 'key-unknown', message: 'A piece of infrastructure has no `colour`.' }],
   model: { ...HARD_MODEL, infrastructure: HARD_MODEL.infrastructure.filter((piece) => piece.id !== 'balancer') },
   outline: { ...HARD_OUTLINE, infrastructure: ['proxy'] },
-  views: [{ ...HARD_CONTAINERS, passed: [{ id: 'balancer', name: 'balancer', connections: ['web-calls-cards'], arrows: ['web~cards'] }] }],
+  views: [{ ...HARD_CONTAINERS, passed: [{ id: 'balancer', name: 'balancer', conditions: [], own: false, connections: ['web-calls-cards'], arrows: ['web~cards'] }] }],
 };

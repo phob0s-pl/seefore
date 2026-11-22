@@ -1,11 +1,13 @@
-import { firstSentence, outlineOf, ownership } from '@seefore/core';
+import { conditionsOf, firstSentence, outlineOf, ownership } from '@seefore/core';
 import type {
   App,
   Component,
+  Condition,
   Connection,
   Infrastructure,
   Model,
   ModelRecord,
+  Outline,
   OutlineApp,
   OutlineGroup,
   OutlineLoose,
@@ -29,6 +31,9 @@ export const LINE_WIDTH = 96;
 /** How much deeper than its own line a wrapped line goes on, and a whole description sits under `--full`. */
 const DEEPER = '    ';
 
+/** One wording of `only` as the outline gives it, with the records that hold it as their own. */
+type OutlineCondition = Outline['conditions'][number];
+
 /** What `seefore list` takes: those of every command, and whether to show descriptions whole. */
 export interface ListOptions extends CheckOptions {
   /** Show each description whole, beneath its record, and not only its first sentence. */
@@ -50,9 +55,17 @@ export interface ListResult extends Model {
   /**
    * Who answers for each system, app, store, component and piece of infrastructure that has an
    * owner, by its id: the owner, and the record whose `owner` names it. A part with no owner,
-   * here or above, is not in it.
+   * here or above, is not in it. An id such as `constructor` is an id like any other, so a reader
+   * asks whether the id is a key of this object itself, and not what the object gives for it.
    */
   ownership: Record<string, Ownership>;
+  /**
+   * The conditions each record is under, by its id, as `conditionsOf` gives them and as the
+   * server gives the page: its own `only` first, then those it has from others, nearest first. A
+   * part has those of what it is in, and a connection those of its ends and of what they are in.
+   * A record that is under none is not in it, and is read as `ownership` is.
+   */
+  conditions: Record<string, Condition[]>;
 }
 
 /**
@@ -73,11 +86,30 @@ export function list(options: ListOptions, io: Io): number {
     warnings,
     ...loaded.model,
     ownership: Object.fromEntries(ownership(loaded.model)),
+    conditions: Object.fromEntries(conditionsByRecord(loaded.model)),
   };
   const layout: Layout = { width: Math.min(LINE_WIDTH, io.columns ?? LINE_WIDTH), full: options.full };
   const here: Here = { cwd: io.cwd, directory, workdir: options.workdir };
   io.out(options.json ? JSON.stringify(result, null, 2) : listing(result, layout, here));
   return EXIT_OK;
+}
+
+/**
+ * The conditions each record of the model is under, by its id, for those under any, its own
+ * first. A map, so that an id such as `constructor` finds only what was put there.
+ */
+function conditionsByRecord(model: Model): Map<string, Condition[]> {
+  const found = new Map<string, Condition[]>();
+  for (const record of elementsAndConnections(model)) {
+    const conditions = conditionsOf(model, record.id);
+    if (conditions.length > 0) found.set(record.id, conditions);
+  }
+  return found;
+}
+
+/** Every record of the model that may have a condition: the elements, then the connections, each family in order of id. */
+function elementsAndConnections(model: Model): ModelRecord<{ only?: string | undefined }>[] {
+  return [...model.people, ...model.systems, ...model.apps, ...model.stores, ...model.components, ...model.infrastructure, ...model.connections];
 }
 
 /** How the listing is laid out. */
@@ -99,6 +131,8 @@ interface Index {
   sorts: Map<string, string>;
   /** How many connections name each record in `via`, by id, for those that some connection names there. */
   through: Map<string, number>;
+  /** The conditions each record is under, its own first, by id, for those under any. */
+  conditions: Map<string, Condition[]>;
   people: Map<string, ModelRecord<Person>>;
   systems: Map<string, ModelRecord<System>>;
   apps: Map<string, ModelRecord<App>>;
@@ -122,17 +156,21 @@ interface Section {
 /**
  * The model as a person reads it: each family under a heading that says how many, what is in a
  * thing beneath it, and each connection under what it starts from, in the order and the groups
- * of its outline. Lines wrap at the width. `here` is where the command was run, so that the
- * command the last line names works there.
+ * of its outline; then each wording of a condition, so that two wordings of one can be seen,
+ * with how many records hold it and how many more have it from them. Lines wrap at the width.
+ * `here` is where the command was run, so that the command the last line names works there.
  */
 function listing(result: ListResult, layout: Layout, here: Here): string {
   const index = indexOf(result);
+  // What is in what, and the wordings of `only`, are the outline's: the page reads the same.
   const outline = outlineOf(result);
-  const looseCount = outline.loose.reduce((sum, part) => sum + 1 + part.components.length, 0);
+  const others = otherSystems(outline);
+  const looseCount = outline.loose.reduce((sum, part) => sum + 1 + part.components.length + (part.stores?.length ?? 0), 0);
   // The note is needed only where a part shows no owner and has one all the same.
   const taken = [...ownership(result)].some(([id, found]) => found.from !== id);
-  const named = (records: ReadonlyMap<string, ModelRecord<{ name: string; description?: string | undefined }>>, ids: readonly string[]): string[] =>
-    ids.map((id) => lookUp(records, id)).flatMap((record) => entry('  ', record.id, record.name, [], record.description, layout));
+  const named = (records: ReadonlyMap<string, ModelRecord<{ name: string; only?: string | undefined; description?: string | undefined }>>, ids: readonly string[]): string[] =>
+    ids.map((id) => lookUp(records, id)).flatMap((record) => entry('  ', record.id, nameOf(record), [], record.description, layout, hadLines(record.id, index)));
+  const systems = (listed: readonly OutlineSystem[]): string[] => listed.flatMap((system) => systemLines(system, index, layout));
 
   const sections: Section[] = [
     { title: 'People', count: outline.people.length, lines: named(index.people, outline.people) },
@@ -140,21 +178,22 @@ function listing(result: ListResult, layout: Layout, here: Here): string {
       title: 'Systems with parts',
       count: outline.withParts.length,
       ...(taken ? { note: 'An owner holds for what is beneath it until a part names its own.' } : {}),
-      lines: outline.withParts.flatMap((system) => systemLines(system, index, layout)),
+      lines: systems(outline.withParts),
     },
-    {
-      title: outline.withParts.length > 0 ? 'Other systems' : 'Systems',
-      count: outline.others.length,
-      lines: outline.others.flatMap((id) => systemLines({ id, apps: [], stores: [] }, index, layout)),
-    },
+    { title: outline.withParts.length > 0 ? 'Other systems' : 'Systems', count: others.length, lines: systems(others) },
     {
       title: 'Infrastructure',
       count: outline.infrastructure.length,
-      lines: outline.infrastructure.flatMap((id) => infrastructureLines(lookUp(index.infrastructure, id), index, layout)),
+      lines: outline.infrastructure.flatMap((id) => infrastructureLines(lookUp(index.infrastructure, id), '  ', '', index, layout)),
     },
     { title: 'Connections', count: result.connections.length, lines: connectionLines(outline.connections, index, layout) },
     { title: 'Owners', count: outline.owners.length, lines: named(index.owners, outline.owners) },
     { title: 'Technologies', count: outline.technologies.length, lines: named(index.technologies, outline.technologies) },
+    {
+      title: 'Conditions',
+      count: outline.conditions.length,
+      lines: outline.conditions.flatMap((condition) => wrap(words(conditionLine(condition, index)), '  ', `  ${DEEPER}`, layout.width)),
+    },
     { title: 'Parts in a record with an error', count: looseCount, lines: outline.loose.flatMap((part) => looseLines(part, index, layout)) },
   ];
 
@@ -188,12 +227,52 @@ function listing(result: ListResult, layout: Layout, here: Here): string {
   return lines.join('\n');
 }
 
-/** Looks the model up once: each record by its id, the names, and the sorts. */
-function indexOf(model: Model): Index {
+/**
+ * The systems with nothing in them that a container view would draw, each as the outline gives
+ * it: one that holds only pieces of infrastructure that are passed through has them beneath it.
+ */
+function otherSystems(outline: Outline): readonly OutlineSystem[] {
+  return outline.others;
+}
+
+/**
+ * The ids of the records that have a wording from another record and do not hold it as their
+ * own. The outline works both counts of a wording out, and the page reads the same outline, so
+ * the command and the page agree.
+ */
+function underOf(condition: OutlineCondition): readonly string[] {
+  return condition.under;
+}
+
+/**
+ * A wording of `only` as the part "Conditions" gives it: how many records hold it as their own,
+ * and how many more have it from them. "only when relaying is on (1 record, 6 more have it from it)".
+ */
+function conditionLine(condition: OutlineCondition, index: Index): string {
+  const own = condition.records.length;
+  const under = underOf(condition).length;
+  const more = under === 0 ? '' : `, ${under} more ${under === 1 ? 'has' : 'have'} it from ${own === 1 ? 'it' : 'them'}`;
+  return `only ${condition.only} (${count(own, 'record')}${more})`;
+}
+
+/**
+ * The lines that `--full` gives beneath a record for each condition it has from another record,
+ * nearest first: "has from Gates: only at the eleven venues with gates". None for a record that
+ * has none, and none in the short listing, which shows a record's own `only` alone.
+ */
+function hadLines(id: string, index: Index): string[] {
+  return (index.conditions.get(id) ?? []).filter((had) => had.from !== id).map((had) => `has from ${farEnd(had.from, index)}: only ${had.only}`);
+}
+
+/** Looks the model up once: each record by its id, the names, the sorts and the conditions. */
+function indexOf(result: ListResult): Index {
+  const model: Model = result;
   const index: Index = {
     names: new Map(),
     sorts: new Map(),
     through: new Map(),
+    // Read from the data's own keys only, so that an id such as `constructor` finds nothing it was not given.
+    conditions: new Map(Object.entries(result.conditions)),
     people: byId(model.people),
     systems: byId(model.systems),
     apps: byId(model.apps),
@@ -234,53 +313,66 @@ function lookUp<T>(records: ReadonlyMap<string, T>, id: string): T {
 }
 
 /**
- * A system, with its apps and stores beneath it and the components of each app beneath that. It
- * says first when it is somebody else's, and last how many connections pass through it.
+ * A system, with its apps, its stores and its pieces of infrastructure beneath it, as the outline
+ * gives them, and beneath each app its components and the stores it keeps. It says first when it
+ * is somebody else's, and last how many connections pass through it.
  */
 function systemLines(system: OutlineSystem, index: Index, layout: Layout): string[] {
   const record = lookUp(index.systems, system.id);
   const facts = [record.external ? 'external' : undefined, owner(record.owner, index), passing(record.id, index)];
   return [
-    ...entry('  ', record.id, record.name, facts, record.description, layout),
+    ...entry('  ', record.id, nameOf(record), facts, record.description, layout, hadLines(record.id, index)),
     ...system.apps.flatMap((app) => appLines(app, '    ', index, layout)),
     ...system.stores.flatMap((store) => storeLines(lookUp(index.stores, store), '    ', index, layout)),
+    ...(system.infrastructure ?? []).flatMap((piece) => infrastructureLines(lookUp(index.infrastructure, piece), '    ', 'infrastructure ', index, layout)),
   ];
 }
 
-/** A piece of infrastructure, with its facts as an app has them, and how many connections pass through it, none too. */
-function infrastructureLines(piece: ModelRecord<Infrastructure>, index: Index, layout: Layout): string[] {
-  const facts = [technologies(piece.technology, index), owner(piece.owner, index), passing(piece.id, index) ?? 'no connection passes through it'];
-  return entry('  ', piece.id, piece.name, facts, piece.description, layout);
+/**
+ * A piece of infrastructure, with its facts as an app has them, and how many connections pass
+ * through it, none too. `head` goes before its id: under a system it says what the line is, as
+ * `app` does. `where` is said first in its brackets, when given.
+ */
+function infrastructureLines(piece: ModelRecord<Infrastructure>, indent: string, head: string, index: Index, layout: Layout, where?: string): string[] {
+  const facts = [where, technologies(piece.technology, index), owner(piece.owner, index), passing(piece.id, index) ?? 'no connection passes through it'];
+  return entry(indent, `${head}${piece.id}`, nameOf(piece), facts, piece.description, layout, hadLines(piece.id, index));
 }
 
-/** A part whose `in` names a record with an error, saying so first in its brackets. */
+/** A part whose `in` names a record with an error, saying so first in its brackets. An app has its components and the stores it keeps beneath it. */
 function looseLines(part: OutlineLoose, index: Index, layout: Layout): string[] {
   const where = `in: ${part.in}`;
-  if (part.family === 'apps') return appLines({ id: part.id, components: part.components }, '  ', index, layout, where);
+  if (part.family === 'apps') return appLines(part, '  ', index, layout, where);
   if (part.family === 'stores') return storeLines(lookUp(index.stores, part.id), '  ', index, layout, where);
+  if (part.family === 'infrastructure') return infrastructureLines(lookUp(index.infrastructure, part.id), '  ', 'infrastructure ', index, layout, where);
   return componentLines(lookUp(index.components, part.id), '  ', index, layout, where);
 }
 
-/** An app, with its components beneath it. `where` is said first in its brackets, when given. */
+/** An app, with its components beneath it, then the stores it keeps, as the outline gives them. `where` is said first in its brackets, when given. */
 function appLines(outlined: OutlineApp, indent: string, index: Index, layout: Layout, where?: string): string[] {
   const app = lookUp(index.apps, outlined.id);
   const facts = [where, app.kind, technologies(app.technology, index), owner(app.owner, index), passing(app.id, index)];
   return [
-    ...entry(indent, `app ${app.id}`, app.name, facts, app.description, layout),
+    ...entry(indent, `app ${app.id}`, nameOf(app), facts, app.description, layout, hadLines(app.id, index)),
     ...outlined.components.flatMap((component) => componentLines(lookUp(index.components, component), `${indent}  `, index, layout)),
+    ...(outlined.stores ?? []).flatMap((store) => storeLines(lookUp(index.stores, store), `${indent}  `, index, layout)),
   ];
 }
 
 /** A store. `where` is said first in its brackets, when given. */
 function storeLines(store: ModelRecord<Store>, indent: string, index: Index, layout: Layout, where?: string): string[] {
   const facts = [where, store.kind, technologies(store.technology, index), owner(store.owner, index)];
-  return entry(indent, `store ${store.id}`, store.name, facts, store.description, layout);
+  return entry(indent, `store ${store.id}`, nameOf(store), facts, store.description, layout, hadLines(store.id, index));
 }
 
 /** A component. `where` is said first in its brackets, when given. */
 function componentLines(component: ModelRecord<Component>, indent: string, index: Index, layout: Layout, where?: string): string[] {
   const facts = [where, technologies(component.technology, index), owner(component.owner, index), passing(component.id, index)];
-  return entry(indent, `component ${component.id}`, component.name, facts, component.description, layout);
+  return entry(indent, `component ${component.id}`, nameOf(component), facts, component.description, layout, hadLines(component.id, index));
+}
+
+/** A record's name, with its condition after it when it has one: "Desk (only in the desk edition)". */
+function nameOf(record: { name: string; only?: string | undefined }): string {
+  return record.only === undefined ? record.name : `${record.name} (only ${record.only})`;
 }
 
 /**
@@ -303,14 +395,32 @@ function connectionLines(groups: readonly OutlineGroup[], index: Index, layout: 
 /**
  * A connection under what it starts from: the arrow to its far end, what it passes through on
  * the way, in order, its name and protocol. The line names its start only when that is a
- * component of the app it stands under.
+ * component of the app it stands under. What it does to a store, or that the far side opened its
+ * channel, comes before its name, and its own condition after it.
  */
 function connectionEntry(connection: ModelRecord<Connection>, start: string, index: Index, layout: Layout): string[] {
   const from = connection.from === start ? '' : `${index.names.get(connection.from) ?? connection.from} `;
-  const route = connection.via === undefined ? '' : `, via ${connection.via.map((id) => farEnd(id, index)).join(', ')}`;
-  const arrow = `${from}-> ${farEnd(connection.to, index)}${route}`;
-  const said = connection.name === undefined ? arrow : `${arrow}: ${connection.name}`;
-  return entry('    ', connection.id, said, [technologies(connection.technology, index)], connection.description, layout);
+  const arrow = `${from}-> ${farEnd(connection.to, index)}${routeOf(connection.via, index)}`;
+  // A mark is one word to the wrap, so that it is never broken over two lines.
+  const marks = [connection.access === undefined ? undefined : `[${connection.access}]`, connection.opens === 'to' ? '[opened by the far side]' : undefined]
+    .filter((mark) => mark !== undefined)
+    .map((mark): Word => ({ text: mark, before: ' ' }));
+  const named = [...marks, ...words(connection.name ?? '')];
+  const said = named.length === 0 ? words(arrow) : [...words(`${arrow}:`), ...named];
+  const conditioned = connection.only === undefined ? said : [...said, ...words(`(only ${connection.only})`)];
+  return entry('    ', connection.id, conditioned, [technologies(connection.technology, index)], connection.description, layout, hadLines(connection.id, index));
+}
+
+/**
+ * What a connection passes through, as the page writes it too: the names in order, joined by a
+ * comma and a space, after ", via". A thing that is under a condition, its own or one it has from
+ * what it is in, stands in brackets, so that taking out an `only` said again changes nothing here.
+ * Nothing for a connection with no route.
+ */
+function routeOf(via: readonly string[] | undefined, index: Index): string {
+  if (via === undefined) return '';
+  const onRoute = (id: string): string => ((index.conditions.get(id)?.length ?? 0) > 0 ? `(${farEnd(id, index)})` : farEnd(id, index));
+  return `, via ${via.map(onRoute).join(', ')}`;
 }
 
 /** How many connections pass through a record, or nothing when none does. */
@@ -335,17 +445,28 @@ function farEnd(id: string, index: Index): string {
  * One record: who it is, what is known of it in brackets, and what it is for, wrapped at the
  * width. Its description is its first sentence on the same line, or under `--full` the whole
  * of it beneath, as it is written: each line of it starts a line of its own, and keeps the
- * spaces written in it, except where it wraps.
+ * spaces written in it, except where it wraps. `had` are the lines that `--full` gives beneath
+ * the record, before its description, for what it has from others.
  */
-function entry(indent: string, head: string, said: string, facts: readonly (string | undefined)[], description: string | undefined, layout: Layout): string[] {
+function entry(
+  indent: string,
+  head: string,
+  said: string | readonly Word[],
+  facts: readonly (string | undefined)[],
+  description: string | undefined,
+  layout: Layout,
+  had: readonly string[] = [],
+): string[] {
   const known = facts.filter((fact) => fact !== undefined);
   const about = known.length > 0 ? ` (${known.join('; ')})` : '';
-  const line = words(`${head}: ${said}${about}`);
+  const line = [...words(`${head}:`), ...(typeof said === 'string' ? words(said) : said), ...words(about)];
   const deeper = indent + DEEPER;
   if (layout.full) {
-    // The record's own wrapped line goes on deeper than the description beneath it, so the two are told apart.
+    // The record's own wrapped line goes on deeper than the lines beneath it, so the two are told
+    // apart, and so does a line of what it has from others, which is one fact however it wraps.
+    const has = had.flatMap((text) => wrap(words(text), deeper, deeper + DEEPER, layout.width));
     const beneath = (description === undefined ? [] : linesOf(description)).flatMap((text) => wrap(written(text), deeper + leading(text), deeper, layout.width));
-    return [...wrap(line, indent, deeper + DEEPER, layout.width), ...beneath];
+    return [...wrap(line, indent, deeper + DEEPER, layout.width), ...has, ...beneath];
   }
   if (description === undefined) return wrap(line, indent, deeper, layout.width);
   // The dash stays with the word before it, so that a wrapped line never starts with one, as a list would.

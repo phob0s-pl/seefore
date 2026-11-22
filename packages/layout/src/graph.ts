@@ -48,7 +48,7 @@ function nodeOf(box: ViewBox): ElkNode {
  * a label only when it has a text; it never measures it, so the room is what counts.
  */
 function edgeOf(arrow: ViewArrow, label: LabelText | undefined): ElkExtendedEdge {
-  const text = label === undefined ? '' : [...label.lines, label.route, label.technology].filter((line) => line !== undefined && line !== '').join('\n');
+  const text = label === undefined ? '' : [...label.lines, label.route, ...(label.only ?? []), label.opened, label.technology].filter((line) => line !== undefined && line !== '').join('\n');
   const labels = label === undefined ? [] : [{ text, width: label.width, height: label.height, layoutOptions: { ...LABEL_OPTIONS } }];
   return { id: arrow.id, sources: [arrow.from], targets: [arrow.to], labels };
 }
@@ -104,8 +104,18 @@ function placedArrow(arrow: ViewArrow, edge: ElkExtendedEdge | undefined, text: 
   const placed: PlacedArrow = { id: arrow.id, from: arrow.from, to: arrow.to, sections: routeOf(edge.sections ?? []).map(straightened) };
   const shape = edge.labels?.[0];
   if (text === undefined || shape === undefined) return placed;
-  const { lines, route, technology } = text;
-  return { ...placed, label: { ...rectOf(shape), lines, ...(route === undefined ? {} : { route }), ...(technology === undefined ? {} : { technology }) } };
+  const { lines, route, only, opened, technology } = text;
+  return {
+    ...placed,
+    label: {
+      ...rectOf(shape),
+      lines,
+      ...(route === undefined ? {} : { route }),
+      ...(only === undefined ? {} : { only }),
+      ...(opened === undefined ? {} : { opened }),
+      ...(technology === undefined ? {} : { technology }),
+    },
+  };
 }
 
 /** The place of a shape. */

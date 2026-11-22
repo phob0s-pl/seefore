@@ -1,15 +1,15 @@
-import type { Drawn, PlacedLabel, View } from '@seefore/core';
+import type { Drawn, PlacedLabel, View, ViewPassed } from '@seefore/core';
 import { Handle, Position, ReactFlow, ReactFlowProvider, useReactFlow, useViewportStore } from '@xyflow/react';
 import type { AriaLabelConfig, EdgeProps, EdgeTypes, NodeProps, NodeTypes } from '@xyflow/react';
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { FocusEvent, KeyboardEvent, ReactNode } from 'react';
-import { HANDLE_IN, HANDLE_OUT, headOf, labelLines, pathOf, toFlow } from './flow.ts';
+import { HANDLE_IN, HANDLE_OUT, RING_RADIUS, headOf, labelLines, passedSaid, pathOf, ringOf, toFlow } from './flow.ts';
 import type { ArrowEdge, BoundaryNode, BoxNode, PictureNode } from './flow.ts';
 import { litBy } from './light.ts';
 import { passingWords } from './records.ts';
 import type { Lit, Target } from './light.ts';
-import { LOOP_MARK, PASSING_MARK, Sample, Shape } from './shapes.tsx';
-import { TEXT_SLACK } from './theme.ts';
+import { LOOP_MARK, PASSING_MARK, Sample, Shape, StoreSign } from './shapes.tsx';
+import { DASHED_CONDITIONS, TEXT_SLACK } from './theme.ts';
 import { MAX_ZOOM, MOVE_MS, detailAt, fitViewport, litBounds, minZoomFor, percent, smallNote, whole } from './zoom.ts';
 import type { Room } from './zoom.ts';
 
@@ -51,15 +51,18 @@ function Handles() {
 
 /**
  * A box: its shape, the lines of its text as the picture gives them, each on one line and
- * clipped at the edge, and on its top edge the marks for what passes through it and for its copies.
+ * clipped at the edge, and on its top edge the marks for what passes through it, for its copies
+ * and for the stores it keeps.
  */
 function BoxView({ id, data }: NodeProps<BoxNode>) {
   const light = useContext(LightContext);
   const { box, placed } = data;
   const loops = box.loops.length;
   const passing = box.passing.length;
+  const kept = box.kept.length;
+  const dashed = DASHED_CONDITIONS && box.only !== undefined ? ' dashed' : '';
   return (
-    <div className={`box family-${box.family}${box.scope ? ' scope' : ''} ${standing(light, 'box', id)}`} data-look={box.look} style={{ width: placed.width, height: placed.height }}>
+    <div className={`box family-${box.family}${box.scope ? ' scope' : ''}${dashed} ${standing(light, 'box', id)}`} data-look={box.look} style={{ width: placed.width, height: placed.height }}>
       <Handles />
       <svg className="shape" width={placed.width} height={placed.height} aria-hidden="true">
         <Shape look={box.look} scope={box.scope} width={placed.width} height={placed.height} />
@@ -73,6 +76,7 @@ function BoxView({ id, data }: NodeProps<BoxNode>) {
           ))}
         </div>
         <div className="box-line text-line">{placed.line}</div>
+        {placed.only !== undefined && <div className="box-only text-line">{placed.only}</div>}
         {placed.sentence.length > 0 && (
           <div className="box-sentence">
             {placed.sentence.map((line, at) => (
@@ -83,10 +87,16 @@ function BoxView({ id, data }: NodeProps<BoxNode>) {
           </div>
         )}
       </div>
-      {(passing > 0 || loops > 0) && (
+      {(passing > 0 || loops > 0 || kept > 0) && (
         <div className="marks" aria-hidden="true">
           {passing > 0 && <div className="mark mark-passing">{`${PASSING_MARK} ${passing}`}</div>}
           {loops > 0 && <div className="mark">{`${LOOP_MARK} ${loops}`}</div>}
+          {kept > 0 && (
+            <div className="mark mark-kept">
+              <StoreSign />
+              {` ${kept}`}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -127,17 +137,24 @@ function Label({ label, clip }: { label: PlacedLabel; clip: string }) {
   );
 }
 
-/** An arrow: the route the picture gives, its head at the last point, and its label. React Flow's own ends are not used. */
+/**
+ * An arrow: the route the picture gives, its head at the last point, a ring just before the head
+ * when the far side opened the channel of every connection it stands for, and its label. React
+ * Flow's own ends are not used.
+ */
 function ArrowView({ id, data }: EdgeProps<ArrowEdge>) {
   const light = useContext(LightContext);
   if (data === undefined) return null;
   const { arrow, placed, index } = data;
   const path = pathOf(placed.sections);
   const head = headOf(placed.sections);
+  const ring = arrow.opened?.all === true ? ringOf(placed.sections) : undefined;
+  const dashed = DASHED_CONDITIONS && arrow.only?.all === true ? ' dashed' : '';
   return (
-    <g className={`arrow${arrow.connections.length > 1 ? ' arrow-many' : ''} ${standing(light, 'arrow', id)}`}>
+    <g className={`arrow${arrow.connections.length > 1 ? ' arrow-many' : ''}${dashed} ${standing(light, 'arrow', id)}`}>
       <path className="arrow-hit" d={path} />
       <path className="arrow-line" d={path} />
+      {ring !== undefined && <circle className="arrow-ring" cx={ring.x} cy={ring.y} r={RING_RADIUS} />}
       {head !== undefined && <polygon className="arrow-head" points={head} />}
       {placed.label !== undefined && <Label label={placed.label} clip={`seefore-label-${index}`} />}
     </g>
@@ -201,14 +218,29 @@ function targetOf(element: EventTarget | null): Target | null {
   return edgeId ? { kind: 'arrow', id: edgeId } : null;
 }
 
-/** How many boxes and arrows a picture has, and what of the view it does not draw. */
+/**
+ * What the line under a view's title says of the stores it draws at the apps that keep them,
+ * which have no box: `10 stores are drawn at the apps that keep them.` Nothing when there are none.
+ */
+export function keptWords(n: number): string | undefined {
+  if (n === 0) return undefined;
+  return n === 1 ? '1 store is drawn at the app that keeps it.' : `${n} stores are drawn at the apps that keep them.`;
+}
+
+/**
+ * How many boxes and arrows a picture has, how many stores it draws at their apps, and what of
+ * the view it does not draw. A large view opens below the zoom where the mark of a kept store
+ * can be read, so the line says it in words too.
+ */
 function Counts({ view, drawn }: { view: View; drawn: Drawn }) {
   const boxes = drawn.boxes.length;
   const arrows = drawn.arrows.length;
   const { outside, broken } = view.left;
+  const kept = keptWords(view.boxes.reduce((sum, box) => sum + box.kept.length, 0));
   return (
     <p className="view-counts">
       {`${boxes} ${boxes === 1 ? 'box' : 'boxes'} and ${arrows} ${arrows === 1 ? 'arrow' : 'arrows'}.`}
+      {kept !== undefined && ` ${kept}`}
       {outside.length > 0 && (
         <>
           {` ${outside.length} ${outside.length === 1 ? 'connection' : 'connections'} between two boxes outside the system ${outside.length === 1 ? 'is' : 'are'} not drawn: `}
@@ -385,10 +417,19 @@ function Inside({ view, drawn, room: given, chosen, onPoint, onFocusTarget, onCh
   );
 }
 
-/** The legend: a sample of each kind of box, line and mark this view draws, and no other; and under it what is given. */
+/** What the legend says of the dash, while the trial of it is on: what the outline of a box and the line of an arrow mean when dashed. */
+export const DASH_WORDS = 'Dashed outline or line: there only sometimes, as its own “only …” says; the boundary is the tinted one';
+
+/**
+ * The legend: a sample of each kind of box, line and mark this view draws, and no other; and
+ * under it what is given. While the dash is tried, a view that draws an `only` line says what
+ * the dash means too.
+ */
 export function Legend({ view, children }: { view: View; children?: ReactNode }) {
+  const dash = DASHED_CONDITIONS && view.legend.some((entry) => entry.key === 'only');
+  const more = useMore();
   return (
-    <section className="legend" aria-label="Legend">
+    <section className="legend" aria-label="Legend" ref={more.ref} onScroll={more.measure} {...(more.hidden ? { tabIndex: 0 } : {})}>
       <ul>
         {view.legend.map((entry) => (
           <li key={entry.key} data-key={entry.key}>
@@ -396,47 +437,101 @@ export function Legend({ view, children }: { view: View; children?: ReactNode })
             <span>{entry.text}</span>
           </li>
         ))}
+        {dash && (
+          <li data-key="dashed">
+            <Sample name="dashed" />
+            <span>{DASH_WORDS}</span>
+          </li>
+        )}
       </ul>
       {children}
+      {more.hidden && (
+        <p className="legend-more" aria-hidden="true">
+          {LEGEND_MORE}
+        </p>
+      )}
     </section>
   );
 }
 
+/** What the legend says at its foot while some of it is out of sight. */
+export const LEGEND_MORE = 'More below: scroll the legend';
+
+/**
+ * Whether some of the legend is out of sight below. The style sheet holds the legend to a
+ * quarter of the window, and it scrolls inside; this is measured when it is drawn, when it
+ * changes size and as it scrolls, so that the line which says there is more goes once the
+ * reader has seen the rest. Nothing of the legend is left out.
+ */
+function useMore(): { ref: (element: HTMLElement | null) => void; measure: () => void; hidden: boolean } {
+  const [element, setElement] = useState<HTMLElement | null>(null);
+  const [hidden, setHidden] = useState(false);
+  const measure = () => {
+    if (element === null) return;
+    // A pixel of slack, since a scroll position may stop a fraction short of the end.
+    setHidden(element.scrollHeight - element.scrollTop - element.clientHeight > 1);
+  };
+  useEffect(() => {
+    if (element === null || typeof ResizeObserver === 'undefined') return;
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    for (const child of element.children) observer.observe(child);
+    return () => observer.disconnect();
+  }, [element]);
+  return { ref: setElement, measure, hidden };
+}
+
 /**
  * What the arrows of the view pass through and has no box, each with how many of the view's
- * connections pass through it. Pointing at one, or its focus, lights those arrows; a click, or
- * Enter, keeps them lit and opens its panel. Missing when there is nothing of the kind.
+ * connections pass through it: first the pieces of infrastructure that are the system's own,
+ * under words that say so, then the rest. One that has a condition, its own or from what it is
+ * in, stands in brackets, as on a route. Pointing at one, or its focus, lights those arrows; a click, or Enter, keeps
+ * them lit and opens its panel. Missing when there is nothing of the kind.
  */
 function PassesThrough({ view, chosen, onPoint, onFocusTarget, onChoose }: { view: View; chosen: Target | null } & Omit<DiagramActions, 'onClear'>) {
   if (view.passed.length === 0) return null;
+  const system = view.boundary?.name ?? view.boxes.find((box) => box.scope)?.name ?? view.scope;
+  const own = view.passed.filter((each) => each.own);
+  const others = view.passed.filter((each) => !each.own);
+  const list = (passed: readonly ViewPassed[], label: string) => (
+    <ul aria-label={label}>
+      {passed.map((each) => {
+        const target: Target = { kind: 'passed', id: each.id };
+        const count = each.connections.length;
+        const isChosen = chosen?.kind === 'passed' && chosen.id === each.id;
+        return (
+          <li key={each.id}>
+            <button
+              type="button"
+              data-id={each.id}
+              {...(isChosen ? { className: 'chosen' } : {})}
+              aria-label={passedSaid(each.name, each.conditions, each.own ? system : undefined, passingWords(count))}
+              // A click made with the keyboard has no count of presses.
+              onClick={(event) => onChoose(target, event.detail === 0)}
+              onMouseEnter={() => onPoint(target)}
+              onMouseLeave={() => onPoint(null)}
+              onFocus={() => onFocusTarget(target)}
+              onBlur={() => onFocusTarget(null)}
+            >
+              {each.conditions.length === 0 ? each.name : `(${each.name})`} <span className="passes-count">{count}</span>
+            </button>
+          </li>
+        );
+      })}
+    </ul>
+  );
   return (
     <div className="passes-through">
       <span className="passes-title">Passes through:</span>
-      <ul aria-label="Passes through">
-        {view.passed.map((each) => {
-          const target: Target = { kind: 'passed', id: each.id };
-          const count = each.connections.length;
-          const isChosen = chosen?.kind === 'passed' && chosen.id === each.id;
-          return (
-            <li key={each.id}>
-              <button
-                type="button"
-                data-id={each.id}
-                {...(isChosen ? { className: 'chosen' } : {})}
-                aria-label={`${each.name}: ${passingWords(count)}`}
-                // A click made with the keyboard has no count of presses.
-                onClick={(event) => onChoose(target, event.detail === 0)}
-                onMouseEnter={() => onPoint(target)}
-                onMouseLeave={() => onPoint(null)}
-                onFocus={() => onFocusTarget(target)}
-                onBlur={() => onFocusTarget(null)}
-              >
-                {each.name} <span className="passes-count">{count}</span>
-              </button>
-            </li>
-          );
-        })}
-      </ul>
+      {own.length > 0 && (
+        <>
+          <span className="passes-group">{`part of ${system}:`}</span>
+          {list(own, `Passes through, part of ${system}`)}
+        </>
+      )}
+      {own.length > 0 && others.length > 0 && <span className="passes-group">others:</span>}
+      {others.length > 0 && list(others, own.length > 0 ? 'Passes through, others' : 'Passes through')}
     </div>
   );
 }

@@ -2,11 +2,13 @@ import { z } from 'zod';
 import { idProblem, isId } from './id.ts';
 import { capital, quote } from './problem.ts';
 import { label } from './shape.ts';
-import { DESCRIPTION_MAX, NAME_MAX } from './text.ts';
+import { DESCRIPTION_MAX, NAME_MAX, ONLY_MAX } from './text.ts';
 
 /**
  * The records of format 1, one schema for each family. They are the one definition of what a
- * record's file may hold; the rules across records are in `rules.ts`.
+ * record's file may hold; the rules across records are in `rules.ts`. Every schema writes its
+ * keys in one order: `from`, `to`, `via`, `opens`, `access`, `name`, `in`, `only`,
+ * `description`, `kind`, `external`, `technology`, `owner`.
  */
 
 /** How an app runs. */
@@ -14,6 +16,12 @@ export const APP_KINDS = ['service', 'browser', 'mobile', 'desktop', 'command', 
 
 /** What sort of data a store holds. */
 export const STORE_KINDS = ['database', 'files', 'cache', 'index', 'queue', 'topic'] as const;
+
+/** What a connection does to the data of the store it ends at. */
+export const ACCESS = ['read', 'write', 'read-write'] as const;
+
+/** Who opened the channel an exchange travels down, when the one that sends did not: the far side, `to`. */
+export const OPENS = ['to'] as const;
 
 /** The characters that end a line. A name is on one line, so it holds none of them. */
 const LINE_BREAK = /[\n\r\u0085\u2028\u2029]/;
@@ -27,6 +35,41 @@ const Name = z
   // Only for a name that is on one line and not empty, so that one slip is reported once.
   .refine((name) => !/\S/.test(name) || LINE_BREAK.test(name) || name === name.trim(), {
     message: '`name` starts or ends with a space. Take the space off.',
+  });
+
+/**
+ * When a thing is there, or is used, at all: the words that read after "only", held to the form
+ * of a name. Its messages say what the words are for, since a condition that runs long or over
+ * lines is one that wants the description.
+ */
+const Only = z
+  .string()
+  .refine((only) => [...only].length <= ONLY_MAX, {
+    // Counted as the limits on text count: one for each code point.
+    error: (issue) =>
+      `\`only\` has ${[...String(issue.input)].length} characters. It may have at most ${ONLY_MAX}. ` +
+      'Keep the words that say when, and say the rest in the description.',
+    params: { code: 'value-too-big' },
+  })
+  .refine((only) => /\S/.test(only), {
+    message: '`only` is empty. Leave it out when the thing is always there, and when nobody has said.',
+    params: { code: 'value-too-small' },
+  })
+  .refine((only) => !LINE_BREAK.test(only), {
+    message: '`only` must be on one line: the few words that read after "only". Say the rest in the description.',
+  })
+  // Only for words that are on one line and not empty, so that one slip is reported once.
+  .refine((only) => !/\S/.test(only) || LINE_BREAK.test(only) || only === only.trim(), {
+    message: '`only` starts or ends with a space. Take the space off.',
+  })
+  // Two wordings that differ only in their spaces look the same in a listing, which is there to
+  // show two wordings of one condition apart. Only for words that passed the rules above.
+  .refine((only) => !/\S/.test(only) || LINE_BREAK.test(only) || only !== only.trim() || !/\s\s|[^\S ]/.test(only), {
+    message: '`only` has two spaces in a row, or a space that is not a plain one. Write its words with single spaces.',
+  })
+  // The field's name is the first word of what it says, so words that start with it say it twice.
+  .refine((only) => !/^only(?![\p{L}\p{M}\p{N}_])/iu.test(only), {
+    message: '`only` holds the words that read after "only". Take the first word off.',
   });
 
 /** What a record is for, in a sentence or a few. It may have several lines. */
@@ -64,8 +107,14 @@ function fileOf(whose: string): string {
   return `An id has no spaces: it is the name of ${whose} file, without \`.yaml\`.`;
 }
 
-/** What an app or a store is part of. */
+/** What an app or a piece of infrastructure is part of. */
 const InSystem = idIn('`in` holds the id of the system it is part of, a record in `systems/`.', fileOf("the system's"));
+
+/** What a store is part of: a system, or the app that keeps it. */
+const InSystemOrApp = idIn(
+  '`in` holds the id of the system it is part of, a record in `systems/`, or of the app that keeps it, a record in `apps/`.',
+  fileOf("that record's"),
+);
 
 /** What a component is inside. */
 const InApp = idIn('`in` holds the id of the app it is inside, a record in `apps/`.', fileOf("the app's"));
@@ -98,6 +147,9 @@ const SystemOwner = ownerId('');
 
 /** An app, a store or a component with no `owner` has the owner of what it is in. */
 const PartOwner = ownerId(' Left out, the owner is taken from what the part is in: check that this is true.');
+
+/** A piece of infrastructure may be in a system or in none, so with no `owner` it has its system's, or none. */
+const PieceOwner = ownerId(' Left out, the owner is taken from the system the piece is in, when it is in one: check that this is true.');
 
 /**
  * One id in `technology`. A value with a space in it is a phrase, not a slip in an id; `phrase`
@@ -158,7 +210,8 @@ const ViaId = z.string().refine(isId, {
 const Via = z
   .array(ViaId)
   .refine((ids) => ids.length > 0, {
-    message: '`via` is an empty list. Leave `via` out until something that is always on the way is known.',
+    // Since stage 6b a thing that is there only in some installs may be named too, so the advice is not "always".
+    message: '`via` is an empty list. Leave `via` out until something on the way is known.',
     params: { code: 'value-too-small' },
   })
   .superRefine((ids, context) => {
@@ -182,15 +235,47 @@ const External = z
   })
   .pipe(z.literal(true));
 
+/**
+ * What a connection does to the data of the store it ends at. Whether it ends at a store is a
+ * rule across records. A use that is neither a read nor a write has none, and so has one that
+ * nobody has said, so the message says that leaving it out is the way for both.
+ */
+const Access = z
+  .unknown()
+  .refine((value) => (ACCESS as readonly unknown[]).includes(value), {
+    message:
+      '`access` must be `read`, `write` or `read-write`: what the connection does to the data of the store it ends at. ' +
+      'Leave it out for a use that is neither, and when nobody has said.',
+    params: { code: 'value-not-allowed' },
+  })
+  .pipe(z.enum(ACCESS));
+
+/**
+ * That the channel this exchange travels down was opened from the far side, by `to` or by
+ * something in `via` on its behalf. `to` is its only value: left out, the one that sends opened
+ * it, or nobody has said.
+ */
+const Opens = z
+  .unknown()
+  .refine((value) => (OPENS as readonly unknown[]).includes(value), {
+    message:
+      '`opens` must be `to`: the channel this exchange travels down was opened from the far side. ' +
+      'Leave it out when the one that sends opened it, and when nobody has said.',
+    params: { code: 'value-not-allowed' },
+  })
+  .pipe(z.enum(OPENS));
+
 /** A kind of person who uses the software, runs it or takes part in what it does. No owner. */
 export const PersonSchema = z.strictObject({
   name: Name,
+  only: Only.optional(),
   description: Description.optional(),
 });
 
 /** Software seen as one thing, ours or somebody else's. */
 export const SystemSchema = z.strictObject({
   name: Name,
+  only: Only.optional(),
   description: Description.optional(),
   external: External.optional(),
   owner: SystemOwner.optional(),
@@ -200,16 +285,18 @@ export const SystemSchema = z.strictObject({
 export const AppSchema = z.strictObject({
   name: Name,
   in: InSystem,
+  only: Only.optional(),
   description: Description.optional(),
   kind: z.enum(APP_KINDS).optional(),
   technology: PartTechnologies.optional(),
   owner: PartOwner.optional(),
 });
 
-/** Something that holds data, in a system. */
+/** Something that holds data, in a system or in the app that keeps it. */
 export const StoreSchema = z.strictObject({
   name: Name,
-  in: InSystem,
+  in: InSystemOrApp,
+  only: Only.optional(),
   description: Description.optional(),
   kind: StoreKind.optional(),
   technology: PartTechnologies.optional(),
@@ -220,6 +307,7 @@ export const StoreSchema = z.strictObject({
 export const ComponentSchema = z.strictObject({
   name: Name,
   in: InApp,
+  only: Only.optional(),
   description: Description.optional(),
   technology: PartTechnologies.optional(),
   owner: PartOwner.optional(),
@@ -233,20 +321,26 @@ export const ConnectionSchema = z.strictObject({
   from: From,
   to: To,
   via: Via.optional(),
+  opens: Opens.optional(),
+  access: Access.optional(),
   name: Name.optional(),
+  only: Only.optional(),
   description: Description.optional(),
   technology: ConnectionTechnologies.optional(),
 });
 
 /**
- * A thing whose job is to pass exchanges on: a proxy, a gateway, a load balancer. It is in no
- * system, since it often stands between two, so with no `owner` it has none.
+ * A thing whose job is to pass exchanges on: a proxy, a gateway, a load balancer. It may be part
+ * of a system, and is in none when it stands between systems or nobody has placed it. With no
+ * `owner` it has its system's, or none.
  */
 export const InfrastructureSchema = z.strictObject({
   name: Name,
+  in: InSystem.optional(),
+  only: Only.optional(),
   description: Description.optional(),
   technology: PartTechnologies.optional(),
-  owner: SystemOwner.optional(),
+  owner: PieceOwner.optional(),
 });
 
 /** A team, a role or an organisation that answers for a part and can be asked. */

@@ -56,6 +56,27 @@ export function litBy(view: View, target: Target): Lit {
   return lit;
 }
 
+/**
+ * What lights when the reader chooses a store that an app keeps, which has no box and is drawn
+ * at its app: that app's box, and of the arrows only those that hold one of the store's own
+ * connections, with their ends and the boxes those connections pass through, as an arrow lights
+ * them. The app's other arrows stay faded: they are not the store's. Nothing lights when the view
+ * does not draw the app.
+ */
+export function litByKept(view: View, keeper: string, connections: ReadonlySet<string>): Lit {
+  const lit: Lit = { boxes: new Set(), arrows: new Set() };
+  if (!holdsBox(view, keeper)) return lit;
+  lit.boxes.add(keeper);
+  for (const arrow of view.arrows) {
+    if (!arrow.connections.some((id) => connections.has(id))) continue;
+    lit.arrows.add(arrow.id);
+    lit.boxes.add(arrow.from);
+    lit.boxes.add(arrow.to);
+  }
+  for (const box of view.boxes) if (box.passing.some((id) => connections.has(id))) lit.boxes.add(box.id);
+  return lit;
+}
+
 /** True when a view draws a box, or its boundary, with this id. */
 export function holdsBox(view: View, id: string): boolean {
   return view.boundary?.id === id || view.boxes.some((box) => box.id === id);

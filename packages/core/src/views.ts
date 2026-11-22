@@ -1,14 +1,22 @@
+import { conditionsOf, keeperOf, systemOf } from './conditions.ts';
 import type { Model, ModelRecord } from './model.ts';
-import type { BoxFamily, BoxLook, LegendEntry, LegendKey, View, ViewArrow, ViewBox, ViewKind, ViewLeft, ViewPassed, ViewRoute } from './picture.ts';
+import type { BoxFamily, BoxLook, LegendEntry, LegendKey, View, ViewArrow, ViewBoundary, ViewBox, ViewHop, ViewKind, ViewLeft, ViewOnly, ViewOpened, ViewPassed, ViewRoute } from './picture.ts';
 import type { App, Component, Connection, Infrastructure, Person, Store, System } from './records.ts';
 import { firstSentence } from './text.ts';
 
 /**
- * The views of a model: for each system a context view, and for a system with an app or a
- * store a container view too. A view says which boxes it draws and how each looks, which
- * arrows join them, which connections each arrow stands for and what they pass through, what is
- * passed through and has no box, which connections it does not draw and why, and what its
- * legend explains. It holds nothing the model does not, and no place: the layout works those out.
+ * The views of a model: for each system a context view, and for a system with parts to show a
+ * container view too: an app, a store of its own, or a piece of infrastructure that a
+ * connection starts or ends at. A view says which boxes it draws and how each looks, which
+ * arrows join them, which connections each arrow stands for, what they pass through and when
+ * they are there, what is passed through and has no box, which connections it does not draw and
+ * why, and what its legend explains. It holds nothing the model does not, and no place: the
+ * layout works those out.
+ *
+ * A store that an app keeps has no box: it is drawn at its app, as a component is. A piece of
+ * infrastructure that is part of a system has a box inside that system's boundary on its
+ * container view, where a connection starts or ends at it, and is drawn at its system in any
+ * other view, as an app is.
  */
 
 /** What an arrow says for a connection that has no name. */
@@ -29,8 +37,16 @@ const LEGEND: readonly LegendEntry[] = [
   { key: 'arrow', text: 'Arrow: from the one that acts to the one it acts on' },
   { key: 'arrow-many', text: 'Arrow for several connections: each line of its label names one' },
   { key: 'route', text: 'Route: what the connections pass through, in order; “via on 2 of 5” when they differ' },
+  { key: 'route-only', text: '(Name) on a route: there only sometimes, as its own “only” says or that of what it is in, and on the way whenever it is there' },
+  { key: 'opened', text: 'Ring before the head: the far side opened the channel this is sent down' },
+  { key: 'opened-some', text: '“far side opened on 2 of 5”: two of the five connections say the far side opened their channel, and the others do not say' },
+  {
+    key: 'only',
+    text: '“only …”: there only then, as the thing says, or on an arrow a part inside the box at an end; “only on 2 of 5”: two of the five have one, and nothing is said of the rest',
+  },
   { key: 'loop', text: 'Copies: connections from one copy of the same thing to another' },
   { key: 'passing', text: "Passing through: how many of this view's connections pass through it" },
+  { key: 'kept', text: 'Kept stores: how many stores this app keeps, drawn at it; its panel lists them' },
 ];
 
 /** What the legend says of the boundary of an external system, in place of what it says of the boundary of another. */
@@ -39,23 +55,67 @@ const BOUNDARY_EXTERNAL = "Boundary: this system, which is external: somebody el
 /** What the legend adds to what it says of the boundary when an arrow starts or ends at its edge. */
 const BOUNDARY_ARROWS = '; an arrow at its edge is to or from the system itself';
 
+/** What the boundary holds, as the legend says it, and what it says when a piece of infrastructure stands inside it too. */
+const INSIDE = 'with its apps and stores inside';
+const INSIDE_WITH_PIECES = 'with its apps, stores and pieces of infrastructure inside';
+
 /** The kinds of store that hold messages on their way, drawn with a look of their own. */
 const MESSAGE_KINDS: ReadonlySet<string> = new Set(['queue', 'topic']);
 
 /**
- * Every view of a model, in the order the page lists them: first each system that has an app
- * or a store, with its context view and then its container view; then each other system, with
- * its context view. Each group is in order of id.
+ * Every view of a model, in the order the page lists them: first each system that has parts to
+ * show, with its context view and then its container view; then each other system, with its
+ * context view. Each group is in order of id.
  */
 export function viewsOf(model: Model): View[] {
   const index = indexOf(model);
-  const followed = model.connections.map((connection) => ({ connection, from: follow(connection.from, index), to: follow(connection.to, index) }));
-  const withParts = model.systems.filter((system) => index.partsIn.has(system.id));
-  const others = model.systems.filter((system) => !index.partsIn.has(system.id));
+  const followed = followedOf(model, index);
+  const boxed = boxedPieces(index, followed);
+  const shown = withPartsOf(index, boxed);
+  const withParts = model.systems.filter((system) => shown.has(system.id));
+  const others = model.systems.filter((system) => !shown.has(system.id));
   return [
-    ...withParts.flatMap((system) => [viewOf('context', system, index, followed), viewOf('containers', system, index, followed)]),
-    ...others.map((system) => viewOf('context', system, index, followed)),
+    ...withParts.flatMap((system) => [viewOf('context', system, index, followed, boxed), viewOf('containers', system, index, followed, boxed)]),
+    ...others.map((system) => viewOf('context', system, index, followed, boxed)),
   ];
+}
+
+/**
+ * The ids of the systems that have parts to show, and so a container view: an app, a store of
+ * its own, or a piece of infrastructure that a connection starts or ends at. A system whose
+ * only parts are pieces that connections pass through has none: its container view would be
+ * empty. The listing asks this too, so that it and the views agree.
+ */
+export function systemsWithParts(model: Model): Set<string> {
+  const index = indexOf(model);
+  return withPartsOf(index, boxedPieces(index, followedOf(model, index)));
+}
+
+/** Each connection with its ends followed. */
+function followedOf(model: Model, index: Index): Followed[] {
+  return model.connections.map((connection) => ({ connection, from: follow(connection.from, index), to: follow(connection.to, index) }));
+}
+
+/**
+ * The pieces of infrastructure in a system that its container view draws as a box: those a
+ * connection starts or ends at whose two ends can both be followed. One that connections only
+ * pass through has no box.
+ */
+function boxedPieces(index: Index, followed: readonly Followed[]): Set<string> {
+  const pieces = new Set([...index.piecesIn.values()].flat());
+  const boxed = new Set<string>();
+  for (const { connection, from, to } of followed) {
+    if (from === undefined || to === undefined) continue;
+    for (const end of [connection.from, connection.to]) if (pieces.has(end)) boxed.add(end);
+  }
+  return boxed;
+}
+
+/** The systems that have an app, a store of their own, or a piece of infrastructure with a box. */
+function withPartsOf(index: Index, boxed: ReadonlySet<string>): Set<string> {
+  const shown = new Set(index.partsIn.keys());
+  for (const [system, pieces] of index.piecesIn) if (pieces.some((piece) => boxed.has(piece))) shown.add(system);
+  return new Set(index.model.systems.map((system) => system.id).filter((id) => shown.has(id)));
 }
 
 /**
@@ -70,6 +130,7 @@ function kindLine(word: 'App' | 'Store' | 'Infrastructure', kind: string | undef
 
 /** The model looked up by id, and what is in each system. */
 interface Index {
+  model: Model;
   people: Map<string, ModelRecord<Person>>;
   systems: Map<string, ModelRecord<System>>;
   apps: Map<string, ModelRecord<App>>;
@@ -80,19 +141,34 @@ interface Index {
   technologies: Map<string, string>;
   /** The name of each person, system, app, store, component and piece of infrastructure, by id. */
   names: Map<string, string>;
-  /** The ids of the apps and stores in each system, by the system's id, in order of id. */
+  /** The ids of the apps and stores in each system, by the system's id, in order of id. A store that an app keeps is not among them. */
   partsIn: Map<string, string[]>;
+  /** The ids of the stores each app keeps, by the app's id, in order of id. */
+  kept: Map<string, string[]>;
+  /** The ids of the pieces of infrastructure in each system, by the system's id, in order of id. */
+  piecesIn: Map<string, string[]>;
 }
 
 /** Looks the model up once. */
 function indexOf(model: Model): Index {
+  const systems = byId(model.systems);
   const partsIn = new Map<string, string[]>();
-  for (const part of [...model.apps, ...model.stores]) partsIn.set(part.in, [...(partsIn.get(part.in) ?? []), part.id]);
-  for (const parts of partsIn.values()) parts.sort();
+  const kept = new Map<string, string[]>();
+  const piecesIn = new Map<string, string[]>();
+  const add = (into: Map<string, string[]>, at: string, id: string) => into.set(at, [...(into.get(at) ?? []), id]);
+  for (const app of model.apps) add(partsIn, app.in, app.id);
+  for (const store of model.stores) {
+    const keeper = keeperOf(model, store.id);
+    if (keeper === undefined) add(partsIn, store.in, store.id);
+    else add(kept, keeper, store.id);
+  }
+  for (const piece of model.infrastructure) if (piece.in !== undefined && systems.has(piece.in)) add(piecesIn, piece.in, piece.id);
+  for (const ids of [...partsIn.values(), ...kept.values(), ...piecesIn.values()]) ids.sort();
   const elements = [model.people, model.systems, model.apps, model.stores, model.components, model.infrastructure];
   return {
+    model,
     people: byId(model.people),
-    systems: byId(model.systems),
+    systems,
     apps: byId(model.apps),
     stores: byId(model.stores),
     components: byId(model.components),
@@ -100,6 +176,8 @@ function indexOf(model: Model): Index {
     technologies: new Map(model.technologies.map((technology) => [technology.id, technology.name])),
     names: new Map(elements.flat().map((record) => [record.id, record.name])),
     partsIn,
+    kept,
+    piecesIn,
   };
 }
 
@@ -110,9 +188,13 @@ function byId<T extends { id: string }>(records: readonly T[]): Map<string, T> {
 
 /** Where an end of a connection belongs, followed through what it is in. */
 interface End {
-  /** The person, the system or the piece of infrastructure it is, or the system it is in. */
+  /** The person, the system or the piece of infrastructure in no system it is, or the system it is in. */
   top: string;
-  /** The app or the store it is, or the app a component is in. Missing for a person, a system or a piece of infrastructure. */
+  /**
+   * What it is drawn as in a container view of its system: the app or the store it is, the app a
+   * component is in or that keeps a store, or the piece of infrastructure it is. Missing for a
+   * person, a system or a piece of infrastructure in no system.
+   */
   part?: string;
 }
 
@@ -124,17 +206,36 @@ interface Followed {
 }
 
 /**
- * Where a record belongs: the person, the system or the piece of infrastructure it is, which is
- * in nothing, or the system it is in and the app or the store it is or is in. Nothing when it,
- * or anything it is in, is a record with an error in its file, since such a record is not in
- * the model.
+ * Where a record belongs: the person, the system or the piece of infrastructure in no system it
+ * is, or the system it is in and what it is drawn as there. A store that an app keeps is drawn
+ * as that app. Nothing when it, or anything it is in, is a record with an error in its file,
+ * since such a record is not in the model, nor when its `in` names a record of a kind it cannot
+ * be in, which the check reports.
  */
 function follow(id: string, index: Index): End | undefined {
-  if (index.people.has(id) || index.systems.has(id) || index.infrastructure.has(id)) return { top: id };
+  const piece = index.infrastructure.get(id);
+  if (index.people.has(id) || index.systems.has(id) || (piece !== undefined && piece.in === undefined)) return { top: id };
+  const part = drawnAs(id, index);
+  const system = part === undefined ? undefined : systemOf(index.model, part);
+  return part === undefined || system === undefined ? undefined : { top: system, part };
+}
+
+/**
+ * What a part of a system is drawn as in its container view: an app or a store in a system, or
+ * a piece of infrastructure in one, as itself; a component as its app; a store that an app keeps
+ * as that app. Nothing when its `in`, or that of its app, names no record of the kind it may be
+ * in, or a record with an error in its file.
+ */
+function drawnAs(id: string, index: Index): string | undefined {
+  const isSystem = (at: string | undefined) => at !== undefined && index.systems.has(at);
+  const inSystem = (app: string | undefined) => (app !== undefined && isSystem(index.apps.get(app)?.in) ? app : undefined);
+  const piece = index.infrastructure.get(id);
+  if (piece !== undefined) return isSystem(piece.in) ? id : undefined;
   const component = index.components.get(id);
-  const part = component === undefined ? (index.apps.get(id) ?? index.stores.get(id)) : index.apps.get(component.in);
-  if (part === undefined || !index.systems.has(part.in)) return undefined;
-  return { top: part.in, part: part.id };
+  if (component !== undefined) return inSystem(component.in);
+  const store = index.stores.get(id);
+  if (store !== undefined) return index.systems.has(store.in) ? id : inSystem(keeperOf(index.model, id));
+  return inSystem(id);
 }
 
 /**
@@ -179,10 +280,13 @@ interface Frame {
   drawn: ReadonlySet<string>;
 }
 
-/** The view of one kind about a system. */
-function viewOf(kind: ViewKind, system: ModelRecord<System>, index: Index, followed: readonly Followed[]): View {
+/** The view of one kind about a system. `boxed` holds the pieces of infrastructure in a system that have a box. */
+function viewOf(kind: ViewKind, system: ModelRecord<System>, index: Index, followed: readonly Followed[], boxed: ReadonlySet<string>): View {
   const scope = system.id;
-  const inside = kind === 'containers' ? (index.partsIn.get(scope) ?? []) : [];
+  // A piece of infrastructure in the system has a box only where a connection starts or ends at it,
+  // one whose other end can be followed, and which this view then draws.
+  const pieces = (index.piecesIn.get(scope) ?? []).filter((piece) => boxed.has(piece));
+  const inside = kind === 'containers' ? [...(index.partsIn.get(scope) ?? []), ...pieces] : [];
   const boxes = [...(kind === 'context' ? [scope] : inside), ...neighboursOf(scope, followed)].sort();
   const ours = new Set([scope, ...inside]);
   const frame: Frame = { kind, scope, ours, drawn: new Set([scope, ...boxes]) };
@@ -197,17 +301,23 @@ function viewOf(kind: ViewKind, system: ModelRecord<System>, index: Index, follo
       look: record.look,
       name: record.name,
       line: record.line,
+      ...(record.only === undefined ? {} : { only: record.only }),
       ...(record.description === undefined ? {} : { sentence: firstSentence(record.description) }),
       scope: id === scope,
       inside: kind === 'containers' && ours.has(id),
       loops: sorted.loops.get(id) ?? [],
       within: sorted.within.get(id) ?? [],
       passing: passing.boxes.get(id) ?? [],
+      // An app is a box only in the container view of its system, where its kept stores are drawn at it.
+      kept: record.family === 'apps' ? (index.kept.get(id) ?? []) : [],
     };
   });
   const arrows = [...sorted.bundles.entries()].sort(([a], [b]) => (a < b ? -1 : 1)).map(([id, bundle]) => arrowOf(id, bundle, frame, index));
   const line = systemLine(system);
-  const boundary = kind === 'containers' ? { id: scope, name: system.name, line, title: `${system.name} ${line}` } : undefined;
+  // The system's own `only` stands after its kind line, as a box has it under its own.
+  const only = ownOnly(scope, index);
+  const title = `${system.name} ${line}${only === undefined ? '' : ` only ${only}`}`;
+  const boundary = kind === 'containers' ? { id: scope, name: system.name, line, ...(only === undefined ? {} : { only }), title } : undefined;
   return {
     id: `${scope}.${kind}`,
     kind,
@@ -217,29 +327,31 @@ function viewOf(kind: ViewKind, system: ModelRecord<System>, index: Index, follo
     ...(boundary === undefined ? {} : { boundary }),
     arrows,
     left: sorted.left,
-    legend: legendOf(viewBoxes, boundary !== undefined, arrows, system),
+    legend: legendOf(viewBoxes, boundary, arrows, passing.passed, system),
     passed: passing.passed,
   };
 }
 
 /**
- * The connections of a model that none of its views holds in any way: not on an arrow, not
- * inside a box or between its copies, and not counted as left out. A view is about a system
- * and holds only what it draws both ends of, or what has an end in its system, so a connection
- * between things that are in no system, such as a person and a piece of infrastructure, is in
- * a view only where both stand beside a system it is about. In order of id.
+ * The connections of a model that none of its views draws: not as an arrow, not inside a box,
+ * and not between its copies. A view is about a system, and draws a connection only where an
+ * end of it is in that system and both ends can be drawn. So a connection between things that
+ * are in no system, such as a person and a piece of infrastructure in no system, is in no
+ * picture, even where a view draws both as neighbours of its system and counts it as left out;
+ * and so is one to a record with an error in its file. One that has an end in a system, a piece
+ * of infrastructure in it and a store that an app keeps among them, and whose other end can be
+ * drawn, is in that system's views. Worked out from what the views draw. In order of id.
  */
 export function connectionsInNoView(model: Model, views: readonly View[]): string[] {
-  const held = new Set<string>();
+  const drawn = new Set<string>();
   for (const view of views) {
-    for (const arrow of view.arrows) for (const id of arrow.connections) held.add(id);
-    for (const box of view.boxes) for (const id of [...box.loops, ...box.within]) held.add(id);
-    for (const id of [...view.left.outside, ...view.left.broken]) held.add(id);
+    for (const arrow of view.arrows) for (const id of arrow.connections) drawn.add(id);
+    for (const box of view.boxes) for (const id of [...box.loops, ...box.within]) drawn.add(id);
   }
-  return inOrder(model.connections.map((connection) => connection.id).filter((id) => !held.has(id)));
+  return inOrder(model.connections.map((connection) => connection.id).filter((id) => !drawn.has(id)));
 }
 
-/** Each person, other system and piece of infrastructure with a connection to the system or to anything in it. */
+/** Each person, other system and piece of infrastructure in no system with a connection to the system or to anything in it. */
 function neighboursOf(scope: string, followed: readonly Followed[]): Set<string> {
   const neighbours = new Set<string>();
   for (const { from, to } of followed) {
@@ -338,11 +450,35 @@ function passingOf(sorted: Sorted, frame: Frame, boxes: ReadonlySet<string>, ind
   }
   return {
     boxes: new Map([...onBoxes].map(([box, connections]) => [box, inOrder(connections)])),
-    passed: inOrder(apart.keys()).map((id) => {
+    passed: inOrder(apart.keys()).map((id): ViewPassed => {
       const found = apart.get(id);
-      return { id, name: index.names.get(id) ?? id, connections: inOrder(found?.connections ?? []), arrows: inOrder(found?.arrows ?? []) };
+      return {
+        id,
+        name: index.names.get(id) ?? id,
+        // The same words said again by what it is in are one condition.
+        conditions: [...new Set(conditionsOf(index.model, id).map((condition) => condition.only))],
+        own: index.infrastructure.has(id) && systemOf(index.model, id) === frame.scope,
+        connections: inOrder(found?.connections ?? []),
+        arrows: inOrder(found?.arrows ?? []),
+      };
     }),
   };
+}
+
+/** The words of a record's own `only`, or nothing when it has none of its own, or is not in the model. */
+function ownOnly(id: string, index: Index): string | undefined {
+  const [first] = conditionsOf(index.model, id);
+  return first?.from === id ? first.only : undefined;
+}
+
+/**
+ * A thing on a route, by its name, in brackets when it has a condition: its own `only`, or one
+ * it has from what it is in. So taking out an `only` that only says again what the thing is in
+ * says changes nothing here. Something whose file has an error is named by its id, and has no
+ * condition the model knows of.
+ */
+function hopOf(id: string, index: Index): ViewHop {
+  return { name: index.names.get(id) ?? id, bracketed: conditionsOf(index.model, id).length > 0 };
 }
 
 /** Ids in order, character by character. */
@@ -353,7 +489,9 @@ function inOrder(ids: Iterable<string>): string[] {
 /**
  * One arrow: the connections between the two drawn records themselves first, then the others,
  * each in order of id; a text for each; the technologies, when every connection names the
- * same ones; and what they pass through at this level, when any does.
+ * same ones; what they pass through at this level, when any does; when they are there, when any
+ * is under a condition that no box of the view says; and whether the far side opened their
+ * channel, when any says so.
  */
 function arrowOf(id: string, bundle: Bundle, frame: Frame, index: Index): ViewArrow {
   const connections = [...bundle.own, ...bundle.others];
@@ -363,7 +501,19 @@ function arrowOf(id: string, bundle: Bundle, frame: Frame, index: Index): ViewAr
     return place === bundle.from || place === bundle.to;
   };
   const routes = connections.map((connection) => (connection.via ?? []).filter((hop) => !atEnd(hop)));
-  const route = routeOf(routes, index.names);
+  const route = routeOf(routes, (hop) => hopOf(hop, index));
+  // A condition whose record the view draws, as a box or as the boundary, is said there. One from a
+  // record it does not draw, such as a component inside the box at an end, is said by nothing else.
+  // The same words had twice, said again lower down, are one condition.
+  const unshown = (connection: ModelRecord<Connection>) => [
+    ...new Set(
+      conditionsOf(index.model, connection.id)
+        .filter((condition) => !frame.drawn.has(condition.from))
+        .map((condition) => condition.only),
+    ),
+  ];
+  const only = onlyOf(connections.map(unshown));
+  const opened = openedOf(connections);
   return {
     id,
     from: bundle.from,
@@ -372,7 +522,44 @@ function arrowOf(id: string, bundle: Bundle, frame: Frame, index: Index): ViewAr
     names: connections.map((connection) => connection.name ?? UNNAMED_CONNECTION),
     technology: sharedTechnology(connections, index.technologies),
     ...(route === undefined ? {} : { route }),
+    ...(only === undefined ? {} : { only }),
+    ...(opened === undefined ? {} : { opened }),
   };
+}
+
+/**
+ * When the connections of an arrow are there, given for each the words of the conditions that
+ * no box of the view says: its own `only`, and those it has from a record the view does not
+ * draw, such as a component inside the box at an end. The words, when every one has the same
+ * such conditions, as the line `only in the hosted edition`; else on how many have one: `only on
+ * 2 of 5`. That says nothing of the others, which may be under a
+ * condition that a box says. Nothing when none has one.
+ */
+function onlyOf(words: readonly (readonly string[])[]): ViewOnly | undefined {
+  const count = words.filter((each) => each.length > 0).length;
+  if (count === 0) return undefined;
+  const all = count === words.length;
+  const first = words[0];
+  // The same conditions on every connection are given in words, two of them with a semicolon
+  // between: one connection under two conditions would else read `only on 1 of 1`.
+  if (all && first !== undefined && words.every((each) => each.length === first.length && each.every((word, at) => word === first[at]))) {
+    const said = first.join('; ');
+    return { count, all, words: said, line: `only ${said}` };
+  }
+  return { count, all, line: `only on ${count} of ${words.length}` };
+}
+
+/**
+ * Whether the connections of an arrow travel down a channel the far side opened: on every one,
+ * which the arrow shows with a ring, or on how many say so, as the line `far side opened on 2 of
+ * 5`. A connection that does not say `opens: to` claims nothing: nobody may have said. Nothing
+ * when none says it.
+ */
+function openedOf(connections: readonly Connection[]): ViewOpened | undefined {
+  const count = connections.filter((connection) => connection.opens === 'to').length;
+  if (count === 0) return undefined;
+  const all = count === connections.length;
+  return { count, all, ...(all ? {} : { line: `far side opened on ${count} of ${connections.length}` }) };
 }
 
 /**
@@ -401,16 +588,27 @@ function sharedTechnology(connections: readonly ModelRecord<Connection>[], names
  * not drawn as an end of the arrow: how many pass through anything, and, when every one passes
  * through the same in the same order, those names in the order of travel, as the line
  * `via Ingress, Workhorse`. When the routes differ, or only some connections have one, the line
- * says on how many: `via on 2 of 5`. Something whose file has an error is named by its id.
+ * says on how many: `via on 2 of 5`. `hopOf` says how each hop is named, and whether it stands
+ * in brackets, which a hop does when it has a condition: `via (Office proxy), HTTPS proxy`.
  * Nothing when no connection passes through anything at this level.
  */
-function routeOf(routes: readonly (readonly string[])[], names: ReadonlyMap<string, string>): ViewRoute | undefined {
+function routeOf(routes: readonly (readonly string[])[], hopOf: (hop: string) => ViewHop): ViewRoute | undefined {
   const count = routes.filter((route) => route.length > 0).length;
   if (count === 0) return undefined;
   const [first = []] = routes;
   const same = count === routes.length && routes.every((route) => route.join(' ') === first.join(' '));
-  const named = same ? first.map((id) => names.get(id) ?? id) : [];
-  return { count, names: named, line: named.length > 0 ? `via ${named.join(', ')}` : `via on ${count} of ${routes.length}` };
+  const hops = same ? first.map(hopOf) : [];
+  return {
+    count,
+    hops,
+    bracketed: hops.some((hop) => hop.bracketed),
+    line: hops.length > 0 ? `via ${hops.map(hopText).join(', ')}` : `via on ${count} of ${routes.length}`,
+  };
+}
+
+/** A thing on a route as the route line writes it: its name, in brackets when it has a condition. */
+function hopText(hop: ViewHop): string {
+  return hop.bracketed ? `(${hop.name})` : hop.name;
 }
 
 /** The names of technologies, in order of their ids. One whose file has an error is named by its id. */
@@ -429,6 +627,8 @@ interface Described {
   look: BoxLook;
   name: string;
   line: string;
+  /** The words of its own `only`. */
+  only: string | undefined;
   description: string | undefined;
 }
 
@@ -438,24 +638,25 @@ interface Described {
  * when the view is about it.
  */
 function recordOf(id: string, scope: string, index: Index): Described {
+  const only = ownOnly(id, index);
   const person = index.people.get(id);
-  if (person) return { family: 'people', look: 'person', name: person.name, line: '[Person]', description: person.description };
+  if (person) return { family: 'people', look: 'person', name: person.name, line: '[Person]', only, description: person.description };
   const system = index.systems.get(id);
   if (system) {
     const look = system.external === true ? 'system-external' : id === scope ? 'system-scope' : 'system';
-    return { family: 'systems', look, name: system.name, line: systemLine(system), description: system.description };
+    return { family: 'systems', look, name: system.name, line: systemLine(system), only, description: system.description };
   }
   const app = index.apps.get(id);
-  if (app) return { family: 'apps', look: 'app', name: app.name, line: kindLine('App', app.kind, app.technology, index.technologies), description: app.description };
+  if (app) return { family: 'apps', look: 'app', name: app.name, line: kindLine('App', app.kind, app.technology, index.technologies), only, description: app.description };
   const store = index.stores.get(id);
   if (store) {
     const look = store.kind !== undefined && MESSAGE_KINDS.has(store.kind) ? 'queue-or-topic' : 'store';
-    return { family: 'stores', look, name: store.name, line: kindLine('Store', store.kind, store.technology, index.technologies), description: store.description };
+    return { family: 'stores', look, name: store.name, line: kindLine('Store', store.kind, store.technology, index.technologies), only, description: store.description };
   }
   const piece = index.infrastructure.get(id);
   if (piece) {
     const line = kindLine('Infrastructure', undefined, piece.technology, index.technologies);
-    return { family: 'infrastructure', look: 'infrastructure', name: piece.name, line, description: piece.description };
+    return { family: 'infrastructure', look: 'infrastructure', name: piece.name, line, only, description: piece.description };
   }
   // A box is made only for an end that was followed, which is one of the five.
   throw new Error(`No person, system, app, store or piece of infrastructure has the id ${id}.`);
@@ -465,21 +666,33 @@ function recordOf(id: string, scope: string, index: Index): Described {
  * The legend of a view: what it draws, and no more, in the legend's order. An external system
  * in scope is drawn with the outline of an external system and the thicker line of the system
  * in scope, and the legend explains both. The boundary says when it is an external system's,
- * and what an arrow at its edge means when the view draws one.
+ * that it holds pieces of infrastructure when one stands inside it, and what an arrow at its
+ * edge means when the view draws one. A thing in brackets is explained where a route line names
+ * one, or the list of what is passed through. The `only` line is explained where a box, the
+ * boundary or an arrow has one.
  */
-function legendOf(boxes: readonly ViewBox[], boundary: boolean, arrows: readonly ViewArrow[], scope: ModelRecord<System>): LegendEntry[] {
+function legendOf(boxes: readonly ViewBox[], drawnBoundary: ViewBoundary | undefined, arrows: readonly ViewArrow[], passed: readonly ViewPassed[], scope: ModelRecord<System>): LegendEntry[] {
+  const boundary = drawnBoundary !== undefined;
   const drawn = new Set<LegendKey>();
+  if (drawnBoundary?.only !== undefined) drawn.add('only');
   for (const box of boxes) {
     drawn.add(box.look);
     if (box.scope && box.look === 'system-external') drawn.add('system-scope-external');
     if (box.loops.length > 0) drawn.add('loop');
     if (box.passing.length > 0) drawn.add('passing');
+    if (box.kept.length > 0) drawn.add('kept');
+    if (box.only !== undefined) drawn.add('only');
   }
   if (boundary) drawn.add('boundary');
   if (arrows.length > 0) drawn.add('arrow');
   if (arrows.some((arrow) => arrow.connections.length > 1)) drawn.add('arrow-many');
   if (arrows.some((arrow) => arrow.route !== undefined)) drawn.add('route');
+  if (arrows.some((arrow) => arrow.route?.bracketed === true) || passed.some((each) => each.conditions.length > 0)) drawn.add('route-only');
+  if (arrows.some((arrow) => arrow.opened?.all === true)) drawn.add('opened');
+  if (arrows.some((arrow) => arrow.opened?.all === false)) drawn.add('opened-some');
+  if (arrows.some((arrow) => arrow.only !== undefined)) drawn.add('only');
   const atEdge = boundary && arrows.some((arrow) => arrow.from === scope.id || arrow.to === scope.id);
-  const boundaryText = (text: string) => `${scope.external === true ? BOUNDARY_EXTERNAL : text}${atEdge ? BOUNDARY_ARROWS : ''}`;
+  const pieces = boxes.some((box) => box.inside && box.family === 'infrastructure');
+  const boundaryText = (text: string) => `${(scope.external === true ? BOUNDARY_EXTERNAL : text).replace(INSIDE, pieces ? INSIDE_WITH_PIECES : INSIDE)}${atEdge ? BOUNDARY_ARROWS : ''}`;
   return LEGEND.filter((entry) => drawn.has(entry.key)).map(({ key, text }) => ({ key, text: key === 'boundary' ? boundaryText(text) : text }));
 }

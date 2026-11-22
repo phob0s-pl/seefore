@@ -1,7 +1,9 @@
+import { conditionsOf } from './conditions.ts';
 import { CURRENT_FORMAT, referenceField } from './format.ts';
 import type { Format } from './format.ts';
 import type { Loaded, RecordFile, RecordText, Reference, SourceRecord } from './load.ts';
 import { ownership } from './model.ts';
+import type { Model } from './model.ts';
 import type { Problem } from './problem.ts';
 import { byId, parentsOf } from './rules.ts';
 
@@ -18,8 +20,9 @@ export interface Uses {
   /** The record asked about. */
   record: UsedRecord;
   /**
-   * Everything inside it, to the bottom: for a system its apps and stores and the components
-   * of each app, for an app its components. A thing comes before what is inside it.
+   * Everything inside it, to the bottom, which goes with it: for a system its apps, its stores
+   * and its pieces of infrastructure, and the components of each app and the stores each keeps;
+   * for an app its components and the stores it keeps. A thing comes before what is inside it.
    */
   inside: UsedRecord[];
   /**
@@ -54,7 +57,25 @@ export interface Left {
   assumes: 'connections-go' | 'left-go';
 }
 
-/** A record's name or description that holds a name or an id of the thing asked about. */
+/**
+ * The condition of the record asked about, and what has it from that record. What has it has it
+ * from this record while the record is what it is in, or an end, and a change to the record's
+ * `only` changes it for all of them. A connection that gets another end may still have the same
+ * words from that end, or from what it is in: only the model afterwards can say.
+ */
+export interface Conditioned {
+  /** The words of the record's own `only`. */
+  only: string;
+  /** The ids of the parts inside it that have the condition from it, in the order of `inside`. */
+  parts: string[];
+  /**
+   * The ids of the connections that start or end at it or at something inside it, and so have it
+   * from it, in order of id. Never the record asked about, which has its own `only` from nothing.
+   */
+  connections: string[];
+}
+
+/** A record's name, condition or description that holds a name or an id of the thing asked about. */
 export interface Mention {
   /** The file of the record whose text it is. */
   file: string;
@@ -63,7 +84,7 @@ export interface Mention {
   column: number;
   /** The id of the record whose text it is. */
   record: string;
-  /** `name` or `description`. */
+  /** `name`, `only` or `description`. */
   field: string;
   /** The id of the thing, or of the record inside it, whose name or id the text holds. */
   names: string;
@@ -97,10 +118,15 @@ export interface Removal extends Uses {
   /** For an owner: how many parts take it from what they are in, and so hold no `owner` to change. */
   inherited: number;
   /**
-   * Each name and description of another record that holds a name or an id of the thing, in
-   * order of file and place. A record that stays is read for the names and ids of the record
-   * asked about and of all inside it. A record that goes with it is read only for the name and
-   * the id of the record asked about, since a rename leaves it.
+   * Its condition and what has it from it, when it has an `only` of its own. Missing when it has
+   * none, or when its file has an error, since its condition is then not known.
+   */
+  condition?: Conditioned;
+  /**
+   * Each name, condition and description of another record that holds a name or an id of the
+   * thing, in order of file and place. A record that stays is read for the names and ids of the
+   * record asked about and of all inside it. A record that goes with it is read only for the
+   * name and the id of the record asked about, since a rename leaves it.
    */
   mentions: Mention[];
   /** False when the directory has an error or a file that was not read: other uses may exist. */
@@ -125,6 +151,13 @@ const ELEMENTS = ['people', 'systems', 'apps', 'stores', 'components', 'infrastr
 
 /** The family of the things whose work is to pass exchanges on, which connections name in `via`. */
 const INFRASTRUCTURE = 'infrastructure';
+
+/**
+ * The families of what may be inside another record, in the order a listing shows them beneath
+ * it. A system holds apps, stores and pieces of infrastructure, and an app components and the
+ * stores it keeps, so one order serves both.
+ */
+const INSIDE = ['apps', 'components', 'stores', INFRASTRUCTURE];
 
 /** The families whose records are named for what they are, and never joined: owners and technologies. */
 const NAMED_ONLY = ['owners', 'technologies'];
@@ -164,9 +197,9 @@ export function usesOf(loaded: Loaded, id: string, format: Format = CURRENT_FORM
     else children.set(parent, [child]);
   }
 
-  // Outside in, as a listing shows it: apps before stores, then each in order of id.
-  const order = format.families.map((family) => family.folder);
-  const rank = (child: string): number => order.indexOf((records.get(child)?.[0] as RecordFile).family);
+  // As a listing shows it: in a system its apps, then its stores, then its pieces of
+  // infrastructure; in an app its components, then the stores it keeps. Each in order of id.
+  const rank = (child: string): number => INSIDE.indexOf((records.get(child)?.[0] as RecordFile).family);
   const inside: UsedRecord[] = [];
   const seen = new Set([id]);
   const walk = (parent: string): void => {
@@ -218,14 +251,35 @@ export function removalOf(loaded: Loaded, id: string, options: RemovalOptions = 
   // Each connection with an end in the thing is taken to go, and so is the connection asked about.
   const cut = new Set([...ends].filter(([file, end]) => file === uses.record.file || oneIn(end)).map(([file]) => file));
 
+  const condition = conditionedBy(loaded.model, uses);
   return {
     ...uses,
     goes,
     changes: changesOf(loaded.records, byFile, uses.references, gone),
     left: complete ? leftBehind(loaded, format, parents, ends, { thing, gone, cut }) : [],
     inherited: uses.record.family === 'owners' ? inheritedFrom(loaded, id) : 0,
+    ...(condition === undefined ? {} : { condition }),
     mentions: mentionsOf(loaded.texts, uses.record, uses.inside, gone),
     complete,
+  };
+}
+
+/**
+ * The condition of the record asked about, when it has an `only` of its own, and what has it
+ * from that record: the parts inside it, and the connections that start or end at it or at
+ * something inside it, as `conditionsOf` says. The record itself is not among them: its `only`
+ * is its own, and a connection asked about has it from none of its ends. A record with an error
+ * in its file is not in the model, so nothing is known of what it has or gives.
+ */
+function conditionedBy(model: Model, uses: Uses): Conditioned | undefined {
+  const id = uses.record.id;
+  const own = conditionsOf(model, id)[0];
+  if (own === undefined || own.from !== id) return undefined;
+  const has = (other: string): boolean => other !== id && conditionsOf(model, other).some((condition) => condition.from === id);
+  return {
+    only: own.only,
+    parts: uses.inside.map((record) => record.id).filter(has),
+    connections: model.connections.map((connection) => connection.id).filter(has),
   };
 }
 
@@ -391,8 +445,9 @@ function inheritedFrom(loaded: Loaded, owner: string): number {
 }
 
 /**
- * Each name and description of another record that holds, as whole words, the name or the id
- * of the thing or of anything inside it. The text of a record that goes with the thing is read
+ * Each name, condition and description of another record that holds, as whole words, the name
+ * or the id of the thing or of anything inside it: a condition such as "only when Redis is up"
+ * speaks of what it names. The text of a record that goes with the thing is read
  * only for the record asked about: a removal takes it, but a rename leaves it. One for each text
  * and each of those it may speak of, in order of file and place.
  */

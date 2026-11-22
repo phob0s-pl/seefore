@@ -90,6 +90,8 @@ export const TEXT = {
   name: 15,
   /** The kind line of a box. */
   line: 11,
+  /** The line of a box's own `only`. */
+  only: 11,
   /** The first sentence of a box. */
   sentence: 12,
   /** The names on an arrow. */
@@ -98,6 +100,8 @@ export const TEXT = {
   technology: 11,
   /** The route line of an arrow. */
   route: 11,
+  /** The lines of an arrow that say when its connections are there, and that the far side opened the channel of some. */
+  condition: 11,
   /** The title of a boundary, in bold. */
   boundary: 16,
 } as const;
@@ -106,11 +110,21 @@ export const TEXT = {
 export const LINE_HEIGHT = {
   name: 18,
   line: 14,
+  only: 14,
   sentence: 15,
   label: 15,
   technology: 14,
   route: 14,
+  condition: 14,
 } as const;
+
+/**
+ * Whether a condition is also drawn as a dash: the outline of a box that has an `only` of its
+ * own, and the line of an arrow whose every connection has one. Off. It is a trial only: the
+ * boundary of a system is dashed already, and whether the two can be told apart at the zoom the
+ * largest views open at is not yet known. The words of the `only` line are drawn either way.
+ */
+export const DASHED_CONDITIONS = false;
 
 /**
  * How much more room the page gives a box's text on each side than the layout broke its lines

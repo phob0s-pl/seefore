@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { conditionsOf } from '../src/conditions.ts';
 import { load } from '../src/load.ts';
 import type { SourceFile } from '../src/load.ts';
 import type { Problem } from '../src/problem.ts';
@@ -559,4 +560,131 @@ describe('the texts a directory holds', () => {
       { file: 'systems/shop.yaml', line: 2, column: 1, record: 'shop', field: 'name', text: 'Shop' },
     ]);
   });
+
+  it('are each condition too, which may speak of another record', () => {
+    const loaded = load(directory({ 'systems/shop.yaml': 'name: Shop\n', 'apps/api.yaml': 'name: API\nin: shop\nonly: when the Shop runs its own payments\n' }));
+    expect(loaded.texts.filter((text) => text.field === 'only')).toEqual([
+      { file: 'apps/api.yaml', line: 3, column: 1, record: 'api', field: 'only', text: 'when the Shop runs its own payments' },
+    ]);
+  });
 });
+
+/**
+ * A desk like Vellumoak's: Desk keeps its drafts and a cache, a worker reads the drafts too, an
+ * ingress in the system stands before Desk, and the office edition has a proxy of its own.
+ */
+const DESK: Readonly<Record<string, string>> = {
+  'people/staff.yaml': 'name: Staff\n',
+  'systems/archive.yaml': 'name: Archive\nowner: archive-team\n',
+  'systems/office.yaml': 'name: Office\nonly: in the head office\n',
+  'apps/desk.yaml': 'name: Desk\nin: archive\nonly: in the desk edition\n',
+  'apps/worker.yaml': 'name: Worker\nin: archive\n',
+  'components/editor.yaml': 'name: Editor\nin: desk\n',
+  'stores/drafts.yaml': 'name: Drafts\nin: desk\n',
+  'stores/cache.yaml': 'name: Cache\nin: desk\n',
+  'stores/records.yaml': 'name: Records\nin: archive\n',
+  'infrastructure/ingress.yaml': 'name: Ingress\nin: archive\n',
+  'infrastructure/office-proxy.yaml': 'name: Office proxy\nin: office\n',
+  'connections/staff-uses-desk.yaml': 'from: staff\nto: desk\nvia: [office-proxy, ingress]\nname: Edits records\n',
+  'connections/editor-keeps-drafts.yaml': 'from: editor\nto: drafts\naccess: read-write\nname: Keeps edits not yet saved\n',
+  'connections/worker-reads-drafts.yaml': 'from: worker\nto: drafts\naccess: read\nname: Reads the drafts to save them\n',
+  'connections/worker-writes-records.yaml': 'from: worker\nto: records\naccess: write\nname: Saves the records\n',
+  'connections/desk-tells-staff.yaml': 'from: desk\nto: staff\nopens: to\nname: Says when a record is saved\n',
+  'owners/archive-team.yaml': 'name: Archive team\n',
+};
+
+describe('a store that an app keeps, a piece in a system, and a condition', () => {
+  it('puts the stores an app keeps with it, after its components', () => {
+    const removal = review(DESK, 'desk');
+    expect(removal.inside.map((record) => `${record.id} in ${record.in}`)).toEqual(['editor in desk', 'cache in desk', 'drafts in desk']);
+    expect(ids(removal.goes)).toEqual(['editor', 'cache', 'drafts', 'editor-keeps-drafts']);
+    expect(removal.changes.map((change) => change.record.id)).toEqual(['desk-tells-staff', 'staff-uses-desk', 'worker-reads-drafts']);
+  });
+
+  it('puts in a system its apps with what is in each, then its stores, then its pieces of infrastructure', () => {
+    expect(ids(review(DESK, 'archive').inside)).toEqual(['desk', 'editor', 'cache', 'drafts', 'worker', 'records', 'ingress']);
+  });
+
+  it('puts a piece of infrastructure with its system, and a connection through it under what must change', () => {
+    const removal = review(DESK, 'office');
+    expect(ids(removal.inside)).toEqual(['office-proxy']);
+    expect(removal.changes).toEqual([
+      {
+        record: { id: 'staff-uses-desk', family: 'connections', file: 'connections/staff-uses-desk.yaml', name: 'Edits records' },
+        places: [{ file: 'connections/staff-uses-desk.yaml', line: 3, column: 7, record: 'staff-uses-desk', field: 'via', names: 'office-proxy' }],
+      },
+    ]);
+    expect(left(removal)).toEqual([]);
+  });
+
+  it("leaves behind, when an app's last kept store goes, what reached nothing else, and says nothing of `access`", () => {
+    const removal = review(withoutNulls({ ...DESK, 'stores/cache.yaml': null }), 'drafts');
+    expect(removal.changes.flatMap((change) => change.places.map((place) => `${change.record.id} ${place.field}`))).toEqual([
+      'editor-keeps-drafts to',
+      'worker-reads-drafts to',
+    ]);
+    // The editor's one connection was to the drafts; Desk has connections of its own, and the worker another.
+    expect(left(removal)).toEqual(['editor no-connection connections-go']);
+    // An app whose only connections were those of its part to the store it kept is left with none too.
+    const alone = withoutNulls({ ...DESK, 'stores/cache.yaml': null, 'connections/staff-uses-desk.yaml': null, 'connections/desk-tells-staff.yaml': null });
+    expect(left(review(alone, 'drafts'))).toEqual(['desk no-connection connections-go', 'editor no-connection connections-go']);
+  });
+
+  it("takes a piece of infrastructure with its system, and leaves behind what only the system's connections reached or named", () => {
+    const removal = review(DESK, 'archive');
+    expect(removal.changes.map((change) => change.record.id)).toEqual(['desk-tells-staff', 'staff-uses-desk']);
+    // The office's proxy is in another system, so it stays, named by nothing.
+    expect(left(removal)).toEqual(['staff no-connection connections-go', 'office-proxy no-user connections-go', 'archive-team no-user connections-go']);
+  });
+
+  it('takes the stores an app keeps with the app, and makes each connection to them from outside go or change', () => {
+    const removal = review(DESK, 'desk');
+    const worker = removal.changes.find((change) => change.record.id === 'worker-reads-drafts');
+    expect(worker?.places).toEqual([{ file: 'connections/worker-reads-drafts.yaml', line: 2, column: 5, record: 'worker-reads-drafts', field: 'to', names: 'drafts' }]);
+    // The worker keeps its connection to the records; the route to Desk named the two pieces.
+    expect(left(removal)).toEqual(['staff no-connection connections-go', 'ingress no-user connections-go', 'office-proxy no-user connections-go']);
+  });
+
+  it('says what has its condition from it: the parts inside it and the connections at it or in it', () => {
+    expect(review(DESK, 'desk').condition).toEqual({
+      only: 'in the desk edition',
+      parts: ['editor', 'cache', 'drafts'],
+      connections: ['desk-tells-staff', 'editor-keeps-drafts', 'staff-uses-desk', 'worker-reads-drafts'],
+    });
+    // Nothing comes from what a connection passes through.
+    expect(review(DESK, 'office').condition).toEqual({ only: 'in the head office', parts: ['office-proxy'], connections: [] });
+  });
+
+  it('does not count a connection with an `only` of its own among those that have its condition from it', () => {
+    const files = { ...DESK, 'connections/editor-keeps-drafts.yaml': 'from: editor\nto: drafts\naccess: read-write\nonly: with drafts kept\n' };
+    expect(review(files, 'editor-keeps-drafts').condition).toEqual({ only: 'with drafts kept', parts: [], connections: [] });
+  });
+
+  it('drops a connection that gets another end from those that have the condition of the old one, though both ends still give it the condition of the app they share', () => {
+    const kept = { ...DESK, 'stores/drafts.yaml': 'name: Drafts\nin: desk\nonly: with drafts kept\n' };
+    expect(review(kept, 'drafts').condition).toEqual({ only: 'with drafts kept', parts: [], connections: ['editor-keeps-drafts', 'worker-reads-drafts'] });
+    // The editor's connection goes to the cache in the place of the drafts: both ends are still in Desk.
+    const moved = { ...kept, 'connections/editor-keeps-drafts.yaml': 'from: editor\nto: cache\naccess: read-write\nname: Keeps edits not yet saved\n' };
+    expect(review(moved, 'drafts').condition?.connections).toEqual(['worker-reads-drafts']);
+    expect(review(moved, 'desk').condition?.connections).toContain('editor-keeps-drafts');
+    expect(conditionsOf(load(directory(moved)).model, 'editor-keeps-drafts')).toEqual([{ only: 'in the desk edition', from: 'desk' }]);
+  });
+
+  it('says nothing of a condition for a record with none of its own, nor for one with an error in its file', () => {
+    expect(review(DESK, 'archive')).not.toHaveProperty('condition');
+    expect(review(DESK, 'editor')).not.toHaveProperty('condition');
+    expect(review({ ...DESK, 'apps/desk.yaml': 'name: Desk\nin: archive\nonly: in the desk edition\ncolour: blue\n' }, 'desk')).not.toHaveProperty('condition');
+  });
+
+  it('finds a name in the condition of another record', () => {
+    const files = { ...DESK, 'apps/worker.yaml': 'name: Worker\nin: archive\nonly: where the Ingress runs\n' };
+    expect(review(files, 'ingress').mentions).toEqual([
+      { file: 'apps/worker.yaml', line: 3, column: 1, record: 'worker', field: 'only', names: 'ingress', words: ['Ingress'], goes: false },
+    ]);
+  });
+});
+
+/** Files with those given as `null` left out. */
+function withoutNulls(files: Readonly<Record<string, string | null>>): Record<string, string> {
+  return Object.fromEntries(Object.entries(files).filter((entry): entry is [string, string] => entry[1] !== null));
+}
