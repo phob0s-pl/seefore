@@ -66,20 +66,27 @@ function sentence(text: string): string {
   return /[.!?…]$/u.test(text) ? text : `${text}.`;
 }
 
-/** What a screen reader says for a box: its whole name, kind line and first sentence, and its mark. */
+/** A number of connections in words: `1 connection`, `3 connections`. */
+function connections(count: number): string {
+  return `${count} ${count === 1 ? 'connection' : 'connections'}`;
+}
+
+/** What a screen reader says for a box: its whole name, kind line and first sentence, and its marks. */
 export function boxSaid(box: ViewBox): string {
   const parts = [`${box.name}, ${box.line}`];
   if (box.sentence !== undefined) parts.push(box.sentence);
-  if (box.loops.length > 0) parts.push(`${box.loops.length} ${box.loops.length === 1 ? 'connection' : 'connections'} between its copies`);
+  if (box.loops.length > 0) parts.push(`${connections(box.loops.length)} between its copies`);
+  if (box.passing.length > 0) parts.push(`${connections(box.passing.length)} of this view ${box.passing.length === 1 ? 'passes' : 'pass'} through it`);
   return parts.map(sentence).join(' ');
 }
 
-/** What a screen reader says for an arrow: its two ends, and the whole name of every connection it stands for. */
+/** What a screen reader says for an arrow: its two ends, the whole name of every connection it stands for, its route and its technology. */
 export function arrowSaid(arrow: ViewArrow, names: ReadonlyMap<string, string>): string {
   const from = names.get(arrow.from) ?? arrow.from;
   const to = names.get(arrow.to) ?? arrow.to;
+  const route = arrow.route === undefined ? '' : `, ${arrow.route.line}`;
   const technology = arrow.technology.length > 0 ? ` [${arrow.technology.join(', ')}]` : '';
-  return `${from} to ${to}: ${arrow.names.join('; ')}${technology}`;
+  return `${from} to ${to}: ${arrow.names.join('; ')}${route}${technology}`;
 }
 
 /** The name of each box and of the boundary of a view, by id. */
@@ -204,19 +211,21 @@ export interface LabelLine {
   text: string;
   /** The middle of the line, from the top of the picture. */
   y: number;
-  /** True for the technology line. */
-  technology: boolean;
+  /** A line of names, the route line or the technology line. */
+  kind: 'name' | 'route' | 'technology';
 }
 
-/** The lines of a label as given, stacked in the middle of the label's place, the technology last. */
+/** The lines of a label as given, stacked in the middle of the label's place: the names, then the route, then the technology. */
 export function labelLines(label: PlacedLabel): LabelLine[] {
-  const height = label.lines.length * LINE_HEIGHT.label + (label.technology === undefined ? 0 : LINE_HEIGHT.technology);
-  let top = label.y + (label.height - height) / 2;
-  const lines: LabelLine[] = label.lines.map((text) => {
-    const line = { text, y: top + LINE_HEIGHT.label / 2, technology: false };
-    top += LINE_HEIGHT.label;
+  const given: { text: string; kind: LabelLine['kind']; height: number }[] = [
+    ...label.lines.map((text) => ({ text, kind: 'name' as const, height: LINE_HEIGHT.label })),
+    ...(label.route === undefined ? [] : [{ text: label.route, kind: 'route' as const, height: LINE_HEIGHT.route }]),
+    ...(label.technology === undefined ? [] : [{ text: label.technology, kind: 'technology' as const, height: LINE_HEIGHT.technology }]),
+  ];
+  let top = label.y + (label.height - given.reduce((sum, line) => sum + line.height, 0)) / 2;
+  return given.map(({ text, kind, height }) => {
+    const line = { text, y: top + height / 2, kind };
+    top += height;
     return line;
   });
-  if (label.technology !== undefined) lines.push({ text: label.technology, y: top + LINE_HEIGHT.technology / 2, technology: true });
-  return lines;
 }

@@ -16,6 +16,7 @@ export { emptyModel, ownership } from './model.ts';
 export type { Model, ModelRecord, Ownership } from './model.ts';
 export type {
   BoxFamily,
+  BoxLook,
   Drawn,
   Failed,
   LegendEntry,
@@ -39,6 +40,8 @@ export type {
   ViewBox,
   ViewKind,
   ViewLeft,
+  ViewPassed,
+  ViewRoute,
   ViewerState,
 } from './picture.ts';
 export { outlineOf } from './outline.ts';

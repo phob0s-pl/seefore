@@ -2,12 +2,13 @@ import type { Drawn, PlacedLabel, View } from '@seefore/core';
 import { Handle, Position, ReactFlow, ReactFlowProvider, useReactFlow, useViewportStore } from '@xyflow/react';
 import type { AriaLabelConfig, EdgeProps, EdgeTypes, NodeProps, NodeTypes } from '@xyflow/react';
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import type { FocusEvent, KeyboardEvent } from 'react';
+import type { FocusEvent, KeyboardEvent, ReactNode } from 'react';
 import { HANDLE_IN, HANDLE_OUT, headOf, labelLines, pathOf, toFlow } from './flow.ts';
 import type { ArrowEdge, BoundaryNode, BoxNode, PictureNode } from './flow.ts';
 import { litBy } from './light.ts';
+import { passingWords } from './records.ts';
 import type { Lit, Target } from './light.ts';
-import { Sample, Shape } from './shapes.tsx';
+import { LOOP_MARK, PASSING_MARK, Sample, Shape } from './shapes.tsx';
 import { MAX_ZOOM, MOVE_MS, detailAt, fitViewport, litBounds, minZoomFor, percent, smallNote, whole } from './zoom.ts';
 import type { Room } from './zoom.ts';
 
@@ -47,16 +48,20 @@ function Handles() {
   );
 }
 
-/** A box: its shape, and the lines of its text as the picture gives them, each on one line and clipped at the edge. */
+/**
+ * A box: its shape, the lines of its text as the picture gives them, each on one line and
+ * clipped at the edge, and on its top edge the marks for what passes through it and for its copies.
+ */
 function BoxView({ id, data }: NodeProps<BoxNode>) {
   const light = useContext(LightContext);
   const { box, placed } = data;
   const loops = box.loops.length;
+  const passing = box.passing.length;
   return (
-    <div className={`box family-${box.family}${box.scope ? ' scope' : ''} ${standing(light, 'box', id)}`} style={{ width: placed.width, height: placed.height }}>
+    <div className={`box family-${box.family}${box.scope ? ' scope' : ''} ${standing(light, 'box', id)}`} data-look={box.look} style={{ width: placed.width, height: placed.height }}>
       <Handles />
       <svg className="shape" width={placed.width} height={placed.height} aria-hidden="true">
-        <Shape family={box.family} scope={box.scope} width={placed.width} height={placed.height} />
+        <Shape look={box.look} scope={box.scope} width={placed.width} height={placed.height} />
       </svg>
       <div className="box-text" aria-hidden="true">
         <div className="box-name">
@@ -77,9 +82,10 @@ function BoxView({ id, data }: NodeProps<BoxNode>) {
           </div>
         )}
       </div>
-      {loops > 0 && (
-        <div className="mark" aria-hidden="true">
-          ↻ {loops}
+      {(passing > 0 || loops > 0) && (
+        <div className="marks" aria-hidden="true">
+          {passing > 0 && <div className="mark mark-passing">{`${PASSING_MARK} ${passing}`}</div>}
+          {loops > 0 && <div className="mark">{`${LOOP_MARK} ${loops}`}</div>}
         </div>
       )}
     </div>
@@ -111,7 +117,7 @@ function Label({ label, clip }: { label: PlacedLabel; clip: string }) {
       <rect className="label-ground" x={label.x} y={label.y} width={label.width} height={label.height} rx={2} />
       <g clipPath={`url(#${clip})`}>
         {labelLines(label).map((line, at) => (
-          <text key={at} className={line.technology ? 'label-technology' : 'label-name'} x={middle} y={line.y} textAnchor="middle" dominantBaseline="central">
+          <text key={at} className={`label-${line.kind}`} x={middle} y={line.y} textAnchor="middle" dominantBaseline="central">
             {line.text}
           </text>
         ))}
@@ -371,13 +377,15 @@ function Inside({ view, drawn, room: given, chosen, onPoint, onFocusTarget, onCh
           />
         )}
       </div>
-      <Legend view={view} />
+      <Legend view={view}>
+        <PassesThrough view={view} chosen={chosen} onPoint={onPoint} onFocusTarget={onFocusTarget} onChoose={onChoose} />
+      </Legend>
     </div>
   );
 }
 
-/** The legend: a sample of each kind of box, line and mark this view draws, and no other. */
-export function Legend({ view }: { view: View }) {
+/** The legend: a sample of each kind of box, line and mark this view draws, and no other; and under it what is given. */
+export function Legend({ view, children }: { view: View; children?: ReactNode }) {
   return (
     <section className="legend" aria-label="Legend">
       <ul>
@@ -388,6 +396,46 @@ export function Legend({ view }: { view: View }) {
           </li>
         ))}
       </ul>
+      {children}
     </section>
+  );
+}
+
+/**
+ * What the arrows of the view pass through and has no box, each with how many of the view's
+ * connections pass through it. Pointing at one, or its focus, lights those arrows; a click, or
+ * Enter, keeps them lit and opens its panel. Missing when there is nothing of the kind.
+ */
+function PassesThrough({ view, chosen, onPoint, onFocusTarget, onChoose }: { view: View; chosen: Target | null } & Omit<DiagramActions, 'onClear'>) {
+  if (view.passed.length === 0) return null;
+  return (
+    <div className="passes-through">
+      <span className="passes-title">Passes through:</span>
+      <ul aria-label="Passes through">
+        {view.passed.map((each) => {
+          const target: Target = { kind: 'passed', id: each.id };
+          const count = each.connections.length;
+          const isChosen = chosen?.kind === 'passed' && chosen.id === each.id;
+          return (
+            <li key={each.id}>
+              <button
+                type="button"
+                data-id={each.id}
+                {...(isChosen ? { className: 'chosen' } : {})}
+                aria-label={`${each.name}: ${passingWords(count)}`}
+                // A click made with the keyboard has no count of presses.
+                onClick={(event) => onChoose(target, event.detail === 0)}
+                onMouseEnter={() => onPoint(target)}
+                onMouseLeave={() => onPoint(null)}
+                onFocus={() => onFocusTarget(target)}
+                onBlur={() => onFocusTarget(null)}
+              >
+                {each.name} <span className="passes-count">{count}</span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }

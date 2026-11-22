@@ -5,7 +5,7 @@ import type { Route } from '../src/address.ts';
 import type { Selection } from '../src/follow.ts';
 import type { Shown } from '../src/live.ts';
 import { Page, pageTitle } from '../src/page.tsx';
-import { CONTAINERS, CONTAINER_PICTURE, CONTEXT, CONTEXT_PICTURE, FAILED_PICTURE, MODEL, PROBLEMS, STATE } from './fixture.ts';
+import { CONTAINERS, CONTAINER_PICTURE, CONTEXT, CONTEXT_PICTURE, FAILED_PICTURE, HARD_CONTAINERS, HARD_PICTURE, HARD_STATE, MODEL, PROBLEMS, STATE } from './fixture.ts';
 
 /** The page drawn without a browser, as React's server rendering draws it. */
 
@@ -298,3 +298,174 @@ describe('the problems', () => {
     expect(html).toContain('The check found 1 error and 1 warning.');
   });
 });
+
+/** The page of the hard cases for a route, with their picture, and something chosen when given. */
+function hard(route: Route = { page: 'view', view: HARD_CONTAINERS.id }, selection: Selection | null = null): string {
+  return render(route, HARD_PICTURE, selection, HARD_STATE);
+}
+
+/** The shape a box of a look draws: the markup of its outline, from its look to the end of its picture. */
+function shapeOf(html: string, look: string): string {
+  const start = html.indexOf(`data-look="${look}"`);
+  if (start < 0) throw new Error(`No box looks ${look}.`);
+  return html.slice(start, html.indexOf('</svg>', start));
+}
+
+/** The markup of the label of an arrow, by its route. */
+function labelOf(html: string, route: string): string {
+  const end = html.indexOf(`>${route}<`);
+  const start = html.lastIndexOf('<g class="arrow-label"', end);
+  return html.slice(start, html.indexOf('</g></g>', end));
+}
+
+describe('the hard cases in a picture', () => {
+  const html = hard();
+
+  it('gives a queue or a topic, a piece of infrastructure and an external system each a shape of its own', () => {
+    // A cylinder on its side, a store's upright: their lids are arcs of another axis.
+    expect(shapeOf(html, 'queue-or-topic')).toMatch(/<path class="outline" d="M8,1 L232,1 A7,74 0 0 1 232,149/);
+    expect(shapeOf(html, 'queue-or-topic')).toContain('class="outline rim"');
+    // Pointed at both ends.
+    expect(shapeOf(html, 'infrastructure')).toMatch(/<polygon class="outline" points="15,1 225,1 239,75 225,149 15,149 1,75"/);
+    // One line, where a system has two.
+    expect(shapeOf(html, 'system-external')).toContain('<rect class="outline"');
+    expect(shapeOf(html, 'system-external')).not.toContain('rim');
+    expect(shapeOf(html, 'app')).toMatch(/<rect class="outline"[^>]*rx="10"/);
+  });
+
+  it('colours a piece of infrastructure by a family of its own, and a queue as a store', () => {
+    expect(html).toContain('box family-infrastructure');
+    expect(html).toMatch(/box family-stores[^"]*" data-look="queue-or-topic"/);
+  });
+
+  it('draws the route line under the names and above the technology, with the other words of the label', () => {
+    const label = labelOf(html, 'via HTTPS proxy');
+    expect(label).toContain('class="label-route"');
+    const places = ['>Asks for pages<', '>via HTTPS proxy<', '>[HTTPS]<'].map((piece) => label.indexOf(piece));
+    expect(places.every((place) => place >= 0)).toBe(true);
+    expect([...places].sort((a, b) => a - b)).toEqual(places);
+    expect(html).toContain('>via on 1 of 2<');
+    expect(times(html, 'class="label-route"')).toBe(2);
+  });
+
+  it('marks a box that connections pass through with their number', () => {
+    expect(times(html, 'class="mark mark-passing"')).toBe(2);
+    expect(html).toMatch(/data-id="proxy"[^]*?class="mark mark-passing">⇢ 1</);
+    expect(html).toMatch(/data-id="gateway"[^]*?class="mark mark-passing">⇢ 1</);
+  });
+
+  it('puts the mark beside the mark for copies', () => {
+    const view = { ...HARD_CONTAINERS, boxes: HARD_CONTAINERS.boxes.map((box) => (box.id === 'proxy' ? { ...box, loops: ['proxy-asks-proxy'] } : box)) };
+    const markup = render({ page: 'view', view: view.id }, HARD_PICTURE, null, { ...HARD_STATE, views: [view] });
+    expect(markup).toContain('<div class="marks" aria-hidden="true"><div class="mark mark-passing">⇢ 1</div><div class="mark">↻ 1</div></div>');
+  });
+
+  it('lists under the legend what is passed through and has no box, with its number', () => {
+    const legend = html.slice(html.indexOf('aria-label="Legend"'));
+    expect(legend).toContain('>Passes through:<');
+    expect(legend).toMatch(/<button type="button" data-id="balancer" aria-label="Load balancer: 1 connection passes through it">Load balancer <span class="passes-count">1<\/span><\/button>/);
+    // None for a view with nothing of the kind.
+    expect(render(containers, CONTAINER_PICTURE)).not.toContain('Passes through');
+  });
+
+  it('has each new look and mark in the legend, with a sample', () => {
+    for (const key of ['system-external', 'queue-or-topic', 'infrastructure', 'route', 'passing']) expect(html).toMatch(new RegExp(`data-key="${key}"><svg class="sample"`));
+    expect(html).toMatch(/data-key="route"><svg[^]*?>via<\/text>/);
+    expect(html).toMatch(/data-key="passing"><svg[^]*?>⇢ 2<\/text>/);
+  });
+
+  it('names for a screen reader the route of an arrow and what passes through a box', () => {
+    expect(html).toContain(`aria-label="${escaped('Clerk to Web: Asks for pages, via HTTPS proxy [HTTPS]')}"`);
+    expect(html).toContain(`aria-label="${escaped('Web to Card provider: Asks for a refund; Takes a payment, via on 1 of 2')}"`);
+    expect(html).toContain(
+      `aria-label="${escaped("HTTPS proxy, [Infrastructure · nginx]. Ends HTTPS on the desk's host and passes requests on. 1 connection of this view passes through it.")}"`,
+    );
+  });
+});
+
+describe('choosing what is passed through', () => {
+  it('lights the arrows that pass through it, and their ends, and opens its panel', () => {
+    const html = hard(undefined, { kind: 'passed', id: 'balancer' });
+    expect(html).toContain('class="arrow arrow-many lit"');
+    // The web app and the card provider are its ends; the gateway, on its way too, has a box of its own and is not lit by the load balancer.
+    expect(times(html, 'box family-apps lit" data-look="app"')).toBe(1);
+    expect(times(html, 'box family-apps faded" data-look="app"')).toBe(1);
+    expect(html).toContain('box family-systems lit" data-look="system-external"');
+    expect(html).toContain('box family-infrastructure faded');
+    expect(html).toMatch(/<button type="button" data-id="balancer" class="chosen"/);
+    const panel = html.slice(html.indexOf('aria-label="Details"'));
+    expect(panel).toContain('>Load balancer</h2>');
+    expect(panel).toContain('<dd>Infrastructure</dd>');
+    expect(panel).toContain('Passing through it in this view (1)');
+    expect(panel).toContain('Web → Card provider');
+  });
+
+  it('lights with a box the arrows that pass through it', () => {
+    const html = hard(undefined, { kind: 'box', id: 'gateway' });
+    expect(html).toContain('class="arrow arrow-many lit"');
+    expect(html).toContain('box family-apps lit chosen" data-look="app"');
+    expect(html).toContain('Passing through it in this view (1)');
+  });
+});
+
+describe('the panel of the hard cases', () => {
+  it('gives each connection of an arrow its route in order, each step a link to its record', () => {
+    const html = hard(undefined, { kind: 'arrow', id: 'web~cards' });
+    const panel = html.slice(html.indexOf('aria-label="Details"'));
+    expect(panel).toContain(
+      '<p class="connection-route">via <span class="hops"><button type="button" class="record-name">Gateway</button>, <button type="button" class="record-name">Load balancer</button></span></p>',
+    );
+    expect(times(panel, 'class="connection-route"')).toBe(1);
+  });
+
+  it('says that a system is external', () => {
+    const html = hard(undefined, { kind: 'box', id: 'cards' });
+    expect(html.slice(html.indexOf('aria-label="Details"'))).toContain('<dd>System: external</dd>');
+  });
+
+  it('lists for a record chosen in the listing the connections of the whole model that pass through it', () => {
+    const html = hard({ page: 'model' }, { kind: 'record', id: 'proxy' });
+    const panel = html.slice(html.indexOf('aria-label="Details"'));
+    expect(panel).toContain('<dd>Infrastructure</dd>');
+    expect(panel).toContain('<dd>nginx</dd>');
+    expect(panel).toContain('Passing through it (1)');
+    expect(panel).toContain('Clerk → Web');
+  });
+
+  it('gives a connection chosen in the listing its route, as links', () => {
+    const html = hard({ page: 'model' }, { kind: 'record', id: 'web-calls-cards' });
+    const panel = html.slice(html.indexOf('aria-label="Details"'));
+    expect(panel).toMatch(/<dt>Via<\/dt><dd><span class="hops"><button type="button" class="record-name">Gateway<\/button>, <button type="button" class="record-name">Load balancer<\/button><\/span><\/dd>/);
+  });
+});
+
+describe('the listing of the hard cases', () => {
+  const whole = hard({ page: 'model' });
+  const html = whole.slice(whole.indexOf('<article class="listing"'));
+
+  it('lists the pieces of infrastructure under a heading of their own, after the systems and before the connections', () => {
+    const places = ['Other systems (1)', 'Infrastructure (2)', name('Load balancer'), name('HTTPS proxy'), 'Connections (5)'].map((piece) => html.indexOf(piece));
+    expect(places.every((place) => place >= 0)).toBe(true);
+    expect([...places].sort((a, b) => a - b)).toEqual(places);
+  });
+
+  it('says how many connections pass through each piece of infrastructure', () => {
+    expect(html).toContain('(nginx; 1 connection passes through it)');
+    expect(html).toContain('<code>balancer</code></span><span class="entry-facts"> (1 connection passes through it)</span>');
+  });
+
+  it('says on its line what a connection passes through, and that a system is external', () => {
+    expect(html).toContain('→ Web, via HTTPS proxy: Asks for pages');
+    expect(html).toContain('→ Card provider, via Gateway, Load balancer: Takes a payment');
+    expect(html).toContain('<code>cards</code></span><span class="entry-facts"> (external)</span>');
+  });
+
+  it('counts the pieces of infrastructure as listed', () => {
+    expect(html).toContain('16 records read. ');
+  });
+});
+
+/** A record's name as the listing makes it a button. */
+function name(text: string): string {
+  return `>${escaped(text)}</button>`;
+}

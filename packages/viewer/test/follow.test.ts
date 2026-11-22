@@ -1,7 +1,7 @@
 import type { ViewerState } from '@seefore/core';
 import { describe, expect, it } from 'vitest';
 import { accepts, keptSelection, resolveRoute, revisionOf } from '../src/follow.ts';
-import { CONTAINERS, CONTEXT, MODEL, STATE, answerFor } from './fixture.ts';
+import { CONTAINERS, CONTEXT, HARD_CONTAINERS, HARD_STATE, MODEL, STATE, answerFor } from './fixture.ts';
 
 /** What a new reading does to the view shown and to what is chosen, and which answers the page takes. */
 
@@ -62,6 +62,14 @@ describe('what a new state does to a selection', () => {
 
   it('keeps no selection as none', () => {
     expect(keptSelection(LATER, containers, null)).toBeNull();
+  });
+
+  it('keeps what is passed through while the view lists it, and a piece of infrastructure chosen in the listing', () => {
+    const desk = { page: 'view' as const, view: HARD_CONTAINERS.id };
+    expect(keptSelection(HARD_STATE, desk, { kind: 'passed', id: 'balancer' })).toEqual({ kind: 'passed', id: 'balancer' });
+    const later = { ...HARD_STATE, views: [{ ...HARD_CONTAINERS, passed: [] }] };
+    expect(keptSelection(later, desk, { kind: 'passed', id: 'balancer' })).toBeNull();
+    expect(keptSelection(HARD_STATE, { page: 'model' }, { kind: 'record', id: 'balancer' })).toEqual({ kind: 'record', id: 'balancer' });
   });
 });
 

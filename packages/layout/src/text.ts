@@ -10,6 +10,8 @@ import {
   LABEL_WIDTH,
   NAME_FONT,
   NAME_LINES,
+  ROUTE_FONT,
+  ROUTE_LINE_HEIGHT,
   SENTENCE_FONT,
   SENTENCE_LINES,
   TECHNOLOGY_FONT,
@@ -31,6 +33,8 @@ export interface BoxText {
 export interface LabelText {
   /** The names, one to a line, or one name in up to three lines, and `+ n more` when not every name has a line. */
   lines: string[];
+  /** The route line, `via Ingress, Workhorse` or `via on 2 of 5`, when any connection of the arrow passes through something. */
+  route?: string;
   /** The technology line, `[HTTPS, JSON]`, when every connection of the arrow names the same. */
   technology?: string;
   /** The room the label takes, in whole pixels: as wide as its widest line, as high as its lines. */
@@ -50,19 +54,25 @@ export function boxText(box: ViewBox): BoxText {
 /**
  * The label of an arrow. A single connection's name takes up to three lines. Two or three
  * names have a line each. More have two lines, and `+ n more` for the rest. Under them, the
- * technology on a line of its own. No line is wider than the label may be. An arrow with no
- * text has no label.
+ * route on a line of its own, and under that the technology. No line is wider than the label
+ * may be. An arrow with no text has no label.
  */
 export function labelText(arrow: ViewArrow): LabelText | undefined {
   const lines = nameLines(arrow.names);
+  const route = arrow.route === undefined ? undefined : oneLine(arrow.route.line, ROUTE_FONT, LABEL_WIDTH);
   const technology = arrow.technology.length === 0 ? undefined : oneLine(`[${arrow.technology.join(', ')}]`, TECHNOLOGY_FONT, LABEL_WIDTH);
-  if (lines.length === 0 && technology === undefined) return undefined;
-  const widths = [...lines.map((line) => widthOf(line, LABEL_FONT)), technology === undefined ? 0 : widthOf(technology, TECHNOLOGY_FONT)];
+  if (lines.length === 0 && route === undefined && technology === undefined) return undefined;
+  const widths = [
+    ...lines.map((line) => widthOf(line, LABEL_FONT)),
+    route === undefined ? 0 : widthOf(route, ROUTE_FONT),
+    technology === undefined ? 0 : widthOf(technology, TECHNOLOGY_FONT),
+  ];
   return {
     lines,
+    ...(route === undefined ? {} : { route }),
     ...(technology === undefined ? {} : { technology }),
     width: Math.ceil(Math.max(...widths)),
-    height: lines.length * LABEL_LINE_HEIGHT + (technology === undefined ? 0 : TECHNOLOGY_LINE_HEIGHT),
+    height: lines.length * LABEL_LINE_HEIGHT + (route === undefined ? 0 : ROUTE_LINE_HEIGHT) + (technology === undefined ? 0 : TECHNOLOGY_LINE_HEIGHT),
   };
 }
 

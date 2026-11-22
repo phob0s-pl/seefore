@@ -68,7 +68,7 @@ async function waitFor<T>(what: () => T | undefined | false, ms = 10_000): Promi
 
 /** A view made up for a test, with nothing in it. */
 function view(id: string): View {
-  return { id, kind: 'context', scope: id.split('.')[0] ?? id, title: `Context view: ${id}`, boxes: [], arrows: [], left: { outside: [], broken: [] }, legend: [] };
+  return { id, kind: 'context', scope: id.split('.')[0] ?? id, title: `Context view: ${id}`, boxes: [], arrows: [], left: { outside: [], broken: [] }, legend: [], passed: [] };
 }
 
 /** The picture a made-up layout gives for a view. */

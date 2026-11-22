@@ -20,7 +20,9 @@ export interface Colours {
   person: string;
   app: string;
   store: string;
-  /** A system, in scope or not: ours and somebody else's look alike until stage 6. */
+  /** A piece of infrastructure. */
+  infrastructure: string;
+  /** A system, in scope or not, ours or external: an external one is told by its outline. */
   system: string;
   arrow: string;
   /** The dashed line of a boundary. */
@@ -47,6 +49,7 @@ export const LIGHT: Colours = {
   person: '#08427b', // 10.1 on white
   app: '#1565c0', // 5.8 on white
   store: '#2e7d5b', // 5.0 on white
+  infrastructure: '#7b3fa0', // 6.9 on white
   system: '#6b6b6b', // 5.3 on white
   arrow: '#555555', // 7.5 on white, 7.0 on the tint
   boundary: '#5a6472', // 5.6 on the tint
@@ -67,6 +70,7 @@ export const DARK: Colours = {
   person: '#6ea8f0', // 7.3 on the ground
   app: '#4f9cf5', // 6.3 on the ground
   store: '#4cc08e', // 7.9 on the ground
+  infrastructure: '#c39bdf', // 7.8 on the ground
   system: '#9aa0a6', // 6.8 on the ground
   arrow: '#9aa0a6', // 6.8 on the ground
   boundary: '#8a93a0', // 5.3 on the tint
@@ -92,6 +96,8 @@ export const TEXT = {
   label: 12,
   /** The technology line of an arrow. */
   technology: 11,
+  /** The route line of an arrow. */
+  route: 11,
   /** The title of a boundary, in bold. */
   boundary: 16,
 } as const;
@@ -103,6 +109,7 @@ export const LINE_HEIGHT = {
   sentence: 15,
   label: 15,
   technology: 14,
+  route: 14,
 } as const;
 
 /** How far a box's text stands in from its edge, in CSS pixels. The engine breaks lines for a box 220 pixels wide inside. */

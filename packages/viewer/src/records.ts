@@ -1,4 +1,4 @@
-import type { App, Component, Connection, Model, ModelRecord, Owner, Person, Store, System, Technology, ViewerState } from '@seefore/core';
+import type { App, Component, Connection, Infrastructure, Model, ModelRecord, Owner, Person, Store, System, Technology, ViewerState } from '@seefore/core';
 
 /** A record of the model, with the family it is in. */
 export type Found =
@@ -7,6 +7,7 @@ export type Found =
   | { family: 'apps'; record: ModelRecord<App> }
   | { family: 'stores'; record: ModelRecord<Store> }
   | { family: 'components'; record: ModelRecord<Component> }
+  | { family: 'infrastructure'; record: ModelRecord<Infrastructure> }
   | { family: 'connections'; record: ModelRecord<Connection> }
   | { family: 'owners'; record: ModelRecord<Owner> }
   | { family: 'technologies'; record: ModelRecord<Technology> };
@@ -24,6 +25,7 @@ export function indexOf(model: Model): Index {
   for (const record of model.apps) index.set(record.id, { family: 'apps', record });
   for (const record of model.stores) index.set(record.id, { family: 'stores', record });
   for (const record of model.components) index.set(record.id, { family: 'components', record });
+  for (const record of model.infrastructure) index.set(record.id, { family: 'infrastructure', record });
   for (const record of model.connections) index.set(record.id, { family: 'connections', record });
   for (const record of model.owners) index.set(record.id, { family: 'owners', record });
   for (const record of model.technologies) index.set(record.id, { family: 'technologies', record });
@@ -52,16 +54,30 @@ export const SORT: Readonly<Record<Family, string>> = {
   apps: 'app',
   stores: 'store',
   components: 'component',
+  infrastructure: 'piece of infrastructure',
   connections: 'connection',
   owners: 'owner',
   technologies: 'technology',
 };
 
-/** What sort of record it is, as a person reads it: `Person`, `App: service`, `Store`. */
+/** The word a box's kind line starts with, for each family, and for the others the word for one record. */
+const KIND_WORD: Readonly<Record<Family, string>> = {
+  people: 'Person',
+  systems: 'System',
+  apps: 'App',
+  stores: 'Store',
+  components: 'Component',
+  infrastructure: 'Infrastructure',
+  connections: 'Connection',
+  owners: 'Owner',
+  technologies: 'Technology',
+};
+
+/** What sort of record it is, as a person reads it and as the kind line of its box says: `Person`, `App: service`, `Store`, `System: external`. */
 export function kindOf(found: Found): string {
-  const sort = SORT[found.family];
-  const word = sort.charAt(0).toUpperCase() + sort.slice(1);
+  const word = KIND_WORD[found.family];
   if ((found.family === 'apps' || found.family === 'stores') && found.record.kind !== undefined) return `${word}: ${found.record.kind}`;
+  if (found.family === 'systems' && found.record.external === true) return `${word}: external`;
   return word;
 }
 
@@ -76,6 +92,7 @@ export function technologiesOf(found: Found): readonly string[] | undefined {
     case 'apps':
     case 'stores':
     case 'components':
+    case 'infrastructure':
     case 'connections':
       return found.record.technology;
     default:
@@ -106,4 +123,15 @@ export function ownerOf(state: ViewerState, index: Index, id: string): OwnerWord
 /** The whole description of a record, when it has one. */
 export function descriptionOf(found: Found): string | undefined {
   return found.record.description;
+}
+
+/** How many connections pass through something, in words: `no connection passes through it`, `1 connection passes through it`, `3 connections pass through it`. */
+export function passingWords(count: number): string {
+  if (count === 0) return 'no connection passes through it';
+  return `${count} ${count === 1 ? 'connection passes' : 'connections pass'} through it`;
+}
+
+/** The connections of a model that name a record in `via`, in the order of the model. */
+export function passingThrough(model: Model, id: string): string[] {
+  return model.connections.filter((connection) => connection.via?.includes(id) === true).map((connection) => connection.id);
 }

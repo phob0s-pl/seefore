@@ -9,7 +9,7 @@ import type { Target } from './light.ts';
  * only for the reading the page holds.
  */
 
-/** What the panel shows: a box or an arrow of the picture, or a record chosen in the listing. */
+/** What the panel shows: a box or an arrow of the picture, something it passes through, or a record chosen in the listing or on a route. */
 export type Selection = Target | { kind: 'record'; id: string };
 
 /** The view a route names in a state, when the state has it. */
@@ -31,7 +31,7 @@ export function resolveRoute(state: ViewerState, route: Route): Route {
 /** True when a model has a record with this id. */
 function hasRecord(state: ViewerState, id: string): boolean {
   const { model } = state;
-  return [model.people, model.systems, model.apps, model.stores, model.components, model.connections, model.owners, model.technologies].some((family) =>
+  return [model.people, model.systems, model.apps, model.stores, model.components, model.infrastructure, model.connections, model.owners, model.technologies].some((family) =>
     family.some((record) => record.id === id),
   );
 }

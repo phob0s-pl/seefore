@@ -37,9 +37,10 @@ export function pageTitle(shown: Shown): string {
   return [what, state?.name ?? undefined, 'seefore'].filter((part) => part !== undefined).join(' · ');
 }
 
-/** The element of the picture that stands for a target, to give the focus back to. */
+/** The element of the picture, or of the list of what it passes through, that stands for a target, to give the focus back to. */
 function elementOf(target: Selection): HTMLElement | null {
   if (target.kind === 'record') return null;
+  if (target.kind === 'passed') return document.querySelector<HTMLElement>(`.passes-through button[data-id="${CSS.escape(target.id)}"]`);
   const kind = target.kind === 'box' ? 'node' : 'edge';
   return document.querySelector<HTMLElement>(`.react-flow__${kind}[data-id="${CSS.escape(target.id)}"]`);
 }
@@ -144,7 +145,9 @@ export function Page({ shown, room, initialSelection = null }: PageProps) {
         )}
         {main}
       </main>
-      {kept !== null && state !== null && <Panel state={state} view={view} selection={kept} focus={focusPanel} onClose={clear} />}
+      {kept !== null && state !== null && (
+        <Panel state={state} view={view} selection={kept} focus={focusPanel} onClose={clear} onOpen={(id, byKeyboard) => choose({ kind: 'record', id }, byKeyboard)} />
+      )}
     </div>
   );
 }

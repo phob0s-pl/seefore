@@ -44,6 +44,12 @@ export const LABEL_LINES = 3;
 /** The height of a line of names on a label. */
 export const LABEL_LINE_HEIGHT = 15;
 
+/** The route line of a label, `via Ingress, Workhorse`: 11 px, in one line under the names and above the technology, set as the technology is. */
+export const ROUTE_FONT: Font = { size: 11, bold: false };
+
+/** The height of the route line of a label. */
+export const ROUTE_LINE_HEIGHT = 14;
+
 /** The technology line of a label, `[HTTPS, JSON]`: 11 px, in one line under the names. Measured. */
 export const TECHNOLOGY_FONT: Font = { size: 11, bold: false };
 

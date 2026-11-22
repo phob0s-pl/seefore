@@ -11,7 +11,14 @@ import type { Problem } from './problem.ts';
  */
 
 /** The families whose records can stand as a box in a view. */
-export type BoxFamily = 'people' | 'systems' | 'apps' | 'stores';
+export type BoxFamily = 'people' | 'systems' | 'apps' | 'stores' | 'infrastructure';
+
+/**
+ * How a box looks: a person, the system the view is about, another system, an external system,
+ * an app, a store, a queue or a topic, a piece of infrastructure. The legend's key for each look
+ * has the same name. An external system is drawn as one also when the view is about it.
+ */
+export type BoxLook = 'person' | 'system-scope' | 'system' | 'system-external' | 'app' | 'store' | 'queue-or-topic' | 'infrastructure';
 
 /** A context view shows a system as one box; a container view shows what is inside it. */
 export type ViewKind = 'context' | 'containers';
@@ -21,9 +28,11 @@ export interface ViewBox {
   /** The id of the record it stands for. An id is used once in a model, so it is also the box's key. */
   id: string;
   family: BoxFamily;
+  /** How it is drawn, and which line of the legend explains it. */
+  look: BoxLook;
   /** The record's name, whole. */
   name: string;
-  /** The line that says its kind and its technologies, whole: `[App: service · Go, PostgreSQL]`. */
+  /** The line that says its kind and its technologies, whole: `[App: service · Go, PostgreSQL]`, `[System: external]`. */
   line: string;
   /** The first sentence of its description, whole. Missing when it has no description. */
   sentence?: string;
@@ -39,6 +48,12 @@ export interface ViewBox {
   loops: string[];
   /** Connections between two different records that are both drawn as this box: their ids, in order of id. Only on a box of the system in scope. */
   within: string[];
+  /**
+   * Connections of the view's arrows that pass through this box: that name in `via` its record,
+   * or anything drawn as it. Their ids, in order of id. A connection is not counted on a box
+   * that its own arrow starts or ends at.
+   */
+  passing: string[];
 }
 
 /** The boundary of a container view: the system in scope. An arrow may start or end at it. */
@@ -67,6 +82,34 @@ export interface ViewArrow {
   names: string[];
   /** The names of the technologies that every one of its connections names. Empty when they differ, or when one names none. */
   technology: string[];
+  /** What its connections pass through. Missing when none of them names anything in `via`. */
+  route?: ViewRoute;
+}
+
+/** What the connections of an arrow pass through. */
+export interface ViewRoute {
+  /** How many of the arrow's connections name something in `via`: at least one. */
+  count: number;
+  /**
+   * When every connection of the arrow names the same in `via`, in the same order: the names of
+   * what they pass through, in the order of travel. Empty when the routes differ, or when only
+   * some connections have one.
+   */
+  names: string[];
+  /** The line its label says, whole: `via Ingress, Workhorse`, or `via on 2 of 5` when the names are empty. */
+  line: string;
+}
+
+/** Something the view's arrows pass through that has no box in the view. */
+export interface ViewPassed {
+  /** The id `via` names: a piece of infrastructure, an app, a component or a system. */
+  id: string;
+  /** Its name, or its id when its file has an error. */
+  name: string;
+  /** The connections of the view's arrows that name it in `via`, in order of id. */
+  connections: string[];
+  /** The arrows those connections are drawn as, in order of id. */
+  arrows: string[];
 }
 
 /** The connections a view does not draw, by the reason. Each list is in order of id. */
@@ -77,8 +120,12 @@ export interface ViewLeft {
   broken: string[];
 }
 
-/** What a legend can explain. A view lists only what it draws. */
-export type LegendKey = 'person' | 'system-scope' | 'system' | 'app' | 'store' | 'boundary' | 'arrow' | 'arrow-many' | 'loop';
+/**
+ * What a legend can explain: each look of a box, the boundary, an arrow, an arrow for several
+ * connections, the route on an arrow, and the marks for copies and for what passes through a
+ * box. A view lists only what it draws.
+ */
+export type LegendKey = BoxLook | 'boundary' | 'arrow' | 'arrow-many' | 'route' | 'loop' | 'passing';
 
 /** One line of the legend. */
 export interface LegendEntry {
@@ -104,6 +151,8 @@ export interface View {
   arrows: ViewArrow[];
   left: ViewLeft;
   legend: LegendEntry[];
+  /** What its arrows pass through that has no box in it, in order of id. */
+  passed: ViewPassed[];
 }
 
 export interface Point {
@@ -141,6 +190,8 @@ export interface PlacedBoundary extends Rect {
 export interface PlacedLabel extends Rect {
   /** The lines to draw: names, and `+ n more` when not every name has a line. */
   lines: string[];
+  /** The route line, `via Ingress, Workhorse` or `via on 2 of 5`, when the arrow has a route: under the names, above the technology. Its room is inside the label's place. */
+  route?: string;
   /** The technology line, `[HTTPS]`, when the arrow has one. Its room is inside the label's place. */
   technology?: string;
 }

@@ -113,10 +113,19 @@ describe('the lines of a label', () => {
     const height = 2 * LINE_HEIGHT.label + LINE_HEIGHT.technology;
     const top = 100 + (64 - height) / 2;
     expect(lines).toEqual([
-      { text: 'One', y: top + LINE_HEIGHT.label / 2, technology: false },
-      { text: 'Two', y: top + LINE_HEIGHT.label * 1.5, technology: false },
-      { text: '[HTTPS]', y: top + 2 * LINE_HEIGHT.label + LINE_HEIGHT.technology / 2, technology: true },
+      { text: 'One', y: top + LINE_HEIGHT.label / 2, kind: 'name' },
+      { text: 'Two', y: top + LINE_HEIGHT.label * 1.5, kind: 'name' },
+      { text: '[HTTPS]', y: top + 2 * LINE_HEIGHT.label + LINE_HEIGHT.technology / 2, kind: 'technology' },
     ]);
+  });
+
+  it('puts the route under the names and above the technology', () => {
+    const lines = labelLines({ x: 0, y: 100, width: 120, height: 60, lines: ['One', 'Two'], route: 'via Ingress', technology: '[HTTPS]' });
+    const height = 2 * LINE_HEIGHT.label + LINE_HEIGHT.route + LINE_HEIGHT.technology;
+    const top = 100 + (60 - height) / 2;
+    expect(lines.map((line) => line.kind)).toEqual(['name', 'name', 'route', 'technology']);
+    expect(lines[2]).toEqual({ text: 'via Ingress', y: top + 2 * LINE_HEIGHT.label + LINE_HEIGHT.route / 2, kind: 'route' });
+    expect(lines[3]?.y).toBe(top + 2 * LINE_HEIGHT.label + LINE_HEIGHT.route + LINE_HEIGHT.technology / 2);
   });
 
   it('draws the lines it is given and breaks none', () => {

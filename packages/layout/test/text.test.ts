@@ -1,8 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import { ELLIPSIS, widthOf } from '../src/measure.ts';
-import { BOX_TEXT_WIDTH, KIND_FONT, LABEL_FONT, LABEL_LINE_HEIGHT, LABEL_WIDTH, NAME_FONT, SENTENCE_FONT, TECHNOLOGY_FONT, TECHNOLOGY_LINE_HEIGHT } from '../src/sizes.ts';
+import {
+  BOX_TEXT_WIDTH,
+  KIND_FONT,
+  LABEL_FONT,
+  LABEL_LINE_HEIGHT,
+  LABEL_WIDTH,
+  NAME_FONT,
+  ROUTE_FONT,
+  ROUTE_LINE_HEIGHT,
+  SENTENCE_FONT,
+  TECHNOLOGY_FONT,
+  TECHNOLOGY_LINE_HEIGHT,
+} from '../src/sizes.ts';
 import { boxText, labelText } from '../src/text.ts';
-import { arrow, box } from './views.ts';
+import { arrow, box, route } from './views.ts';
 
 /** True when no line is wider than the width, allowing for the sum of fractions. */
 function fit(lines: readonly string[], font: { size: number; bold: boolean }, width: number): boolean {
@@ -90,5 +102,37 @@ describe('the label of an arrow', () => {
 
   it('is missing when the arrow has no words at all', () => {
     expect(labelText(arrow('a', 'b', []))).toBeUndefined();
+  });
+});
+
+describe('the route line of a label', () => {
+  it('names what the connections pass through, on a line of its own under the names and above the technology', () => {
+    const label = labelText({ ...arrow('a', 'b', ['Calls the API'], ['HTTPS']), route: route(['Ingress', 'Workhorse']) });
+    expect(label).toMatchObject({ lines: ['Calls the API'], route: 'via Ingress, Workhorse', technology: '[HTTPS]' });
+    expect(label?.height).toBe(LABEL_LINE_HEIGHT + ROUTE_LINE_HEIGHT + TECHNOLOGY_LINE_HEIGHT);
+  });
+
+  it('says on how many connections they pass through something when the routes differ', () => {
+    const label = labelText({ ...arrow('a', 'b', ['One', 'Two', 'Three', 'Four', 'Five']), route: route([], 2, 5) });
+    expect(label?.lines).toEqual(['One', 'Two', '+ 3 more']);
+    expect(label?.route).toBe('via on 2 of 5');
+    expect(label?.height).toBe(3 * LABEL_LINE_HEIGHT + ROUTE_LINE_HEIGHT);
+  });
+
+  it('is measured, and the label is as wide as it when it is the widest line', () => {
+    const label = labelText({ ...arrow('a', 'b', ['Pays']), route: route(['Load balancer']) });
+    expect(label?.width).toBe(Math.ceil(widthOf('via Load balancer', ROUTE_FONT)));
+  });
+
+  it('is cut with an ellipsis when it is wider than the label', () => {
+    const label = labelText({ ...arrow('a', 'b', ['Pays']), route: route(['The customer’s HTTP proxy', 'The load balancer of the proxies', 'Ingress']) });
+    expect(label?.route?.endsWith(ELLIPSIS)).toBe(true);
+    expect(label?.route?.startsWith('via The customer’s')).toBe(true);
+    expect(fit([label?.route ?? ''], ROUTE_FONT, LABEL_WIDTH)).toBe(true);
+    expect(label?.width).toBeLessThanOrEqual(LABEL_WIDTH);
+  });
+
+  it('is missing when no connection of the arrow passes through anything', () => {
+    expect(labelText(arrow('a', 'b', ['Pays'], ['HTTPS']))).not.toHaveProperty('route');
   });
 });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { holds, litBy } from '../src/light.ts';
-import { CONTAINERS, CONTEXT } from './fixture.ts';
+import { CONTAINERS, CONTEXT, HARD_CONTAINERS } from './fixture.ts';
 
 /** Which boxes and arrows a hover, the focus or a choice lights. */
 
@@ -44,5 +44,24 @@ describe('what a hover lights', () => {
     expect(holds(CONTAINERS, { kind: 'box', id: 'shop' })).toBe(true);
     expect(holds(CONTEXT, { kind: 'box', id: 'order-api' })).toBe(false);
     expect(holds(CONTAINERS, { kind: 'arrow', id: 'customer~shop' })).toBe(true);
+    expect(holds(HARD_CONTAINERS, { kind: 'passed', id: 'balancer' })).toBe(true);
+    expect(holds(HARD_CONTAINERS, { kind: 'passed', id: 'gateway' })).toBe(false);
+  });
+});
+
+describe('what passes through', () => {
+  it('lights, with a box, the arrows that pass through it and their ends', () => {
+    expect(lit({ kind: 'box', id: 'gateway' }, HARD_CONTAINERS)).toEqual({ boxes: ['cards', 'gateway', 'web'], arrows: ['web~cards'] });
+    expect(lit({ kind: 'box', id: 'proxy' }, HARD_CONTAINERS)).toEqual({ boxes: ['clerk', 'proxy', 'web'], arrows: ['clerk~web', 'proxy~web'] });
+  });
+
+  it('lights, with an arrow, the boxes it passes through', () => {
+    expect(lit({ kind: 'arrow', id: 'web~cards' }, HARD_CONTAINERS)).toEqual({ boxes: ['cards', 'gateway', 'web'], arrows: ['web~cards'] });
+    expect(lit({ kind: 'arrow', id: 'clerk~web' }, HARD_CONTAINERS)).toEqual({ boxes: ['clerk', 'proxy', 'web'], arrows: ['clerk~web'] });
+  });
+
+  it('lights, for what has no box, the arrows that pass through it and their ends', () => {
+    expect(lit({ kind: 'passed', id: 'balancer' }, HARD_CONTAINERS)).toEqual({ boxes: ['cards', 'web'], arrows: ['web~cards'] });
+    expect(lit({ kind: 'passed', id: 'nothing' }, HARD_CONTAINERS)).toEqual({ boxes: [], arrows: [] });
   });
 });
