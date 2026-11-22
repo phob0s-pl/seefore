@@ -40,6 +40,7 @@ export type {
   ViewLeft,
   ViewerState,
 } from './picture.ts';
+export { outlineOf } from './outline.ts';
 export { compareProblems } from './problem.ts';
 export type { Position, Problem, Severity } from './problem.ts';
 export {
@@ -58,3 +59,4 @@ export type { App, Component, Connection, Owner, Person, Store, System, Technolo
 export { DESCRIPTION_MAX, NAME_MAX } from './text.ts';
 export { isShort, readInFull, recordsWithId, removalOf, usesOf, wordsFor } from './uses.ts';
 export type { Change, Left, Mention, Removal, RemovalOptions, UsedRecord, Uses } from './uses.ts';
+export { viewsOf } from './views.ts';
