@@ -294,6 +294,94 @@ describe('seefore uses, in words', () => {
   });
 });
 
+describe('seefore uses, for what a connection passes through', () => {
+  /** A site whose pages are reached through a balancer, an ingress and a part of another app. */
+  const ROUTES: Readonly<Record<string, string>> = {
+    'seefore.yaml': 'format: 1\nname: Routes\n',
+    'people/visitor.yaml': 'name: Visitor\n',
+    'people/operator.yaml': 'name: Operator\n',
+    'systems/site.yaml': 'name: Site\n',
+    'apps/web.yaml': 'name: Web\nin: site\n',
+    'apps/workhorse.yaml': 'name: Workhorse\nin: site\n',
+    'components/router.yaml': 'name: Router\nin: workhorse\n',
+    'infrastructure/balancer.yaml': 'name: Balancer\n',
+    'infrastructure/ingress.yaml': 'name: Ingress\ntechnology: [nginx]\n',
+    'connections/visitor-reads-pages.yaml': 'from: visitor\nto: web\nvia: [balancer, ingress, router]\nname: Reads the pages\n',
+    'connections/workhorse-asks-web.yaml': 'from: workhorse\nto: web\nname: Asks for the size of a file\n',
+    'connections/operator-reloads-ingress.yaml': 'from: operator\nto: ingress\nname: Reloads it\n',
+    'technologies/nginx.yaml': 'name: nginx\n',
+  };
+
+  it('puts a connection that passes through the thing, or anything in it, under what must change, apart from those with an end in it', () => {
+    write(ROUTES);
+    expect(run(['uses', 'workhorse']).out.split('\n')).toEqual([
+      'app workhorse: Workhorse (apps/workhorse.yaml)',
+      '',
+      'Goes with it: 1 record inside it:',
+      '  component router: Router (components/router.yaml)',
+      '',
+      '1 connection has one end in it. It must go or get another end:',
+      '  connections/workhorse-asks-web.yaml:1:7: `from`',
+      '',
+      '1 connection passes through it. It must name another in its place in `via`, or leave it out:',
+      '  connections/visitor-reads-pages.yaml:3:26: `via` names `router`',
+      '',
+      'If the connection with one end in it goes, nothing is left with no connection.',
+      '',
+      'No other record\'s name or description holds "workhorse", or the name or the id of anything inside it.',
+    ]);
+  });
+
+  it('leaves behind a piece of infrastructure that only the connections that go pass through', () => {
+    write(ROUTES);
+    expect(run(['uses', 'web']).out.split('\n').slice(2)).toEqual([
+      'Goes with it: nothing is inside it.',
+      '',
+      '2 connections have one end in it. Each must go or get another end:',
+      '  connections/visitor-reads-pages.yaml:2:5: `to`',
+      '  connections/workhorse-asks-web.yaml:2:5: `to`',
+      '',
+      'If they go, 3 records are left with no connection:',
+      '  person visitor: Visitor (people/visitor.yaml)',
+      '  system site: Site (systems/site.yaml)',
+      '  app workhorse: Workhorse (apps/workhorse.yaml)',
+      '',
+      '1 record is named by nothing but it and those connections:',
+      '  piece of infrastructure balancer: Balancer (infrastructure/balancer.yaml)',
+      '',
+      'No other record\'s name or description holds "web".',
+    ]);
+    expect(json(['uses', 'web']).data.left.map((one) => `${one.record.id} ${one.reason} ${one.assumes}`)).toContain('balancer no-user connections-go');
+  });
+
+  it('works on a piece of infrastructure as on any record', () => {
+    write(ROUTES);
+    expect(run(['uses', 'ingress']).out.split('\n')).toEqual([
+      'piece of infrastructure ingress: Ingress (infrastructure/ingress.yaml)',
+      '',
+      '1 connection has one end in it. It must go or get another end:',
+      '  connections/operator-reloads-ingress.yaml:2:5: `to`',
+      '',
+      '1 connection passes through it. It must name another in its place in `via`, or leave it out:',
+      '  connections/visitor-reads-pages.yaml:3:17: `via`',
+      '',
+      'If the connection with one end in it goes, 1 record is left with no connection:',
+      '  person operator: Operator (people/operator.yaml)',
+      '',
+      '1 record is named by nothing but it and the connection with one end in it:',
+      '  technology nginx: nginx (technologies/nginx.yaml)',
+      '',
+      'No other record\'s name or description holds "ingress".',
+    ]);
+    // One that only connections pass through has nothing else to say of them.
+    expect(run(['uses', 'balancer']).out.split('\n').slice(2, 5)).toEqual([
+      '1 connection passes through it. It must name another in its place in `via`, or leave it out:',
+      '  connections/visitor-reads-pages.yaml:3:7: `via`',
+      '',
+    ]);
+  });
+});
+
 describe('an id that more than one record has', () => {
   const CLASH = {
     'seefore.yaml': 'format: 1\nname: Clash\n',

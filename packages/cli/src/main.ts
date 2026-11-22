@@ -25,9 +25,10 @@ Usage:
 
 Commands:
   check    Read the source directory and report what is wrong with it.
-  list     List the model: people, systems with what is in them, connections under
-           what they start from, owners and technologies. Each description shows its
-           first sentence. A record with an error in its file is left out.
+  list     List the model: people, systems with what is in them, infrastructure,
+           connections under what they start from, owners and technologies. Each
+           description shows its first sentence. A record with an error in its file
+           is left out.
   uses     Show what removing or renaming a record would touch: what goes with it,
            what must go or change, what would be left behind, and which records may
            speak of it in their text.

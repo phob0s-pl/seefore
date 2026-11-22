@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { load } from '../src/load.ts';
 import type { SourceFile } from '../src/load.ts';
+import { ownership } from '../src/model.ts';
 
-/** A small shop: one system with an app and its component, a store, a person and the rest. */
+/** A small shop: one system with an app and its component, a store, a person, a proxy and the rest. */
 const SHOP: Record<string, string> = {
   'seefore.yaml': 'format: 1\nname: Shop\n',
   'people/customer.yaml': 'name: Customer\n',
@@ -14,6 +15,7 @@ const SHOP: Record<string, string> = {
   'stores/orders-copy.yaml': 'name: Copy of the orders\nin: shop\n',
   'components/checkout.yaml': 'name: Checkout\nin: order-api\n',
   'components/basket.yaml': 'name: Basket\nin: storefront\n',
+  'infrastructure/proxy.yaml': 'name: HTTPS proxy\n',
   'owners/shop-team.yaml': 'name: Shop team\n',
   'technologies/go.yaml': 'name: Go\n',
 };
@@ -51,14 +53,29 @@ describe('a reference that names no record', () => {
       'connections/thing.yaml',
       'from: costumer\nto: shop\n',
       '1:7',
-      '`from` names `costumer`, but no record has that id. A connection goes from a person, a system, an app, a store or a component.',
+      '`from` names `costumer`, but no record has that id. A connection goes from a person, a system, an app, a store, a component or a piece of infrastructure.',
     ],
     [
       '`to` of a connection',
       'connections/thing.yaml',
       'from: customer\nto: shopp\n',
       '2:5',
-      '`to` names `shopp`, but no record has that id. A connection goes to a person, a system, an app, a store or a component.',
+      '`to` names `shopp`, but no record has that id. A connection goes to a person, a system, an app, a store, a component or a piece of infrastructure.',
+    ],
+    [
+      '`via` of a connection',
+      'connections/thing.yaml',
+      'from: customer\nto: card-provider\nvia: [proxy, ingres]\n',
+      '3:14',
+      '`via` names `ingres`, but no record has that id. ' +
+        'Each id in `via` names a piece of infrastructure, an app, a component or a system: something this exchange passes through.',
+    ],
+    [
+      '`owner` of a piece of infrastructure',
+      'infrastructure/thing.yaml',
+      'name: Thing\nowner: shop-teem\n',
+      '2:8',
+      '`owner` names `shop-teem`, but no record has that id. `owner` names an owner, a record in `owners/`.',
     ],
     ['`owner` of a system', 'systems/thing.yaml', 'name: Thing\nowner: shop-teem\n', '2:8', '`owner` names `shop-teem`, but no record has that id. `owner` names an owner, a record in `owners/`.'],
     ['`owner` of an app', 'apps/thing.yaml', 'name: Thing\nin: shop\nowner: shop-teem\n', '3:8', '`owner` names `shop-teem`, but no record has that id. `owner` names an owner, a record in `owners/`.'],
@@ -149,9 +166,69 @@ describe('a reference that names a record of the wrong kind', () => {
     ['a component in a system', 'components/thing.yaml', 'name: Thing\nin: shop\n', '2:5', '`in` names `shop`, which is a system. A component is in an app.'],
     ['a component in another component', 'components/thing.yaml', 'name: Thing\nin: checkout\n', '2:5', '`in` names `checkout`, which is a component. A component is in an app.'],
     ['a component in a store', 'components/thing.yaml', 'name: Thing\nin: orders-database\n', '2:5', '`in` names `orders-database`, which is a store. A component is in an app.'],
-    ['a connection from an owner', 'connections/thing.yaml', 'from: shop-team\nto: shop\n', '1:7', '`from` names `shop-team`, which is an owner. A connection goes from a person, a system, an app, a store or a component.'],
-    ['a connection to a technology', 'connections/thing.yaml', 'from: customer\nto: go\n', '2:5', '`to` names `go`, which is a technology. A connection goes to a person, a system, an app, a store or a component.'],
-    ['a connection to a connection', 'connections/thing.yaml', 'from: customer\nto: other\n', '2:5', '`to` names `other`, which is a connection. A connection goes to a person, a system, an app, a store or a component.'],
+    [
+      'a connection from an owner',
+      'connections/thing.yaml',
+      'from: shop-team\nto: shop\n',
+      '1:7',
+      '`from` names `shop-team`, which is an owner. A connection goes from a person, a system, an app, a store, a component or a piece of infrastructure.',
+    ],
+    [
+      'a connection to a technology',
+      'connections/thing.yaml',
+      'from: customer\nto: go\n',
+      '2:5',
+      '`to` names `go`, which is a technology. A connection goes to a person, a system, an app, a store, a component or a piece of infrastructure.',
+    ],
+    [
+      'a connection to a connection',
+      'connections/thing.yaml',
+      'from: customer\nto: other\n',
+      '2:5',
+      '`to` names `other`, which is a connection. A connection goes to a person, a system, an app, a store, a component or a piece of infrastructure.',
+    ],
+    [
+      'a route through a person',
+      'connections/thing.yaml',
+      'from: storefront\nto: card-provider\nvia: [customer]\n',
+      '3:7',
+      '`via` names `customer`, which is a person. ' +
+        'Each id in `via` names a piece of infrastructure, an app, a component or a system: something this exchange passes through.',
+    ],
+    [
+      'a route through a technology',
+      'connections/thing.yaml',
+      'from: storefront\nto: card-provider\nvia: [proxy, go]\n',
+      '3:14',
+      '`via` names `go`, which is a technology. ' +
+        'Each id in `via` names a piece of infrastructure, an app, a component or a system: something this exchange passes through.',
+    ],
+    [
+      'a route through a connection',
+      'connections/thing.yaml',
+      'from: storefront\nto: card-provider\nvia: [other]\n',
+      '3:7',
+      '`via` names `other`, which is a connection. ' +
+        'Each id in `via` names a piece of infrastructure, an app, a component or a system: something this exchange passes through.',
+    ],
+    [
+      'a route through a store, which says what a queue or a topic is to do',
+      'connections/thing.yaml',
+      'from: storefront\nto: order-api\nvia: [orders-database]\n',
+      '3:7',
+      '`via` names `orders-database`, which is a store. ' +
+        'Each id in `via` names a piece of infrastructure, an app, a component or a system: something this exchange passes through. ' +
+        'A store is never passed through, and a queue or a topic is a store: write a connection to it from the one that puts in, ' +
+        'and another from the one that takes out, in place of this one.',
+    ],
+    ['a piece of infrastructure in a system', 'infrastructure/thing.yaml', 'name: Thing\nowner: shop\n', '2:8', '`owner` names `shop`, which is a system. `owner` names an owner, a record in `owners/`.'],
+    [
+      'a piece of infrastructure built with an owner',
+      'infrastructure/thing.yaml',
+      'name: Thing\ntechnology: [shop-team]\n',
+      '2:14',
+      '`technology` names `shop-team`, which is an owner. Each id in `technology` names a technology, a record in `technologies/`.',
+    ],
     ['an owner that is a technology', 'systems/thing.yaml', 'name: Thing\nowner: go\n', '2:8', '`owner` names `go`, which is a technology. `owner` names an owner, a record in `owners/`.'],
     ['an owner that is a person', 'components/thing.yaml', 'name: Thing\nin: order-api\nowner: customer\n', '3:8', '`owner` names `customer`, which is a person. `owner` names an owner, a record in `owners/`.'],
     ['a technology that is an owner', 'stores/thing.yaml', 'name: Thing\nin: shop\ntechnology: [go, shop-team]\n', '3:18', '`technology` names `shop-team`, which is an owner. Each id in `technology` names a technology, a record in `technologies/`.'],
@@ -228,6 +305,219 @@ describe('a store acts on nothing but another store', () => {
   it('leaves an end that names nothing, or the wrong kind, to the rule that reports it', () => {
     expect(found(shop({ 'connections/thing.yaml': 'from: orders-database\nto: nowhere\n' }))).toEqual(['connections/thing.yaml:2:5 error reference-unknown']);
     expect(found(shop({ 'connections/thing.yaml': 'from: orders-database\nto: go\n' }))).toEqual(['connections/thing.yaml:2:5 error reference-wrong-kind']);
+  });
+
+  it('holds for a piece of infrastructure too: a store does not act on one', () => {
+    const files = shop({ 'connections/thing.yaml': 'from: orders-database\nto: proxy\n' });
+    expect(found(files)).toEqual(['connections/thing.yaml:1:7 error store-acts']);
+    expect(messages(files)[0]).toContain('from the store `orders-database` to the piece of infrastructure `proxy`, but');
+    expect(found(shop({ 'connections/thing.yaml': 'from: proxy\nto: orders-database\nname: Keeps its sessions\n' }))).toEqual([]);
+  });
+});
+
+describe('a piece of infrastructure', () => {
+  it('may be the end of a connection, for what it does on its own account', () => {
+    const files = shop({
+      'connections/deploy-reloads-proxy.yaml': 'from: customer\nto: proxy\nname: Reloads it\n',
+      'connections/proxy-checks-api.yaml': 'from: proxy\nto: order-api\nname: Checks that it is up\n',
+      'connections/proxy-checks-basket.yaml': 'from: proxy\nto: basket\nname: Checks that it is up\n',
+    });
+    expect(load(files).problems).toEqual([]);
+    expect(load(files).model.connections.map((connection) => `${connection.from} ${connection.to}`)).toEqual(['customer proxy', 'proxy order-api', 'proxy basket']);
+  });
+
+  it('may be named in `via` beside an app, a component and a system, in the order of travel', () => {
+    const files = shop({
+      'connections/thing.yaml': 'from: customer\nto: checkout\nvia: [card-provider, proxy, basket]\n',
+      'connections/checkout-pays.yaml': 'from: checkout\nto: card-provider\n',
+    });
+    expect(load(files).problems).toEqual([]);
+    expect(load(files).model.connections.find((connection) => connection.id === 'thing')?.via).toEqual(['card-provider', 'proxy', 'basket']);
+  });
+
+  it('has the owner it names, and none when it names none, since it is in nothing', () => {
+    const owners = load(shop({ 'infrastructure/proxy.yaml': 'name: HTTPS proxy\nowner: shop-team\n', 'infrastructure/gateway.yaml': 'name: Gateway\n' })).model;
+    expect(ownership(owners).get('proxy')).toEqual({ owner: 'shop-team', from: 'proxy' });
+    expect(ownership(owners).has('gateway')).toBe(false);
+  });
+});
+
+describe('what a connection passes through', () => {
+  /** What a connection passes through stands between its two ends: said in each message of `via-end`. */
+  const between = 'What a connection passes through stands between its two ends';
+
+  /** The shop, where the storefront has work of its own, with this connection. */
+  const route = (text: string): SourceFile[] =>
+    shop({ 'connections/customer-shops.yaml': 'from: customer\nto: storefront\nname: Shops\n', 'connections/thing.yaml': text });
+
+  it.each([
+    ['its `from`', 'from: storefront\nto: card-provider\nvia: [proxy, storefront]\n', '3:14', `\`via\` names \`storefront\`, which is the \`from\` of this connection. ${between}: take \`storefront\` out of \`via\`.`],
+    ['its `to`', 'from: customer\nto: card-provider\nvia: [card-provider]\n', '3:7', `\`via\` names \`card-provider\`, which is the \`to\` of this connection. ${between}: take \`card-provider\` out of \`via\`.`],
+    [
+      'the app its `to` is in',
+      'from: storefront\nto: checkout\nvia: [order-api]\n',
+      '3:7',
+      `\`via\` names \`order-api\`, which \`checkout\`, the \`to\` of this connection, is in. ${between}: take \`order-api\` out of \`via\`.`,
+    ],
+    [
+      'the system its `from` is in, two levels up',
+      'from: basket\nto: card-provider\nvia: [shop]\n',
+      '3:7',
+      `\`via\` names \`shop\`, which \`basket\`, the \`from\` of this connection, is in. ${between}: take \`shop\` out of \`via\`.`,
+    ],
+    [
+      'what is in its `to`',
+      'from: customer\nto: shop\nvia: [proxy, storefront]\n',
+      '3:14',
+      `\`via\` names \`storefront\`, which is in \`shop\`, the \`to\` of this connection. ${between}. ` +
+        'Take `storefront` out of `via`, or, if the exchange goes on past it, make the part of `shop` that it ends at the `to`.',
+    ],
+    [
+      'what is in its `from`, two levels down',
+      'from: shop\nto: card-provider\nvia: [checkout]\n',
+      '3:7',
+      `\`via\` names \`checkout\`, which is in \`shop\`, the \`from\` of this connection. ${between}. ` +
+        'Take `checkout` out of `via`, or, if the exchange starts before it, make the part of `shop` that it starts at the `from`.',
+    ],
+  ])('is an error at the id when `via` names %s', (_what, text, place, message) => {
+    const files = route(text);
+    expect(found(files)).toEqual([`connections/thing.yaml:${place} error via-end`]);
+    expect(messages(files)).toEqual([message]);
+  });
+
+  it('reports each id that is wrong, and an id that is an end and in the other end once', () => {
+    expect(found(route('from: checkout\nto: storefront\nvia: [order-api, proxy, basket]\n'))).toEqual([
+      'connections/thing.yaml:3:7 error via-end',
+      'connections/thing.yaml:3:25 error via-end',
+    ]);
+    // `order-api` is what the `from` is in, and the connection goes from a part of it to itself.
+    expect(messages(route('from: checkout\nto: order-api\nvia: [order-api]\n'))).toEqual([
+      `\`via\` names \`order-api\`, which \`checkout\`, the \`from\` of this connection, is in. ${between}: take \`order-api\` out of \`via\`.`,
+    ]);
+  });
+
+  it('lets a connection pass through what is beside its ends, in the same system or not', () => {
+    expect(found(route('from: basket\nto: checkout\nvia: [proxy]\n'))).toEqual([]);
+    expect(found(route('from: customer\nto: checkout\nvia: [storefront, basket]\n'))).toEqual([]);
+  });
+
+  it('leaves an id that names nothing, or a record `via` may not name, to the rule that reports it', () => {
+    expect(found(route('from: customer\nto: orders-database\nvia: [orders-database]\n'))).toEqual(['connections/thing.yaml:3:7 error reference-wrong-kind']);
+    expect(found(route('from: customer\nto: nowhere\nvia: [nowhere]\n'))).toEqual([
+      'connections/thing.yaml:2:5 error reference-unknown',
+      'connections/thing.yaml:3:7 error reference-unknown',
+    ]);
+  });
+
+  it('leaves the connection out of the model', () => {
+    expect(load(route('from: customer\nto: card-provider\nvia: [card-provider]\n')).model.connections.map((connection) => connection.id)).toEqual(['customer-shops']);
+  });
+});
+
+describe('a message broker drawn as one store', () => {
+  /** A shop with a store named as its technology is, and a connection to it. */
+  const broker = (store: string): SourceFile[] =>
+    shop({
+      'stores/events.yaml': store,
+      'technologies/kafka.yaml': 'name: Kafka\n',
+      'connections/api-writes-events.yaml': 'from: order-api\nto: events\nname: Puts each order\n',
+    });
+
+  it('is a warning on the store, which says what it looked at and what to do', () => {
+    expect(load(broker('name: Kafka\nin: shop\ntechnology: [go, kafka]\n')).problems).toEqual([
+      {
+        file: 'stores/events.yaml',
+        line: 1,
+        column: 1,
+        severity: 'warning',
+        code: 'broker-as-store',
+        message:
+          'This store is named "Kafka", as is `kafka`, a technology it names, and it has no `kind`: it may be a message broker drawn as one store. ' +
+          'A broker is a technology. Each queue or topic in it is a store of its own, of kind `queue` or `topic`, with the broker as its `technology`. ' +
+          'Write a store for each that the facts tell apart, move each connection to the one it puts into or takes from, ' +
+          'and name what is left for what it holds, not for the broker. If this store is not a broker, give it a name that says what it holds.',
+      },
+    ]);
+  });
+
+  it.each(['queue', 'topic'])('is one for a store of kind %s too, and says so', (kind) => {
+    const problems = load(broker(`name: Kafka\nin: shop\nkind: ${kind}\ntechnology: [kafka]\n`)).problems;
+    expect(problems.map((problem) => problem.code)).toEqual(['broker-as-store']);
+    expect(problems[0]?.message).toContain(`a technology it names, and it is of kind \`${kind}\`: it may be`);
+  });
+
+  it('reads the name in any case and with any spaces between its words, and keeps the store in the model', () => {
+    const files = shop({ 'stores/events.yaml': 'name: apache  KAFKA\nin: shop\ntechnology: [kafka, go]\n', 'technologies/kafka.yaml': 'name: Apache Kafka\n' });
+    const loaded = load(files);
+    expect(found(files)).toEqual(['stores/events.yaml:1:1 warning broker-as-store']);
+    expect(loaded.problems[0]?.message).toMatch(/^This store is named "apache {2}KAFKA", as is `kafka`, a technology it names, and it has no `kind`/);
+    expect(loaded.model.stores.map((store) => store.id)).toContain('events');
+  });
+
+  it.each([
+    ['a store of another kind, such as a database named for its product', 'name: Kafka\nin: shop\nkind: database\ntechnology: [kafka]\n'],
+    ['a topic named for what it holds', 'name: Order events\nin: shop\nkind: topic\ntechnology: [kafka]\n'],
+    ['a store named for a technology it does not name', 'name: Kafka\nin: shop\n'],
+    ['a store whose name holds more than the technology', 'name: Kafka cluster\nin: shop\ntechnology: [kafka]\n'],
+  ])('is not one for %s', (_what, store) => {
+    expect(load(broker(store)).problems).toEqual([]);
+  });
+});
+
+describe('an app or a system that only passes exchanges on', () => {
+  /** The shop with a gateway app that two connections pass through. */
+  const GATEWAY = {
+    'apps/gateway.yaml': 'name: Gateway\nin: shop\n',
+    'connections/customer-buys.yaml': 'from: customer\nto: checkout\nvia: [gateway]\nname: Buys\n',
+    'connections/basket-pays.yaml': 'from: basket\nto: card-provider\nvia: [proxy, gateway]\nname: Pays\n',
+  };
+
+  it('is a warning on the app, which says how many pass through it and what to do', () => {
+    expect(load(shop(GATEWAY)).problems).toEqual([
+      {
+        file: 'apps/gateway.yaml',
+        line: 1,
+        column: 1,
+        severity: 'warning',
+        code: 'passes-on-only',
+        message:
+          '2 connections name this app in `via`, and no connection starts or ends at it or at anything in it. ' +
+          'All it does is pass exchanges on, so it is a piece of infrastructure: move its file to `infrastructure/`, ' +
+          'keeping only its `name`, `description`, `technology` and `owner`. If it has work of its own, write the connection for that work.',
+      },
+    ]);
+  });
+
+  it('is one for a system, and says to move what is in it first', () => {
+    const problems = load(
+      shop({
+        'systems/edge.yaml': 'name: Edge\n',
+        'apps/edge-worker.yaml': 'name: Edge worker\nin: edge\n',
+        'connections/customer-buys.yaml': 'from: customer\nto: storefront\nvia: [edge]\n',
+      }),
+    ).problems;
+    expect(problems.map((problem) => `${problem.file} ${problem.code}`)).toEqual(['systems/edge.yaml passes-on-only']);
+    expect(problems[0]?.message).toBe(
+      '1 connection names this system in `via`, and no connection starts or ends at it or at anything in it. ' +
+        'All it does is pass exchanges on, so it is a piece of infrastructure: move its file to `infrastructure/`, ' +
+        'keeping only its `name`, `description`, `technology` and `owner`, and first move or remove what is in it, ' +
+        'since a piece of infrastructure holds nothing. If it has work of its own, write the connection for that work.',
+    );
+  });
+
+  it('is not one for an app with work of its own, at either end, or through anything in it', () => {
+    expect(found(shop({ ...GATEWAY, 'connections/gateway-logs.yaml': 'from: gateway\nto: orders-database\nname: Logs each request\n' }))).toEqual([]);
+    expect(found(shop({ ...GATEWAY, 'connections/clerk-asks.yaml': 'from: customer\nto: gateway\nname: Asks how it is\n' }))).toEqual([]);
+    expect(found(shop({ ...GATEWAY, 'components/router.yaml': 'name: Router\nin: gateway\n', 'connections/router-reads.yaml': 'from: router\nto: orders-database\n' }))).toEqual(
+      [],
+    );
+  });
+
+  it('is not one for a component or a piece of infrastructure, which may only pass on', () => {
+    expect(found(shop({ 'components/router.yaml': 'name: Router\nin: order-api\n', 'connections/customer-buys.yaml': 'from: customer\nto: checkout\nvia: [router]\n' }))).toEqual(
+      [],
+    );
+    expect(found(shop({ 'connections/customer-buys.yaml': 'from: customer\nto: checkout\nvia: [proxy]\n' }))).toEqual([]);
   });
 });
 

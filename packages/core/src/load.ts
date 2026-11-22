@@ -8,8 +8,8 @@ import { emptyModel } from './model.ts';
 import type { Model, ModelRecord } from './model.ts';
 import { START, compareProblems, error, list, quote, warning } from './problem.ts';
 import type { Problem } from './problem.ts';
-import type { Connection } from './records.ts';
-import { byId, connectionProblems, parentsOf, referenceProblems } from './rules.ts';
+import type { Connection, Store, Technology } from './records.ts';
+import { brokerProblems, byId, connectionProblems, parentsOf, referenceProblems, viaProblems } from './rules.ts';
 import { checkShape } from './shape.ts';
 import { readYaml } from './yaml.ts';
 import type { YamlFile } from './yaml.ts';
@@ -267,9 +267,11 @@ export function loadAs(format: Format, files: readonly SourceFile[]): Loaded {
   references.sort(compareReferences);
 
   problems.push(...referenceProblems(format, everyRecord, references));
-  // The checks of the conventions are about connections, and look at those of the right shape.
-  const connections = typed.filter((record) => record.file.startsWith('connections/')) as ModelRecord<Connection>[];
-  problems.push(...connectionProblems(format, everyRecord, parentsOf(format, everyRecord, references), references, connections));
+  // The checks of the conventions look at the records of the right shape, and at what every record names.
+  const parents = parentsOf(format, everyRecord, references);
+  problems.push(...connectionProblems(format, everyRecord, parents, references, ofFamily<Connection>(typed, 'connections')));
+  problems.push(...viaProblems(format, everyRecord, parents, references));
+  problems.push(...brokerProblems(everyRecord, ofFamily<Store>(typed, 'stores'), ofFamily<Technology>(typed, 'technologies')));
 
   records.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : a.file < b.file ? -1 : 1));
   unread.sort((a, b) => (a.file < b.file ? -1 : 1));
@@ -346,6 +348,11 @@ function textsIn(record: SourceRecord, yaml: YamlFile): RecordText[] {
     found.push({ file: record.file, ...yaml.at(pair.key), record: record.id, field: pair.key.value, text: pair.value.value });
   }
   return found;
+}
+
+/** The records of one family whose file has the shape of its record, typed. Each was held to the schema its type is inferred from. */
+function ofFamily<T>(typed: readonly ModelRecord<unknown>[], folder: string): ModelRecord<T>[] {
+  return typed.filter((record) => record.file.startsWith(folder + '/')) as ModelRecord<T>[];
 }
 
 /**

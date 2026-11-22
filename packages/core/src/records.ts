@@ -169,10 +169,18 @@ const Via = z
     });
   });
 
-/** The mark for somebody else's system. `true` is its only value: a system of ours, and one nobody has spoken for, have none. */
-const External = z.literal(true, {
-  error: () => '`external` must be `true`. Leave it out for a system of yours, and for one nobody has spoken for.',
-});
+/**
+ * The mark for somebody else's system. `true` is its only value: a system of ours, and one
+ * nobody has spoken for, have none. Any other value is told what to do, in the words of the
+ * rule, and not only which value there is.
+ */
+const External = z
+  .unknown()
+  .refine((value) => value === true, {
+    message: '`external` must be `true`. Leave it out for a system of yours, and for one nobody has spoken for.',
+    params: { code: 'value-not-allowed' },
+  })
+  .pipe(z.literal(true));
 
 /** A kind of person who uses the software, runs it or takes part in what it does. No owner. */
 export const PersonSchema = z.strictObject({

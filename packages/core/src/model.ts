@@ -33,9 +33,10 @@ export interface Ownership {
 }
 
 /**
- * Who answers for each system, app, store and component of the model, by id. One with no
- * `owner` has that of what it is in, followed upwards; one with none above it either has none,
- * and is not in the map. A person has no owner.
+ * Who answers for each system, app, store, component and piece of infrastructure of the model,
+ * by id. One with no `owner` has that of what it is in, followed upwards; one with none above it
+ * either has none, and is not in the map. A piece of infrastructure is in nothing, so it has
+ * only the owner it names. A person has no owner.
  */
 export function ownership(model: Model): Map<string, Ownership> {
   const found = new Map<string, Ownership>();

@@ -1,5 +1,5 @@
 import { CURRENT_FORMAT, idProblem, isShort, nounOf, recordsWithId, referenceField, removalOf, wordsFor } from '@seefore/core';
-import type { Left, Mention, Reference, Removal, UsedRecord } from '@seefore/core';
+import type { Change, Left, Mention, Reference, Removal, UsedRecord } from '@seefore/core';
 import { EXIT_OK, forShell, notStarted, openSource } from './check.ts';
 import type { CheckOptions } from './check.ts';
 import type { Io } from './io.ts';
@@ -72,7 +72,7 @@ function report(result: UsesResult, unread: number, here: Here): string {
   const blocks = [
     [head(result.record)],
     goesWith(result, head),
-    mustChange(result, path),
+    ...mustChange(result, path),
     inherited(result.inherited),
     ...leftBehind(result, head),
     ...maySpeak(result, path),
@@ -106,35 +106,57 @@ function goesWith(result: UsesResult, head: Head): string[] {
 }
 
 /**
- * Each record that names it and stays, with each place: what must go or change. Each place is
- * shown at its own field, and the advice fits every place: a place that names an owner where a
- * connection's end must be is no end, and taking it out would not mend it.
+ * Each record that names it and stays, with each place: what must go or change. The connections
+ * with one end in it come first, then those that only pass through it, each under advice of its
+ * own. Each place is shown at its own field, and the advice fits every place: a place that names
+ * an owner where a connection's end must be is no end, and taking it out would not mend it.
  */
-function mustChange(result: UsesResult, path: Path): string[] {
+function mustChange(result: UsesResult, path: Path): string[][] {
   const { changes, record } = result;
   const n = changes.length;
-  const each = n === 1 ? 'It' : 'Each';
   const places = changes.flatMap((change) => change.places);
   const field = record.family === 'owners' ? 'owner' : record.family === 'technologies' ? 'technology' : undefined;
-  let heading: string;
+  const lines = (shown: readonly Change[]): string[] => shown.flatMap((change) => change.places.map((place) => placeLine(place, record.id, path)));
+
   if (field !== undefined && places.every((place) => place.field === field)) {
-    heading = n === 0 ? `No record names it in \`${field}\`.` : `${count(n, 'record')} ${n === 1 ? 'names' : 'name'} it in \`${field}\`. ${each} must name another in its place, or leave it out:`;
-  } else if (places.every(isEndOf(result))) {
-    if (n === 0) heading = record.family === 'connections' ? 'Nothing names it.' : 'No connection has one end in it.';
-    else heading = `${count(n, 'connection')} ${n === 1 ? 'has' : 'have'} one end in it. ${each} must go or get another end:`;
-  } else {
+    const heading = n === 0 ? `No record names it in \`${field}\`.` : `${count(n, 'record')} ${n === 1 ? 'names' : 'name'} it in \`${field}\`. ${each(n)} must name another in its place, or leave it out:`;
+    return [[heading, ...lines(changes)]];
+  }
+  const endOf = isEndOf(result);
+  if (!places.every((place) => endOf(place) || place.field === 'via')) {
     // Only a directory with errors names a record where it may not.
-    heading = `${count(n, 'record')} ${n === 1 ? 'names' : 'name'} it. ${each} must go or change:`;
+    return [[`${count(n, 'record')} ${n === 1 ? 'names' : 'name'} it. ${each(n)} must go or change:`, ...lines(changes)]];
   }
 
-  const lines = [heading];
-  for (const change of changes) {
-    for (const place of change.places) {
-      const names = place.names === record.id ? '' : ` names \`${place.names}\``;
-      lines.push(`  ${path(place.file)}:${place.line}:${place.column}: \`${place.field}\`${names}`);
-    }
+  const ending = changes.filter((change) => change.places.some(endOf));
+  const passing = changes.filter((change) => !change.places.some(endOf));
+  const blocks: string[][] = [];
+  if (ending.length > 0 || passing.length === 0) {
+    const e = ending.length;
+    const heading =
+      e > 0
+        ? `${count(e, 'connection')} ${e === 1 ? 'has' : 'have'} one end in it. ${each(e)} must go or get another end:`
+        : record.family === 'connections'
+          ? 'Nothing names it.'
+          : 'No connection has one end in it.';
+    blocks.push([heading, ...lines(ending)]);
   }
-  return lines;
+  if (passing.length > 0) {
+    const p = passing.length;
+    blocks.push([`${count(p, 'connection')} ${p === 1 ? 'passes' : 'pass'} through it. ${each(p)} must name another in its place in \`via\`, or leave it out:`, ...lines(passing)]);
+  }
+  return blocks;
+}
+
+/** One place that names it: the file, the line and the column, the field, and the id it names when that is something inside it. */
+function placeLine(place: Reference, id: string, path: Path): string {
+  const names = place.names === id ? '' : ` names \`${place.names}\``;
+  return `  ${path(place.file)}:${place.line}:${place.column}: \`${place.field}\`${names}`;
+}
+
+/** How advice starts for one record or for several. */
+function each(n: number): string {
+  return n === 1 ? 'It' : 'Each';
 }
 
 /** For an owner: how many parts take it from what they are in, and so have no `owner` to change. */
@@ -154,6 +176,9 @@ function leftBehind(result: UsesResult, head: Head): string[][] {
   const asConnection = result.record.family === 'connections';
   // The connections with one end in it: those it is an end of, not those that name it as a technology.
   const crossing = result.changes.filter((change) => change.places.some(isEndOf(result))).length;
+  // Those that only pass through it stay, so then the ones that go are named as those with one end in it.
+  const passing = result.changes.some((change) => change.places.every((place) => place.field === 'via'));
+  const ending = crossing === 1 ? 'the connection with one end in it' : `the ${crossing} connections with one end in it`;
   const unconnected = result.left.filter((left) => left.reason === 'no-connection');
   const unusedFirst = result.left.filter((left) => left.reason === 'no-user' && left.assumes === 'connections-go');
   const unusedThen = result.left.filter((left) => left.assumes === 'left-go');
@@ -161,14 +186,14 @@ function leftBehind(result: UsesResult, head: Head): string[][] {
   const are = (n: number): string => (n === 1 ? 'is' : 'are');
 
   const blocks: string[][] = [];
-  const ifGone = asConnection || crossing === 1 ? 'If it goes' : 'If they go';
+  const ifGone = asConnection ? 'If it goes' : passing ? `If ${ending} ${crossing === 1 ? 'goes' : 'go'}` : crossing === 1 ? 'If it goes' : 'If they go';
   if (unconnected.length > 0) {
     blocks.push([`${ifGone}, ${count(unconnected.length, 'record')} ${are(unconnected.length)} left with no connection:`, ...lines(unconnected)]);
   } else if (asConnection || crossing > 0) {
     blocks.push([`${ifGone}, nothing is left with no connection.`]);
   }
   if (unusedFirst.length > 0) {
-    const by = crossing === 0 ? 'it' : crossing === 1 ? 'it and that connection' : 'it and those connections';
+    const by = crossing === 0 ? 'it' : passing ? `it and ${ending}` : crossing === 1 ? 'it and that connection' : 'it and those connections';
     blocks.push([`${count(unusedFirst.length, 'record')} ${are(unusedFirst.length)} named by nothing but ${by}:`, ...lines(unusedFirst)]);
   }
   if (unusedThen.length > 0) {

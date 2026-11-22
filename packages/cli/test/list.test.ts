@@ -161,6 +161,150 @@ describe('the connections', () => {
   });
 });
 
+describe('what a connection passes through, and whose a system is', () => {
+  /** A box office whose orders pass through a load balancer and a gateway, with a queue, a topic and somebody else's system. */
+  const TICKETS: Readonly<Record<string, string>> = {
+    'seefore.yaml': MARKER,
+    'people/buyer.yaml': 'name: Buyer\n',
+    'people/operator.yaml': 'name: Operator\n',
+    'systems/box-office.yaml': 'name: Box office\n',
+    'systems/card-provider.yaml': 'name: Card provider\ndescription: Takes card payments.\nexternal: true\nowner: card-company\n',
+    'systems/edge.yaml': 'name: Edge network\n',
+    'apps/shop.yaml': 'name: Shop\nin: box-office\n',
+    'apps/shop-api.yaml': 'name: Shop API\nin: box-office\ntechnology: [go]\n',
+    'apps/gateway.yaml': 'name: Gateway\nin: box-office\nkind: service\n',
+    'components/checkout.yaml': 'name: Checkout\nin: shop-api\n',
+    'components/router.yaml': 'name: Router\nin: shop-api\n',
+    'stores/sales.yaml': 'name: Ticket sales\nin: box-office\nkind: topic\ntechnology: [kafka]\n',
+    'stores/receipts.yaml': 'name: Receipts to send\nin: box-office\nkind: queue\n',
+    'infrastructure/load-balancer.yaml': 'name: Load balancer\ndescription: Spreads the requests.\ntechnology: [haproxy]\nowner: platform-team\n',
+    'infrastructure/spare-proxy.yaml': 'name: Spare proxy\n',
+    'connections/buyer-uses-shop.yaml': 'from: buyer\nto: shop\nname: Picks seats\n',
+    'connections/shop-places-order.yaml': 'from: shop\nto: checkout\nvia: [edge, load-balancer, gateway, router]\nname: Places an order\ntechnology: [https]\n',
+    'connections/shop-asks-seats.yaml': 'from: shop\nto: shop-api\nvia: [load-balancer]\n',
+    'connections/checkout-pays.yaml': 'from: checkout\nto: card-provider\nname: Takes the payment\n',
+    'connections/checkout-puts-sale.yaml': 'from: checkout\nto: sales\nname: Puts each sale\n',
+    'connections/shop-api-queues-receipt.yaml': 'from: shop-api\nto: receipts\nname: Queues a receipt\n',
+    'connections/gateway-calls-edge.yaml': 'from: gateway\nto: edge\nname: Clears the cache\n',
+    'connections/operator-reloads-balancer.yaml': 'from: operator\nto: load-balancer\nname: Reloads its settings\n',
+    'connections/balancer-checks-api.yaml': 'from: load-balancer\nto: shop-api\nname: Checks that each copy is up\n',
+    'connections/spare-proxy-checks-api.yaml': 'from: spare-proxy\nto: shop-api\n',
+    'owners/platform-team.yaml': 'name: Platform team\n',
+    'owners/card-company.yaml': 'name: The card company\n',
+    'technologies/go.yaml': 'name: Go\n',
+    'technologies/https.yaml': 'name: HTTPS\n',
+    'technologies/kafka.yaml': 'name: Kafka\n',
+    'technologies/haproxy.yaml': 'name: HAProxy\n',
+  };
+
+  it('writes the route on the line of a connection, in order, a component with its app', () => {
+    write(TICKETS);
+    const connections = section(run(['list']).out, 'Connections (10)');
+    expect(connections.slice(7, 12)).toEqual([
+      '  from Shop (app shop)',
+      '    shop-asks-seats: -> Shop API, via Load balancer',
+      '    shop-places-order: -> Shop API / Checkout, via Edge network, Load balancer, Gateway, Shop',
+      '        API / Router: Places an order (HTTPS)',
+      '  from Shop API (app shop-api)',
+    ]);
+  });
+
+  it('lists the pieces of infrastructure under a heading of their own, after the systems, each with how many connections pass through it', () => {
+    write(TICKETS);
+    const out = run(['list']).out;
+    expect(body(out).filter((line) => /^[A-Z]/.test(line))).toEqual([
+      'People (2)',
+      'Systems with parts (1)',
+      'Other systems (2)',
+      'Infrastructure (2)',
+      'Connections (10)',
+      'Owners (2)',
+      'Technologies (4)',
+    ]);
+    expect(section(out, 'Infrastructure (2)')).toEqual([
+      'Infrastructure (2)',
+      '  load-balancer: Load balancer (HAProxy; owner: Platform team; 2 connections pass through it) -',
+      '      Spreads the requests.',
+      '  spare-proxy: Spare proxy (no connection passes through it)',
+    ]);
+  });
+
+  it('says how many connections pass through an app, a component and a system, and which systems are external', () => {
+    write(TICKETS);
+    const out = run(['list']).out;
+    expect(section(out, 'Systems with parts (1)')).toEqual([
+      'Systems with parts (1)',
+      '  box-office: Box office',
+      '    app gateway: Gateway (service; 1 connection passes through it)',
+      '    app shop: Shop',
+      '    app shop-api: Shop API (Go)',
+      '      component checkout: Checkout',
+      '      component router: Router (1 connection passes through it)',
+      '    store receipts: Receipts to send (queue)',
+      '    store sales: Ticket sales (topic; Kafka)',
+    ]);
+    expect(section(out, 'Other systems (2)')).toEqual([
+      'Other systems (2)',
+      '  card-provider: Card provider (external; owner: The card company) - Takes card payments.',
+      '  edge: Edge network (1 connection passes through it)',
+    ]);
+  });
+
+  it('puts the connections that start at a piece of infrastructure under it, after the other groups', () => {
+    write({ ...TICKETS, 'systems/broken.yaml': 'name: [Broken\n', 'connections/broken-calls-api.yaml': 'from: broken\nto: broken\n' });
+    const connections = section(run(['list']).out, 'Connections (11)');
+    expect(connections.slice(-6)).toEqual([
+      '  from broken (a record with an error)',
+      '    broken-calls-api: -> broken',
+      '  from Load balancer (piece of infrastructure load-balancer)',
+      '    balancer-checks-api: -> Shop API: Checks that each copy is up',
+      '  from Spare proxy (piece of infrastructure spare-proxy)',
+      '    spare-proxy-checks-api: -> Shop API',
+    ]);
+  });
+
+  it('counts the pieces of infrastructure among the records it lists', () => {
+    write({ ...TICKETS, 'infrastructure/broken-proxy.yaml': 'name: Broken proxy\ncolour: blue\n' });
+    expect(run(['list']).out.split('\n').at(-1)).toBe('31 records read, 30 listed. 1 error, 0 warnings: run `seefore check` to see them.');
+  });
+
+  it('gives in the data the pieces of infrastructure, and `via` and `external` where a record has them', () => {
+    write(TICKETS);
+    const data = JSON.parse(run(['list', '--json']).out) as ListResult;
+    expect(data.infrastructure).toEqual([
+      {
+        id: 'load-balancer',
+        file: 'infrastructure/load-balancer.yaml',
+        name: 'Load balancer',
+        description: 'Spreads the requests.',
+        technology: ['haproxy'],
+        owner: 'platform-team',
+      },
+      { id: 'spare-proxy', file: 'infrastructure/spare-proxy.yaml', name: 'Spare proxy' },
+    ]);
+    expect(data.connections.find((connection) => connection.id === 'shop-places-order')).toEqual({
+      id: 'shop-places-order',
+      file: 'connections/shop-places-order.yaml',
+      from: 'shop',
+      to: 'checkout',
+      via: ['edge', 'load-balancer', 'gateway', 'router'],
+      name: 'Places an order',
+      technology: ['https'],
+    });
+    expect(data.systems.find((system) => system.id === 'card-provider')).toEqual({
+      id: 'card-provider',
+      file: 'systems/card-provider.yaml',
+      name: 'Card provider',
+      description: 'Takes card payments.',
+      external: true,
+      owner: 'card-company',
+    });
+    // A piece of infrastructure is in nothing: it has the owner it names, and only that.
+    expect(data.ownership['load-balancer']).toEqual({ owner: 'platform-team', from: 'load-balancer' });
+    expect(Object.keys(data.ownership)).not.toContain('spare-proxy');
+  });
+});
+
 describe('a description', () => {
   it('shows its whole first sentence, by the rules of the platform', () => {
     expect(firstSentence('Takes orders. Says how far each has got.')).toBe('Takes orders.');

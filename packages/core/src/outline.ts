@@ -5,10 +5,10 @@ import type { App, Component, Connection, Store, System } from './records.ts';
 /**
  * The listing of a model as a tree of ids, in the order `seefore list` prints it: the people;
  * the systems that have an app or a store, each with its apps, the components of each app, and
- * its stores; the other systems; the connections under what they start from; the owners; the
- * technologies; and last the parts whose `in` names a record with an error. Each list is in
- * order of id. It says nothing of how the listing is written: the command and the page each
- * write it in their own way.
+ * its stores; the other systems; the pieces of infrastructure; the connections under what they
+ * start from; the owners; the technologies; and last the parts whose `in` names a record with
+ * an error. Each list is in order of id. It says nothing of how the listing is written: the
+ * command and the page each write it in their own way.
  */
 export function outlineOf(model: Model): Outline {
   const parts = partsOf(model);
@@ -71,14 +71,19 @@ function partsOf(model: Model): Parts {
  * The connections, each under the person, system, app or store it starts from, in the order of
  * `starts`, and in order of id beneath it. A component's are under its app. Those that start at
  * a record with an error, or at a part in one, come after the rest, in order of the id they
- * stand under.
+ * stand under. Those that start at a piece of infrastructure come last, in order of its id.
  */
 function groupsOf(model: Model, starts: readonly string[]): OutlineGroup[] {
   const appOf = new Map(model.components.map((component) => [component.id, component.in]));
   const groups = groupBy(model.connections, (connection: ModelRecord<Connection>) => appOf.get(connection.from) ?? connection.from);
-  const shown = new Set(starts);
-  const order = [...starts.filter((id) => groups.has(id)), ...[...groups.keys()].filter((id) => !shown.has(id)).sort()];
-  const known = new Set([model.people, model.systems, model.apps, model.stores, model.components].flatMap((family) => ids(family)));
+  const infrastructure = ids(model.infrastructure);
+  const shown = new Set([...starts, ...infrastructure]);
+  const order = [
+    ...starts.filter((id) => groups.has(id)),
+    ...[...groups.keys()].filter((id) => !shown.has(id)).sort(),
+    ...infrastructure.filter((id) => groups.has(id)),
+  ];
+  const known = new Set([model.people, model.systems, model.apps, model.stores, model.components, model.infrastructure].flatMap((family) => ids(family)));
   return order.map((start) => ({ start, known: known.has(start), connections: ids(groups.get(start)) }));
 }
 

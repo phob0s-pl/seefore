@@ -116,7 +116,7 @@ describe('a source directory with only its marker', () => {
     ]);
     expect(loaded.problems[1]?.message).toBe(
       'seefore does not read this file: it knows no records in `elements/`. The folders it reads are `apps`, `components`, ' +
-        '`connections`, `owners`, `people`, `stores`, `systems` and `technologies`.',
+        '`connections`, `infrastructure`, `owners`, `people`, `stores`, `systems` and `technologies`.',
     );
     expect(loaded.problems[2]?.message).toBe(
       'seefore does not read this file. Records sit in folders, and the only file at the top is `seefore.yaml`.',

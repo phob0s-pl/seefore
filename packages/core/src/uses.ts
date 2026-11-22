@@ -41,8 +41,8 @@ export interface Left {
   record: UsedRecord;
   /**
    * `no-connection`: it is an end of a connection now, itself or through something inside it,
-   * and would then be an end of none. `no-user`: it is an owner or a technology, and no record
-   * would then name it.
+   * and would then be an end of none. `no-user`: it is an owner or a technology, or a piece of
+   * infrastructure that is the end of no connection, and no record would then name it.
    */
   reason: 'no-connection' | 'no-user';
   /**
@@ -83,7 +83,8 @@ export interface Removal extends Uses {
   goes: UsedRecord[];
   /**
    * Each record that stays and names the thing, with each place, in order of file: a connection
-   * with one end in it, or what names an owner or a technology.
+   * with one end in it, one that names it or something inside it in `via`, or what names an
+   * owner or a technology.
    */
   changes: Change[];
   /**
@@ -118,7 +119,10 @@ export interface RemovalOptions {
 const CONNECTIONS = 'connections';
 
 /** The families whose records a connection may join. */
-const ELEMENTS = ['people', 'systems', 'apps', 'stores', 'components'];
+const ELEMENTS = ['people', 'systems', 'apps', 'stores', 'components', 'infrastructure'];
+
+/** The family of the things whose work is to pass exchanges on, which connections name in `via`. */
+const INFRASTRUCTURE = 'infrastructure';
 
 /** The families whose records are named for what they are, and never joined: owners and technologies. */
 const NAMED_ONLY = ['owners', 'technologies'];
@@ -301,30 +305,43 @@ function changesOf(records: readonly SourceRecord[], byFile: ReadonlyMap<string,
 
 /**
  * What a removal leaves behind. First each element that is an end of a connection now, itself
- * or through anything inside it, and would be an end of none once the connections taken go.
- * Then each owner and technology that only what goes names. Last, apart, each owner and
- * technology that would lose its last user only if the elements left with no connection went
- * too, with all inside them. Each part is in the order of a listing.
+ * or through anything inside it, and would be an end of none once the connections taken go; a
+ * piece of infrastructure only if no connection that stays passes through it either. Then each
+ * owner and technology that only what goes names, and each piece of infrastructure that is the
+ * end of no connection and that only connections which go name in `via`. Last, apart, each
+ * owner and technology that would lose its last user only if the elements left with no
+ * connection went too, with all inside them. Each part is in the order of a listing.
  */
 function leftBehind(loaded: Loaded, format: Format, parents: ReadonlyMap<string, string>, ends: ReadonlyMap<string, Ends>, taken: Taken): Left[] {
   const files = [...loaded.records, ...loaded.unread];
   const order = format.families.map((family) => family.folder);
   const listed = (a: RecordFile, b: RecordFile): number => order.indexOf(a.family) - order.indexOf(b.family) || (a.id < b.id ? -1 : 1);
 
-  const before = touched(ends.values(), parents);
-  const after = touched([...ends].filter(([file]) => !taken.cut.has(file)).map(([, end]) => end), parents);
-  const unconnected = files
-    .filter((record) => ELEMENTS.includes(record.family) && !taken.thing.has(record.id) && before.has(record.id) && !after.has(record.id))
-    .sort(listed);
-
   const first = new Set([...taken.gone, ...taken.cut]);
-  const then = new Set([...first, ...withInside(unconnected, files, parents)]);
   const users = usersOf(loaded.references);
   const unused = (gone: ReadonlySet<string>) => (record: RecordFile): boolean => {
     const by = users.get(record.id) ?? [];
     return by.length > 0 && by.every((file) => gone.has(file));
   };
-  const named = files.filter((record) => NAMED_ONLY.includes(record.family) && !taken.thing.has(record.id)).sort(listed);
+
+  const before = touched(ends.values(), parents);
+  const after = touched([...ends].filter(([file]) => !taken.cut.has(file)).map(([, end]) => end), parents);
+  // A piece of infrastructure that a connection which stays passes through still has its use.
+  const unconnected = files
+    .filter(
+      (record) =>
+        ELEMENTS.includes(record.family) &&
+        !taken.thing.has(record.id) &&
+        before.has(record.id) &&
+        !after.has(record.id) &&
+        (record.family !== INFRASTRUCTURE || unused(first)(record)),
+    )
+    .sort(listed);
+
+  const then = new Set([...first, ...withInside(unconnected, files, parents)]);
+  // A piece of infrastructure that is the end of no connection is named only in `via`, as an owner is only in `owner`.
+  const namedOnly = (record: RecordFile): boolean => NAMED_ONLY.includes(record.family) || (record.family === INFRASTRUCTURE && !before.has(record.id));
+  const named = files.filter((record) => namedOnly(record) && !taken.thing.has(record.id)).sort(listed);
   const unusedFirst = named.filter(unused(first));
   const unusedThen = unconnected.length === 0 ? [] : named.filter((record) => !unusedFirst.includes(record) && unused(then)(record));
 

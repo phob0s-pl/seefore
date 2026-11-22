@@ -52,6 +52,7 @@ describe('the outline', () => {
         },
       ],
       others: ['card-provider'],
+      infrastructure: [],
       connections: [
         { start: 'customer', known: true, connections: ['customer-shops'] },
         { start: 'warehouse-clerk', known: true, connections: ['clerk-packs'] },
@@ -137,6 +138,31 @@ describe('the outline', () => {
   });
 
   it('is empty for an empty model', () => {
-    expect(outlineOf(modelOf({}))).toEqual({ people: [], withParts: [], others: [], connections: [], owners: [], technologies: [], loose: [] });
+    expect(outlineOf(modelOf({}))).toEqual({ people: [], withParts: [], others: [], infrastructure: [], connections: [], owners: [], technologies: [], loose: [] });
+  });
+
+  it('gives the pieces of infrastructure apart, in order of id, and the connections that start at one last, after those at a record with an error', () => {
+    const outline = outlineOf(
+      modelOf({
+        ...PARTS,
+        'systems/zone.yaml': 'name: [Zone\n',
+        'connections/zone-calls-mailer.yaml': 'from: zone\nto: mailer\n',
+        'infrastructure/proxy.yaml': 'name: Proxy\n',
+        'infrastructure/balancer.yaml': 'name: Balancer\n',
+        'infrastructure/idle.yaml': 'name: Idle\n',
+        'connections/visitor-reaches-web.yaml': 'from: visitor\nto: web\nvia: [balancer, proxy]\nname: Reaches\n',
+        'connections/proxy-checks-web.yaml': 'from: proxy\nto: web\nname: Checks that it is up\n',
+        'connections/balancer-checks-proxy.yaml': 'from: balancer\nto: proxy\nname: Checks that it is up\n',
+        'connections/balancer-asks-mailer.yaml': 'from: balancer\nto: mailer\nname: Sends an alert\n',
+      }),
+    );
+    expect(outline.infrastructure).toEqual(['balancer', 'idle', 'proxy']);
+    expect(outline.connections.slice(-3)).toEqual([
+      { start: 'zone', known: false, connections: ['zone-calls-mailer'] },
+      { start: 'balancer', known: true, connections: ['balancer-asks-mailer', 'balancer-checks-proxy'] },
+      { start: 'proxy', known: true, connections: ['proxy-checks-web'] },
+    ]);
+    // A connection that only passes through a piece of infrastructure stands under what it starts from.
+    expect(outline.connections[0]).toEqual({ start: 'visitor', known: true, connections: ['visitor-reaches-web', 'visitor-uses-web'] });
   });
 });

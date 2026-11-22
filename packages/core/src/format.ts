@@ -21,6 +21,11 @@ export interface ReferenceField {
   list?: boolean;
   /** The rule in plain words, said with every problem of this field. */
   rule: string;
+  /**
+   * What to do when the field names a record of a family it may not name, by that family. It is
+   * said after the rule, for a slip the rule alone would not mend.
+   */
+  wrongFamily?: Readonly<Record<string, string>>;
 }
 
 /** What the records of a family hold, and what they may name. */
@@ -70,6 +75,11 @@ const VIA: ReferenceField = {
   families: ['infrastructure', 'apps', 'components', 'systems'],
   list: true,
   rule: 'Each id in `via` names a piece of infrastructure, an app, a component or a system: something this exchange passes through.',
+  wrongFamily: {
+    stores:
+      'A store is never passed through, and a queue or a topic is a store: write a connection to it from the one that puts in, ' +
+      'and another from the one that takes out, in place of this one.',
+  },
 };
 
 /**

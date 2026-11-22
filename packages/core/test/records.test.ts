@@ -10,7 +10,9 @@ const AROUND: SourceFile[] = [
   { path: 'seefore.yaml', text: 'format: 1\nname: Shop\n' },
   { path: 'people/customer.yaml', text: 'name: Customer\n' },
   { path: 'systems/shop.yaml', text: 'name: Shop\n' },
+  { path: 'systems/card-provider.yaml', text: 'name: Card provider\n' },
   { path: 'apps/order-api.yaml', text: 'name: Order API\nin: shop\n' },
+  { path: 'infrastructure/proxy.yaml', text: 'name: HTTPS proxy\n' },
   { path: 'owners/shop-team.yaml', text: 'name: Shop team\n' },
   { path: 'technologies/go.yaml', text: 'name: Go\n' },
   { path: 'technologies/https.yaml', text: 'name: HTTPS\n' },
@@ -23,6 +25,7 @@ const FAMILIES = [
   { folder: 'apps', noun: 'app', least: 'name: An app\nin: shop\n' },
   { folder: 'stores', noun: 'store', least: 'name: A store\nin: shop\n' },
   { folder: 'components', noun: 'component', least: 'name: A component\nin: order-api\n' },
+  { folder: 'infrastructure', noun: 'piece of infrastructure', least: 'name: A piece of infrastructure\n' },
   { folder: 'connections', noun: 'connection', least: 'from: customer\nto: shop\n' },
   { folder: 'owners', noun: 'owner', least: 'name: An owner\n' },
   { folder: 'technologies', noun: 'technology', least: 'name: A technology\n' },
@@ -82,11 +85,12 @@ describe('the records of format 1', () => {
 describe('the keys a record may have', () => {
   it.each([
     ['people', 'person', '`name` and `description`'],
-    ['systems', 'system', '`name`, `description` and `owner`'],
+    ['systems', 'system', '`name`, `description`, `external` and `owner`'],
     ['apps', 'app', '`name`, `in`, `description`, `kind`, `technology` and `owner`'],
     ['stores', 'store', '`name`, `in`, `description`, `kind`, `technology` and `owner`'],
     ['components', 'component', '`name`, `in`, `description`, `technology` and `owner`'],
-    ['connections', 'connection', '`from`, `to`, `name`, `description` and `technology`'],
+    ['infrastructure', 'piece of infrastructure', '`name`, `description`, `technology` and `owner`'],
+    ['connections', 'connection', '`from`, `to`, `via`, `name`, `description` and `technology`'],
     ['owners', 'owner', '`name` and `description`'],
     ['technologies', 'technology', '`name` and `description`'],
   ])('refuses a key %s do not have, at the key, and names the ones they have', (folder, noun, keys) => {
@@ -107,7 +111,7 @@ describe('the keys a record may have', () => {
     expect(codesOf(`${folder}/thing.yaml`, `${least}owner: shop-team\n`)).toEqual([`${least.split('\n').length}:1 key-unknown`]);
   });
 
-  it.each(['people', 'systems', 'components', 'connections', 'owners', 'technologies'])('gives no kind to a record in %s', (folder) => {
+  it.each(['people', 'systems', 'components', 'infrastructure', 'connections', 'owners', 'technologies'])('gives no kind to a record in %s', (folder) => {
     const least = FAMILIES.find((family) => family.folder === folder)?.least ?? '';
     expect(codesOf(`${folder}/thing.yaml`, `${least}kind: service\n`)).toEqual([`${least.split('\n').length}:1 key-unknown`]);
   });
@@ -117,13 +121,22 @@ describe('the keys a record may have', () => {
     expect(codesOf(`${folder}/thing.yaml`, `${least}technology: [go]\n`)).toEqual([`${least.split('\n').length}:1 key-unknown`]);
   });
 
-  it.each(['people', 'systems', 'connections', 'owners', 'technologies'])('gives no `in` to a record in %s', (folder) => {
+  it.each(['people', 'systems', 'infrastructure', 'connections', 'owners', 'technologies'])('gives no `in` to a record in %s', (folder) => {
     const least = FAMILIES.find((family) => family.folder === folder)?.least ?? '';
     expect(codesOf(`${folder}/thing.yaml`, `${least}in: shop\n`)).toEqual([`${least.split('\n').length}:1 key-unknown`]);
   });
 
   it('keeps `from` and `to` to connections', () => {
     expect(codesOf('apps/thing.yaml', 'name: Thing\nin: shop\nfrom: customer\nto: shop\n')).toEqual(['3:1 key-unknown', '4:1 key-unknown']);
+  });
+
+  it('keeps `via` to connections, and `external` to systems', () => {
+    expect(codesOf('apps/thing.yaml', 'name: Thing\nin: shop\nvia: [proxy]\n')).toEqual(['3:1 key-unknown']);
+    expect(codesOf('infrastructure/thing.yaml', 'name: Thing\nvia: [proxy]\n')).toEqual(['2:1 key-unknown']);
+    for (const folder of ['people', 'apps', 'stores', 'components', 'infrastructure', 'connections', 'owners', 'technologies']) {
+      const least = FAMILIES.find((family) => family.folder === folder)?.least ?? '';
+      expect(codesOf(`${folder}/thing.yaml`, `${least}external: true\n`), folder).toEqual([`${least.split('\n').length}:1 key-unknown`]);
+    }
   });
 });
 
@@ -240,7 +253,7 @@ describe('`kind`', () => {
     accepted('apps/thing.yaml', `name: Thing\nin: shop\nkind: ${kind}\n`);
   });
 
-  it.each(['database', 'files', 'cache', 'index'])('takes %s for a store', (kind) => {
+  it.each(['database', 'files', 'cache', 'index', 'queue', 'topic'])('takes %s for a store', (kind) => {
     accepted('stores/thing.yaml', `name: Thing\nin: shop\nkind: ${kind}\n`);
   });
 
@@ -254,16 +267,23 @@ describe('`kind`', () => {
 
   it('refuses any other kind of store, and names the kinds there are', () => {
     expect(problemsOf('stores/thing.yaml', 'name: Thing\nin: shop\nkind: server\n')).toEqual([
-      '3:7 value-not-allowed `kind` must be one of `database`, `files`, `cache` and `index`.',
+      '3:7 value-not-allowed `kind` must be one of `database`, `files`, `cache`, `index`, `queue` and `topic`.',
     ]);
     expect(codesOf('stores/thing.yaml', 'name: Thing\nin: shop\nkind: service\n')).toEqual(['3:7 value-not-allowed']);
     expect(codesOf('stores/thing.yaml', 'name: Thing\nin: shop\nkind: 3\n')).toEqual(['3:7 value-not-allowed']);
+    expect(codesOf('stores/thing.yaml', 'name: Thing\nin: shop\nkind: stream\n')).toEqual(['3:7 value-not-allowed']);
   });
 
-  it.each(['queue', 'topic'])('says how to write a %s, which is a store with no kind at this stage', (kind) => {
-    expect(problemsOf('stores/thing.yaml', `name: Thing\nin: shop\nkind: ${kind}\n`)).toEqual([
-      '3:7 value-not-allowed `kind` must be one of `database`, `files`, `cache` and `index`. ' +
-        'A queue or a topic is a store with no `kind` at this stage. Say which in its description.',
+  it('gives the model a queue and a topic as kinds of store, as they are written', () => {
+    const loaded = load([
+      ...AROUND,
+      { path: 'stores/jobs.yaml', text: 'name: Jobs\nin: shop\nkind: queue\ntechnology: [go]\n' },
+      { path: 'stores/order-events.yaml', text: 'name: Order events\nin: shop\nkind: topic\n' },
+    ]);
+    expect(loaded.problems).toEqual([]);
+    expect(loaded.model.stores).toEqual([
+      { id: 'jobs', file: 'stores/jobs.yaml', name: 'Jobs', in: 'shop', kind: 'queue', technology: ['go'] },
+      { id: 'order-events', file: 'stores/order-events.yaml', name: 'Order events', in: 'shop', kind: 'topic' },
     ]);
   });
 
@@ -284,6 +304,7 @@ describe('`technology`', () => {
     ['apps', 'name: Thing\nin: shop\n'],
     ['stores', 'name: Thing\nin: shop\n'],
     ['components', 'name: Thing\nin: order-api\n'],
+    ['infrastructure', 'name: Thing\n'],
     ['connections', 'from: customer\nto: shop\n'],
   ])('takes a list of ids on a record in %s, in either way of writing a list', (folder, least) => {
     accepted(`${folder}/thing.yaml`, `${least}technology: [go]\n`);
@@ -337,6 +358,7 @@ describe('`owner`', () => {
     ['apps', 'name: Thing\nin: shop\n'],
     ['stores', 'name: Thing\nin: shop\n'],
     ['components', 'name: Thing\nin: order-api\n'],
+    ['infrastructure', 'name: Thing\n'],
   ])('may be left off, or given, on a record in %s', (folder, least) => {
     accepted(`${folder}/thing.yaml`, least);
     accepted(`${folder}/thing.yaml`, `${least}owner: shop-team\n`);
@@ -358,11 +380,15 @@ describe('`owner`', () => {
     ]);
   });
 
-  it('says that a part with `owner` left out takes the owner of what it is in, and a system nothing', () => {
+  it('says that a part with `owner` left out takes the owner of what it is in, and a system or a piece of infrastructure nothing', () => {
     const takes = 'Left out, the owner is taken from what the part is in: check that this is true.';
     expect(problemsOf('stores/thing.yaml', 'name: Thing\nin: shop\nowner: Two teams argue\n')[0]).toContain(takes);
     expect(problemsOf('components/thing.yaml', 'name: Thing\nin: order-api\nowner: Two teams argue\n')[0]).toContain(takes);
     expect(problemsOf('systems/thing.yaml', 'name: Thing\nowner: Two teams argue\n')[0]).not.toContain('Left out');
+    expect(problemsOf('infrastructure/thing.yaml', 'name: Thing\nowner: Two teams argue\n')).toEqual([
+      '2:8 value-invalid `owner` holds the id of a record in `owners/`. ' +
+        'If who answers takes a sentence to say, leave `owner` out and put the sentence in the description.',
+    ]);
   });
 
   it('answers a slip in an id with the id it was meant to be', () => {
@@ -390,13 +416,64 @@ describe('`from` and `to`', () => {
 
   it('refuses what is not an id, at the value', () => {
     expect(problemsOf('connections/thing.yaml', 'from: Customer\nto: shop\n')).toEqual([
-      '1:7 value-invalid `from` holds the id of the one that acts: a person, a system, an app, a store or a component. ' +
+      '1:7 value-invalid `from` holds the id of the one that acts: a person, a system, an app, a store, a component or a piece of infrastructure. ' +
         '`Customer` is not an id: an id is written in lowercase, like `customer`.',
     ]);
     expect(problemsOf('connections/thing.yaml', 'from: customer\nto: The shop\n')).toEqual([
-      '2:5 value-invalid `to` holds the id of the one it acts on: a person, a system, an app, a store or a component. ' +
+      '2:5 value-invalid `to` holds the id of the one it acts on: a person, a system, an app, a store, a component or a piece of infrastructure. ' +
         "An id has no spaces: it is the name of that record's file, without `.yaml`.",
     ]);
     expect(codesOf('connections/thing.yaml', 'from: customer\nto: 12\n')).toEqual(['2:5 value-wrong-kind']);
+  });
+});
+
+describe('`via`', () => {
+  it('takes a list of ids, in either way of writing a list, and gives it to the model in its order', () => {
+    accepted('connections/thing.yaml', 'from: customer\nto: card-provider\nvia: [proxy]\n');
+    accepted('connections/thing.yaml', 'from: customer\nto: card-provider\nvia:\n  - proxy\n  - order-api\n');
+    const loaded = load([...AROUND, { path: 'connections/thing.yaml', text: 'from: customer\nto: card-provider\nvia: [order-api, proxy]\nname: Pays\n' }]);
+    expect(loaded.model.connections).toEqual([
+      { id: 'thing', file: 'connections/thing.yaml', from: 'customer', to: 'card-provider', via: ['order-api', 'proxy'], name: 'Pays' },
+    ]);
+  });
+
+  it.each([
+    ['an empty list', 'via: []\n', '3:6 value-too-small `via` is an empty list. Leave it out when the exchange passes through nothing.'],
+    ['one id that is not in a list', 'via: proxy\n', '3:6 value-wrong-kind `via` must be a list, but this is text.'],
+    ['an id written twice, at the second', 'via: [proxy, order-api, proxy]\n', '3:25 value-invalid `proxy` is in `via` twice. Keep one.'],
+    [
+      'an item with a space, with no id made from it, at the item',
+      'via: [proxy, the gateway]\n',
+      '3:14 value-invalid The second id in `via`, `the gateway`, is not an id. ' +
+        '`via` holds the ids of what the exchange passes through, nearest to `from` first. Say anything more in the description.',
+    ],
+    ['an item that is an id but for a slip', 'via: [Proxy]\n', '3:7 value-invalid The first id in `via`, `Proxy`, is not an id: an id is written in lowercase, like `proxy`.'],
+    ['an item that is not text', 'via: [proxy, 3]\n', '3:14 value-wrong-kind The second id in `via` must be text, but this is a whole number.'],
+  ])('refuses %s', (_what, text, problem) => {
+    expect(problemsOf('connections/thing.yaml', `from: customer\nto: card-provider\n${text}`)).toEqual([problem]);
+  });
+});
+
+describe('`external`', () => {
+  it('takes `true` on a system, and gives it to the model', () => {
+    const loaded = load([...AROUND, { path: 'systems/payments.yaml', text: 'name: Payments\ndescription: Takes card payments.\nexternal: true\n' }]);
+    expect(loaded.problems).toEqual([]);
+    expect(loaded.model.systems.find((system) => system.id === 'payments')).toEqual({
+      id: 'payments',
+      file: 'systems/payments.yaml',
+      name: 'Payments',
+      description: 'Takes card payments.',
+      external: true,
+    });
+  });
+
+  it.each([
+    ['`false`', 'external: false\n'],
+    ['text', 'external: yes please\n'],
+    ['a number', 'external: 1\n'],
+  ])('refuses %s, at the value, and says what to do for a system that is not external', (_what, text) => {
+    expect(problemsOf('systems/thing.yaml', `name: Thing\n${text}`)).toEqual([
+      '2:11 value-not-allowed `external` must be `true`. Leave it out for a system of yours, and for one nobody has spoken for.',
+    ]);
   });
 });

@@ -273,6 +273,70 @@ describe('what would be left behind', () => {
   });
 });
 
+describe('what a connection passes through', () => {
+  /** A site whose pages are reached through a balancer, an ingress and a part of another app. */
+  const ROUTES: Readonly<Record<string, string>> = {
+    'people/visitor.yaml': 'name: Visitor\n',
+    'people/operator.yaml': 'name: Operator\n',
+    'systems/site.yaml': 'name: Site\n',
+    'apps/web.yaml': 'name: Web\nin: site\n',
+    'apps/workhorse.yaml': 'name: Workhorse\nin: site\n',
+    'components/router.yaml': 'name: Router\nin: workhorse\n',
+    'infrastructure/balancer.yaml': 'name: Balancer\n',
+    'infrastructure/ingress.yaml': 'name: Ingress\ntechnology: [nginx]\n',
+    'infrastructure/edge-cache.yaml': 'name: Edge cache\n',
+    'connections/visitor-reads-pages.yaml': 'from: visitor\nto: web\nvia: [balancer, ingress, router]\nname: Reads the pages\n',
+    'connections/workhorse-asks-web.yaml': 'from: workhorse\nto: web\nname: Asks for the size of a file\n',
+    'connections/operator-reloads-ingress.yaml': 'from: operator\nto: ingress\nname: Reloads it\n',
+    'connections/operator-empties-cache.yaml': 'from: operator\nto: edge-cache\nname: Empties it\n',
+    'technologies/nginx.yaml': 'name: nginx\n',
+  };
+
+  it('puts a connection that names the thing, or anything in it, in `via` under what must go or change, at its place there', () => {
+    const removal = review(ROUTES, 'workhorse');
+    expect(removal.changes).toEqual([
+      {
+        record: { id: 'visitor-reads-pages', family: 'connections', file: 'connections/visitor-reads-pages.yaml', name: 'Reads the pages' },
+        places: [{ file: 'connections/visitor-reads-pages.yaml', line: 3, column: 26, record: 'visitor-reads-pages', field: 'via', names: 'router' }],
+      },
+      {
+        record: { id: 'workhorse-asks-web', family: 'connections', file: 'connections/workhorse-asks-web.yaml', name: 'Asks for the size of a file' },
+        places: [{ file: 'connections/workhorse-asks-web.yaml', line: 1, column: 7, record: 'workhorse-asks-web', field: 'from', names: 'workhorse' }],
+      },
+    ]);
+    // The connection that passes through it stays, with what it passes through besides.
+    expect(left(removal)).toEqual([]);
+  });
+
+  it('leaves behind a piece of infrastructure that only connections which go pass through, and that is the end of none', () => {
+    // Both connections to Web go. The ingress is still reloaded by the operator; the balancer has nothing left.
+    expect(left(review(ROUTES, 'web'))).toEqual([
+      'visitor no-connection connections-go',
+      'site no-connection connections-go',
+      'workhorse no-connection connections-go',
+      'balancer no-user connections-go',
+    ]);
+  });
+
+  it('leaves behind a piece of infrastructure that is an end only of what goes, unless a connection that stays passes through it', () => {
+    expect(left(review(ROUTES, 'operator'))).toEqual(['edge-cache no-connection connections-go']);
+    expect(left(review(ROUTES, 'visitor-reads-pages'))).toEqual(['visitor no-connection connections-go', 'balancer no-user connections-go']);
+  });
+
+  it('works on a piece of infrastructure as on any record', () => {
+    const removal = review(ROUTES, 'ingress');
+    expect(removal.record).toEqual({ id: 'ingress', family: 'infrastructure', file: 'infrastructure/ingress.yaml', name: 'Ingress' });
+    expect(removal.inside).toEqual([]);
+    expect(removal.goes).toEqual([]);
+    expect(removal.changes.map((change) => `${change.record.id} ${change.places.map((place) => place.field)}`)).toEqual([
+      'operator-reloads-ingress to',
+      'visitor-reads-pages via',
+    ]);
+    // The operator still empties the cache, so only what the ingress alone names is left.
+    expect(left(removal)).toEqual(['nginx no-user connections-go']);
+  });
+});
+
 describe('what may speak of it', () => {
   it('finds its id with spaces, also over a line break, and points at the key of the text', () => {
     expect(review(RELAYS, 'relay-pool-server').mentions).toEqual([
