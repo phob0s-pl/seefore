@@ -5,7 +5,8 @@
   "description": "The seefore viewer: a read-only page that draws the pictures the engine lays out. Built into the command's package.",
   "type": "module",
   "scripts": {
-    "build": "node build.mjs"
+    "build": "node build.mjs",
+    "look": "node build.mjs && node look.mjs"
   },
   "devDependencies": {
     "@seefore/core": "*",

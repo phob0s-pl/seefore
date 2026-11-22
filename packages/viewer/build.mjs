@@ -1,12 +1,15 @@
 // Builds the page into the command's package, packages/cli/dist/viewer, so that the installed
-// command serves it with nothing else to fetch.
-import { mkdirSync, writeFileSync } from 'node:fs';
+// command serves it with nothing else to fetch: index.html, one script, app.js, and one style
+// sheet, app.css, which holds React Flow's own styles and the page's.
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const out = join(here, '..', 'cli', 'dist', 'viewer');
+// What an earlier build left is cleared, so that the server's list of files is this build's.
+rmSync(out, { recursive: true, force: true });
 mkdirSync(out, { recursive: true });
 
 await build({
@@ -25,6 +28,22 @@ await build({
 
 writeFileSync(
   join(out, 'index.html'),
-  '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n<title>seefore</title>\n</head>\n<body>\n<div id="root"></div>\n<script type="module" src="/app.js"></script>\n</body>\n</html>\n',
+  [
+    '<!doctype html>',
+    '<html lang="en">',
+    '<head>',
+    '<meta charset="utf-8">',
+    '<meta name="viewport" content="width=device-width, initial-scale=1">',
+    '<meta name="color-scheme" content="light dark">',
+    '<title>seefore</title>',
+    '<link rel="stylesheet" href="/app.css">',
+    '</head>',
+    '<body>',
+    '<div id="root"></div>',
+    '<script type="module" src="/app.js"></script>',
+    '</body>',
+    '</html>',
+    '',
+  ].join('\n'),
 );
 console.log(`built ${out}`);
