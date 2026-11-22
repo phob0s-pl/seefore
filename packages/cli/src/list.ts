@@ -3,6 +3,7 @@ import type {
   App,
   Component,
   Connection,
+  Infrastructure,
   Model,
   ModelRecord,
   OutlineApp,
@@ -47,8 +48,9 @@ export interface ListResult extends Model {
   errors: number;
   warnings: number;
   /**
-   * Who answers for each system, app, store and component that has an owner, by its id: the
-   * owner, and the record whose `owner` names it. A part with no owner, here or above, is not in it.
+   * Who answers for each system, app, store, component and piece of infrastructure that has an
+   * owner, by its id: the owner, and the record whose `owner` names it. A part with no owner,
+   * here or above, is not in it.
    */
   ownership: Record<string, Ownership>;
 }
@@ -90,13 +92,19 @@ interface Layout {
 interface Index {
   /** The name of each record of the model but a connection, by id. */
   names: Map<string, string>;
-  /** The sort of each element, as a person reads it, by id: `person`, `system`, `app`, `store`, `component`. */
+  /**
+   * The sort of each element, as a person reads it, by id: `person`, `system`, `app`, `store`,
+   * `component`, `piece of infrastructure`.
+   */
   sorts: Map<string, string>;
+  /** How many connections name each record in `via`, by id, for those that some connection names there. */
+  through: Map<string, number>;
   people: Map<string, ModelRecord<Person>>;
   systems: Map<string, ModelRecord<System>>;
   apps: Map<string, ModelRecord<App>>;
   stores: Map<string, ModelRecord<Store>>;
   components: Map<string, ModelRecord<Component>>;
+  infrastructure: Map<string, ModelRecord<Infrastructure>>;
   connections: Map<string, ModelRecord<Connection>>;
   owners: Map<string, ModelRecord<Owner>>;
   technologies: Map<string, ModelRecord<Technology>>;
@@ -139,6 +147,11 @@ function listing(result: ListResult, layout: Layout, here: Here): string {
       count: outline.others.length,
       lines: outline.others.flatMap((id) => systemLines({ id, apps: [], stores: [] }, index, layout)),
     },
+    {
+      title: 'Infrastructure',
+      count: outline.infrastructure.length,
+      lines: outline.infrastructure.flatMap((id) => infrastructureLines(lookUp(index.infrastructure, id), index, layout)),
+    },
     { title: 'Connections', count: result.connections.length, lines: connectionLines(outline.connections, index, layout) },
     { title: 'Owners', count: outline.owners.length, lines: named(index.owners, outline.owners) },
     { title: 'Technologies', count: outline.technologies.length, lines: named(index.technologies, outline.technologies) },
@@ -157,7 +170,17 @@ function listing(result: ListResult, layout: Layout, here: Here): string {
   }
 
   // Every record of the model is listed. One left out has an error in its own file.
-  const families = [result.people, result.systems, result.apps, result.stores, result.components, result.connections, result.owners, result.technologies];
+  const families = [
+    result.people,
+    result.systems,
+    result.apps,
+    result.stores,
+    result.components,
+    result.infrastructure,
+    result.connections,
+    result.owners,
+    result.technologies,
+  ];
   const listed = families.reduce((sum, family) => sum + family.length, 0);
   const read = `${count(result.records, 'record')} read${listed < result.records ? `, ${listed} listed` : ''}.`;
   const found = result.errors + result.warnings === 0 ? 'No problems.' : problemsInBrief(result.errors, result.warnings, here);
@@ -170,16 +193,18 @@ function indexOf(model: Model): Index {
   const index: Index = {
     names: new Map(),
     sorts: new Map(),
+    through: new Map(),
     people: byId(model.people),
     systems: byId(model.systems),
     apps: byId(model.apps),
     stores: byId(model.stores),
     components: byId(model.components),
+    infrastructure: byId(model.infrastructure),
     connections: byId(model.connections),
     owners: byId(model.owners),
     technologies: byId(model.technologies),
   };
-  for (const family of [model.people, model.systems, model.apps, model.stores, model.components, model.owners, model.technologies]) {
+  for (const family of [model.people, model.systems, model.apps, model.stores, model.components, model.infrastructure, model.owners, model.technologies]) {
     for (const record of family) index.names.set(record.id, record.name);
   }
   const sorts: [string, readonly { id: string }[]][] = [
@@ -188,8 +213,11 @@ function indexOf(model: Model): Index {
     ['app', model.apps],
     ['store', model.stores],
     ['component', model.components],
+    ['piece of infrastructure', model.infrastructure],
   ];
   for (const [sort, family] of sorts) for (const record of family) index.sorts.set(record.id, sort);
+  // `via` names none twice, so each id in it is one connection that passes through.
+  for (const connection of model.connections) for (const id of connection.via ?? []) index.through.set(id, (index.through.get(id) ?? 0) + 1);
   return index;
 }
 
@@ -205,14 +233,24 @@ function lookUp<T>(records: ReadonlyMap<string, T>, id: string): T {
   return record;
 }
 
-/** A system, with its apps and stores beneath it and the components of each app beneath that. */
+/**
+ * A system, with its apps and stores beneath it and the components of each app beneath that. It
+ * says first when it is somebody else's, and last how many connections pass through it.
+ */
 function systemLines(system: OutlineSystem, index: Index, layout: Layout): string[] {
   const record = lookUp(index.systems, system.id);
+  const facts = [record.external ? 'external' : undefined, owner(record.owner, index), passing(record.id, index)];
   return [
-    ...entry('  ', record.id, record.name, [owner(record.owner, index)], record.description, layout),
+    ...entry('  ', record.id, record.name, facts, record.description, layout),
     ...system.apps.flatMap((app) => appLines(app, '    ', index, layout)),
     ...system.stores.flatMap((store) => storeLines(lookUp(index.stores, store), '    ', index, layout)),
   ];
+}
+
+/** A piece of infrastructure, with its facts as an app has them, and how many connections pass through it, none too. */
+function infrastructureLines(piece: ModelRecord<Infrastructure>, index: Index, layout: Layout): string[] {
+  const facts = [technologies(piece.technology, index), owner(piece.owner, index), passing(piece.id, index) ?? 'no connection passes through it'];
+  return entry('  ', piece.id, piece.name, facts, piece.description, layout);
 }
 
 /** A part whose `in` names a record with an error, saying so first in its brackets. */
@@ -226,7 +264,7 @@ function looseLines(part: OutlineLoose, index: Index, layout: Layout): string[] 
 /** An app, with its components beneath it. `where` is said first in its brackets, when given. */
 function appLines(outlined: OutlineApp, indent: string, index: Index, layout: Layout, where?: string): string[] {
   const app = lookUp(index.apps, outlined.id);
-  const facts = [where, app.kind, technologies(app.technology, index), owner(app.owner, index)];
+  const facts = [where, app.kind, technologies(app.technology, index), owner(app.owner, index), passing(app.id, index)];
   return [
     ...entry(indent, `app ${app.id}`, app.name, facts, app.description, layout),
     ...outlined.components.flatMap((component) => componentLines(lookUp(index.components, component), `${indent}  `, index, layout)),
@@ -241,13 +279,14 @@ function storeLines(store: ModelRecord<Store>, indent: string, index: Index, lay
 
 /** A component. `where` is said first in its brackets, when given. */
 function componentLines(component: ModelRecord<Component>, indent: string, index: Index, layout: Layout, where?: string): string[] {
-  const facts = [where, technologies(component.technology, index), owner(component.owner, index)];
+  const facts = [where, technologies(component.technology, index), owner(component.owner, index), passing(component.id, index)];
   return entry(indent, `component ${component.id}`, component.name, facts, component.description, layout);
 }
 
 /**
- * The connections, each group under the person, system, app or store it starts from, as the
- * outline gives them. A group that starts at a record with an error is shown by its id.
+ * The connections, each group under the person, system, app, store or piece of infrastructure
+ * it starts from, as the outline gives them. A group that starts at a record with an error is
+ * shown by its id.
  */
 function connectionLines(groups: readonly OutlineGroup[], index: Index, layout: Layout): string[] {
   const lines: string[] = [];
@@ -262,18 +301,27 @@ function connectionLines(groups: readonly OutlineGroup[], index: Index, layout: 
 }
 
 /**
- * A connection under what it starts from: the arrow to its far end, its name and protocol. The
- * line names its start only when that is a component of the app it stands under.
+ * A connection under what it starts from: the arrow to its far end, what it passes through on
+ * the way, in order, its name and protocol. The line names its start only when that is a
+ * component of the app it stands under.
  */
 function connectionEntry(connection: ModelRecord<Connection>, start: string, index: Index, layout: Layout): string[] {
   const from = connection.from === start ? '' : `${index.names.get(connection.from) ?? connection.from} `;
-  const arrow = `${from}-> ${farEnd(connection.to, index)}`;
+  const route = connection.via === undefined ? '' : `, via ${connection.via.map((id) => farEnd(id, index)).join(', ')}`;
+  const arrow = `${from}-> ${farEnd(connection.to, index)}${route}`;
   const said = connection.name === undefined ? arrow : `${arrow}: ${connection.name}`;
   return entry('    ', connection.id, said, [technologies(connection.technology, index)], connection.description, layout);
 }
 
+/** How many connections pass through a record, or nothing when none does. */
+function passing(id: string, index: Index): string | undefined {
+  const n = index.through.get(id) ?? 0;
+  if (n === 0) return undefined;
+  return n === 1 ? '1 connection passes through it' : `${n} connections pass through it`;
+}
+
 /**
- * The far end of a connection by its name, and a component with its app's, as in
+ * A record that a connection names, by its name, and a component with its app's, as in
  * "Order API / Checkout". A record whose file has an error is shown by its id, since its name
  * is not known.
  */

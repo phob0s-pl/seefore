@@ -16,6 +16,7 @@ export { emptyModel, ownership } from './model.ts';
 export type { Model, ModelRecord, Ownership } from './model.ts';
 export type {
   BoxFamily,
+  BoxLook,
   Drawn,
   Failed,
   LegendEntry,
@@ -39,6 +40,8 @@ export type {
   ViewBox,
   ViewKind,
   ViewLeft,
+  ViewPassed,
+  ViewRoute,
   ViewerState,
 } from './picture.ts';
 export { outlineOf } from './outline.ts';
@@ -48,6 +51,7 @@ export {
   APP_KINDS,
   AppSchema,
   ComponentSchema,
+  InfrastructureSchema,
   ConnectionSchema,
   OwnerSchema,
   PersonSchema,
@@ -56,8 +60,8 @@ export {
   SystemSchema,
   TechnologySchema,
 } from './records.ts';
-export type { App, Component, Connection, Owner, Person, Store, System, Technology } from './records.ts';
+export type { App, Component, Connection, Infrastructure, Owner, Person, Store, System, Technology } from './records.ts';
 export { DESCRIPTION_MAX, NAME_MAX, firstSentence } from './text.ts';
 export { isShort, readInFull, recordsWithId, removalOf, usesOf, wordsFor } from './uses.ts';
 export type { Change, Left, Mention, Removal, RemovalOptions, UsedRecord, Uses } from './uses.ts';
-export { UNNAMED_CONNECTION, viewsOf } from './views.ts';
+export { UNNAMED_CONNECTION, connectionsInNoView, viewsOf } from './views.ts';

@@ -1,12 +1,15 @@
 import type { Drawn, PlacedArrow, PlacedBoundary, PlacedBox, PlacedLabel, Point, View, ViewArrow, ViewBoundary, ViewBox } from '@seefore/core';
 import type { Edge, Node, NodeHandle } from '@xyflow/react';
 import { Position } from '@xyflow/react';
+import { onOutlines } from './outline.ts';
+import type { Outlined } from './outline.ts';
 import { LINE_HEIGHT } from './theme.ts';
 
 /**
  * A picture as React Flow's nodes and edges. React Flow is only the canvas: every place, route
  * and line of text comes from the picture, and nothing is worked out again but what React Flow
- * asks for, a child's place from its parent's.
+ * asks for, a child's place from its parent's, and where an arrow's end touches the outline its
+ * box draws.
  */
 
 /** What a box node draws. */
@@ -25,6 +28,7 @@ export interface BoundaryData extends Record<string, unknown> {
 /** What an arrow edge draws. */
 export interface ArrowData extends Record<string, unknown> {
   arrow: ViewArrow;
+  /** Its place in the picture, with each end moved to touch the outline of its box. */
   placed: PlacedArrow;
   /** Its place among the arrows of the picture, which makes a name for its label's clip that no other arrow has. */
   index: number;
@@ -66,20 +70,27 @@ function sentence(text: string): string {
   return /[.!?…]$/u.test(text) ? text : `${text}.`;
 }
 
-/** What a screen reader says for a box: its whole name, kind line and first sentence, and its mark. */
+/** A number of connections in words: `1 connection`, `3 connections`. */
+function connections(count: number): string {
+  return `${count} ${count === 1 ? 'connection' : 'connections'}`;
+}
+
+/** What a screen reader says for a box: its whole name, kind line and first sentence, and its marks. */
 export function boxSaid(box: ViewBox): string {
   const parts = [`${box.name}, ${box.line}`];
   if (box.sentence !== undefined) parts.push(box.sentence);
-  if (box.loops.length > 0) parts.push(`${box.loops.length} ${box.loops.length === 1 ? 'connection' : 'connections'} between its copies`);
+  if (box.loops.length > 0) parts.push(`${connections(box.loops.length)} between its copies`);
+  if (box.passing.length > 0) parts.push(`${connections(box.passing.length)} of this view ${box.passing.length === 1 ? 'passes' : 'pass'} through it`);
   return parts.map(sentence).join(' ');
 }
 
-/** What a screen reader says for an arrow: its two ends, and the whole name of every connection it stands for. */
+/** What a screen reader says for an arrow: its two ends, the whole name of every connection it stands for, its route and its technology. */
 export function arrowSaid(arrow: ViewArrow, names: ReadonlyMap<string, string>): string {
   const from = names.get(arrow.from) ?? arrow.from;
   const to = names.get(arrow.to) ?? arrow.to;
+  const route = arrow.route === undefined ? '' : `, ${arrow.route.line}`;
   const technology = arrow.technology.length > 0 ? ` [${arrow.technology.join(', ')}]` : '';
-  return `${from} to ${to}: ${arrow.names.join('; ')}${technology}`;
+  return `${from} to ${to}: ${arrow.names.join('; ')}${route}${technology}`;
 }
 
 /** The name of each box and of the boundary of a view, by id. */
@@ -139,10 +150,18 @@ export function toFlow(view: View, drawn: Drawn): { nodes: PictureNode[]; edges:
   const drawnIds = new Set(nodes.map((node) => node.id));
   const arrows = new Map(view.arrows.map((arrow) => [arrow.id, arrow]));
   const names = namesIn(view);
+  const places = new Map(drawn.boxes.map((placed) => [placed.id, placed]));
+  // A box with the outline its look draws, where an arrow's end is moved to touch it.
+  const outlined = (id: string): Outlined | undefined => {
+    const box = boxes.get(id);
+    const placed = places.get(id);
+    return box === undefined || placed === undefined ? undefined : { look: box.look, scope: box.scope, x: placed.x, y: placed.y, width: placed.width, height: placed.height };
+  };
   const edges: ArrowEdge[] = [];
   for (const placed of drawn.arrows) {
     const arrow = arrows.get(placed.id);
     if (arrow === undefined || !drawnIds.has(arrow.from) || !drawnIds.has(arrow.to)) continue;
+    const sections = onOutlines(placed.sections, outlined(arrow.from), outlined(arrow.to));
     edges.push({
       id: placed.id,
       type: 'arrow',
@@ -150,7 +169,7 @@ export function toFlow(view: View, drawn: Drawn): { nodes: PictureNode[]; edges:
       target: arrow.to,
       sourceHandle: HANDLE_OUT,
       targetHandle: HANDLE_IN,
-      data: { arrow, placed, index: edges.length },
+      data: { arrow, placed: { ...placed, sections }, index: edges.length },
       ariaLabel: arrowSaid(arrow, names),
       selectable: false,
       // Above the boundary's tint, which is a node of its own.
@@ -204,19 +223,21 @@ export interface LabelLine {
   text: string;
   /** The middle of the line, from the top of the picture. */
   y: number;
-  /** True for the technology line. */
-  technology: boolean;
+  /** A line of names, the route line or the technology line. */
+  kind: 'name' | 'route' | 'technology';
 }
 
-/** The lines of a label as given, stacked in the middle of the label's place, the technology last. */
+/** The lines of a label as given, stacked in the middle of the label's place: the names, then the route, then the technology. */
 export function labelLines(label: PlacedLabel): LabelLine[] {
-  const height = label.lines.length * LINE_HEIGHT.label + (label.technology === undefined ? 0 : LINE_HEIGHT.technology);
-  let top = label.y + (label.height - height) / 2;
-  const lines: LabelLine[] = label.lines.map((text) => {
-    const line = { text, y: top + LINE_HEIGHT.label / 2, technology: false };
-    top += LINE_HEIGHT.label;
+  const given: { text: string; kind: LabelLine['kind']; height: number }[] = [
+    ...label.lines.map((text) => ({ text, kind: 'name' as const, height: LINE_HEIGHT.label })),
+    ...(label.route === undefined ? [] : [{ text: label.route, kind: 'route' as const, height: LINE_HEIGHT.route }]),
+    ...(label.technology === undefined ? [] : [{ text: label.technology, kind: 'technology' as const, height: LINE_HEIGHT.technology }]),
+  ];
+  let top = label.y + (label.height - given.reduce((sum, line) => sum + line.height, 0)) / 2;
+  return given.map(({ text, kind, height }) => {
+    const line = { text, y: top + height / 2, kind };
+    top += height;
     return line;
   });
-  if (label.technology !== undefined) lines.push({ text: label.technology, y: top + LINE_HEIGHT.technology / 2, technology: true });
-  return lines;
 }

@@ -49,7 +49,7 @@ view. A view is worked out from the model and is not stored.
   panel.
 - **The kind** is told by that line and by the shape: a person, a system, an app and a store
   each have their own. Colour comes third, and never alone. The system in scope has a thicker
-  line. Ours and somebody else's look alike until stage 6 decides on a stored mark.
+  line. Ours and somebody else's look alike until stage 6a decides on a stored mark.
 - **The boundary** is a dashed line with a light tint and `Name [System]` at its top left.
 - **An arrow** runs in right angles, from the one that acts, with its label on its own line.
   One that stands for several connections is drawn thicker. A box whose copies act on one
@@ -144,7 +144,7 @@ Of "Every stage ends the same way": part 3, since nothing new can be written, an
 Editing, dragging, stored positions and styling controls. Search, a link to a box and
 drill-down: stage 10. Component views, a landscape and "this box and its neighbours" as a view:
 stage 9. The limit for a crowded view, and what holds a picture still when the model changes:
-stage 7. What a connection passes through, and a mark for somebody else's system: stage 6.
+stage 7. What a connection passes through, and a mark for somebody else's system: stage 6a.
 Export of a picture.
 
 ## Against the research

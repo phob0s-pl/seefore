@@ -26,6 +26,7 @@ const RULES: [Name, Name[], number][] = [
   ['person', ['ground', 'tint'], LINE],
   ['app', ['ground', 'tint'], LINE],
   ['store', ['ground', 'tint'], LINE],
+  ['infrastructure', ['ground', 'tint'], LINE],
   ['system', ['ground', 'tint'], LINE],
   ['arrow', ['ground', 'tint'], LINE],
   ['fadedLine', ['ground', 'tint'], LINE],

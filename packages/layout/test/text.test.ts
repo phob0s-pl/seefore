@@ -1,8 +1,23 @@
 import { describe, expect, it } from 'vitest';
 import { ELLIPSIS, widthOf } from '../src/measure.ts';
-import { BOX_TEXT_WIDTH, KIND_FONT, LABEL_FONT, LABEL_LINE_HEIGHT, LABEL_WIDTH, NAME_FONT, SENTENCE_FONT, TECHNOLOGY_FONT, TECHNOLOGY_LINE_HEIGHT } from '../src/sizes.ts';
+import {
+  BOX_PADDING,
+  BOX_TEXT_WIDTH,
+  BOX_WIDTH,
+  KIND_FONT,
+  LABEL_FONT,
+  LABEL_LINE_HEIGHT,
+  LABEL_WIDTH,
+  NAME_FONT,
+  ROUTE_FONT,
+  ROUTE_LINE_HEIGHT,
+  SENTENCE_FONT,
+  TECHNOLOGY_FONT,
+  TECHNOLOGY_LINE_HEIGHT,
+  TEXT_INSET,
+} from '../src/sizes.ts';
 import { boxText, labelText } from '../src/text.ts';
-import { arrow, box } from './views.ts';
+import { arrow, box, route } from './views.ts';
 
 /** True when no line is wider than the width, allowing for the sum of fractions. */
 function fit(lines: readonly string[], font: { size: number; bold: boolean }, width: number): boolean {
@@ -12,7 +27,26 @@ function fit(lines: readonly string[], font: { size: number; bold: boolean }, wi
 describe('the text of a box', () => {
   it('is the name, the kind line and the first sentence, each broken to fit the box', () => {
     const text = boxText(box('order-api', 'apps', { name: 'Order API', line: '[App: service · Go]', sentence: 'Takes orders and says how far each has got.' }));
-    expect(text).toEqual({ name: ['Order API'], line: '[App: service · Go]', sentence: ['Takes orders and says how far each', 'has got.'] });
+    expect(text).toEqual({
+      name: ['Order API'],
+      line: '[App: service · Go]',
+      sentence: ['Takes orders and says how far each', 'has got.'],
+      inset: { left: BOX_PADDING, right: BOX_PADDING },
+    });
+  });
+
+  it('is broken for the room the shape of its look leaves, and says how far in that room is', () => {
+    // 216 px wide in bold: it fits a box that fills its rectangle, and not a queue or a piece of infrastructure.
+    const name = 'Payment reconciliation events';
+    expect(boxText(box('a', 'apps', { name })).name).toEqual([name]);
+    for (const look of ['queue-or-topic', 'infrastructure'] as const) {
+      const text = boxText(box('a', look === 'infrastructure' ? 'infrastructure' : 'stores', { look, name }));
+      expect(text.inset).toEqual(TEXT_INSET[look]);
+      expect(text.name).toEqual(['Payment reconciliation', 'events']);
+      expect(fit(text.name, NAME_FONT, BOX_WIDTH - text.inset.left - text.inset.right)).toBe(true);
+    }
+    expect(TEXT_INSET['queue-or-topic']).toEqual({ left: BOX_PADDING, right: BOX_PADDING + 8 });
+    expect(TEXT_INSET.infrastructure).toEqual({ left: BOX_PADDING + 4, right: BOX_PADDING + 4 });
   });
 
   it('has the name in at most two lines', () => {
@@ -90,5 +124,52 @@ describe('the label of an arrow', () => {
 
   it('is missing when the arrow has no words at all', () => {
     expect(labelText(arrow('a', 'b', []))).toBeUndefined();
+  });
+});
+
+describe('the route line of a label', () => {
+  it('names what the connections pass through, on a line of its own under the names and above the technology', () => {
+    const label = labelText({ ...arrow('a', 'b', ['Calls the API'], ['HTTPS']), route: route(['Ingress', 'Workhorse']) });
+    expect(label).toMatchObject({ lines: ['Calls the API'], route: 'via Ingress, Workhorse', technology: '[HTTPS]' });
+    expect(label?.height).toBe(LABEL_LINE_HEIGHT + ROUTE_LINE_HEIGHT + TECHNOLOGY_LINE_HEIGHT);
+  });
+
+  it('says on how many connections they pass through something when the routes differ', () => {
+    const label = labelText({ ...arrow('a', 'b', ['One', 'Two', 'Three', 'Four', 'Five']), route: route([], 2, 5) });
+    expect(label?.lines).toEqual(['One', 'Two', '+ 3 more']);
+    expect(label?.route).toBe('via on 2 of 5');
+    expect(label?.height).toBe(3 * LABEL_LINE_HEIGHT + ROUTE_LINE_HEIGHT);
+  });
+
+  it('is measured, and the label is as wide as it when it is the widest line', () => {
+    const label = labelText({ ...arrow('a', 'b', ['Pays']), route: route(['Load balancer']) });
+    expect(label?.width).toBe(Math.ceil(widthOf('via Load balancer', ROUTE_FONT)));
+  });
+
+  it('gives as many whole names as fit, and then how many are left, when not all fit', () => {
+    const two = labelText({ ...arrow('a', 'b', ['Pays']), route: route(['CDN', 'Ingress', 'The load balancer of the proxies']) });
+    expect(two?.route).toBe('via CDN, Ingress, + 1 more');
+    const one = labelText({ ...arrow('a', 'b', ['Pays']), route: route(['Ingress', 'Workhorse', 'The load balancer of the proxies']) });
+    expect(one?.route).toBe('via Ingress, + 2 more');
+    for (const label of [two, one]) {
+      expect(fit([label?.route ?? ''], ROUTE_FONT, LABEL_WIDTH)).toBe(true);
+      expect(label?.width).toBeLessThanOrEqual(LABEL_WIDTH);
+    }
+  });
+
+  it('cuts the first name with an ellipsis when not even it fits whole, and still says how many are left', () => {
+    // Boxwick's route: the second hop must not be lost to the cut.
+    const label = labelText({ ...arrow('a', 'b', ['Pays']), route: route(['Content delivery network', 'Load balancer']) });
+    expect(label?.route).toBe(`via Content${ELLIPSIS} + 1 more`);
+    expect(fit([label?.route ?? ''], ROUTE_FONT, LABEL_WIDTH)).toBe(true);
+    // One name alone is cut as any line is.
+    const alone = labelText({ ...arrow('a', 'b', ['Pays']), route: route(['The load balancer in front of every proxy']) });
+    expect(alone?.route?.endsWith(ELLIPSIS)).toBe(true);
+    expect(alone?.route).not.toContain('more');
+    expect(fit([alone?.route ?? ''], ROUTE_FONT, LABEL_WIDTH)).toBe(true);
+  });
+
+  it('is missing when no connection of the arrow passes through anything', () => {
+    expect(labelText(arrow('a', 'b', ['Pays'], ['HTTPS']))).not.toHaveProperty('route');
   });
 });

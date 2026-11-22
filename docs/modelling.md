@@ -15,7 +15,7 @@ is a **connection**.
 
 ## The records
 
-Eight kinds, one folder each.
+Nine kinds, one folder each. The ninth, `infrastructure/`, came at stage 6a (`hard-cases.md`).
 
 | Folder | What it is | C4's word |
 | --- | --- | --- |
@@ -24,13 +24,14 @@ Eight kinds, one folder each.
 | `apps/` | Something that runs code | Container |
 | `stores/` | Something that holds data | Container |
 | `components/` | A piece inside an app | Component |
+| `infrastructure/` | A thing whose job is to pass exchanges on: a proxy, a gateway, a load balancer | none |
 | `connections/` | One thing acts on another | Relationship |
 | `owners/` | A team, a role or an organisation that answers for what a part is and can be asked | none |
 | `technologies/` | A thing with a name that a part is built with or an exchange is carried in | none |
 
 ## The fields
 
-Eight names.
+Ten names. `via` and `external` came at stage 6a.
 
 | Field | On | What it holds | Required |
 | --- | --- | --- | --- |
@@ -39,10 +40,12 @@ Eight names.
 | `in` | app, store | The id of the system it is part of | yes |
 | `in` | component | The id of the app it is inside | yes |
 | `kind` | app | `service`, `browser`, `mobile`, `desktop`, `command`, `function`, `job` | no |
-| `kind` | store | `database`, `files`, `cache`, `index` | no |
-| `technology` | app, store, component, connection | A list of ids of technologies, none twice | no |
-| `owner` | system, app, store, component | The id of an owner | no |
-| `from`, `to` | connection | The id of a person, a system, an app, a store or a component | yes |
+| `kind` | store | `database`, `files`, `cache`, `index`, `queue`, `topic` | no |
+| `external` | system | `true`: the people this model is kept for cannot change the system | no |
+| `technology` | app, store, component, infrastructure, connection | A list of ids of technologies, none twice | no |
+| `owner` | system, app, store, component, infrastructure | The id of an owner | no |
+| `from`, `to` | connection | The id of a person, a system, an app, a store, a component or a piece of infrastructure | yes |
+| `via` | connection | What the exchange passes through, in the order of travel: a list of ids of pieces of infrastructure, apps, components or systems | no |
 
 - A key that is not in this table is an error.
 - Only a name and what a thing is in are required, and on a connection only its two ends.
@@ -75,9 +78,11 @@ name: Takes the payment
 technology: [https]
 ```
 
-- The keys are written in this order, and each key starts a line: `from`, `to`, `name`, `in`,
-  `description`, `kind`, `technology`, `owner`. A record has only some of them.
-- A list is a set: `[go, postgresql]` and `[postgresql, go]` say the same.
+- The keys are written in this order, and each key starts a line: `from`, `to`, `via`, `name`,
+  `in`, `description`, `kind`, `external`, `technology`, `owner`. A record has only some of
+  them.
+- `technology` is a set: `[go, postgresql]` and `[postgresql, go]` say the same. `via` is not:
+  its order is the order of travel.
 - A description too long for one line is a folded block. Each sentence starts a line, and
   nothing in the block needs quotes. The limit of 2,000 characters counts the text as it is
   read, not as it is laid out.
@@ -96,9 +101,9 @@ Each of these is an error, reported at the value that is wrong.
 | Rule | Problem code |
 | --- | --- |
 | An id names one record in the whole directory, whatever the folder (stage 3) | `id-twice` |
-| `in`, `from`, `to`, `owner` and each id in `technology` name a record that exists | `reference-unknown` |
+| `in`, `from`, `to`, `owner` and each id in `technology` and in `via` name a record that exists | `reference-unknown` |
 | `in` of an app or a store names a system, and `in` of a component an app | `reference-wrong-kind` |
-| `from` and `to` name a person, a system, an app, a store or a component | `reference-wrong-kind` |
+| `from` and `to` name a person, a system, an app, a store, a component or a piece of infrastructure | `reference-wrong-kind` |
 | `owner` names an owner, and each id in `technology` a technology | `reference-wrong-kind` |
 | A connection that starts at a store ends at a store | `store-acts` |
 
@@ -149,7 +154,8 @@ this repository fails when the two differ.
 2. **Ours and somebody else's.** Somebody else's software that the team calls is a system
    like any other. Usually nothing is written inside it; something may be, when the team uses
    it directly, such as another team's database that it reads. Whose a system is goes in its
-   description, and in `owner` when it is somebody the team can ask. A system with nothing in
+   description, in `external` when the team cannot change it (convention 9), and in `owner`
+   when it is somebody the team can ask. A system with nothing in
    it is drawn as one box: it may be somebody else's, or ours and not described yet. A cloud
    service the team controls is an app or a store of its own system, with the product as its
    technology; one it only calls is a system of its own. What is outside a picture is worked
@@ -182,31 +188,22 @@ this repository fails when the two differ.
 
 ## What it cannot say yet
 
-Stage 6 adds the hard cases. Until then:
+Stage 6a gave three of the hard cases a field: what a connection passes through, a queue or a
+topic, and an external system (`hard-cases.md`). Stage 6b adds the others. Until then:
 
 <!-- cannot-say-yet:start -->
 | The fact | Where it goes |
 | --- | --- |
-| That somebody outside maintains a system | Its description, and its owner when it is somebody the team can ask |
-| A queue or a topic | A store with no kind, and its description |
 | Reads or writes | The verb of the connection's name: "Reads the orders" |
-| Something in between that passes an exchange on: a proxy, a gateway, a load balancer | One connection, from the one that addresses the exchange to the one that answers it. Its description says what it passes through, in the order of travel. No connection of its own for the passing on. Routing, choosing where to send, pooling, changing the protocol, rate limits, checking the caller and ending TLS are passing on |
 | A part or a connection that is not always there | Its description says when, in ordinary words, on the narrowest record it is true of, and not again on that record's connections. In the first sentence when the part or the arrow would be misread without it |
 | A call that does not wait | The connection's description |
 | The same code in several apps | A component in the app whose inside is modelled |
 | State an app keeps inside itself, and what its components leave there for one another | The app's description, and the components'. No connection between the components for it |
-
-A thing in between gets a record when it has work of its own: it answers an exchange itself,
-such as serving a file, or starts one that nobody sent through it, such as copying data to a
-replica. That work may have connections. What it only passes on is still written end to end.
-The same holds for a component. Code of the team's own that only passes on may keep its
-record, with no connection for the passing on. What is known of a thing with no record goes
-into the description of the part it stands in front of.
 <!-- cannot-say-yet:end -->
 
 ## The commands
 
-`seefore check` now reads the eight folders and reports the problems above, each with its
+`seefore check` reads the nine folders and reports the problems above, each with its
 file, line and column. Nothing about how it is called has changed.
 
 ```
@@ -243,7 +240,7 @@ all that is inside it. It answers in four lists, and counts records:
 | List | What is in it |
 | --- | --- |
 | Goes with it | What is inside the thing, and each connection with both ends in it |
-| Must go or change | Each connection with one end in the thing. For an owner or a technology, each record that names it |
+| Must go or change | Each connection with one end in the thing, and each that names it in `via`. For an owner or a technology, each record that names it |
 | Left behind | A part that has a connection now and would have none if those connections went. An owner or a technology that only those records name |
 | May speak of it | Another record whose `name` or `description` holds the thing's name, its id, or its id with spaces for hyphens |
 
@@ -300,9 +297,9 @@ records.
 | What an arrow means | Who acts, not which way the data moves. That holds where no packet starts: at the software that chooses where a browser is sent, and at the reader of a queue or a topic |
 | Owner | A record, named by id (the owner). Optional everywhere; a person has none |
 | Technology | A record, named by id (the owner): a thing with a name. A library, a query language and a data format are; a style, an algorithm, a setting and a version are not |
-| Somebody else's system | No stored mark. Whether one is stored is settled at stage 6 |
+| Somebody else's system | No stored mark. Whether one is stored is settled at stage 6a |
 | A connection higher up | A summary, written only when it says more than the ones beneath it |
-| What sits in between, and a condition | Ordinary words in a description until stage 6, in no fixed form. Stage 6 proposes each lift to a person |
+| What sits in between, and a condition | Ordinary words in a description, in no fixed form, until stages 6a and 6b. Those stages propose each lift to a person |
 | Kinds | Short fixed lists, not required. `service` for a program that stays up |
 | Comments | None in any file seefore reads. A rule of stage 3, added at this stage |
 | A large change | The skill shows a summary and three files, not every file |
@@ -327,10 +324,11 @@ things around the format changed.
 | Some messages spoke the parser's words | They say what to do |
 | The line for a technology and for an owner was drawn in different places | Conventions 5 and 6 |
 
-Accepted as it is, for stage 6: what a connection passes through and a condition are words in
-a description; a queue or a topic is a store with no kind; a store cannot be in an app; code
-cannot be in several apps. New for stage 6, from this trial: several stores in one server; who
-opens a channel as against who sends down it; who makes a part as against who runs it.
+Accepted as it is, for stages 6a and 6b: what a connection passes through and a condition are
+words in a description; a queue or a topic is a store with no kind; a store cannot be in an app;
+code cannot be in several apps. New for those stages, from this trial: several stores in one
+server; who opens a channel as against who sends down it; who makes a part as against who runs
+it.
 
 ## Names this stage adds
 
@@ -347,8 +345,8 @@ command that could not start. `id-twice`, a problem code of stage 3, is now also
 ## Leaves out
 
 Queues and topics, what sits in between, reads and writes, calls that do not wait, conditions,
-shared code, groups and infrastructure: stage 6. Views: stages 5 and 9. Kinds of the user's
-own. Deployment. Any required depth.
+shared code, groups and infrastructure: stages 6a and 6b. Views: stages 5 and 9. Kinds of the
+user's own. Deployment. Any required depth.
 
 ## Against the research
 
@@ -408,6 +406,6 @@ Risks it takes on:
 - **Ids that meet, and ids that drift.** An id is used once in the whole directory, so an app
   called `redis` and the technology Redis cannot both have that id. The skill names an app or
   a store for what it is for. After a rename or a split an id may say an old name.
-- **Nothing typed tells ours from somebody else's.** Until stage 6 that is in descriptions.
-- **A route and a condition are words until stage 6.** In the trial about one connection in
-  seven passes through something, and one in four holds only under a condition.
+- **Nothing typed tells ours from somebody else's.** Until stage 6a that is in descriptions.
+- **A route and a condition are words until stages 6a and 6b.** In the trial about one
+  connection in seven passes through something, and one in four holds only under a condition.

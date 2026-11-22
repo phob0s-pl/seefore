@@ -1,5 +1,5 @@
 import { CURRENT_FORMAT, idProblem, isShort, nounOf, recordsWithId, referenceField, removalOf, wordsFor } from '@seefore/core';
-import type { Left, Mention, Reference, Removal, UsedRecord } from '@seefore/core';
+import type { Change, Left, Mention, Reference, Removal, UsedRecord } from '@seefore/core';
 import { EXIT_OK, forShell, notStarted, openSource } from './check.ts';
 import type { CheckOptions } from './check.ts';
 import type { Io } from './io.ts';
@@ -72,7 +72,7 @@ function report(result: UsesResult, unread: number, here: Here): string {
   const blocks = [
     [head(result.record)],
     goesWith(result, head),
-    mustChange(result, path),
+    ...mustChange(result, path, here),
     inherited(result.inherited),
     ...leftBehind(result, head),
     ...maySpeak(result, path),
@@ -105,36 +105,95 @@ function goesWith(result: UsesResult, head: Head): string[] {
   return lines;
 }
 
+/** What a place that names it is: an end of a connection, a step on its route, another field that may name it, or a reference its field may not hold. */
+type PlaceKind = 'end' | 'route' | 'other' | 'wrong';
+
 /**
- * Each record that names it and stays, with each place: what must go or change. Each place is
- * shown at its own field, and the advice fits every place: a place that names an owner where a
- * connection's end must be is no end, and taking it out would not mend it.
+ * Each record that names it and stays, with each place: what must go or change. The connections
+ * with one end in it come first, then those that also pass through it, then those that only
+ * pass through it, each under advice of its own; last, apart, each reference its field may not
+ * hold. Each place is shown at its own field, and the advice fits every place: a place that names
+ * an owner where a connection's end must be is no end, and taking it out would not mend it.
  */
-function mustChange(result: UsesResult, path: Path): string[] {
-  const { changes, record } = result;
+function mustChange(result: UsesResult, path: Path, here: Here): string[][] {
+  const kindOf = placeKinds(result);
+  const lines = (shown: readonly Change[]): string[] => shown.flatMap((change) => change.places.map((place) => placeLine(place, result.record.id, path)));
+  const blocks = changed(result, only(result.changes, (place) => kindOf(place) !== 'wrong'), kindOf, lines);
+  const wrong = only(result.changes, (place) => kindOf(place) === 'wrong');
+  const w = wrong.reduce((sum, change) => sum + change.places.length, 0);
+  if (w > 0) {
+    const heading =
+      w === 1
+        ? '1 reference names it in a field that may not hold it. It is a reference to mend'
+        : `${w} references name it in fields that may not hold it. Each is a reference to mend`;
+    blocks.push([`${heading}, as \`${seefore('check', here)}\` reports:`, ...lines(wrong)]);
+  }
+  return blocks;
+}
+
+/**
+ * The blocks for the places whose field may name it. For a connection that has one end in it
+ * and passes through it too, both edits are said: a new end alone leaves its route naming what
+ * goes. Taking the last id out of `via` leaves an empty list, so the advice says what to do then.
+ */
+function changed(result: UsesResult, changes: readonly Change[], kindOf: (place: Reference) => PlaceKind, lines: (shown: readonly Change[]) => string[]): string[][] {
+  const { record } = result;
   const n = changes.length;
-  const each = n === 1 ? 'It' : 'Each';
   const places = changes.flatMap((change) => change.places);
   const field = record.family === 'owners' ? 'owner' : record.family === 'technologies' ? 'technology' : undefined;
-  let heading: string;
+
+  // No field may name a connection, so one that a record names is named only where it may not be.
+  if (record.family === 'connections') return result.changes.length === 0 ? [['Nothing names it.']] : [];
   if (field !== undefined && places.every((place) => place.field === field)) {
-    heading = n === 0 ? `No record names it in \`${field}\`.` : `${count(n, 'record')} ${n === 1 ? 'names' : 'name'} it in \`${field}\`. ${each} must name another in its place, or leave it out:`;
-  } else if (places.every(isEndOf(result))) {
-    if (n === 0) heading = record.family === 'connections' ? 'Nothing names it.' : 'No connection has one end in it.';
-    else heading = `${count(n, 'connection')} ${n === 1 ? 'has' : 'have'} one end in it. ${each} must go or get another end:`;
-  } else {
-    // Only a directory with errors names a record where it may not.
-    heading = `${count(n, 'record')} ${n === 1 ? 'names' : 'name'} it. ${each} must go or change:`;
+    const heading = n === 0 ? `No record names it in \`${field}\`.` : `${count(n, 'record')} ${n === 1 ? 'names' : 'name'} it in \`${field}\`. ${each(n)} must name another in its place, or leave it out:`;
+    return [[heading, ...lines(changes)]];
+  }
+  if (!places.every((place) => kindOf(place) === 'end' || kindOf(place) === 'route')) {
+    // Only a directory with errors, such as an id that two records have, names an element in a field of another kind.
+    return [[`${count(n, 'record')} ${n === 1 ? 'names' : 'name'} it. ${each(n)} must go or change:`, ...lines(changes)]];
   }
 
-  const lines = [heading];
-  for (const change of changes) {
-    for (const place of change.places) {
-      const names = place.names === record.id ? '' : ` names \`${place.names}\``;
-      lines.push(`  ${path(place.file)}:${place.line}:${place.column}: \`${place.field}\`${names}`);
-    }
+  const hasEnd = (change: Change): boolean => change.places.some((place) => kindOf(place) === 'end');
+  const hasRoute = (change: Change): boolean => change.places.some((place) => kindOf(place) === 'route');
+  const ending = changes.filter((change) => hasEnd(change) && !hasRoute(change));
+  const both = changes.filter((change) => hasEnd(change) && hasRoute(change));
+  const passing = changes.filter((change) => !hasEnd(change));
+  const route = 'name another in its place in `via`, or leave it out, and leave out `via` too if nothing is left in it';
+  const blocks: string[][] = [];
+  if (ending.length > 0 || (both.length === 0 && passing.length === 0)) {
+    const e = ending.length;
+    const heading = e > 0 ? `${count(e, 'connection')} ${e === 1 ? 'has' : 'have'} one end in it. ${each(e)} must go or get another end:` : 'No connection has one end in it.';
+    blocks.push([heading, ...lines(ending)]);
   }
-  return lines;
+  if (both.length > 0) {
+    const b = both.length;
+    const then = b === 1 ? `If it gets another end, it must also ${route}:` : `One that gets another end must also ${route}:`;
+    blocks.push([
+      `${count(b, 'connection')} ${b === 1 ? 'has' : 'have'} one end in it and ${b === 1 ? 'passes' : 'pass'} through it too. ${each(b)} must go or get another end. ${then}`,
+      ...lines(both),
+    ]);
+  }
+  if (passing.length > 0) {
+    const p = passing.length;
+    blocks.push([`${count(p, 'connection')} ${p === 1 ? 'passes' : 'pass'} through it. ${each(p)} must ${route}:`, ...lines(passing)]);
+  }
+  return blocks;
+}
+
+/** These changes, each with only the places that pass the test, leaving out a change with none. */
+function only(changes: readonly Change[], test: (place: Reference) => boolean): Change[] {
+  return changes.map((change) => ({ ...change, places: change.places.filter(test) })).filter((change) => change.places.length > 0);
+}
+
+/** One place that names it: the file, the line and the column, the field, and the id it names when that is something inside it. */
+function placeLine(place: Reference, id: string, path: Path): string {
+  const names = place.names === id ? '' : ` names \`${place.names}\``;
+  return `  ${path(place.file)}:${place.line}:${place.column}: \`${place.field}\`${names}`;
+}
+
+/** How advice starts for one record or for several. */
+function each(n: number): string {
+  return n === 1 ? 'It' : 'Each';
 }
 
 /** For an owner: how many parts take it from what they are in, and so have no `owner` to change. */
@@ -152,29 +211,39 @@ function inherited(parts: number): string[] {
 function leftBehind(result: UsesResult, head: Head): string[][] {
   if (!result.complete) return [];
   const asConnection = result.record.family === 'connections';
+  const kindOf = placeKinds(result);
   // The connections with one end in it: those it is an end of, not those that name it as a technology.
-  const crossing = result.changes.filter((change) => change.places.some(isEndOf(result))).length;
+  const crossing = result.changes.filter((change) => change.places.some((place) => kindOf(place) === 'end')).length;
+  // Those that only pass through it stay, so then the ones that go are named as those with one end in it.
+  const passing = result.changes.some((change) => change.places.every((place) => kindOf(place) === 'route'));
+  const ending = crossing === 1 ? 'the connection with one end in it' : `the ${crossing} connections with one end in it`;
   const unconnected = result.left.filter((left) => left.reason === 'no-connection');
   const unusedFirst = result.left.filter((left) => left.reason === 'no-user' && left.assumes === 'connections-go');
   const unusedThen = result.left.filter((left) => left.assumes === 'left-go');
+  // A piece of infrastructure that nothing would name is taken to go too, with the owner and the technologies only it names.
+  const pieces = unusedFirst.filter((left) => left.record.family === 'infrastructure').length;
   const lines = (left: readonly Left[]): string[] => left.map((one) => '  ' + head(one.record));
   const are = (n: number): string => (n === 1 ? 'is' : 'are');
 
   const blocks: string[][] = [];
-  const ifGone = asConnection || crossing === 1 ? 'If it goes' : 'If they go';
+  const ifGone = asConnection ? 'If it goes' : passing ? `If ${ending} ${crossing === 1 ? 'goes' : 'go'}` : crossing === 1 ? 'If it goes' : 'If they go';
   if (unconnected.length > 0) {
     blocks.push([`${ifGone}, ${count(unconnected.length, 'record')} ${are(unconnected.length)} left with no connection:`, ...lines(unconnected)]);
   } else if (asConnection || crossing > 0) {
     blocks.push([`${ifGone}, nothing is left with no connection.`]);
   }
   if (unusedFirst.length > 0) {
-    const by = crossing === 0 ? 'it' : crossing === 1 ? 'it and that connection' : 'it and those connections';
+    const by = crossing === 0 ? 'it' : passing ? `it and ${ending}` : crossing === 1 ? 'it and that connection' : 'it and those connections';
     blocks.push([`${count(unusedFirst.length, 'record')} ${are(unusedFirst.length)} named by nothing but ${by}:`, ...lines(unusedFirst)]);
   }
   if (unusedThen.length > 0) {
-    const those = unconnected.length === 1 ? 'the record left with no connection goes' : `the ${unconnected.length} records left with no connection go`;
+    const u = unconnected.length;
+    const those = [
+      ...(u === 0 ? [] : [u === 1 ? 'the record left with no connection' : `the ${u} records left with no connection`]),
+      ...(pieces === 0 ? [] : [pieces === 1 ? 'the piece of infrastructure named by nothing' : `the ${pieces} pieces of infrastructure named by nothing`]),
+    ];
     const more = `${unusedThen.length} more ${unusedThen.length === 1 ? 'record' : 'records'}`;
-    blocks.push([`If ${those} too, ${more} ${are(unusedThen.length)} named by nothing:`, ...lines(unusedThen)]);
+    blocks.push([`If ${joined(those, 'and')} ${u + pieces === 1 ? 'goes' : 'go'} too, ${more} ${are(unusedThen.length)} named by nothing:`, ...lines(unusedThen)]);
   }
   return blocks;
 }
@@ -268,14 +337,18 @@ function problems(result: UsesResult, unread: number, here: Here): string[] {
 }
 
 /**
- * Whether a place is a connection's end in the thing: `from` or `to` naming a record of the
- * thing that a connection may end at, and not, say, an owner named there by mistake.
+ * What each place that names the thing is, by its field and by what its field may name: a
+ * connection's end in the thing, a step on its route, a place of another field that may name
+ * it, such as `owner`, or a reference to mend, as a technology in `via` or an owner in `to` is.
  */
-function isEndOf(result: UsesResult): (place: Reference) => boolean {
+function placeKinds(result: UsesResult): (place: Reference) => PlaceKind {
   const families = new Map([result.record, ...result.inside].map((record) => [record.id, record.family]));
-  return (place) =>
-    (place.field === 'from' || place.field === 'to') &&
-    (referenceField(CURRENT_FORMAT, 'connections', place.field)?.families.includes(families.get(place.names) ?? '') ?? false);
+  return (place) => {
+    const field = referenceField(CURRENT_FORMAT, place.file.slice(0, place.file.indexOf('/')), place.field);
+    if (!(field?.families.includes(families.get(place.names) ?? '') ?? false)) return 'wrong';
+    if (place.field === 'from' || place.field === 'to') return 'end';
+    return place.field === 'via' ? 'route' : 'other';
+  };
 }
 
 /** True when a record of this family can have others inside it, as a system and an app can. */

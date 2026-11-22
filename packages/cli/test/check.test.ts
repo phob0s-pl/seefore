@@ -414,7 +414,7 @@ describe('seefore check', () => {
       'apps/port.yaml': 'name: Exporter\nin: shop\ndescription: Listens on port #9100 for scrapes.\n',
       'apps/modes.yaml': 'name: Modes\nin: shop\ndescription: Two modes: node\n',
       'systems/argue.yaml': 'name: Argue\nowner: Two teams argue\n',
-      'stores/work.yaml': 'name: Work\nin: shop\nkind: queue\n',
+      'stores/work.yaml': 'name: Work\nin: shop\nkind: stream\n',
     });
     const result = run(['check']);
     expect(result.code).toBe(1);
@@ -422,8 +422,7 @@ describe('seefore check', () => {
       'apps/modes.yaml:3:23: error: YAML reads this colon as the start of another key. Put the whole text in double quotes.',
       'apps/port.yaml:3:30: error: YAML reads ` #9100 for scrapes.` as a comment, so the value stops before it. If this is part of the text, ' +
         'put the whole text in double quotes. If it is a note, remove it: a record holds no comments.',
-      'stores/work.yaml:3:7: error: `kind` must be one of `database`, `files`, `cache` and `index`. ' +
-        'A queue or a topic is a store with no `kind` at this stage. Say which in its description.',
+      'stores/work.yaml:3:7: error: `kind` must be one of `database`, `files`, `cache`, `index`, `queue` and `topic`.',
       'systems/argue.yaml:2:8: error: `owner` holds the id of a record in `owners/`. ' +
         'If who answers takes a sentence to say, leave `owner` out and put the sentence in the description.',
       '',

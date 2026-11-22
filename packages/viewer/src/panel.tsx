@@ -1,14 +1,15 @@
 import type { View, ViewArrow, ViewBox, ViewerState } from '@seefore/core';
-import { useEffect, useMemo, useRef } from 'react';
+import { Fragment, useEffect, useMemo, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { namesIn } from './flow.ts';
 import type { Selection } from './follow.ts';
-import { descriptionOf, endName, indexOf, insideOf, kindOf, nameOf, ownerOf, technologiesOf, technologyNames } from './records.ts';
+import { descriptionOf, endName, indexOf, insideOf, kindOf, nameOf, ownerOf, passingThrough, technologiesOf, technologyNames } from './records.ts';
 import type { Index } from './records.ts';
 
 /**
  * The panel of details: a record, whole, or every connection an arrow stands for. It is opened
- * by a click or by Enter on a box or an arrow, and by a click on a record in the listing.
+ * by a click or by Enter on a box or an arrow, on something in the list of what the arrows pass
+ * through, and on a record in the listing or on a step of a route.
  */
 
 export interface PanelProps {
@@ -19,6 +20,8 @@ export interface PanelProps {
   /** True when the panel was opened from the keyboard, so that the focus moves to it. */
   focus: boolean;
   onClose(): void;
+  /** A record was chosen in the panel, as a step of a route: `byKeyboard` when Enter or Space chose it. */
+  onOpen(id: string, byKeyboard: boolean): void;
 }
 
 /** One fact of a record: what it is, and its value. */
@@ -32,7 +35,7 @@ function Fact({ term, children }: { term: string; children: ReactNode }) {
 }
 
 /** The panel of details. */
-export function Panel({ state, view, selection, focus, onClose }: PanelProps) {
+export function Panel({ state, view, selection, focus, onClose, onOpen }: PanelProps) {
   const index = useMemo(() => indexOf(state.model), [state.model]);
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
@@ -41,7 +44,10 @@ export function Panel({ state, view, selection, focus, onClose }: PanelProps) {
 
   const arrow = selection.kind === 'arrow' ? view?.arrows.find((each) => each.id === selection.id) : undefined;
   const box = selection.kind === 'box' ? view?.boxes.find((each) => each.id === selection.id) : undefined;
-  const title = arrow !== undefined ? arrowTitle(arrow, view) : selection.kind === 'arrow' ? selection.id : box?.name ?? nameOf(index, selection.id);
+  const passed = selection.kind === 'passed' ? view?.passed.find((each) => each.id === selection.id) : undefined;
+  const title = arrow !== undefined ? arrowTitle(arrow, view) : selection.kind === 'arrow' ? selection.id : (box?.name ?? passed?.name ?? nameOf(index, selection.id));
+  // What passes through the record in the view shown, when the reader chose it there; otherwise in the whole model.
+  const inView = box?.passing ?? passed?.connections;
 
   return (
     <aside className="panel" aria-label="Details">
@@ -54,11 +60,11 @@ export function Panel({ state, view, selection, focus, onClose }: PanelProps) {
         </button>
       </div>
       {arrow !== undefined ? (
-        <ArrowDetails arrow={arrow} index={index} />
+        <ArrowDetails arrow={arrow} index={index} onOpen={onOpen} />
       ) : selection.kind === 'arrow' ? (
         <p>This arrow is no longer in the view.</p>
       ) : (
-        <RecordDetails state={state} index={index} id={selection.id} box={box} scope={view?.scope === selection.id} />
+        <RecordDetails state={state} index={index} id={selection.id} box={box} scope={view?.scope === selection.id} passing={inView} onOpen={onOpen} />
       )}
     </aside>
   );
@@ -71,30 +77,59 @@ function arrowTitle(arrow: ViewArrow, view: View | undefined): string {
 }
 
 /** Every connection an arrow stands for. */
-function ArrowDetails({ arrow, index }: { arrow: ViewArrow; index: Index }) {
+function ArrowDetails({ arrow, index, onOpen }: { arrow: ViewArrow; index: Index; onOpen: PanelProps['onOpen'] }) {
   const count = arrow.connections.length;
   return (
     <>
       <p>{count === 1 ? 'This arrow stands for one connection.' : `This arrow stands for ${count} connections.`}</p>
-      <ConnectionList ids={arrow.connections} index={index} />
+      <ConnectionList ids={arrow.connections} index={index} onOpen={onOpen} />
     </>
   );
 }
 
-/** A record, whole: its name, kind, technologies, owner, description and file, and the connections its box holds. */
-function RecordDetails({ state, index, id, box, scope }: { state: ViewerState; index: Index; id: string; box: ViewBox | undefined; scope: boolean }) {
+interface RecordDetailsProps {
+  state: ViewerState;
+  index: Index;
+  id: string;
+  box: ViewBox | undefined;
+  scope: boolean;
+  /** The connections of the view shown that pass through the record, when it was chosen in the view. */
+  passing: readonly string[] | undefined;
+  onOpen: PanelProps['onOpen'];
+}
+
+/**
+ * A record, whole: its name, kind, technologies, owner, description and file, the connections
+ * its box holds, and those that pass through it. A connection says what it passes through.
+ */
+function RecordDetails({ state, index, id, box, scope, passing, onOpen }: RecordDetailsProps) {
   const found = index.get(id);
+  const through = passing ?? passingThrough(state.model, id);
+  const throughHeading = passing === undefined ? `Passing through it (${through.length})` : `Passing through it in this view (${through.length})`;
+  const throughList = through.length > 0 && (
+    <section>
+      <h3>{throughHeading}</h3>
+      <ConnectionList ids={through} index={index} onOpen={onOpen} />
+    </section>
+  );
   if (found === undefined) {
+    const file = fileOf(state, id);
     return (
-      <p>
-        The record <code>{id}</code> is not in the model. Its file may have an error: <a href="#/problems">see the problems</a>.
-      </p>
+      <>
+        <p className="record-problem">
+          {file === undefined ? 'Its file has a problem' : <code>{file}</code>}
+          {file === undefined ? ', so ' : ' has a problem, so '}
+          <code>{id}</code> is not in the model: <a href="#/problems">see the problems</a>.
+        </p>
+        {throughList}
+      </>
     );
   }
   const inside = insideOf(found);
   const technologies = technologyNames(index, technologiesOf(found));
   const owner = ownerOf(state, index, id);
   const description = descriptionOf(found);
+  const via = found.family === 'connections' ? (found.record.via ?? []) : [];
   return (
     <>
       <dl className="facts">
@@ -102,6 +137,11 @@ function RecordDetails({ state, index, id, box, scope }: { state: ViewerState; i
         {inside !== undefined && <Fact term="In">{endName(index, inside)}</Fact>}
         {found.family === 'connections' && (
           <Fact term="From and to">{`${endName(index, found.record.from)} → ${endName(index, found.record.to)}`}</Fact>
+        )}
+        {via.length > 0 && (
+          <Fact term="Via">
+            <Hops ids={via} index={index} onOpen={onOpen} />
+          </Fact>
         )}
         {technologies.length > 0 && <Fact term={technologies.length === 1 ? 'Technology' : 'Technologies'}>{technologies.join(', ')}</Fact>}
         {owner !== undefined && <Fact term="Owner">{owner.from === undefined ? owner.owner : `${owner.owner}, taken from ${owner.from}`}</Fact>}
@@ -113,21 +153,51 @@ function RecordDetails({ state, index, id, box, scope }: { state: ViewerState; i
       {box !== undefined && box.loops.length > 0 && (
         <section>
           <h3>{`Between its copies (${box.loops.length})`}</h3>
-          <ConnectionList ids={box.loops} index={index} />
+          <ConnectionList ids={box.loops} index={index} onOpen={onOpen} />
         </section>
       )}
       {box !== undefined && box.within.length > 0 && (
         <section>
           <h3>{`Inside it, not drawn (${box.within.length})`}</h3>
-          <ConnectionList ids={box.within} index={index} />
+          <ConnectionList ids={box.within} index={index} onOpen={onOpen} />
         </section>
       )}
+      {throughList}
     </>
   );
 }
 
-/** Connections, each with its own two ends, its name, its technology, its description and its file. */
-function ConnectionList({ ids, index }: { ids: readonly string[]; index: Index }) {
+/**
+ * The file of a record that is not in the model, as a problem names it: a file directly in a
+ * folder, named for the id. Missing when no problem names one.
+ */
+function fileOf(state: ViewerState, id: string): string | undefined {
+  return state.problems.find((problem) => {
+    const parts = problem.file.split('/');
+    const name = parts[1];
+    return parts.length === 2 && name !== undefined && name.slice(0, name.lastIndexOf('.')) === id;
+  })?.file;
+}
+
+/** What a connection passes through, in the order of travel, each step a link that opens its record. */
+function Hops({ ids, index, onOpen }: { ids: readonly string[]; index: Index; onOpen: PanelProps['onOpen'] }) {
+  return (
+    <span className="hops">
+      {ids.map((id, at) => (
+        <Fragment key={`${id}-${at}`}>
+          {at > 0 && ', '}
+          {/* A click made with the keyboard has no count of presses. */}
+          <button type="button" className="record-name" onClick={(event) => onOpen(id, event.detail === 0)}>
+            {endName(index, id)}
+          </button>
+        </Fragment>
+      ))}
+    </span>
+  );
+}
+
+/** Connections, each with its own two ends, its name, what it passes through, its technology, its description and its file. */
+function ConnectionList({ ids, index, onOpen }: { ids: readonly string[]; index: Index; onOpen: PanelProps['onOpen'] }) {
   return (
     <ol className="connections">
       {ids.map((id) => {
@@ -145,6 +215,12 @@ function ConnectionList({ ids, index }: { ids: readonly string[]; index: Index }
           <li key={id} className="connection">
             <p className="connection-name">{connection.name ?? 'Unnamed connection'}</p>
             <p className="connection-ends">{`${endName(index, connection.from)} → ${endName(index, connection.to)}`}</p>
+            {connection.via !== undefined && connection.via.length > 0 && (
+              <p className="connection-route">
+                {'via '}
+                <Hops ids={connection.via} index={index} onOpen={onOpen} />
+              </p>
+            )}
             {technologies.length > 0 && <p className="connection-technology">{`[${technologies.join(', ')}]`}</p>}
             {connection.description !== undefined && <p className="description">{connection.description}</p>}
             <p className="connection-file">

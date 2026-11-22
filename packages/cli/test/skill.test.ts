@@ -15,6 +15,7 @@ import type { z } from 'zod';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const spec = readFileSync(join(root, 'docs/modelling.md'), 'utf8');
+const hardCases = readFileSync(join(root, 'docs/hard-cases.md'), 'utf8');
 const skill = readFileSync(join(root, 'plugin/skills/model/SKILL.md'), 'utf8');
 
 /** The text between the two marks of a block. */
@@ -84,8 +85,13 @@ describe('every skill of the plugin', () => {
 
 describe('the model skill', () => {
   it('carries the conventions of the spec word for word', () => {
-    for (const name of ['conventions', 'cannot-say-yet']) {
-      expect(block(skill, name), `the block ${name}; run \`npm run sync:skill\``).toBe(block(spec, name));
+    const blocks: [string, string][] = [
+      ['conventions', spec],
+      ['cannot-say-yet', spec],
+      ['hard-cases', hardCases],
+    ];
+    for (const [name, from] of blocks) {
+      expect(block(skill, name), `the block ${name}; run \`npm run sync:skill\``).toBe(block(from, name));
     }
   });
 
@@ -149,5 +155,24 @@ describe.each([
     const loaded = load(files);
     expect(loaded.problems).toEqual([]);
     expect(loaded.model.apps[0]?.description).toBe('Takes orders and says how far each has got. Only in the hosted edition: see issue #5377.');
+  });
+});
+
+describe('the examples of the spec of stage 6a', () => {
+  it('are records the engine reads with no problem', () => {
+    const around: SourceFile[] = [
+      { path: 'seefore.yaml', text: 'format: 1\nname: Archive\n' },
+      { path: 'systems/archive.yaml', text: 'name: Archive\n' },
+      { path: 'apps/staff-browser.yaml', text: 'name: Staff browser\nin: archive\n' },
+      { path: 'apps/desk.yaml', text: 'name: Desk\nin: archive\n' },
+      { path: 'technologies/nginx.yaml', text: 'name: nginx\n' },
+      { path: 'technologies/https.yaml', text: 'name: HTTPS\n' },
+    ];
+    const found = examples(hardCases);
+    expect(found.map((file) => file.path)).toEqual(['infrastructure/proxy.yaml', 'connections/staff-browser-asks-desk.yaml', 'systems/card-provider.yaml']);
+    const loaded = load([...around, ...found]);
+    expect(loaded.problems).toEqual([]);
+    expect(loaded.model.connections[0]?.via).toEqual(['proxy']);
+    expect(loaded.model.systems.find((system) => system.id === 'card-provider')?.external).toBe(true);
   });
 });

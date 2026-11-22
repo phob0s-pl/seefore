@@ -9,7 +9,7 @@ import type { Target } from './light.ts';
  * only for the reading the page holds.
  */
 
-/** What the panel shows: a box or an arrow of the picture, or a record chosen in the listing. */
+/** What the panel shows: a box or an arrow of the picture, something it passes through, or a record chosen in the listing or on a route. */
 export type Selection = Target | { kind: 'record'; id: string };
 
 /** The view a route names in a state, when the state has it. */
@@ -31,18 +31,27 @@ export function resolveRoute(state: ViewerState, route: Route): Route {
 /** True when a model has a record with this id. */
 function hasRecord(state: ViewerState, id: string): boolean {
   const { model } = state;
-  return [model.people, model.systems, model.apps, model.stores, model.components, model.connections, model.owners, model.technologies].some((family) =>
+  return [model.people, model.systems, model.apps, model.stores, model.components, model.infrastructure, model.connections, model.owners, model.technologies].some((family) =>
     family.some((record) => record.id === id),
   );
 }
 
 /**
+ * True when a connection of the model passes through a record with this id. Such a record is
+ * there though it is not in the model, when its file has a problem: the connection's route
+ * still names it, and its panel says so.
+ */
+function onRoute(state: ViewerState, id: string): boolean {
+  return state.model.connections.some((connection) => connection.via?.includes(id) === true);
+}
+
+/**
  * A selection as it stands in a new state: kept while what it names is still there (a box or
- * an arrow in the view shown, a record in the model), and cleared when it is gone.
+ * an arrow in the view shown, a record in the model or on a route), and cleared when it is gone.
  */
 export function keptSelection(state: ViewerState, route: Route, selection: Selection | null): Selection | null {
   if (selection === null) return null;
-  if (selection.kind === 'record') return hasRecord(state, selection.id) ? selection : null;
+  if (selection.kind === 'record') return hasRecord(state, selection.id) || onRoute(state, selection.id) ? selection : null;
   const view = viewOf(state, route);
   return view !== undefined && holds(view, selection) ? selection : null;
 }

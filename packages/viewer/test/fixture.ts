@@ -1,4 +1,4 @@
-import type { Drawn, Failed, Model, Outline, Picture, PictureAnswer, Problem, View, ViewerState } from '@seefore/core';
+import type { Drawn, Failed, Model, Outline, Picture, PictureAnswer, Problem, View, ViewBox, ViewerState } from '@seefore/core';
 
 /**
  * A made-up reading of a small shop, as the server would hand it to the page: the state, and
@@ -46,6 +46,7 @@ export const MODEL: Model = {
     { id: 'checkout', file: 'components/checkout.yaml', name: 'Checkout', in: 'order-api', description: 'Takes a basket and a payment and makes an order of them.' },
     { id: 'order-status', file: 'components/order-status.yaml', name: 'Order status', in: 'order-api' },
   ],
+  infrastructure: [],
   connections: [
     { id: 'checkout-asks-status', file: 'connections/checkout-asks-status.yaml', from: 'checkout', to: 'order-status', name: 'Asks how far an order has got' },
     { id: 'checkout-takes-payment', file: 'connections/checkout-takes-payment.yaml', from: 'checkout', to: 'card-provider', name: 'Takes the payment', technology: ['https'] },
@@ -81,6 +82,7 @@ export const OUTLINE: Outline = {
   people: ['customer'],
   withParts: [{ id: 'shop', apps: [{ id: 'order-api', components: ['checkout', 'order-status'] }], stores: ['orders-database'] }],
   others: ['card-provider'],
+  infrastructure: [],
   connections: [
     { start: 'customer', known: true, connections: ['customer-pays-card-provider', 'customer-uses-shop'] },
     {
@@ -134,11 +136,12 @@ export const CONTEXT: View = {
   scope: 'shop',
   title: 'Context view: Shop',
   boxes: [
-    { id: 'card-provider', family: 'systems', name: 'Card provider', line: '[System]', sentence: 'Takes card payments.', scope: false, inside: false, loops: [], within: [] },
-    { id: 'customer', family: 'people', name: 'Customer', line: '[Person]', sentence: 'Buys from the shop.', scope: false, inside: false, loops: [], within: [] },
+    { id: 'card-provider', family: 'systems', look: 'system', name: 'Card provider', line: '[System]', sentence: 'Takes card payments.', scope: false, inside: false, loops: [], within: [], passing: [] },
+    { id: 'customer', family: 'people', look: 'person', name: 'Customer', line: '[Person]', sentence: 'Buys from the shop.', scope: false, inside: false, loops: [], within: [], passing: [] },
     {
       id: 'shop',
       family: 'systems',
+      look: 'system-scope',
       name: 'Shop',
       line: '[System]',
       sentence: 'Sells goods and ships them.',
@@ -146,6 +149,7 @@ export const CONTEXT: View = {
       inside: false,
       loops: [],
       within: ['checkout-asks-status', 'checkout-writes-orders', 'order-api-shares-locks'],
+      passing: [],
     },
   ],
   arrows: [
@@ -167,6 +171,7 @@ export const CONTEXT: View = {
     { key: 'arrow', text: 'A connection, from the one that acts' },
     { key: 'arrow-many', text: 'Several connections between two boxes' },
   ],
+  passed: [],
 };
 
 export const CONTAINERS: View = {
@@ -175,11 +180,12 @@ export const CONTAINERS: View = {
   scope: 'shop',
   title: 'Container view: Shop',
   boxes: [
-    { id: 'card-provider', family: 'systems', name: 'Card provider', line: '[System]', sentence: 'Takes card payments.', scope: false, inside: false, loops: [], within: [] },
-    { id: 'customer', family: 'people', name: 'Customer', line: '[Person]', sentence: 'Buys from the shop.', scope: false, inside: false, loops: [], within: [] },
+    { id: 'card-provider', family: 'systems', look: 'system', name: 'Card provider', line: '[System]', sentence: 'Takes card payments.', scope: false, inside: false, loops: [], within: [], passing: [] },
+    { id: 'customer', family: 'people', look: 'person', name: 'Customer', line: '[Person]', sentence: 'Buys from the shop.', scope: false, inside: false, loops: [], within: [], passing: [] },
     {
       id: 'order-api',
       family: 'apps',
+      look: 'app',
       name: 'Order API',
       line: '[App: service · Go]',
       sentence: 'Takes orders and says how far each has got.',
@@ -187,10 +193,12 @@ export const CONTAINERS: View = {
       inside: true,
       loops: ['order-api-shares-locks'],
       within: ['checkout-asks-status'],
+      passing: [],
     },
     {
       id: 'orders-database',
       family: 'stores',
+      look: 'store',
       name: 'Orders database',
       line: '[Store: database · PostgreSQL]',
       sentence: 'Keeps orders < 90 days old & how far each has got.',
@@ -198,9 +206,10 @@ export const CONTAINERS: View = {
       inside: true,
       loops: [],
       within: [],
+      passing: [],
     },
   ],
-  boundary: { id: 'shop', name: 'Shop', title: 'Shop [System]' },
+  boundary: { id: 'shop', name: 'Shop', line: '[System]', title: 'Shop [System]' },
   arrows: [
     { id: 'customer~shop', from: 'customer', to: 'shop', connections: ['customer-uses-shop'], names: ['Buys goods'], technology: [] },
     { id: 'order-api~card-provider', from: 'order-api', to: 'card-provider', ...PAYMENTS },
@@ -217,6 +226,7 @@ export const CONTAINERS: View = {
     { key: 'arrow-many', text: 'Several connections between two boxes' },
     { key: 'loop', text: 'Connections between copies of one box' },
   ],
+  passed: [],
 };
 
 export const CARD_CONTEXT: View = {
@@ -225,9 +235,9 @@ export const CARD_CONTEXT: View = {
   scope: 'card-provider',
   title: 'Context view: Card provider',
   boxes: [
-    { id: 'card-provider', family: 'systems', name: 'Card provider', line: '[System]', sentence: 'Takes card payments.', scope: true, inside: false, loops: [], within: [] },
-    { id: 'customer', family: 'people', name: 'Customer', line: '[Person]', sentence: 'Buys from the shop.', scope: false, inside: false, loops: [], within: [] },
-    { id: 'shop', family: 'systems', name: 'Shop', line: '[System]', sentence: 'Sells goods and ships them.', scope: false, inside: false, loops: [], within: [] },
+    { id: 'card-provider', family: 'systems', look: 'system-scope', name: 'Card provider', line: '[System]', sentence: 'Takes card payments.', scope: true, inside: false, loops: [], within: [], passing: [] },
+    { id: 'customer', family: 'people', look: 'person', name: 'Customer', line: '[Person]', sentence: 'Buys from the shop.', scope: false, inside: false, loops: [], within: [], passing: [] },
+    { id: 'shop', family: 'systems', look: 'system', name: 'Shop', line: '[System]', sentence: 'Sells goods and ships them.', scope: false, inside: false, loops: [], within: [], passing: [] },
   ],
   arrows: [
     { id: 'customer~card-provider', from: 'customer', to: 'card-provider', connections: ['customer-pays-card-provider'], names: ['Pays by card'], technology: [] },
@@ -241,11 +251,12 @@ export const CARD_CONTEXT: View = {
     { key: 'arrow', text: 'A connection, from the one that acts' },
     { key: 'arrow-many', text: 'Several connections between two boxes' },
   ],
+  passed: [],
 };
 
-/** A box of 240 by 150 at a place. */
-function at(x: number, y: number) {
-  return { x, y, width: 240, height: 150 };
+/** A box of 240 by 150 at a place, with its text as far in from its sides as the layout puts it for its look. */
+function at(x: number, y: number, inset = { left: 12, right: 12 }) {
+  return { x, y, width: 240, height: 150, inset };
 }
 
 export const CONTEXT_PICTURE: Drawn = {
@@ -344,6 +355,7 @@ export const STATE: ViewerState = {
   },
   outline: OUTLINE,
   views: [CONTEXT, CONTAINERS, CARD_CONTEXT],
+  inNoView: [],
 };
 
 /** The picture of each view of the state. */
@@ -359,3 +371,198 @@ export function answerFor(view: string, revision = STATE.revision): PictureAnswe
   if (picture === undefined) throw new Error(`No picture of ${view} in the fixture.`);
   return { revision, picture };
 }
+
+/**
+ * The hard cases, in a reading of their own: a help desk whose web app a clerk reaches through
+ * an HTTPS proxy, which also checks the app on its own account and so has a box; a topic; and
+ * a card provider that is external, paid through the desk's gateway and a load balancer that
+ * nothing starts or ends at, so that the gateway carries a mark and the load balancer is
+ * listed under the legend. Of the two connections to the card provider one has a route.
+ */
+export const HARD_MODEL: Model = {
+  people: [{ id: 'clerk', file: 'people/clerk.yaml', name: 'Clerk', description: 'Answers the tickets.' }],
+  systems: [
+    { id: 'cards', file: 'systems/cards.yaml', name: 'Card provider', description: 'Takes card payments.', external: true },
+    { id: 'desk', file: 'systems/desk.yaml', name: 'Desk', description: 'Keeps the tickets of the help desk.' },
+  ],
+  apps: [
+    { id: 'gateway', file: 'apps/gateway.yaml', name: 'Gateway', in: 'desk', description: 'Signs the calls that leave the desk.', kind: 'service' },
+    { id: 'web', file: 'apps/web.yaml', name: 'Web', in: 'desk', description: 'The pages of the desk.', kind: 'service' },
+  ],
+  stores: [{ id: 'events', file: 'stores/events.yaml', name: 'Ticket events', in: 'desk', description: 'What changed on a ticket.', kind: 'topic', technology: ['kafka'] }],
+  components: [],
+  infrastructure: [
+    { id: 'balancer', file: 'infrastructure/balancer.yaml', name: 'Load balancer' },
+    { id: 'proxy', file: 'infrastructure/proxy.yaml', name: 'HTTPS proxy', description: "Ends HTTPS on the desk's host and passes requests on.", technology: ['nginx'] },
+  ],
+  connections: [
+    { id: 'clerk-uses-web', file: 'connections/clerk-uses-web.yaml', from: 'clerk', to: 'web', via: ['proxy'], name: 'Asks for pages', technology: ['https'] },
+    { id: 'proxy-checks-web', file: 'connections/proxy-checks-web.yaml', from: 'proxy', to: 'web', name: 'Checks that it answers' },
+    { id: 'web-asks-cards', file: 'connections/web-asks-cards.yaml', from: 'web', to: 'cards', name: 'Asks for a refund' },
+    { id: 'web-calls-cards', file: 'connections/web-calls-cards.yaml', from: 'web', to: 'cards', via: ['gateway', 'balancer'], name: 'Takes a payment' },
+    { id: 'web-publishes-events', file: 'connections/web-publishes-events.yaml', from: 'web', to: 'events', name: 'Says what changed' },
+  ],
+  owners: [],
+  technologies: [
+    { id: 'https', file: 'technologies/https.yaml', name: 'HTTPS' },
+    { id: 'kafka', file: 'technologies/kafka.yaml', name: 'Kafka' },
+    { id: 'nginx', file: 'technologies/nginx.yaml', name: 'nginx' },
+  ],
+};
+
+export const HARD_OUTLINE: Outline = {
+  people: ['clerk'],
+  withParts: [{ id: 'desk', apps: [{ id: 'gateway', components: [] }, { id: 'web', components: [] }], stores: ['events'] }],
+  others: ['cards'],
+  infrastructure: ['balancer', 'proxy'],
+  connections: [
+    { start: 'clerk', known: true, connections: ['clerk-uses-web'] },
+    { start: 'web', known: true, connections: ['web-asks-cards', 'web-calls-cards', 'web-publishes-events'] },
+    { start: 'proxy', known: true, connections: ['proxy-checks-web'] },
+  ],
+  owners: [],
+  technologies: ['https', 'kafka', 'nginx'],
+  loose: [],
+};
+
+/** A box of the hard cases' container view, with nothing in its marks unless given. */
+function hardBox(box: Omit<ViewBox, 'scope' | 'loops' | 'within' | 'passing'> & Partial<ViewBox>): ViewBox {
+  return { scope: false, loops: [], within: [], passing: [], ...box };
+}
+
+export const HARD_CONTAINERS: View = {
+  id: 'desk.containers',
+  kind: 'containers',
+  scope: 'desk',
+  title: 'Container view: Desk',
+  boxes: [
+    hardBox({ id: 'cards', family: 'systems', look: 'system-external', name: 'Card provider', line: '[System: external]', sentence: 'Takes card payments.', inside: false }),
+    hardBox({ id: 'clerk', family: 'people', look: 'person', name: 'Clerk', line: '[Person]', sentence: 'Answers the tickets.', inside: false }),
+    hardBox({ id: 'events', family: 'stores', look: 'queue-or-topic', name: 'Ticket events', line: '[Store: topic · Kafka]', sentence: 'What changed on a ticket.', inside: true }),
+    hardBox({ id: 'gateway', family: 'apps', look: 'app', name: 'Gateway', line: '[App: service]', sentence: 'Signs the calls that leave the desk.', inside: true, passing: ['web-calls-cards'] }),
+    hardBox({
+      id: 'proxy',
+      family: 'infrastructure',
+      look: 'infrastructure',
+      name: 'HTTPS proxy',
+      line: '[Infrastructure · nginx]',
+      sentence: "Ends HTTPS on the desk's host and passes requests on.",
+      inside: false,
+      passing: ['clerk-uses-web'],
+    }),
+    hardBox({ id: 'web', family: 'apps', look: 'app', name: 'Web', line: '[App: service]', sentence: 'The pages of the desk.', inside: true }),
+  ],
+  boundary: { id: 'desk', name: 'Desk', line: '[System]', title: 'Desk [System]' },
+  arrows: [
+    {
+      id: 'clerk~web',
+      from: 'clerk',
+      to: 'web',
+      connections: ['clerk-uses-web'],
+      names: ['Asks for pages'],
+      technology: ['HTTPS'],
+      route: { count: 1, names: ['HTTPS proxy'], line: 'via HTTPS proxy' },
+    },
+    { id: 'proxy~web', from: 'proxy', to: 'web', connections: ['proxy-checks-web'], names: ['Checks that it answers'], technology: [] },
+    {
+      id: 'web~cards',
+      from: 'web',
+      to: 'cards',
+      connections: ['web-asks-cards', 'web-calls-cards'],
+      names: ['Asks for a refund', 'Takes a payment'],
+      technology: [],
+      route: { count: 1, names: [], line: 'via on 1 of 2' },
+    },
+    { id: 'web~events', from: 'web', to: 'events', connections: ['web-publishes-events'], names: ['Says what changed'], technology: [] },
+  ],
+  left: { outside: [], broken: [] },
+  legend: [
+    { key: 'person', text: 'Person: a role that uses the software, runs it or takes part' },
+    { key: 'system-external', text: "External system: somebody else's, used as it is given" },
+    { key: 'app', text: 'App: something that runs code' },
+    { key: 'queue-or-topic', text: 'Queue or topic: a store that holds messages on their way' },
+    { key: 'infrastructure', text: 'Infrastructure: passes exchanges on, such as a proxy' },
+    { key: 'boundary', text: 'Boundary: this system, with its apps and stores inside' },
+    { key: 'arrow', text: 'Arrow: from the one that acts to the one it acts on' },
+    { key: 'arrow-many', text: 'Arrow for several connections: each line of its label names one' },
+    { key: 'route', text: 'Route: what the connections pass through, in order; “via on 2 of 5” when they differ' },
+    { key: 'passing', text: "Passing through: how many of this view's connections pass through it" },
+  ],
+  passed: [{ id: 'balancer', name: 'Load balancer', connections: ['web-calls-cards'], arrows: ['web~cards'] }],
+};
+
+export const HARD_PICTURE: Drawn = {
+  view: 'desk.containers',
+  width: 1500,
+  height: 600,
+  boundary: { id: 'desk', x: 360, y: 40, width: 760, height: 520, title: 'Desk [System]', titleAt: { x: 384, y: 52, width: 116, height: 20 } },
+  boxes: [
+    { id: 'cards', ...at(1220, 200), name: ['Card provider'], line: '[System: external]', sentence: ['Takes card payments.'] },
+    { id: 'clerk', ...at(40, 330), name: ['Clerk'], line: '[Person]', sentence: ['Answers the tickets.'] },
+    { id: 'events', ...at(820, 360, { left: 12, right: 20 }), name: ['Ticket events'], line: '[Store: topic · Kafka]', sentence: ['What changed on a ticket.'] },
+    { id: 'gateway', ...at(820, 104), name: ['Gateway'], line: '[App: service]', sentence: ['Signs the calls that leave the desk.'] },
+    { id: 'proxy', ...at(40, 60, { left: 16, right: 16 }), name: ['HTTPS proxy'], line: '[Infrastructure · nginx]', sentence: ["Ends HTTPS on the desk's host and", 'passes requests on.'] },
+    { id: 'web', ...at(400, 200), name: ['Web'], line: '[App: service]', sentence: ['The pages of the desk.'] },
+  ],
+  arrows: [
+    {
+      id: 'clerk~web',
+      from: 'clerk',
+      to: 'web',
+      sections: [[{ x: 280, y: 405 }, { x: 330, y: 405 }, { x: 330, y: 300 }, { x: 400, y: 300 }]],
+      label: { x: 270, y: 420, width: 90, height: 43, lines: ['Asks for pages'], route: 'via HTTPS proxy', technology: '[HTTPS]' },
+    },
+    {
+      id: 'proxy~web',
+      from: 'proxy',
+      to: 'web',
+      sections: [[{ x: 280, y: 135 }, { x: 330, y: 135 }, { x: 330, y: 250 }, { x: 400, y: 250 }]],
+      label: { x: 284, y: 150, width: 92, height: 30, lines: ['Checks that it', 'answers'] },
+    },
+    {
+      id: 'web~cards',
+      from: 'web',
+      to: 'cards',
+      sections: [[{ x: 640, y: 275 }, { x: 1220, y: 275 }]],
+      label: { x: 660, y: 290, width: 108, height: 44, lines: ['Asks for a refund', 'Takes a payment'], route: 'via on 1 of 2' },
+    },
+    {
+      id: 'web~events',
+      from: 'web',
+      to: 'events',
+      sections: [[{ x: 520, y: 350 }, { x: 520, y: 435 }, { x: 820, y: 435 }]],
+      label: { x: 600, y: 445, width: 110, height: 15, lines: ['Says what changed'] },
+    },
+  ],
+};
+
+export const HARD_STATE: ViewerState = {
+  revision: 'h1',
+  directory: '/work/desk/architecture',
+  available: true,
+  name: 'Desk',
+  format: 1,
+  records: 16,
+  errors: 0,
+  warnings: 0,
+  problems: [],
+  model: HARD_MODEL,
+  ownership: {},
+  outline: HARD_OUTLINE,
+  views: [HARD_CONTAINERS],
+  inNoView: [],
+};
+
+/**
+ * The hard cases with an error in the file of the load balancer: it is not in the model, though
+ * the payment still passes through it, and the view names it by its id.
+ */
+export const BROKEN_HOP_STATE: ViewerState = {
+  ...HARD_STATE,
+  revision: 'h2',
+  errors: 1,
+  problems: [{ file: 'infrastructure/balancer.yaml', line: 2, column: 1, severity: 'error', code: 'key-unknown', message: 'A piece of infrastructure has no `colour`.' }],
+  model: { ...HARD_MODEL, infrastructure: HARD_MODEL.infrastructure.filter((piece) => piece.id !== 'balancer') },
+  outline: { ...HARD_OUTLINE, infrastructure: ['proxy'] },
+  views: [{ ...HARD_CONTAINERS, passed: [{ id: 'balancer', name: 'balancer', connections: ['web-calls-cards'], arrows: ['web~cards'] }] }],
+};

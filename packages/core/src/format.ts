@@ -2,6 +2,7 @@ import type { z } from 'zod';
 import {
   AppSchema,
   ComponentSchema,
+  InfrastructureSchema,
   ConnectionSchema,
   OwnerSchema,
   PersonSchema,
@@ -20,6 +21,11 @@ export interface ReferenceField {
   list?: boolean;
   /** The rule in plain words, said with every problem of this field. */
   rule: string;
+  /**
+   * What to do when the field names a record of a family it may not name, by that family. It is
+   * said after the rule, for a slip the rule alone would not mend.
+   */
+  wrongFamily?: Readonly<Record<string, string>>;
 }
 
 /** What the records of a family hold, and what they may name. */
@@ -52,7 +58,7 @@ export interface Format {
 }
 
 /** The families a connection may start or end at: the elements of the model. */
-const ELEMENTS = ['people', 'systems', 'apps', 'stores', 'components'];
+const ELEMENTS = ['people', 'systems', 'apps', 'stores', 'components', 'infrastructure'];
 
 const OWNER: ReferenceField = { field: 'owner', families: ['owners'], rule: '`owner` names an owner, a record in `owners/`.' };
 
@@ -63,8 +69,21 @@ const TECHNOLOGY: ReferenceField = {
   rule: 'Each id in `technology` names a technology, a record in `technologies/`.',
 };
 
+/** What a connection passes through. A store is not one: a put and a take are two connections. */
+const VIA: ReferenceField = {
+  field: 'via',
+  families: ['infrastructure', 'apps', 'components', 'systems'],
+  list: true,
+  rule: 'Each id in `via` names a piece of infrastructure, an app, a component or a system: something this exchange passes through.',
+  wrongFamily: {
+    stores:
+      'A store is never passed through, and a queue or a topic is a store: write a connection to it from the one that puts in, ' +
+      'and another from the one that takes out, in place of this one.',
+  },
+};
+
 /**
- * Format 1: eight families of records. The order is the order a listing shows them in: who
+ * Format 1: nine families of records. The order is the order a listing shows them in: who
  * uses the software, the software from the outside in, how it is connected, and the two
  * families that the others name.
  */
@@ -101,14 +120,19 @@ export const FORMAT_1: Format = {
       },
     },
     {
+      folder: 'infrastructure',
+      record: { noun: 'piece of infrastructure', one: 'a piece of infrastructure', schema: InfrastructureSchema, references: [TECHNOLOGY, OWNER] },
+    },
+    {
       folder: 'connections',
       record: {
         noun: 'connection',
         one: 'a connection',
         schema: ConnectionSchema,
         references: [
-          { field: 'from', families: ELEMENTS, rule: 'A connection goes from a person, a system, an app, a store or a component.' },
-          { field: 'to', families: ELEMENTS, rule: 'A connection goes to a person, a system, an app, a store or a component.' },
+          { field: 'from', families: ELEMENTS, rule: 'A connection goes from a person, a system, an app, a store, a component or a piece of infrastructure.' },
+          { field: 'to', families: ELEMENTS, rule: 'A connection goes to a person, a system, an app, a store, a component or a piece of infrastructure.' },
+          VIA,
           TECHNOLOGY,
         ],
       },

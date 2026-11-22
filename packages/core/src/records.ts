@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { idProblem, isId } from './id.ts';
 import { capital, quote } from './problem.ts';
-import { label, notAllowed } from './shape.ts';
+import { label } from './shape.ts';
 import { DESCRIPTION_MAX, NAME_MAX } from './text.ts';
 
 /**
@@ -13,7 +13,7 @@ import { DESCRIPTION_MAX, NAME_MAX } from './text.ts';
 export const APP_KINDS = ['service', 'browser', 'mobile', 'desktop', 'command', 'function', 'job'] as const;
 
 /** What sort of data a store holds. */
-export const STORE_KINDS = ['database', 'files', 'cache', 'index'] as const;
+export const STORE_KINDS = ['database', 'files', 'cache', 'index', 'queue', 'topic'] as const;
 
 /** The characters that end a line. A name is on one line, so it holds none of them. */
 const LINE_BREAK = /[\n\r\u0085\u2028\u2029]/;
@@ -71,10 +71,16 @@ const InSystem = idIn('`in` holds the id of the system it is part of, a record i
 const InApp = idIn('`in` holds the id of the app it is inside, a record in `apps/`.', fileOf("the app's"));
 
 /** The one that acts. */
-const From = idIn('`from` holds the id of the one that acts: a person, a system, an app, a store or a component.', fileOf("that record's"));
+const From = idIn(
+  '`from` holds the id of the one that acts: a person, a system, an app, a store, a component or a piece of infrastructure.',
+  fileOf("that record's"),
+);
 
 /** The one it acts on. */
-const To = idIn('`to` holds the id of the one it acts on: a person, a system, an app, a store or a component.', fileOf("that record's"));
+const To = idIn(
+  '`to` holds the id of the one it acts on: a person, a system, an app, a store, a component or a piece of infrastructure.',
+  fileOf("that record's"),
+);
 
 /**
  * Who answers for a part. Who cannot be named by an id is said in the description. `leftOut`
@@ -131,18 +137,50 @@ const PartTechnologies = technologies('Name a technology by the id of its record
 /** What a connection is carried in, such as a protocol. */
 const ConnectionTechnologies = technologies('A phrase about how an exchange travels goes in the description.');
 
+/** What sort of data a store holds. A queue and a topic hold messages on their way. */
+const StoreKind = z.enum(STORE_KINDS);
+
+/** One id in `via`: something the exchange passes through. */
+const ViaId = z.string().refine(isId, {
+  error: (issue) => {
+    const value = String(issue.input);
+    const which = `${capital(label(issue.path ?? []))}, ${quote(value)},`;
+    return hasSpace(value)
+      ? `${which} is not an id. \`via\` holds the ids of what the exchange passes through, nearest to \`from\` first. Say anything more in the description.`
+      : idProblem(value, which);
+  },
+});
+
 /**
- * What sort of data a store holds. A queue and a topic are stores with no kind until a later
- * stage gives them one, so a store that names either is told how to say it.
+ * What a connection passes through, in the order of travel, nearest to `from` first. The one
+ * list whose order means something. None twice.
  */
-const StoreKind = z
+const Via = z
+  .array(ViaId)
+  .refine((ids) => ids.length > 0, {
+    message: '`via` is an empty list. Leave `via` out until something that is always on the way is known.',
+    params: { code: 'value-too-small' },
+  })
+  .superRefine((ids, context) => {
+    const seen = new Set<string>();
+    ids.forEach((id, index) => {
+      if (seen.has(id)) context.addIssue({ code: 'custom', path: [index], message: `${quote(id)} is in \`via\` twice. Keep one.` });
+      seen.add(id);
+    });
+  });
+
+/**
+ * The mark for somebody else's system. `true` is its only value: a system of ours, and one
+ * nobody has spoken for, have none. Any other value is told what to do, in the words of the
+ * rule, and not only which value there is.
+ */
+const External = z
   .unknown()
-  .refine((kind) => kind !== 'queue' && kind !== 'topic', {
-    error: (issue) =>
-      `${notAllowed(issue.path ?? [], STORE_KINDS)} A queue or a topic is a store with no \`kind\` at this stage. Say which in its description.`,
+  .refine((value) => value === true, {
+    message: '`external` must be `true`. Leave it out for a system of yours, and for one nobody has spoken for.',
     params: { code: 'value-not-allowed' },
   })
-  .pipe(z.enum(STORE_KINDS));
+  .pipe(z.literal(true));
 
 /** A kind of person who uses the software, runs it or takes part in what it does. No owner. */
 export const PersonSchema = z.strictObject({
@@ -154,6 +192,7 @@ export const PersonSchema = z.strictObject({
 export const SystemSchema = z.strictObject({
   name: Name,
   description: Description.optional(),
+  external: External.optional(),
   owner: SystemOwner.optional(),
 });
 
@@ -193,9 +232,21 @@ export const ComponentSchema = z.strictObject({
 export const ConnectionSchema = z.strictObject({
   from: From,
   to: To,
+  via: Via.optional(),
   name: Name.optional(),
   description: Description.optional(),
   technology: ConnectionTechnologies.optional(),
+});
+
+/**
+ * A thing whose job is to pass exchanges on: a proxy, a gateway, a load balancer. It is in no
+ * system, since it often stands between two, so with no `owner` it has none.
+ */
+export const InfrastructureSchema = z.strictObject({
+  name: Name,
+  description: Description.optional(),
+  technology: PartTechnologies.optional(),
+  owner: SystemOwner.optional(),
 });
 
 /** A team, a role or an organisation that answers for a part and can be asked. */
@@ -216,5 +267,6 @@ export type App = z.infer<typeof AppSchema>;
 export type Store = z.infer<typeof StoreSchema>;
 export type Component = z.infer<typeof ComponentSchema>;
 export type Connection = z.infer<typeof ConnectionSchema>;
+export type Infrastructure = z.infer<typeof InfrastructureSchema>;
 export type Owner = z.infer<typeof OwnerSchema>;
 export type Technology = z.infer<typeof TechnologySchema>;

@@ -48,10 +48,8 @@ function nodeOf(box: ViewBox): ElkNode {
  * a label only when it has a text; it never measures it, so the room is what counts.
  */
 function edgeOf(arrow: ViewArrow, label: LabelText | undefined): ElkExtendedEdge {
-  const labels =
-    label === undefined
-      ? []
-      : [{ text: [...label.lines, label.technology ?? ''].join('\n').trim(), width: label.width, height: label.height, layoutOptions: { ...LABEL_OPTIONS } }];
+  const text = label === undefined ? '' : [...label.lines, label.route, label.technology].filter((line) => line !== undefined && line !== '').join('\n');
+  const labels = label === undefined ? [] : [{ text, width: label.width, height: label.height, layoutOptions: { ...LABEL_OPTIONS } }];
   return { id: arrow.id, sources: [arrow.from], targets: [arrow.to], labels };
 }
 
@@ -90,7 +88,7 @@ function placedBox(box: ViewBox, shape: ElkShape): PlacedBox {
 /** The boundary at its place, with its title in the top padding, cut to the room inside. */
 function placedBoundary(boundary: ViewBoundary, shape: ElkShape): PlacedBoundary {
   const rect = rectOf(shape);
-  const title = titleText(boundary.title, rect.width - BOUNDARY_PADDING.left - BOUNDARY_PADDING.right);
+  const title = titleText(boundary, rect.width - BOUNDARY_PADDING.left - BOUNDARY_PADDING.right);
   const titleAt = {
     x: rect.x + BOUNDARY_PADDING.left,
     y: rect.y + (BOUNDARY_PADDING.top - TITLE_LINE_HEIGHT) / 2,
@@ -106,8 +104,8 @@ function placedArrow(arrow: ViewArrow, edge: ElkExtendedEdge | undefined, text: 
   const placed: PlacedArrow = { id: arrow.id, from: arrow.from, to: arrow.to, sections: routeOf(edge.sections ?? []).map(straightened) };
   const shape = edge.labels?.[0];
   if (text === undefined || shape === undefined) return placed;
-  const { lines, technology } = text;
-  return { ...placed, label: { ...rectOf(shape), lines, ...(technology === undefined ? {} : { technology }) } };
+  const { lines, route, technology } = text;
+  return { ...placed, label: { ...rectOf(shape), lines, ...(route === undefined ? {} : { route }), ...(technology === undefined ? {} : { technology }) } };
 }
 
 /** The place of a shape. */

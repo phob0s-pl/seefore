@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { statSync, watch } from 'node:fs';
 import type { FSWatcher } from 'node:fs';
-import { emptyModel, outlineOf, ownership, viewsOf } from '@seefore/core';
+import { connectionsInNoView, emptyModel, outlineOf, ownership, viewsOf } from '@seefore/core';
 import type { Model, Problem, View, ViewerState } from '@seefore/core';
 import { readSource } from '../check.ts';
 
@@ -21,8 +21,8 @@ const FORMAT_UNKNOWN = new Set(['marker-missing', 'format-unknown', 'format-not-
 
 /**
  * Reads the source directory as `seefore check` does, with the same problems, and works out
- * the model's views and its listing. When the directory is gone, or its marker cannot say
- * which format it is in, there is no model and there are no views.
+ * the model's views, its listing and the connections that no view holds. When the directory is
+ * gone, or its marker cannot say which format it is in, there is no model and there are no views.
  */
 export function readingOf(directory: string, views: (model: Model) => View[] = viewsOf): Reading {
   if (identityOf(directory) === undefined) {
@@ -38,6 +38,7 @@ export function readingOf(directory: string, views: (model: Model) => View[] = v
   const { loaded, problems, errors, warnings } = readSource(directory);
   const available = !problems.some((problem) => FORMAT_UNKNOWN.has(problem.code));
   const model = available ? loaded.model : emptyModel();
+  const drawn = available ? views(model) : [];
   return {
     directory,
     available,
@@ -50,7 +51,8 @@ export function readingOf(directory: string, views: (model: Model) => View[] = v
     model,
     ownership: Object.fromEntries(ownership(model)),
     outline: outlineOf(model),
-    views: available ? views(model) : [],
+    views: drawn,
+    inNoView: connectionsInNoView(model, drawn),
   };
 }
 
@@ -70,6 +72,7 @@ function unavailable(directory: string, problem: Problem): Reading {
     ownership: {},
     outline: outlineOf(model),
     views: [],
+    inNoView: [],
   };
 }
 

@@ -3,83 +3,170 @@
 // address is printed. Not part of the command, and not run by `npm run check`.
 //
 // Besides the fixture's three views it serves a crowded one, "grid.containers", with many
-// boxes and arrows, to see that every arrow is drawn and what a picture too small to read says.
-// POST /revision makes a new reading, as a changed file would.
+// boxes and arrows, to see that every arrow is drawn and what a picture too small to read says:
+// its view is worked out by the engine from a grid of records, and its places are made by hand.
+// It serves too the views of a help desk with the hard cases of stage 6a, worked out and laid
+// out by the engine itself: routes on arrows, a queue and a topic, external systems, a piece of
+// infrastructure with a box and one without, and boxes that connections pass through. Before it
+// listens it turns every picture into what the page draws, so that a view the page cannot draw
+// stops it at once. POST /revision makes a new reading, as a changed file would.
 import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { connectionsInNoView, emptyModel, load, outlineOf, ownership, viewsOf } from '../core/src/index.ts';
+import { boxText, layOut } from '../layout/src/index.ts';
+import { toFlow } from './src/flow.ts';
 import { PICTURES, STATE } from './test/fixture.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const built = join(here, '..', 'cli', 'dist', 'viewer');
 const port = Number(process.argv[2] ?? 0);
 
-/** A container view of a grid of boxes, each with an arrow to the right and one down. */
+/**
+ * A container view of a grid of apps and stores, each joined by an arrow to the next across and
+ * down, worked out by the engine from records, and its picture with places made by hand, each
+ * box's text broken as the layout breaks it. A store acts on nothing, so an arrow beside a store
+ * runs from the app to it. Gives the model too, to be listed with the rest.
+ */
 function grid(columns, rows) {
   const box = (c, r) => `box-${String(c).padStart(2, '0')}-${String(r).padStart(2, '0')}`;
-  const boxes = [];
-  const placed = [];
-  const arrows = [];
-  const drawnArrows = [];
+  const isApp = (c, r) => ['apps', 'stores', 'apps', 'apps'][(c + r) % 4] === 'apps';
+  const files = { 'seefore.yaml': 'format: 1\nname: Grid\n', 'systems/grid.yaml': 'name: Grid\n', 'technologies/https.yaml': 'name: HTTPS\n', 'technologies/go.yaml': 'name: Go\n' };
+  const join = (one, other, verb) => {
+    const [from, to] = isApp(...one) ? [one, other] : [other, one];
+    const name = verb === 'calls' ? 'Calls\ntechnology: [https]' : 'Feeds';
+    files[`connections/${box(...from)}-${verb}-${box(...to)}.yaml`] = `from: ${box(...from)}\nto: ${box(...to)}\nname: ${name}\n`;
+  };
   const left = 64;
   const top = 104;
   const across = 420;
   const down = 240;
+  const places = new Map();
   for (let c = 0; c < columns; c++) {
     for (let r = 0; r < rows; r++) {
-      const id = box(c, r);
-      const family = ['apps', 'stores', 'apps', 'apps'][(c + r) % 4];
-      boxes.push({ id, family, name: `Part ${c}.${r}`, line: family === 'apps' ? '[App: service · Go]' : '[Store: database]', sentence: `Does the work of part ${c} ${r}.`, scope: false, inside: true, loops: [], within: [] });
-      const x = left + c * across;
-      const y = top + r * down;
-      placed.push({ id, x, y, width: 240, height: 150, name: [`Part ${c}.${r}`], line: family === 'apps' ? '[App: service · Go]' : '[Store: database]', sentence: [`Does the work of part ${c} ${r}.`] });
-      if (c + 1 < columns) {
-        const to = box(c + 1, r);
-        arrows.push({ id: `${id}~${to}`, from: id, to, connections: [`${id}-calls`], names: ['Calls'], technology: ['HTTPS'] });
-        drawnArrows.push({ id: `${id}~${to}`, from: id, to, sections: [[{ x: x + 240, y: y + 75 }, { x: x + across, y: y + 75 }]], label: { x: x + 240 + 50, y: y + 75 - 16, width: 80, height: 32, lines: ['Calls'], technology: '[HTTPS]' } });
-      }
-      if (r + 1 < rows) {
-        const to = box(c, r + 1);
-        arrows.push({ id: `${id}~${to}`, from: id, to, connections: [`${id}-feeds`], names: ['Feeds'], technology: [] });
-        drawnArrows.push({ id: `${id}~${to}`, from: id, to, sections: [[{ x: x + 120, y: y + 150 }, { x: x + 120, y: y + down }]] });
-      }
+      const app = isApp(c, r);
+      files[`${app ? 'apps' : 'stores'}/${box(c, r)}.yaml`] = `name: Part ${c}.${r}\nin: grid\ndescription: Does the work of part ${c} ${r}.\n${app ? 'kind: service\ntechnology: [go]' : 'kind: database'}\n`;
+      places.set(box(c, r), { x: left + c * across, y: top + r * down });
+      if (c + 1 < columns) join([c, r], [c + 1, r], 'calls');
+      if (r + 1 < rows) join([c, r], [c, r + 1], 'feeds');
     }
   }
+  const { model } = load(Object.entries(files).map(([path, text]) => ({ path, text })));
+  const view = viewsOf(model).find((each) => each.id === 'grid.containers');
   const right = left + (columns - 1) * across + 240 + 24;
   const bottom = top + (rows - 1) * down + 150 + 24;
-  const view = {
-    id: 'grid.containers',
-    kind: 'containers',
-    scope: 'grid',
-    title: 'Container view: Grid',
-    boxes,
-    boundary: { id: 'grid', name: 'Grid', title: 'Grid [System]' },
-    arrows,
-    left: { outside: [], broken: [] },
-    legend: [
-      { key: 'app', text: 'App: something that runs code' },
-      { key: 'store', text: 'Store: something that holds data' },
-      { key: 'boundary', text: 'The system this view is about, around what is in it' },
-      { key: 'arrow', text: 'A connection, from the one that acts' },
-    ],
+  /** The line between two boxes side by side, or one above the other, from the edge of one to the facing edge of the other. */
+  const sectionOf = (from, to) => {
+    if (from.y === to.y) {
+      const [start, end] = from.x < to.x ? [from.x + 240, to.x] : [from.x, to.x + 240];
+      return [{ x: start, y: from.y + 75 }, { x: end, y: from.y + 75 }];
+    }
+    const [start, end] = from.y < to.y ? [from.y + 150, to.y] : [from.y, to.y + 150];
+    return [{ x: from.x + 120, y: start }, { x: from.x + 120, y: end }];
   };
   const drawn = {
     view: view.id,
     width: right + 40,
     height: bottom + 40,
     boundary: { id: 'grid', x: 40, y: 40, width: right - 40, height: bottom - 40, title: 'Grid [System]', titleAt: { x: 64, y: 52, width: 120, height: 20 } },
-    boxes: placed,
-    arrows: drawnArrows,
+    boxes: view.boxes.map((each) => ({ id: each.id, ...places.get(each.id), width: 240, height: 150, ...boxText(each) })),
+    arrows: view.arrows.map((arrow) => {
+      const [from, to] = [places.get(arrow.from), places.get(arrow.to)];
+      const section = sectionOf(from, to);
+      const label = from.y === to.y ? { label: { x: Math.min(section[0].x, section[1].x) + 50, y: from.y + 75 - 16, width: 80, height: 32, lines: ['Calls'], technology: '[HTTPS]' } } : {};
+      return { id: arrow.id, from: arrow.from, to: arrow.to, sections: [section], ...label };
+    }),
   };
-  return { view, drawn };
+  return { view, drawn, model };
 }
+
+/**
+ * A help desk as files. Visitors and clerks reach its web app through an HTTPS proxy, which
+ * also checks the API on its own account, and so has a box; visitors come through an edge
+ * network first, which is somebody else's and has no box. The gateway signs what leaves the
+ * desk and shares its keys between its copies. Jobs wait in a queue, changes go out on a
+ * topic, and the card provider and the mail service are external, reached through a load
+ * balancer that nothing starts or ends at.
+ */
+const DESK = {
+  'seefore.yaml': 'format: 1\nname: Desk\n',
+  'people/visitor.yaml': 'name: Visitor\ndescription: Asks the help desk for help.\n',
+  'people/clerk.yaml': 'name: Clerk\ndescription: Answers the tickets.\n',
+  'systems/desk.yaml': 'name: Desk\ndescription: Keeps the tickets of the help desk.\n',
+  'systems/cards.yaml': 'name: Card provider\ndescription: Takes card payments.\nexternal: true\n',
+  'systems/mail.yaml': 'name: Mail service\ndescription: Sends mail for others.\nexternal: true\n',
+  'systems/edge.yaml': 'name: Edge network\ndescription: Serves the pages near the reader.\nexternal: true\n',
+  'apps/web.yaml': 'name: Web\nin: desk\ndescription: The pages of the desk.\nkind: service\ntechnology: [react]\n',
+  'apps/api.yaml': 'name: API\nin: desk\ndescription: Takes and answers every call on a ticket.\nkind: service\ntechnology: [go]\n',
+  'apps/gateway.yaml': 'name: Gateway\nin: desk\ndescription: Signs the calls that leave the desk.\nkind: service\n',
+  'apps/worker.yaml': 'name: Worker\nin: desk\ndescription: Does the jobs that can wait.\nkind: job\ntechnology: [go]\n',
+  'stores/tickets.yaml': 'name: Tickets\nin: desk\ndescription: Every ticket and its answers.\nkind: database\ntechnology: [postgresql]\n',
+  'stores/jobs.yaml': 'name: Jobs\nin: desk\ndescription: The jobs waiting for the worker.\nkind: queue\ntechnology: [redis]\n',
+  'stores/events.yaml': 'name: Ticket events\nin: desk\ndescription: What changed on a ticket.\nkind: topic\ntechnology: [kafka]\n',
+  'infrastructure/proxy.yaml': "name: HTTPS proxy\ndescription: Ends HTTPS on the desk's host and passes requests on.\ntechnology: [nginx]\n",
+  'infrastructure/balancer.yaml': 'name: Load balancer\ndescription: Spreads the calls that leave the desk.\n',
+  'technologies/react.yaml': 'name: React\n',
+  'technologies/go.yaml': 'name: Go\n',
+  'technologies/postgresql.yaml': 'name: PostgreSQL\n',
+  'technologies/redis.yaml': 'name: Redis\n',
+  'technologies/kafka.yaml': 'name: Kafka\n',
+  'technologies/nginx.yaml': 'name: nginx\n',
+  'technologies/https.yaml': 'name: HTTPS\n',
+  'technologies/sql.yaml': 'name: SQL\n',
+  'technologies/smtp.yaml': 'name: SMTP\n',
+  'connections/visitor-opens-web.yaml': 'from: visitor\nto: web\nvia: [edge, proxy]\nname: Opens the help pages\ntechnology: [https]\n',
+  'connections/clerk-answers-web.yaml': 'from: clerk\nto: web\nvia: [proxy]\nname: Answers tickets\ntechnology: [https]\n',
+  'connections/web-asks-api.yaml': 'from: web\nto: api\nvia: [gateway]\nname: Asks for tickets\ntechnology: [https]\n',
+  'connections/web-sends-api.yaml': 'from: web\nto: api\nname: Sends edits\ntechnology: [https]\n',
+  'connections/proxy-checks-api.yaml': 'from: proxy\nto: api\nname: Checks that it answers\n',
+  'connections/gateway-shares-keys.yaml': 'from: gateway\nto: gateway\nname: Shares its keys\n',
+  'connections/api-keeps-tickets.yaml': 'from: api\nto: tickets\nname: Keeps tickets\ntechnology: [sql]\n',
+  'connections/api-queues-jobs.yaml': 'from: api\nto: jobs\nname: Queues a job\n',
+  'connections/worker-takes-jobs.yaml': 'from: worker\nto: jobs\nname: Takes the next job\n',
+  'connections/api-tells-events.yaml': 'from: api\nto: events\nname: Says what changed\ntechnology: [kafka]\n',
+  'connections/worker-mails.yaml': 'from: worker\nto: mail\nvia: [balancer]\nname: Sends the answer by mail\ntechnology: [smtp]\n',
+  'connections/api-pays-cards.yaml': 'from: api\nto: cards\nvia: [gateway, balancer]\nname: Takes a payment\ntechnology: [https]\n',
+};
+
+const desk = load(Object.entries(DESK).map(([path, text]) => ({ path, text })));
+const deskViews = viewsOf(desk.model);
+const deskPictures = Object.fromEntries(await Promise.all(deskViews.map(async (view) => [view.id, await layOut(view)])));
 
 const crowded = grid(9, 8);
 let revision = 1;
-/** The state of the latest reading: the fixture's, with the crowded view. */
-const state = () => ({ ...STATE, revision: `r${revision}`, views: [...STATE.views, crowded.view], model: { ...STATE.model, systems: [...STATE.model.systems, { id: 'grid', file: 'systems/grid.yaml', name: 'Grid' }] } });
-const pictures = { ...PICTURES, [crowded.view.id]: crowded.drawn };
+/** How many records a model holds. */
+const size = (one) => Object.values(one).reduce((sum, family) => sum + family.length, 0);
+/** Models in one, each family in order of id. A record the models share, as a technology may be, is held once. */
+const merged = (...models) =>
+  Object.fromEntries(
+    Object.keys(emptyModel()).map((family) => {
+      const byId = new Map(models.flatMap((one) => one[family]).map((record) => [record.id, record]));
+      return [family, [...byId.values()].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))];
+    }),
+  );
+const model = merged(STATE.model, desk.model, crowded.model);
+const views = [...STATE.views, ...deskViews, crowded.view];
+/**
+ * The state of the latest reading: the fixture's, with the crowded view and the help desk's.
+ * Its tally is the merged model's, and the records with an error that the fixture counts.
+ */
+const state = () => ({
+  ...STATE,
+  revision: `r${revision}`,
+  records: size(model) + STATE.records - size(STATE.model),
+  views,
+  model,
+  ownership: { ...STATE.ownership, ...Object.fromEntries(ownership(desk.model)), ...Object.fromEntries(ownership(crowded.model)) },
+  outline: outlineOf(model),
+  inNoView: connectionsInNoView(model, views),
+});
+const pictures = { ...PICTURES, ...deskPictures, [crowded.view.id]: crowded.drawn };
+// Every picture as the page draws it: a view the page cannot draw stops the preview here.
+for (const view of views) {
+  const picture = pictures[view.id];
+  if (picture !== undefined && !('failed' in picture)) toFlow(view, picture);
+}
 const listeners = new Set();
 
 const server = createServer((request, response) => {

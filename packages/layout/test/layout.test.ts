@@ -3,9 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { graphOf, sorted, straightened } from '../src/graph.ts';
 import { layOut } from '../src/index.ts';
 import { ELLIPSIS, widthOf } from '../src/measure.ts';
-import { BOUNDARY_PADDING, BOX_HEIGHT, BOX_TEXT_WIDTH, BOX_WIDTH, NAME_FONT, TITLE_FONT } from '../src/sizes.ts';
+import { BOUNDARY_PADDING, BOX_HEIGHT, BOX_PADDING, BOX_TEXT_WIDTH, BOX_WIDTH, LABEL_LINE_HEIGHT, NAME_FONT, ROUTE_LINE_HEIGHT, TECHNOLOGY_LINE_HEIGHT, TITLE_FONT } from '../src/sizes.ts';
 import { onEdge, troubles, within } from './geometry.ts';
-import { arrow, box, containerView, contextView, crowded, fan, inside, shopContainers, shopContext } from './views.ts';
+import { arrow, box, containerView, contextView, crowded, fan, inside, route, shopContainers, shopContext } from './views.ts';
 
 /** The picture of a view, which the test needs drawn. */
 async function drawn(view: View): Promise<Drawn> {
@@ -33,7 +33,7 @@ describe('the layout of a view', () => {
       view: 'alone.context',
       width: BOX_WIDTH + 24,
       height: BOX_HEIGHT + 24,
-      boxes: [{ id: 'alone', x: 12, y: 12, width: BOX_WIDTH, height: BOX_HEIGHT, name: ['Alone'], line: '[System]', sentence: [] }],
+      boxes: [{ id: 'alone', x: 12, y: 12, width: BOX_WIDTH, height: BOX_HEIGHT, name: ['Alone'], line: '[System]', sentence: [], inset: { left: BOX_PADDING, right: BOX_PADDING } }],
       arrows: [],
     });
   });
@@ -114,13 +114,16 @@ describe('the layout of a view', () => {
     });
   });
 
-  it('cuts the title of a boundary narrower than it', async () => {
-    const title = 'The system that keeps every record of every customer [System]';
-    const picture = await drawn(containerView('long', [inside('one', 'apps')], [], title));
-    const boundary = picture.boundary;
-    expect(boundary?.title.endsWith(ELLIPSIS)).toBe(true);
-    expect(title.startsWith(boundary?.title.slice(0, -1) ?? '')).toBe(true);
-    expect(boundary?.titleAt.width).toBeLessThanOrEqual((boundary?.width ?? 0) - BOUNDARY_PADDING.left - BOUNDARY_PADDING.right);
+  it('cuts the name in the title of a boundary narrower than it, and keeps its kind line whole', async () => {
+    const name = 'The system that keeps every record of every customer';
+    for (const line of ['[System]', '[System: external]']) {
+      const picture = await drawn(containerView('long', [inside('one', 'apps')], [], name, line));
+      const boundary = picture.boundary;
+      const cut = boundary?.title.slice(0, -` ${line}`.length) ?? '';
+      expect(boundary?.title.endsWith(`${ELLIPSIS} ${line}`)).toBe(true);
+      expect(name.startsWith(cut.slice(0, -1))).toBe(true);
+      expect(boundary?.titleAt.width).toBeLessThanOrEqual((boundary?.width ?? 0) - BOUNDARY_PADDING.left - BOUNDARY_PADDING.right);
+    }
   });
 
   it('draws a boundary with nothing inside it at the size of one box, with its title', async () => {
@@ -142,6 +145,29 @@ describe('the layout of a view', () => {
     expect(picture.arrows[0]?.label?.lines).toEqual(['管理订单']);
     expect(picture.arrows[0]?.label?.width).toBe(64);
     for (const placed of picture.boxes) for (const line of placed.name) expect(widthOf(line, NAME_FONT)).toBeLessThanOrEqual(BOX_TEXT_WIDTH);
+  });
+
+  it('gives the route line its place in the label, between the names and the technology', async () => {
+    const view = shopContainers();
+    const routed: View = {
+      ...view,
+      arrows: view.arrows.map((each) => (each.id === 'storefront~order-api' ? { ...each, route: route(['Ingress', 'Workhorse']) } : each)),
+    };
+    const picture = await drawn(routed);
+    const label = picture.arrows.find((each) => each.id === 'storefront~order-api')?.label;
+    expect(label).toMatchObject({ lines: ['Places an order'], route: 'via Ingress, Workhorse', technology: '[HTTPS]' });
+    expect(label?.height).toBe(LABEL_LINE_HEIGHT + ROUTE_LINE_HEIGHT + TECHNOLOGY_LINE_HEIGHT);
+    expect(troubles(picture)).toEqual([]);
+    // The other labels have none.
+    expect(picture.arrows.filter((each) => each.label?.route !== undefined).map((each) => each.id)).toEqual(['storefront~order-api']);
+  });
+
+  it('gives a piece of infrastructure a box of the size of every box, outside the boundary', async () => {
+    const view = containerView('shop', [inside('order-api', 'apps'), box('proxy', 'infrastructure', { line: '[Infrastructure · nginx]' })], [arrow('proxy', 'order-api', ['Checks that it answers'])]);
+    const picture = await drawn(view);
+    expect(placeOf(picture, 'proxy')).toMatchObject({ width: BOX_WIDTH, height: BOX_HEIGHT, line: '[Infrastructure · nginx]' });
+    expect(within(placeOf(picture, 'proxy'), picture.boundary ?? { x: 0, y: 0, width: 0, height: 0 })).toBe(false);
+    expect(troubles(picture)).toEqual([]);
   });
 
   it('says so in words a reader can use when the layout throws', async () => {

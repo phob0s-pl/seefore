@@ -1,3 +1,4 @@
+import type { BoxLook } from '@seefore/core';
 import type { Font } from './measure.ts';
 
 /**
@@ -14,8 +15,31 @@ export const BOX_HEIGHT = 150;
 /** The room between the left or right edge of a box and its text. About 39 characters of the sentence fit on a line. */
 export const BOX_PADDING = 12;
 
-/** The widest a line of text in a box may be. */
+/** The widest a line of text in a box may be, in a box whose shape fills its rectangle. */
 export const BOX_TEXT_WIDTH = BOX_WIDTH - 2 * BOX_PADDING;
+
+/** How far a box's text stands in from its left and its right edge. */
+export interface Inset {
+  left: number;
+  right: number;
+}
+
+/**
+ * How far the text stands in from the edges of a box of each look. Most shapes fill their
+ * rectangle, and their text has the box's padding. A queue or a topic keeps its text clear of
+ * the near end drawn on its right, and a piece of infrastructure of the points at its sides.
+ * The layout breaks the text for the room between, and the page draws it there.
+ */
+export const TEXT_INSET: Readonly<Record<BoxLook, Inset>> = {
+  person: { left: BOX_PADDING, right: BOX_PADDING },
+  'system-scope': { left: BOX_PADDING, right: BOX_PADDING },
+  system: { left: BOX_PADDING, right: BOX_PADDING },
+  'system-external': { left: BOX_PADDING, right: BOX_PADDING },
+  app: { left: BOX_PADDING, right: BOX_PADDING },
+  store: { left: BOX_PADDING, right: BOX_PADDING },
+  'queue-or-topic': { left: BOX_PADDING, right: BOX_PADDING + 8 },
+  infrastructure: { left: BOX_PADDING + 4, right: BOX_PADDING + 4 },
+};
 
 /** The name of a box: 15 px bold. Measured. */
 export const NAME_FONT: Font = { size: 15, bold: true };
@@ -43,6 +67,12 @@ export const LABEL_LINES = 3;
 
 /** The height of a line of names on a label. */
 export const LABEL_LINE_HEIGHT = 15;
+
+/** The route line of a label, `via Ingress, Workhorse`: 11 px, in one line under the names and above the technology, set as the technology is. */
+export const ROUTE_FONT: Font = { size: 11, bold: false };
+
+/** The height of the route line of a label. */
+export const ROUTE_LINE_HEIGHT = 14;
 
 /** The technology line of a label, `[HTTPS, JSON]`: 11 px, in one line under the names. Measured. */
 export const TECHNOLOGY_FONT: Font = { size: 11, bold: false };

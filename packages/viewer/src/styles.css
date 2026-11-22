@@ -305,6 +305,10 @@ summary:focus-visible,
   --line-colour: var(--system);
 }
 
+.family-infrastructure {
+  --line-colour: var(--infrastructure);
+}
+
 .box .shape {
   position: absolute;
   inset: 0;
@@ -320,16 +324,22 @@ summary:focus-visible,
   fill: none;
 }
 
+/* The tab of an external system: solid, in the colour of its line, so that it is seen by its shape when the picture is small. */
+.tab {
+  fill: var(--line-colour);
+}
+
+/* The room at its sides is the picture's, set on the element: what the layout broke the lines for, and a little more. */
 .box-text {
   position: absolute;
   inset: 0;
   overflow: hidden;
-  padding: 12px var(--box-padding) 0;
+  padding-top: 12px;
   text-align: center;
 }
 
 /* Under a store's lid. */
-.family-stores .box-text {
+.box[data-look='store'] .box-text {
   padding-top: 18px;
 }
 
@@ -357,11 +367,16 @@ summary:focus-visible,
   line-height: var(--height-sentence);
 }
 
-/* The mark of a box whose copies act on each other, on its top edge. */
-.mark {
+/* The marks of a box on its top edge: what passes through it, and its copies that act on each other. */
+.marks {
   position: absolute;
   top: -10px;
   right: 16px;
+  display: flex;
+  gap: 6px;
+}
+
+.mark {
   height: 20px;
   padding: 0 7px;
   border: 1.5px solid var(--line-colour);
@@ -467,6 +482,12 @@ summary:focus-visible,
   white-space: pre;
 }
 
+.label-route {
+  font-size: var(--size-route);
+  fill: var(--text);
+  white-space: pre;
+}
+
 .arrow.lit .arrow-line {
   stroke: var(--text);
 }
@@ -492,6 +513,7 @@ summary:focus-visible,
 }
 
 .arrow.faded .label-name,
+.arrow.faded .label-route,
 .arrow.faded .label-technology {
   fill: var(--faded-text);
 }
@@ -519,6 +541,49 @@ summary:focus-visible,
   font-size: 11px;
   font-weight: bold;
   fill: var(--text);
+}
+
+.sample-route text {
+  font-size: 10px;
+  fill: var(--text);
+}
+
+/* Under the legend: what the arrows pass through that has no box, each a button that lights its arrows. */
+
+.passes-through {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  margin-top: 8px;
+  font-size: 13px;
+}
+
+.passes-title {
+  font-weight: bold;
+}
+
+.passes-through ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.passes-through button {
+  padding: 1px 8px;
+  border-radius: 10px;
+}
+
+.passes-through button.chosen {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.passes-count {
+  font-weight: bold;
 }
 
 /* Detail follows the zoom. What is hidden stays in the names a screen reader gets. */
@@ -640,6 +705,15 @@ summary:focus-visible,
 .listing .note {
   color: var(--quiet);
   margin: 4px 0;
+}
+
+/* How many connections are in no picture: a line that stands out, by its rule and its weight, not by colour alone. */
+.listing .in-no-picture {
+  margin: 12px 0 4px;
+  padding: 8px 12px;
+  border-left: 4px solid var(--accent);
+  background: var(--side);
+  font-weight: bold;
 }
 
 .listing ul {

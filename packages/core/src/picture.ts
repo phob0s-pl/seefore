@@ -11,7 +11,14 @@ import type { Problem } from './problem.ts';
  */
 
 /** The families whose records can stand as a box in a view. */
-export type BoxFamily = 'people' | 'systems' | 'apps' | 'stores';
+export type BoxFamily = 'people' | 'systems' | 'apps' | 'stores' | 'infrastructure';
+
+/**
+ * How a box looks: a person, the system the view is about, another system, an external system,
+ * an app, a store, a queue or a topic, a piece of infrastructure. The legend's key for each look
+ * has the same name. An external system is drawn as one also when the view is about it.
+ */
+export type BoxLook = 'person' | 'system-scope' | 'system' | 'system-external' | 'app' | 'store' | 'queue-or-topic' | 'infrastructure';
 
 /** A context view shows a system as one box; a container view shows what is inside it. */
 export type ViewKind = 'context' | 'containers';
@@ -21,9 +28,11 @@ export interface ViewBox {
   /** The id of the record it stands for. An id is used once in a model, so it is also the box's key. */
   id: string;
   family: BoxFamily;
+  /** How it is drawn, and which line of the legend explains it. */
+  look: BoxLook;
   /** The record's name, whole. */
   name: string;
-  /** The line that says its kind and its technologies, whole: `[App: service · Go, PostgreSQL]`. */
+  /** The line that says its kind and its technologies, whole: `[App: service · Go, PostgreSQL]`, `[System: external]`. */
   line: string;
   /** The first sentence of its description, whole. Missing when it has no description. */
   sentence?: string;
@@ -39,6 +48,13 @@ export interface ViewBox {
   loops: string[];
   /** Connections between two different records that are both drawn as this box: their ids, in order of id. Only on a box of the system in scope. */
   within: string[];
+  /**
+   * Connections the view holds that pass through this box: that name in `via` its record, or
+   * anything drawn as it. Those on its arrows count, and those a box holds inside it or between
+   * its copies. Their ids, in order of id. A connection is not counted on a box that its own
+   * arrow starts or ends at, nor on the box that holds it.
+   */
+  passing: string[];
 }
 
 /** The boundary of a container view: the system in scope. An arrow may start or end at it. */
@@ -46,7 +62,9 @@ export interface ViewBoundary {
   /** The id of the system. */
   id: string;
   name: string;
-  /** What is written at its top left: `Shop [System]`. */
+  /** The system's kind line: `[System]`, or `[System: external]` for somebody else's. */
+  line: string;
+  /** What is written at its top left: its name, then its kind line, as in `Shop [System]`. */
   title: string;
 }
 
@@ -67,6 +85,41 @@ export interface ViewArrow {
   names: string[];
   /** The names of the technologies that every one of its connections names. Empty when they differ, or when one names none. */
   technology: string[];
+  /**
+   * What its connections pass through at this level: what they name in `via`, less what is
+   * drawn as either end of the arrow, which is passed inside that end. Missing when that leaves
+   * nothing for every one of them.
+   */
+  route?: ViewRoute;
+}
+
+/** What the connections of an arrow pass through. */
+export interface ViewRoute {
+  /** How many of the arrow's connections pass through something at this level: at least one. */
+  count: number;
+  /**
+   * When every connection of the arrow names the same in `via`, in the same order: the names of
+   * what they pass through, in the order of travel. Empty when the routes differ, or when only
+   * some connections have one.
+   */
+  names: string[];
+  /** The line its label says, whole: `via Ingress, Workhorse`, or `via on 2 of 5` when the names are empty. */
+  line: string;
+}
+
+/** Something that connections the view holds pass through, and that has no box in the view. */
+export interface ViewPassed {
+  /** The id `via` names: a piece of infrastructure, an app, a component or a system. */
+  id: string;
+  /** Its name, or its id when its file has an error. */
+  name: string;
+  /**
+   * The connections the view holds that name it in `via`, in order of id: on its arrows, and
+   * inside a box or between its copies.
+   */
+  connections: string[];
+  /** The arrows of those connections that are drawn as one, in order of id. One held in a box has none. */
+  arrows: string[];
 }
 
 /** The connections a view does not draw, by the reason. Each list is in order of id. */
@@ -77,8 +130,13 @@ export interface ViewLeft {
   broken: string[];
 }
 
-/** What a legend can explain. A view lists only what it draws. */
-export type LegendKey = 'person' | 'system-scope' | 'system' | 'app' | 'store' | 'boundary' | 'arrow' | 'arrow-many' | 'loop';
+/**
+ * What a legend can explain: each look of a box, the thicker line of an external system the
+ * view is about, the boundary, an arrow, an arrow for several connections, the route on an
+ * arrow, and the marks for copies and for what passes through a box. A view lists only what it
+ * draws.
+ */
+export type LegendKey = BoxLook | 'system-scope-external' | 'boundary' | 'arrow' | 'arrow-many' | 'route' | 'loop' | 'passing';
 
 /** One line of the legend. */
 export interface LegendEntry {
@@ -104,6 +162,8 @@ export interface View {
   arrows: ViewArrow[];
   left: ViewLeft;
   legend: LegendEntry[];
+  /** What its arrows pass through that has no box in it, in order of id. */
+  passed: ViewPassed[];
 }
 
 export interface Point {
@@ -127,12 +187,17 @@ export interface PlacedBox extends Rect {
   line: string;
   /** The first sentence, in at most four lines. Empty when there is none. */
   sentence: string[];
+  /**
+   * How far its text stands in from its left and its right edge: the room the lines were broken
+   * for, which the shape of its look leaves. The page draws the text there.
+   */
+  inset: { left: number; right: number };
 }
 
 /** The boundary with its place and the place of its title. */
 export interface PlacedBoundary extends Rect {
   id: string;
-  /** The title in one line, cut when the boundary is narrower than it. */
+  /** The title in one line. When the boundary is narrower than it, the name is cut and the kind line kept whole. */
   title: string;
   titleAt: Rect;
 }
@@ -141,6 +206,8 @@ export interface PlacedBoundary extends Rect {
 export interface PlacedLabel extends Rect {
   /** The lines to draw: names, and `+ n more` when not every name has a line. */
   lines: string[];
+  /** The route line, `via Ingress, Workhorse` or `via on 2 of 5`, when the arrow has a route: under the names, above the technology. Its room is inside the label's place. */
+  route?: string;
   /** The technology line, `[HTTPS]`, when the arrow has one. Its room is inside the label's place. */
   technology?: string;
 }
@@ -189,7 +256,9 @@ export interface Outline {
   withParts: OutlineSystem[];
   /** The other systems. */
   others: string[];
-  /** The connections, under what they start from, in the order the starts are listed above. */
+  /** The pieces of infrastructure: things whose job is to pass exchanges on. They are in no system. */
+  infrastructure: string[];
+  /** The connections, under what they start from, in the order the starts are listed above, then those that start at a piece of infrastructure. */
   connections: OutlineGroup[];
   owners: string[];
   technologies: string[];
@@ -252,6 +321,11 @@ export interface ViewerState {
   outline: Outline;
   /** Every view, in the order the sidebar lists them: the systems with parts first. */
   views: View[];
+  /**
+   * The connections that no view holds in any way, in order of id: not on an arrow, not inside
+   * a box or between its copies, and not counted as left out. They are in no picture.
+   */
+  inNoView: string[];
 }
 
 /** The server's answer when asked for the picture of a view at a revision. */

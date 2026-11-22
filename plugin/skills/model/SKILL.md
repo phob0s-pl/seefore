@@ -36,17 +36,18 @@ Run each `seefore` command by itself, with nothing joined to it.
 
 ## 2. The records
 
-Eight kinds, each in its own folder. Bold is required; write nothing else, and no key that is
+Nine kinds, each in its own folder. Bold is required; write nothing else, and no key that is
 not in this table.
 
 | Folder | What it is | Keys, in the order they are written |
 | --- | --- | --- |
 | `people/` | A kind of person who uses the software, runs it or takes part. A role, not an individual | **`name`**, `description` |
-| `systems/` | Software seen as one thing, ours or somebody else's | **`name`**, `description`, `owner` |
+| `systems/` | Software seen as one thing, ours or somebody else's | **`name`**, `description`, `external`, `owner` |
 | `apps/` | Something that runs code | **`name`**, **`in`**, `description`, `kind`, `technology`, `owner` |
 | `stores/` | Something that holds data | **`name`**, **`in`**, `description`, `kind`, `technology`, `owner` |
 | `components/` | A piece inside an app | **`name`**, **`in`**, `description`, `technology`, `owner` |
-| `connections/` | One thing acts on another | **`from`**, **`to`**, `name`, `description`, `technology` |
+| `infrastructure/` | A thing whose job is to pass exchanges on: a proxy, a gateway, a load balancer | **`name`**, `description`, `technology`, `owner` |
+| `connections/` | One thing acts on another | **`from`**, **`to`**, `via`, `name`, `description`, `technology` |
 | `owners/` | A team, a role or an organisation that answers for what a part is and can be asked | **`name`**, `description` |
 | `technologies/` | A thing with a name that a part is built with or an exchange is carried in | **`name`**, `description` |
 
@@ -58,12 +59,18 @@ not in this table.
 - `in` is the id of what the thing is part of: a system for an app and for a store, an app
   for a component.
 - `kind` of an app is one of `service`, `browser`, `mobile`, `desktop`, `command`,
-  `function`, `job`. `kind` of a store is one of `database`, `files`, `cache`, `index`. Leave
-  it out when none fits. `service` is a program that stays up; the source may say so in other
-  words.
+  `function`, `job`. `kind` of a store is one of `database`, `files`, `cache`, `index`,
+  `queue`, `topic`. Leave it out when none fits. `service` is a program that stays up; the
+  source may say so in other words. Convention 8 tells a queue from a topic.
 - `technology` is a list of ids of records in `technologies/`.
 - `owner` is the id of a record in `owners/`.
-- `from` and `to` are ids of a person, a system, an app, a store or a component.
+- `from` and `to` are ids of a person, a system, an app, a store, a component or a piece of
+  infrastructure.
+- `via` is what the exchange passes through, in the order of travel, nearest to `from` first:
+  a list of ids of pieces of infrastructure, apps, components or systems. Convention 7 says
+  what goes in it.
+- `external` is `true` on a system that the people this model is kept for cannot change.
+  Leave it out otherwise. Convention 9 says what it means.
 
 `apps/order-api.yaml`:
 
@@ -138,7 +145,8 @@ These conventions are the spec's, word for word. No check can hold them, so you 
 2. **Ours and somebody else's.** Somebody else's software that the team calls is a system
    like any other. Usually nothing is written inside it; something may be, when the team uses
    it directly, such as another team's database that it reads. Whose a system is goes in its
-   description, and in `owner` when it is somebody the team can ask. A system with nothing in
+   description, in `external` when the team cannot change it (convention 9), and in `owner`
+   when it is somebody the team can ask. A system with nothing in
    it is drawn as one box: it may be somebody else's, or ours and not described yet. A cloud
    service the team controls is an app or a store of its own system, with the product as its
    technology; one it only calls is a system of its own. What is outside a picture is worked
@@ -169,26 +177,81 @@ These conventions are the spec's, word for word. No check can hold them, so you 
    source, like any other fact.
 <!-- conventions:end -->
 
+<!-- hard-cases:start -->
+7. **What a connection passes through.** A connection keeps its two ends: the one that acts
+   and the one it acts on. What stands between them and passes the exchange on is named in
+   `via`, in the order of travel, nearest to `from` first.
+   - **Passing on** is routing, choosing where to send, pooling, changing the protocol,
+     limiting, checking the caller and ending TLS.
+   - **Ask of each exchange what the thing in between does with it.** It passes the exchange
+     on: the thing goes in `via`. The exchange is about the thing itself, such as a deploy
+     that reloads it, a check it makes of what stands behind it, or a list it fetches: the
+     connection starts or ends at the thing. It answers with something of its own, such as a
+     file it serves: that is work of its own, with a connection that ends at it.
+   - **A piece of infrastructure** is a thing whose work for the software is passing on and
+     nothing else, whoever made it and whoever runs it. A thing that also answers with
+     something of its own is an app, and `via` still names it on what it passes on. Code
+     inside an app that only passes on may stay a component of that app.
+   - **`via` holds what is on the way every time this exchange is made.** A thing that is
+     there only in some installs, or only when another way fails, stays in the description.
+     Where the ways differ, `via` holds what they share, in order. Leaving something out of
+     `via` claims nothing.
+   - A way that is taken only when a condition holds, such as a fallback, may be a connection
+     of its own: its name says when, and its `via` holds what is on that way.
+   - A place on the way that each install fills with a product of its own is one piece of
+     infrastructure, named for the place, with the products in its description.
+   - What a person works in, such as a browser or a command line, is the one that acts, and
+     not something on the way.
+   - What a piece of infrastructure passes on is never written as one connection to it and
+     another from it: that is one connection, with the piece in `via`.
+   - `via` names a piece of infrastructure, an app, a component or a system. Never a store.
+     Never an end of the connection, what an end is in, or what is in an end.
+   - A redirect that a browser carries, and a push down a channel that another connection
+     opened, are not routes. Convention 1 says how each is written.
+8. **Queues and topics.** A queue is a store that one reader takes each message from. A topic
+   is a store whose every subscriber gets each message. The one that puts in and the one that
+   takes out each act on the store, as convention 1 says, and no arrow runs from a writer to
+   a reader. So a queue or a topic is never in `via`. A stream that a second reader could
+   follow is a topic, though one group reads it today.
+   - **The broker is a technology**, the `technology` of each queue and topic it carries. It
+     has no record of its own. A broker that has work of its own, such as a call it makes to
+     check a login, is an app beside its topics. A connection that manages the broker itself,
+     such as one that creates its topics, ends at that app, or at the store that holds what
+     the facts do not tell apart.
+   - A queue or a topic gets a store of its own when the facts name it and say who puts in or
+     who takes out. The other side may be unknown. Those the facts do not tell apart may be
+     one store, named for what it holds and never for the broker.
+   - A queue inside one app, such as a buffer between two of its components, is not a store.
+     It stays in the app's description.
+   - A queue kept as rows in a database is a store of its own, of kind `queue`, with the
+     database's product as its technology and the database named in its description.
+   - A queue or a topic is in the system that answers for it.
+9. **An external system.** `external: true` says that the people this model is kept for cannot
+   change the system: they use it as it is given.
+   - It follows who makes the system, not who runs it. A product of ours that a customer runs
+     is ours, and who runs a copy is said in the description.
+   - It is not "outside this picture". That is worked out from the scope of a view, and
+     nothing is stored for it.
+   - It says nothing of a part inside the system, and it is no reason to move one. Code of
+     ours that runs inside somebody else's software stays in that system where the model has
+     it there: the system is external, and the part's description or its `owner` says that
+     the part is ours.
+   - One record that stands for ours and somebody else's alike has no mark, and its
+     description says so. Split it when a connection belongs to one only.
+   - A partner the team can ask is external and may still have an `owner`.
+   - A system with no mark is not thereby ours: nobody has said.
+<!-- hard-cases:end -->
+
 ### What this format cannot say yet
 
 <!-- cannot-say-yet:start -->
 | The fact | Where it goes |
 | --- | --- |
-| That somebody outside maintains a system | Its description, and its owner when it is somebody the team can ask |
-| A queue or a topic | A store with no kind, and its description |
 | Reads or writes | The verb of the connection's name: "Reads the orders" |
-| Something in between that passes an exchange on: a proxy, a gateway, a load balancer | One connection, from the one that addresses the exchange to the one that answers it. Its description says what it passes through, in the order of travel. No connection of its own for the passing on. Routing, choosing where to send, pooling, changing the protocol, rate limits, checking the caller and ending TLS are passing on |
 | A part or a connection that is not always there | Its description says when, in ordinary words, on the narrowest record it is true of, and not again on that record's connections. In the first sentence when the part or the arrow would be misread without it |
 | A call that does not wait | The connection's description |
 | The same code in several apps | A component in the app whose inside is modelled |
 | State an app keeps inside itself, and what its components leave there for one another | The app's description, and the components'. No connection between the components for it |
-
-A thing in between gets a record when it has work of its own: it answers an exchange itself,
-such as serving a file, or starts one that nobody sent through it, such as copying data to a
-replica. That work may have connections. What it only passes on is still written end to end.
-The same holds for a component. Code of the team's own that only passes on may keep its
-record, with no connection for the passing on. What is known of a thing with no record goes
-into the description of the part it stands in front of.
 <!-- cannot-say-yet:end -->
 
 ### What to ask
@@ -202,6 +265,9 @@ Ask the person only where the answer changes what you write:
 | A part with no owner of its own, inside something that has one | Look at what it would take from above. If that would be false, say so to the person before you leave `owner` out |
 | A technology whose name could mean two things, such as a product or a practice | Which is meant? When convention 5 settles it, do not ask: make the record |
 | A connection between apps whose components are in the model | Which component, if you know? |
+| A proxy, a gateway, a load balancer, a CDN, a pooler, a relay | Is passing on its whole job? Yes: a piece of infrastructure, in `via`. No: an app with a connection for its own work, and in `via` for what it passes on |
+| A broker, a bus, a queue, a topic, a stream | Which queues or topics do the facts name? Who puts into each and who takes out? Does one reader take a message, or does every subscriber get it? |
+| A new system, or one with nothing in it and no owner | Can the people this model is kept for change it? If not, it is external |
 
 Never fill in what nobody said. No owner, technology, kind or description from your own
 guess. A record with only its required keys is a good record. A responsibility or a part's
@@ -238,8 +304,9 @@ Then wait for a yes to what you have shown. A go-ahead given before a removal, a
 open choice was shown does not cover it. When the person has said yes to exactly this, do not
 ask again.
 
-Settle the ids first. Write owners and technologies, then people and systems, then apps and
-stores, then components, then connections. Run the check after each whole batch.
+Settle the ids first. Write owners and technologies, then people, systems and infrastructure,
+then apps and stores, then components, then connections. Run the check after each whole
+batch.
 
 ## 6. Change, move, split and remove
 
@@ -259,6 +326,11 @@ stores, then components, then connections. Run the check after each whole batch.
   id. Show where each connection goes. When both parts now make an exchange, the old
   connection stays with the part that goes on, and the other part gets a new one.
 - **Merge.** The reverse: say which id goes on, and keep each exchange that is still its own.
+- **Turn an app into a piece of infrastructure**, or the other way. Move its file to the other
+  folder under the same name, so that its id stays and every record that names it still does.
+  A piece of infrastructure has no `in` and no `kind`: take them out, move or remove what was
+  inside it first, and write its `owner` on it if it took one from its system. An app needs
+  its `in`.
 - **Remove.** First run `seefore uses <id> --workdir=<folder>`. It answers in four lists: what
   goes with the thing, what must go or change, what would be left behind, and which records
   may speak of it. Show them. Say for each record what you will do: remove it, change it, or
@@ -266,13 +338,32 @@ stores, then components, then connections. Run the check after each whole batch.
   record goes, move each fact it holds that is still true into a record that stays. Wait for
   a yes, then make all of those changes together.
 
-## 7. Check it
+## 7. Lift what a description says into a field
+
+A model written before a field existed says the fact in words. When the person asks for it,
+or when you meet such words while changing a record, propose to lift them: what a connection
+passes through into `via`, a queue or a topic into `kind`, whose a system is into `external`.
+
+- Lift only from the words of the record, never from your own guess.
+- Propose one route at a time. Show the route by name, in order; each new piece of
+  infrastructure as a file; and for each connection the sentence the lift rests on, quoted,
+  and its description as it would read afterwards.
+- Show kinds and marks each as a table: the record, the value, the words it rests on, quoted.
+- The person answers each: yes, no, or yes but for these. Ask an open choice on its own:
+  infrastructure or an app, the order when the words give none.
+- Take out of a description only the words the field now says in full. A sentence that says
+  more stays whole: when a thing is on the way, what it does to this exchange. When nothing
+  is left that says anything, take the description out.
+- The summary of section 5 for a large change does not stand in for this. Every lift is
+  shown, however many there are.
+
+## 8. Check it
 
 Run `seefore check --workdir=<folder>`. Mend every error it reports in a file you wrote, and
 run it again. For a warning, say what it is and ask. Do not change a file you did not mean to
 change.
 
-## 8. Say what happened
+## 9. Say what happened
 
 Tell the person which files were written, changed and removed, in words: what was added,
 renamed, moved or removed, by name. Say what the check said. Say that nothing was committed.
