@@ -123,15 +123,23 @@ Decided:
 | A thing that only passes exchanges on | A record in `infrastructure/`, named in `via` on the connections that pass through it. A connection may also start or end at one, for what it does on its own account | 2026-11-22 |
 | A mark for somebody else's system | Stored, as `external: true` on a system, and the page says "external". It follows who makes a system, not who runs it. "Outside this picture" is still worked out from a view | 2026-11-22 |
 | What the checks of stage 6a read | The model's structure only, with no list of words. One check compares a store's name with the name of its technology | 2026-11-22 |
+| Stage 6b as one stage | One stage, as the plan had it. Its three planners asked for three; the owner kept one. The rest goes as `research/stage-6b/recommendation.md` has it | 2026-11-22 |
+| What a store is in | A system, or the app that keeps it: then it is drawn at that app. Never a store. Several stores in one server stay words | 2026-11-22 |
+| Infrastructure in a system | A piece of infrastructure may be in a system, and may be in none | 2026-11-22 |
+| Reads and writes | `access` on a connection that ends at a store. Never asked for, and no check for one that is missing | 2026-11-22 |
+| Who opens a channel | `opens: to` on a connection: the far side opened the channel. The arrow still starts at the one that sends | 2026-11-22 |
+| A condition | `only`, in free words, on every record but an owner and a technology. A thing has those of what it is in, and a connection those of its ends | 2026-11-22 |
+| A condition and `via` | A thing that has `only` may be named in `via`: it is on the way whenever it is there. This changes the answer of stage 6a, which kept such a thing in words because nothing could say when it was there | 2026-11-22 |
+| Code that several apps share | Never a component in several apps: on the trial models that states calls that do not happen. No app kind `library` | 2026-11-22 |
 
 To settle in the stage named, with the recommendation the two proposals reached:
 
 | Decision | Stage | Recommendation |
 | --- | --- | --- |
-| Whether a piece of infrastructure may be in a system | 6b | Open. It is in none, so one of ours is drawn outside our boundary: Teleport's relay, Geena's edge |
 | A route when a view is zoomed out | 7 | Open. The words on an arrow are hidden below 60 %, and the largest views open between 7 and 52 % |
-| Several stores in one server | 6b | Open. The candidate for stage 6 cut "a store in a store"; five of the eight trial systems have the case |
-| Who opens a channel, as against who sends down it | 6b | Open. At stage 4 the description says who opens it |
+| A call that does not wait | 11 | No field at stage 6b: a queue or a topic says it, and else the connection's name. Flows have asynchronous sends; ask again there |
+| Groups, code that several apps share, one program that runs as several apps | A stage of its own, before 9 | Moved out of stage 6b, and still to be planned. Tools differ on whether a thing is in one group or in several |
+| A condition as a record | When free words prove too loose | Open. At stage 6b nothing ties two records with one condition together but their spelling |
 | Layout | 7 | ELK is in use since stage 5, with no stored coordinates. Whether it holds when the model changes, and the limit for a crowded view, are proven or rejected at stage 7. Measured at stage 5: a container view of 59 to 88 boxes cannot be read when fitted to a screen |
 
 ## Status
@@ -144,7 +152,7 @@ To settle in the stage named, with the recommendation the two proposals reached:
 | 4 | Basic modelling | built and tried; the ten changes of the trial made 2026-11-22; awaits acceptance |
 | 5 | Automatic diagrams | built 2026-11-22; the trial with the owner is still to do |
 | 6a | Hard cases in a picture | built 2026-11-22; the trial with the owner is still to do |
-| 6b | Hard cases in a record | |
+| 6b | Hard cases in a record | in work |
 | 7 | Layout stability (gate) | |
 | 8 | C4 checks | |
 | 9 | Focused views | |
@@ -246,16 +254,17 @@ To settle in the stage named, with the recommendation the two proposals reached:
 
 ### 6b. Hard cases in a record
 
-- **Adds:** a condition on a part or a connection, a call that does not wait, reads and
-  writes of a store, a store that one app keeps, code that several apps share, and groups.
-  For each: one convention, one check, and guidance from the skill at the moment of
-  modelling.
+- **Adds:** a store that one app keeps, a piece of infrastructure in a system, reads and
+  writes of a store, who opened the channel a connection travels down, and a condition on a
+  part or a connection. For each: one convention, a check where a check can tell, and guidance
+  from the skill at the moment of modelling.
 - **Ends with:** the spec page of stage 6a, with these conventions and their reasons. The
   viewer shows each where a picture has room for it. The skill proposes each lift from a
   description to a person.
-- **Trial:** the real messaging, conditions, shared stores and shared code of the trial
-  systems.
-- **Leaves out:** deployment views, data models, typed shapes of deployment.
+- **Trial:** the real stores, pushes, conditions and routes of the trial systems.
+- **Leaves out:** a field for a call that does not wait, which waits for flows. Groups, code
+  that several apps share, and one program that runs as several apps: a stage of their own,
+  still to be planned. Deployment views, data models, typed shapes of deployment.
 
 ### 7. Layout stability (gate)
 

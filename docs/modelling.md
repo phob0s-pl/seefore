@@ -31,14 +31,18 @@ Nine kinds, one folder each. The ninth, `infrastructure/`, came at stage 6a (`ha
 
 ## The fields
 
-Ten names. `via` and `external` came at stage 6a.
+Thirteen names. `via` and `external` came at stage 6a, and `only`, `access` and `opens` at
+stage 6b (`hard-cases.md`).
 
 | Field | On | What it holds | Required |
 | --- | --- | --- | --- |
 | `name` | every record | What people call it. One line of 1 to 100 characters. On a connection, the few words on the arrow, starting with a verb | yes, but not on a connection |
 | `description` | every record | What it is responsible for. Text of 1 to 2,000 characters | no |
-| `in` | app, store | The id of the system it is part of | yes |
+| `in` | app | The id of the system it is part of | yes |
+| `in` | store | The id of the system it is part of, or of the app that keeps it | yes |
 | `in` | component | The id of the app it is inside | yes |
+| `in` | infrastructure | The id of the system it is part of | no |
+| `only` | every record but an owner and a technology | When the thing is there at all: the words that read after "only". One line of 1 to 100 characters | no |
 | `kind` | app | `service`, `browser`, `mobile`, `desktop`, `command`, `function`, `job` | no |
 | `kind` | store | `database`, `files`, `cache`, `index`, `queue`, `topic` | no |
 | `external` | system | `true`: the people this model is kept for cannot change the system | no |
@@ -46,6 +50,8 @@ Ten names. `via` and `external` came at stage 6a.
 | `owner` | system, app, store, component, infrastructure | The id of an owner | no |
 | `from`, `to` | connection | The id of a person, a system, an app, a store, a component or a piece of infrastructure | yes |
 | `via` | connection | What the exchange passes through, in the order of travel: a list of ids of pieces of infrastructure, apps, components or systems | no |
+| `opens` | connection that does not end at a store | `to`: the channel was opened from the far side | no |
+| `access` | connection that ends at a store | `read`, `write` or `read-write` | no |
 
 - A key that is not in this table is an error.
 - Only a name and what a thing is in are required, and on a connection only its two ends.
@@ -78,9 +84,9 @@ name: Takes the payment
 technology: [https]
 ```
 
-- The keys are written in this order, and each key starts a line: `from`, `to`, `via`, `name`,
-  `in`, `description`, `kind`, `external`, `technology`, `owner`. A record has only some of
-  them.
+- The keys are written in this order, and each key starts a line: `from`, `to`, `via`, `opens`,
+  `access`, `name`, `in`, `only`, `description`, `kind`, `external`, `technology`, `owner`. A
+  record has only some of them.
 - `technology` is a set: `[go, postgresql]` and `[postgresql, go]` say the same. `via` is not:
   its order is the order of travel.
 - A description too long for one line is a folded block. Each sentence starts a line, and
@@ -91,7 +97,7 @@ technology: [https]
 ```yaml
 description: >-
   Takes orders and says how far each has got.
-  Only in the hosted edition: see issue #5377.
+  Turns away a basket over the limit: see issue #5377.
 ```
 
 ## What must be true across records
@@ -102,14 +108,15 @@ Each of these is an error, reported at the value that is wrong.
 | --- | --- |
 | An id names one record in the whole directory, whatever the folder (stage 3) | `id-twice` |
 | `in`, `from`, `to`, `owner` and each id in `technology` and in `via` name a record that exists | `reference-unknown` |
-| `in` of an app or a store names a system, and `in` of a component an app | `reference-wrong-kind` |
+| `in` of an app names a system, `in` of a store a system or an app, `in` of a component an app, and `in` of a piece of infrastructure a system | `reference-wrong-kind` |
 | `from` and `to` name a person, a system, an app, a store, a component or a piece of infrastructure | `reference-wrong-kind` |
 | `owner` names an owner, and each id in `technology` a technology | `reference-wrong-kind` |
 | A connection that starts at a store ends at a store | `store-acts` |
 
 A record whose own file is broken still exists for the others, so one broken file does not
-make every reference to it an error. Nothing can be inside itself at this stage: an app and a
-store are in a system, and a component is in an app.
+make every reference to it an error. Nothing can be inside itself: an app is in a
+system, a store in a system or an app, a component in an app, and a piece of infrastructure in
+a system or in nothing.
 
 Two more are warnings. The model can be read, and says something the conventions call
 doubtful.
@@ -188,17 +195,17 @@ this repository fails when the two differ.
 
 ## What it cannot say yet
 
-Stage 6a gave three of the hard cases a field: what a connection passes through, a queue or a
-topic, and an external system (`hard-cases.md`). Stage 6b adds the others. Until then:
+Stages 6a and 6b gave eight of the hard cases a field (`hard-cases.md`). These are left, and
+are said in words:
 
 <!-- cannot-say-yet:start -->
 | The fact | Where it goes |
 | --- | --- |
-| Reads or writes | The verb of the connection's name: "Reads the orders" |
-| A part or a connection that is not always there | Its description says when, in ordinary words, on the narrowest record it is true of, and not again on that record's connections. In the first sentence when the part or the arrow would be misread without it |
-| A call that does not wait | The connection's description |
-| The same code in several apps | A component in the app whose inside is modelled |
-| State an app keeps inside itself, and what its components leave there for one another | The app's description, and the components'. No connection between the components for it |
+| A call that does not wait | The connection's name: "Emits audit events without waiting". A put into a queue or a topic never waits for its reader (convention 12) |
+| The same code in several apps | A component in the app whose inside is modelled. Its description names the other apps |
+| One program that runs as several apps | An app for each running part. Each description names the program |
+| Several stores in one server | Each is a store, and its description names the server (convention 10) |
+| State an app keeps inside itself, and what its components leave there for one another | The app's description, and the components'. No connection between the components for it. A store in the app only when the facts name it (convention 10) |
 <!-- cannot-say-yet:end -->
 
 ## The commands
