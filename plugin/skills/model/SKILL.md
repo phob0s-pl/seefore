@@ -94,9 +94,9 @@ How a record is written:
   read as a number or as `true`, `false` or `null`. Inside double quotes write `\"` for a
   double quote and `\\` for a backslash.
 - When `description:` and its text would pass 96 columns, write a folded block: `description:
-  >-`, and the text beneath it, indented by two spaces. Start each sentence on a new line, and
-  wrap a long sentence at a space. Nothing in a block needs quotes. A blank line starts a new
-  paragraph.
+  >-`, and the text beneath it, indented by two spaces and no more. Start each sentence on a
+  new line, and wrap a long sentence at a space, within 96 columns. Nothing in a block needs
+  quotes. A blank line starts a new paragraph.
 - Write no comments. `seefore check` refuses a file that holds one.
 
 ```yaml
@@ -112,23 +112,29 @@ These conventions are the spec's, word for word. No check can hold them, so you 
 <!-- conventions:start -->
 1. **The arrow.** A connection goes from the one that acts to the one it acts on: the one
    that makes the call, sends the message, or reads or writes the store. A reply is not a
-   connection. What the other end later sends of its own accord, such as a call back, is its
-   own act and a connection from it.
+   connection. What the other end later sends in a call of its own, such as a call back, is
+   its own act and a connection from it.
    - **A store** acts on nothing but another store. A queue, a topic and a store's feed of
      changes are stores here: the one that puts a message in and the one that takes it out
-     both act on the store, even when the platform wakes the taker. When one store copies
-     itself to another or hands on to it, the connection goes from the store it starts at.
-   - **A subscription.** Write the push, from the one that sends. Say who opens the channel
-     when the arrow could be read as the sender dialling. Write the opening as a connection
-     of its own only when it has a purpose of its own, such as an agent that registers.
+     both act on the store, even when the platform wakes the taker. This comes before the
+     rule for a subscription. Topics that the facts do not tell apart are one store. When
+     one store copies itself to another or hands on to it, the connection goes from the
+     store it starts at.
+   - **A subscription to a part that sends.** Write the push, from the one that sends. Say
+     who opens the channel when the arrow could be read as the sender dialling. Write the
+     opening as a connection of its own only when it has a purpose of its own, such as an
+     agent that registers. Opening it only to receive is said in the description of the
+     push.
    - **A redirect.** When software sends a person's browser on to another place, write it
-     from the software that chooses the place, and say that the browser carries it. Write
-     the way back only when it is stated. What the person does there, such as signing in or
-     paying, is the person's own act.
+     from the software that sends the browser on, whoever supplied the address, and say that
+     the browser carries it. A call that fetched the address is a connection of its own.
+     Write the way back only when it is stated. What the person does there, such as signing
+     in or paying, is the person's own act.
    - **Two parts that meet only in a store or a file** do not act on each other. Each has
-     its connection to the store, and there is none between them.
-   - **A connection from a thing to itself** says that one copy acts on another. Say which
-     acts on which.
+     its connection to the store, and there is none between them. When the facts name the
+     store or the file and it has no record, write one.
+   - **A connection from a thing to itself** says that one copy acts on another: two
+     instances of one part, or two people of one role. Say which acts on which.
 2. **Ours and somebody else's.** Somebody else's software that the team calls is a system
    like any other. Usually nothing is written inside it; something may be, when the team uses
    it directly, such as another team's database that it reads. Whose a system is goes in its
@@ -138,21 +144,25 @@ These conventions are the spec's, word for word. No check can hold them, so you 
    technology; one it only calls is a system of its own. What is outside a picture is worked
    out from the scope of the view, and nothing is stored for it.
 3. **One record or several.** Copies and variants are one record until their connections
-   differ: separate them when a stated connection belongs to one and not to the others. How
-   many of them run is a fact for the description. One record may stand for many of a kind,
-   with a name in the plural and the number in the description. A connection stands for one
-   exchange with one purpose: write one for each purpose, and leave its `name` out when
-   nobody said what it is for.
-4. **The level.** A connection is written at the lowest level known at each end, down to a
-   component, and counts for what its ends are in. One written higher up between the same
-   two things is a summary. Write it only when its sentence says more than the ones beneath
-   it.
+   differ: separate them when a stated connection belongs to one and not to the others.
+   Where the difference is one of condition, such as an edition, an environment or a
+   setting, keep one record and say the condition on the connection. How many of them run is
+   a fact for the description. One record may stand for many of a kind, with a name in the
+   plural and the number in the description. A connection stands for one exchange with one
+   purpose: write one for each purpose, and leave its `name` out when nobody said what it is
+   for. Two acts are one purpose when the facts state them as one step. They are two when
+   one can happen without the other.
+4. **The level.** A connection is written at the lowest level known at each end: the lowest
+   part that the facts name and the model has a record for, down to a component. It counts
+   for what its ends are in. One written higher up between the same two things is a
+   summary. Write it only when its sentence says more than the ones beneath it.
 5. **A technology** is a thing with a name that a part is built with or an exchange is
    carried in: a language, a framework, a library, a product, a protocol, a query language
    or a data format. The test: another maker would have to use it, read it or speak it. A
-   style such as REST, an algorithm, a setting of a protocol and a version are not: they go
-   in the description. A phrase that says how an exchange travels, such as "by hand" or "a
-   link in the browser", is not one either. It goes in the description of the connection.
+   style such as REST, an algorithm, a setting of a protocol and a version of a product are
+   not: they go in the description. A protocol with a number in its name, such as HTTP/2, is
+   one. A phrase that says how an exchange travels, such as "by hand" or "a link in the
+   browser", is not one. It goes in the description of the connection.
 6. **An owner** is the team, the role or the organisation that answers for what a part is,
    and that the team keeping the model can ask. Who runs a copy goes in the description. A
    role that both acts and answers is two records: a person and an owner. An owner needs a
@@ -167,15 +177,17 @@ These conventions are the spec's, word for word. No check can hold them, so you 
 | That somebody outside maintains a system | Its description, and its owner when it is somebody the team can ask |
 | A queue or a topic | A store with no kind, and its description |
 | Reads or writes | The verb of the connection's name: "Reads the orders" |
-| Something in between that passes an exchange on: a proxy, a gateway, a load balancer | One connection, from the one that addresses the exchange to the one that answers it. Its description says what it passes through, in the order of travel. No connection of its own for the passing on. Routing, rate limits, checking the caller and ending TLS are passing on |
-| A part or a connection that is not always there | Its description says when, in ordinary words, on the narrowest record it is true of. In the first sentence when the arrow cannot be understood without it |
+| Something in between that passes an exchange on: a proxy, a gateway, a load balancer | One connection, from the one that addresses the exchange to the one that answers it. Its description says what it passes through, in the order of travel. No connection of its own for the passing on. Routing, choosing where to send, pooling, changing the protocol, rate limits, checking the caller and ending TLS are passing on |
+| A part or a connection that is not always there | Its description says when, in ordinary words, on the narrowest record it is true of, and not again on that record's connections. In the first sentence when the part or the arrow would be misread without it |
 | A call that does not wait | The connection's description |
 | The same code in several apps | A component in the app whose inside is modelled |
-| State an app keeps inside itself | The app's description |
+| State an app keeps inside itself, and what its components leave there for one another | The app's description, and the components'. No connection between the components for it |
 
-A thing in between gets a record when it has work of its own, such as serving files or
-choosing a replica. That work may have connections. What it only passes on is still written
-end to end.
+A thing in between gets a record when it has work of its own: it answers an exchange itself,
+such as serving a file, or starts one that nobody sent through it, such as copying data to a
+replica. That work may have connections. What it only passes on is still written end to end.
+The same holds for a component. What is known of a thing with no record goes into the
+description of the part it stands in front of.
 <!-- cannot-say-yet:end -->
 
 ### What to ask
@@ -249,8 +261,9 @@ stores, then components, then connections. Run the check after each whole batch.
 - **Remove.** First run `seefore uses <id> --workdir=<folder>`. It answers in four lists: what
   goes with the thing, what must go or change, what would be left behind, and which records
   may speak of it. Show them. Say for each record what you will do: remove it, change it, or
-  leave it. Whether a record that is left behind goes too is the person's choice. Wait for a
-  yes, then make all of those changes together.
+  leave it. Whether a record that is left behind goes too is the person's choice. Before a
+  record goes, move each fact it holds that is still true into a record that stays. Wait for
+  a yes, then make all of those changes together.
 
 ## 7. Check it
 

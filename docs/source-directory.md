@@ -31,12 +31,13 @@ There are no other keys. The marker never names a machine, a path or a remote, s
 directory can be moved or cloned anywhere.
 
 The file is named exactly `seefore.yaml`, in lowercase, and is a file, not a link. A marker
-under another spelling, such as `seefore.yml`, still marks the folder, and is reported.
+under another spelling, such as `seefore.yml`, still marks the folder, and is reported. Where
+there is no `seefore.yaml`, the misspelt one is read in its place.
 
 The format is read first, before any other rule is applied. A directory written in a format
 this seefore does not know is refused whole. When the marker cannot say which format the
-directory is in, nothing else in it is read. Either way no record is read under the wrong
-rules.
+directory is in, nothing else in it is read: when `format` is missing, is written twice, or
+the marker is a link or cannot be read. Either way no record is read under the wrong rules.
 
 A source directory cannot sit inside another one. That is reported whichever of the two the
 check starts from, and under any spelling of the inner marker's name.
@@ -105,7 +106,8 @@ seefore --version
 `seefore check` reads the directory and reports problems.
 
 - Every problem names a file, a line and a column, and says in plain words what is wrong.
-- A broken file is reported and the rest is still read.
+- A broken file is reported and the rest is still read. A record's file that cannot be read,
+  or is not UTF-8, is still a record for the others.
 - A folder or a file that cannot be read is reported the same way.
 - A YAML file that seefore does not read is reported as a warning, so a misspelt folder does
   not hide a record.
