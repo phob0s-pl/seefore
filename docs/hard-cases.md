@@ -344,9 +344,9 @@ no check reads who may reach whose store. That is a team's rule, for stage 25; `
   `far side opened on 2 of 5`. That claims nothing of the others. The panel says it for each
   connection.
 - **`only` is a line.** On a box it stands under the kind line: `only in the hosted edition`.
-  The system a view is about has it on its boundary. On an arrow it is a line of the label:
-  the words, when every connection of the arrow has its own and they are the same, and else
-  on how many it is written: `only on 2 of 5`. A box shows its own `only`. An arrow shows that
+  The system a view is about has it on its boundary. On an arrow it is a line of the label,
+  or two: the words, when every connection of the arrow is under the same conditions, and
+  else on how many have one: `only on 2 of 5`. A box shows its own `only`. An arrow shows that
   of its connections, and what they have from a part that the view does not draw as a box of
   its own, such as a component: what a box in the view says is not said again on its arrows.
   The panel gives a thing's own, and then what it has from others, each with the record it
@@ -385,12 +385,15 @@ Since stage 6b:
   piece of infrastructure under the system it is in. A piece in no system stays under the
   heading it had. It writes `[read]`, `[write]` or `[read-write]` before a connection's name,
   `[opened by the far side]` likewise, and `(only in the hosted edition)` after the name of a
-  thing that has `only`. A heading "Conditions" lists each wording with how many records hold
-  it, sorted by its words, so two wordings of one condition stand side by side. `--json` gains
-  the three fields, and `conditions`: for each record that has any, its own and those it has
-  from others, each with the id of the record it comes from.
+  thing that has `only`. A thing on a route that has a condition stands in brackets, as in the
+  picture. A heading "Conditions" lists each wording with how many records hold it and how
+  many more have it from them, sorted by its words, so two wordings of one condition stand
+  side by side. With `--full` a record also says each condition it has from another, and
+  from which. `--json` gains the three fields, and `conditions`: for each record that has
+  any, its own and those it has from others, each with the id of the record it comes from.
 - `seefore uses <id>`: a store goes with the app that keeps it, and a piece of infrastructure
-  with the system it is in. A thing whose `only` others have from it says how many they are.
+  with the system it is in. A thing whose `only` others have from it says how many they are,
+  and that a connection which gets another end may still have the condition from there.
   `--json` has that as `condition`.
 
 ## The skill

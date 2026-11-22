@@ -530,17 +530,22 @@ function arrowOf(id: string, bundle: Bundle, frame: Frame, index: Index): ViewAr
 /**
  * When the connections of an arrow are there, given for each the words of the conditions that
  * no box of the view says: its own `only`, and those it has from a record the view does not
- * draw, such as a component inside the box at an end. The words, when every one has exactly one
- * such condition and they are the same, as the line `only in the hosted edition`; else on how
- * many have one: `only on 2 of 5`. That says nothing of the others, which may be under a
+ * draw, such as a component inside the box at an end. The words, when every one has the same
+ * such conditions, as the line `only in the hosted edition`; else on how many have one: `only on
+ * 2 of 5`. That says nothing of the others, which may be under a
  * condition that a box says. Nothing when none has one.
  */
 function onlyOf(words: readonly (readonly string[])[]): ViewOnly | undefined {
   const count = words.filter((each) => each.length > 0).length;
   if (count === 0) return undefined;
   const all = count === words.length;
-  const first = words[0]?.[0];
-  if (all && first !== undefined && words.every((each) => each.length === 1 && each[0] === first)) return { count, all, words: first, line: `only ${first}` };
+  const first = words[0];
+  // The same conditions on every connection are given in words, two of them with a semicolon
+  // between: one connection under two conditions would else read `only on 1 of 1`.
+  if (all && first !== undefined && words.every((each) => each.length === first.length && each.every((word, at) => word === first[at]))) {
+    const said = first.join('; ');
+    return { count, all, words: said, line: `only ${said}` };
+  }
   return { count, all, line: `only on ${count} of ${words.length}` };
 }
 

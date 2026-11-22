@@ -151,7 +151,7 @@ export interface ViewOnly {
   count: number;
   /** True when every connection of the arrow has one, whatever its words. */
   all: boolean;
-  /** The words, when every connection has exactly one such condition and they are the same. Missing when they differ, or when only some have one. */
+  /** The words, when every connection has the same such conditions: two of them are joined by a semicolon. Missing when they differ, or when only some have one. */
   words?: string;
   /**
    * The line its label says, whole: `only ` and the words, as in `only in the hosted edition`,

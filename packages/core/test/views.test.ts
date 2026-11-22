@@ -1292,6 +1292,14 @@ describe('a condition on an arrow that no box says', () => {
     const alone = { ...HIDDEN, 'connections/desk-keeps-records.yaml': 'from: desk\nto: browser\nname: Pings\n' };
     expect(arrow(view(alone, 'archive.containers'), 'desk~records').only).toEqual({ count: 1, all: true, words: 'when editing is licensed', line: 'only when editing is licensed' });
     expect(view(alone, 'archive.containers').legend.map((entry) => entry.key)).toContain('only');
+    // One connection under two conditions, its own and its component's, says both in words.
+    const both = { ...alone, 'connections/editor-saves-records.yaml': 'from: editor\nto: records\naccess: write\nname: Saves edits\nonly: on a working day\n' };
+    expect(arrow(view(both, 'archive.containers'), 'desk~records').only).toEqual({
+      count: 1,
+      all: true,
+      words: 'on a working day; when editing is licensed',
+      line: 'only on a working day; when editing is licensed',
+    });
   });
 
   it('gives on an arrow to an app the condition of a store it keeps, which has no box', () => {

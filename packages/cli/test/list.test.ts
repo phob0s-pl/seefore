@@ -340,16 +340,17 @@ describe('what is in what, reads and writes, who opened a channel, and condition
     // Each record is counted once, under one heading.
     expect(body(out).filter((line) => /^[A-Z]/.test(line))).toEqual([
       'People (1)',
-      'Systems with parts (2)',
+      'Systems with parts (1)',
       'An owner holds for what is beneath it until a part names its own.',
+      'Other systems (1)',
       'Infrastructure (1)',
       'Connections (6)',
       'Owners (1)',
       'Conditions (2)',
     ]);
     expect(out.split('\n').at(-1)).toBe('18 records read. No problems.');
-    expect(section(out, 'Systems with parts (2)')).toEqual([
-      'Systems with parts (2)',
+    expect(section(out, 'Systems with parts (1)')).toEqual([
+      'Systems with parts (1)',
       'An owner holds for what is beneath it until a part names its own.',
       '  archive: Archive (owner: Archive team)',
       '    app desk: Desk (service)',
@@ -358,6 +359,11 @@ describe('what is in what, reads and writes, who opened a channel, and condition
       '    app staff-browser: Staff browser (browser)',
       '    store records: Records (database)',
       '    infrastructure proxy: HTTPS proxy (2 connections pass through it)',
+    ]);
+    // A system whose pieces are only passed through has no part that a view would draw: it
+    // stands with the other systems, and its pieces beneath it.
+    expect(section(out, 'Other systems (1)')).toEqual([
+      'Other systems (1)',
       '  office: Office',
       '    infrastructure office-proxy: Office proxy (only in the head office) (1 connection passes',
       '        through it)',
