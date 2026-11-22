@@ -39,6 +39,7 @@ export function outlineOf(model: Model): Outline {
       stores: ids(parts.storesIn.get(system.id)),
     })),
     others: ids(others),
+    infrastructure: ids(model.infrastructure),
     connections: groupsOf(model, starts),
     owners: ids(model.owners),
     technologies: ids(model.technologies),

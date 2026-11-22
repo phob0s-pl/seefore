@@ -182,7 +182,7 @@ this repository fails when the two differ.
 
 ## What it cannot say yet
 
-Stage 6 adds the hard cases. Until then:
+Stages 6a and 6b add the hard cases. Until then:
 
 <!-- cannot-say-yet:start -->
 | The fact | Where it goes |
@@ -300,9 +300,9 @@ records.
 | What an arrow means | Who acts, not which way the data moves. That holds where no packet starts: at the software that chooses where a browser is sent, and at the reader of a queue or a topic |
 | Owner | A record, named by id (the owner). Optional everywhere; a person has none |
 | Technology | A record, named by id (the owner): a thing with a name. A library, a query language and a data format are; a style, an algorithm, a setting and a version are not |
-| Somebody else's system | No stored mark. Whether one is stored is settled at stage 6 |
+| Somebody else's system | No stored mark. Whether one is stored is settled at stage 6a |
 | A connection higher up | A summary, written only when it says more than the ones beneath it |
-| What sits in between, and a condition | Ordinary words in a description until stage 6, in no fixed form. Stage 6 proposes each lift to a person |
+| What sits in between, and a condition | Ordinary words in a description, in no fixed form, until stages 6a and 6b. Those stages propose each lift to a person |
 | Kinds | Short fixed lists, not required. `service` for a program that stays up |
 | Comments | None in any file seefore reads. A rule of stage 3, added at this stage |
 | A large change | The skill shows a summary and three files, not every file |
@@ -327,10 +327,11 @@ things around the format changed.
 | Some messages spoke the parser's words | They say what to do |
 | The line for a technology and for an owner was drawn in different places | Conventions 5 and 6 |
 
-Accepted as it is, for stage 6: what a connection passes through and a condition are words in
-a description; a queue or a topic is a store with no kind; a store cannot be in an app; code
-cannot be in several apps. New for stage 6, from this trial: several stores in one server; who
-opens a channel as against who sends down it; who makes a part as against who runs it.
+Accepted as it is, for stages 6a and 6b: what a connection passes through and a condition are
+words in a description; a queue or a topic is a store with no kind; a store cannot be in an app;
+code cannot be in several apps. New for those stages, from this trial: several stores in one
+server; who opens a channel as against who sends down it; who makes a part as against who runs
+it.
 
 ## Names this stage adds
 
@@ -347,8 +348,8 @@ command that could not start. `id-twice`, a problem code of stage 3, is now also
 ## Leaves out
 
 Queues and topics, what sits in between, reads and writes, calls that do not wait, conditions,
-shared code, groups and infrastructure: stage 6. Views: stages 5 and 9. Kinds of the user's
-own. Deployment. Any required depth.
+shared code, groups and infrastructure: stages 6a and 6b. Views: stages 5 and 9. Kinds of the
+user's own. Deployment. Any required depth.
 
 ## Against the research
 
@@ -408,6 +409,6 @@ Risks it takes on:
 - **Ids that meet, and ids that drift.** An id is used once in the whole directory, so an app
   called `redis` and the technology Redis cannot both have that id. The skill names an app or
   a store for what it is for. After a rename or a split an id may say an old name.
-- **Nothing typed tells ours from somebody else's.** Until stage 6 that is in descriptions.
-- **A route and a condition are words until stage 6.** In the trial about one connection in
-  seven passes through something, and one in four holds only under a condition.
+- **Nothing typed tells ours from somebody else's.** Until stage 6a that is in descriptions.
+- **A route and a condition are words until stages 6a and 6b.** In the trial about one
+  connection in seven passes through something, and one in four holds only under a condition.

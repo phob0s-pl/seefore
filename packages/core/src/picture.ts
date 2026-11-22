@@ -189,7 +189,9 @@ export interface Outline {
   withParts: OutlineSystem[];
   /** The other systems. */
   others: string[];
-  /** The connections, under what they start from, in the order the starts are listed above. */
+  /** The pieces of infrastructure: things whose job is to pass exchanges on. They are in no system. */
+  infrastructure: string[];
+  /** The connections, under what they start from, in the order the starts are listed above, then those that start at a piece of infrastructure. */
   connections: OutlineGroup[];
   owners: string[];
   technologies: string[];
