@@ -52,8 +52,11 @@ view. A view is worked out from the model and is not stored.
   line. Ours and somebody else's look alike until stage 6 decides on a stored mark.
 - **The boundary** is a dashed line with a light tint and `Name [System]` at its top left.
 - **An arrow** runs in right angles, from the one that acts, with its label on its own line.
+  One that stands for several connections is drawn thicker. A box whose copies act on one
+  another carries the mark ↻ with the number of those connections.
 - **The title** names the type and the scope: "Container view: Shop". **The legend** shows each
-  kind of box, line and mark that this view draws, and no other.
+  kind of box, line and mark that this view draws, and no other. Both stand beside the
+  picture, not over it.
 - Boxes are outlines, in a light and a dark theme. Text and lines meet the contrast rule of
   WCAG 2.2, also while the rest is faded.
 
@@ -107,7 +110,10 @@ seefore --server [--workdir=<directory>] [--port=<number>] [--no-open]
   `--no-open` is given or the output is not a terminal.
 - It watches the source directory it found when it started. If that directory goes, the page
   says so and waits for it to come back; it never moves to another one.
-- A directory that cannot be found ends with exit code 2, as for `seefore check`.
+- A directory that cannot be found ends with exit code 2, as for `seefore check`. So does a
+  command whose own page or layout file is missing: it says to install seefore again.
+- `node scripts/shoot.mjs` takes a picture of every view of a directory in a headless browser,
+  for the trial of a stage. It is not part of the installed command.
 
 ## Decisions taken at this stage
 

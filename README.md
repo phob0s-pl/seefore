@@ -33,4 +33,6 @@ To use the skills while working on them, start Claude Code with the plugin:
 claude --plugin-dir /path/to/seefore/plugin
 ```
 
-Then `/seefore:init` starts a source directory, and `seefore check` reads one.
+Then `/seefore:init` starts a source directory, `/seefore:model` writes its records, and
+`seefore check` reads it. `seefore --server` shows it in the browser: the views of each system,
+laid out by the engine, on a page that follows the files as they change.
