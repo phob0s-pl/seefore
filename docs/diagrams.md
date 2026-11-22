@@ -16,7 +16,8 @@ what it is given.
 ## The views
 
 Every system has a context view. A system that has an app or a store also has a container
-view. A view is worked out from the model and is not stored.
+view, and since stage 6b so has one that holds a piece of infrastructure with a box of its
+own (`hard-cases.md`). A view is worked out from the model and is not stored.
 
 | View | What it holds |
 | --- | --- |

@@ -143,10 +143,10 @@ this repository fails when the two differ.
      rule for a subscription. Topics that the facts do not tell apart are one store. When
      one store copies itself to another or hands on to it, the connection goes from the
      store it starts at.
-   - **A subscription to a part that sends.** Write the push, from the one that sends. Say
-     who opens the channel when the arrow could be read as the sender dialling. Write the
-     opening as a connection of its own only when it has a purpose of its own, such as an
-     agent that registers. Opening it only to receive is said in the description of the
+   - **A subscription to a part that sends.** Write the push, from the one that sends. When
+     the other side opened the channel, the push says so with `opens: to` (convention 12).
+     Write the opening as a connection of its own only when it has a purpose of its own, such
+     as an agent that registers. What kind of channel it is stays in the description of the
      push.
    - **A redirect.** When software sends a person's browser on to another place, write it
      from the software that sends the browser on, whoever supplied the address, and say that
@@ -235,7 +235,9 @@ prints the model in words, to read before the viewer exists.
   so. A record with an error in its own file is left out, and the last line says how many
   were read and how many are listed.
 - With `--json` it prints the model as data, with no text cut, and `ownership`: for each part
-  that has an owner, the owner and the record it comes from.
+  that has an owner, the owner and the record it comes from. Since stage 6b it also prints
+  `conditions`: for each record that has any, its own `only` and those it has from others,
+  each with the id of the record it comes from.
 
 ```
 seefore uses <id> [--workdir=<directory>] [--json]

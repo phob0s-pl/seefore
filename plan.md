@@ -126,7 +126,7 @@ Decided:
 | Stage 6b as one stage | One stage, as the plan had it. Its three planners asked for three; the owner kept one. The rest goes as `research/stage-6b/recommendation.md` has it | 2026-11-22 |
 | What a store is in | A system, or the app that keeps it: then it is drawn at that app. Never a store. Several stores in one server stay words | 2026-11-22 |
 | Infrastructure in a system | A piece of infrastructure may be in a system, and may be in none | 2026-11-22 |
-| Reads and writes | `access` on a connection that ends at a store. Never asked for, and no check for one that is missing | 2026-11-22 |
+| Reads and writes | `access` on a connection that ends at a store. It may always be left out: no check reports one that is missing at this stage | 2026-11-22 |
 | Who opens a channel | `opens: to` on a connection: the far side opened the channel. The arrow still starts at the one that sends | 2026-11-22 |
 | A condition | `only`, in free words, on every record but an owner and a technology. A thing has those of what it is in, and a connection those of its ends | 2026-11-22 |
 | A condition and `via` | A thing that has `only` may be named in `via`: it is on the way whenever it is there. This changes the answer of stage 6a, which kept such a thing in words because nothing could say when it was there | 2026-11-22 |

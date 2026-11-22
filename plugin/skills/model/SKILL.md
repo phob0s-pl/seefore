@@ -135,10 +135,10 @@ These conventions are the spec's, word for word. No check can hold them, so you 
      rule for a subscription. Topics that the facts do not tell apart are one store. When
      one store copies itself to another or hands on to it, the connection goes from the
      store it starts at.
-   - **A subscription to a part that sends.** Write the push, from the one that sends. Say
-     who opens the channel when the arrow could be read as the sender dialling. Write the
-     opening as a connection of its own only when it has a purpose of its own, such as an
-     agent that registers. Opening it only to receive is said in the description of the
+   - **A subscription to a part that sends.** Write the push, from the one that sends. When
+     the other side opened the channel, the push says so with `opens: to` (convention 12).
+     Write the opening as a connection of its own only when it has a purpose of its own, such
+     as an agent that registers. What kind of channel it is stays in the description of the
      push.
    - **A redirect.** When software sends a person's browser on to another place, write it
      from the software that sends the browser on, whoever supplied the address, and say that
@@ -206,7 +206,11 @@ These conventions are the spec's, word for word. No check can hold them, so you 
      through, is not named. Where the ways differ, `via` holds what they share, in order.
      Leaving something out of `via` claims nothing.
    - A way that is taken only when a condition holds, such as a fallback, may be a connection
-     of its own: its `only` says when, and its `via` holds what is on that way.
+     of its own: its `only` says when, and its `via` holds what is on that way. The other way
+     then says when it is taken too, so that nobody counts one exchange twice. Where the facts
+     do not tell the ways apart so cleanly, the order of trying stays in words.
+   - A connection has nothing from what it passes through. When the exchange itself is made
+     only where a thing on its way is there, the connection says so in its own `only`.
    - A place on the way that each install fills with a product of its own is one piece of
      infrastructure, named for the place, with the products in its description.
    - What a person works in, such as a browser or a command line, is the one that acts, and
@@ -232,7 +236,8 @@ These conventions are the spec's, word for word. No check can hold them, so you 
      who takes out. The other side may be unknown. Those the facts do not tell apart may be
      one store, named for what it holds and never for the broker.
    - A queue inside one app, such as a buffer between two of its components, is not a store.
-     It stays in the app's description.
+     It stays in the app's description. Convention 10 says when what an app keeps for itself
+     is a store in that app.
    - A queue kept as rows in a database is a store of its own, of kind `queue`, with the
      database's product as its technology and the database named in its description.
    - A queue or a topic is in the system that answers for it.
@@ -257,6 +262,11 @@ These conventions are the spec's, word for word. No check can hold them, so you 
       owner or one machine does not make a store an app's: a database server with one service
       in front of it is in the system.
     - A store that anything outside the app reaches is in the system.
+    - It must hold for every form the record stands for. A store that is a local file in one
+      install and a shared database in another is in the system, and its description says so.
+    - Work that an app keeps for itself on disk, such as its own queue of jobs, is such a
+      store when the facts name it. A queue that another app puts into or takes from is in
+      the system.
     - State inside an app stays in the app's description. It is a store in the app when the
       facts name it and say what the app's record cannot carry: a format, a size, how long it
       is kept.
@@ -272,8 +282,9 @@ These conventions are the spec's, word for word. No check can hold them, so you 
     at: `read`, `write` or `read-write`.
     - At a queue or a topic, `write` puts a message in and `read` takes one out, whatever the
       product does beneath. Claiming the oldest job is a read.
-    - A write that gets an answer back is still a write. One act that takes what is there and
-      puts something new in its place is `read-write`.
+    - A write that gets an answer back is still a write, and so is one that first looks
+      whether it may. One act that takes what is there and puts something new in its place is
+      `read-write`. The name and the description together say which.
     - A use that is neither, such as signing with a key that never leaves its store, has no
       `access`. Nor has one that nobody has said: leaving it out claims nothing.
     - **The verb stays in the name.** The name is what a person reads on the arrow, and
@@ -296,9 +307,10 @@ These conventions are the spec's, word for word. No check can hold them, so you 
     - **The test:** could a reader find the thing missing, or never used, in an install that
       runs? An edition, a kind of install, a setting, a licence, a consent, another way
       failing.
-    - **Not a condition:** when in a run an exchange happens, such as every night or on a
-      refund, which the name says. That a thing is planned, or on its way out. The bare word
-      "optional": say who chooses, or when.
+    - **Not a condition:** when in a run an exchange happens, such as every night, on a
+      refund or when a backup is restored, which the name says. A check that is made each
+      time, such as a check of rights. That a thing is planned, or on its way out. The bare
+      word "optional": say who chooses, or when.
     - "In production" may be written: it says when a part is there. It is no model of an
       environment.
     - It goes on the narrowest record it is true of as a whole.
@@ -335,10 +347,10 @@ Ask the person only where the answer changes what you write:
 | A proxy, a gateway, a load balancer, a CDN, a pooler, a relay | Is passing on its whole job? Yes: a piece of infrastructure, in `via`. No: an app with a connection for its own work, and in `via` for what it passes on |
 | A broker, a bus, a queue, a topic, a stream | Which queues or topics do the facts name? Who puts into each and who takes out? Does one reader take a message, or does every subscriber get it? |
 | A new system, or one with nothing in it and no owner | Can the people this model is kept for change it? If not, it is external |
-| An app that keeps files or a database of its own | Does anything reach them but through the app? Is it worth a record? Yes and yes: a store in the app |
+| An app that keeps files or a database of its own | Does each running copy of the app have its own? Does anything outside the app reach the data but through the app? Is it worth a record? Only for yes, no and yes is it a store in the app. Else it is a store in the system, or a sentence of the app's description |
 | A database | Is this the data or the server? The data is the store. What else is on that server goes in the description |
 | A piece of infrastructure | Is it part of one system, or does it stand outside every system? |
-| A connection to a store whose words do not say | Does it read, write or both? |
+| A connection to a store whose words do not say what it does there | Does it read, write, do both, or neither? Leave `access` out for neither, and when nobody knows |
 | Something is sent that nobody asked for just then | Which side opened the channel it goes down? |
 | A send that does not wait for an answer | Is there a queue or a topic between? Then that is a store. If not, the name says so |
 | A part or a connection the facts call optional, or tie to an edition, an install, a setting or a consent | Could a reader find it missing in an install that runs? When is it there? Offer the wordings the directory already has, from "Conditions" in `seefore list`, before you write a new one |
@@ -389,7 +401,10 @@ batch.
   file's name stay. Then show each record that may speak of the thing, those that stay and
   those that go with it, and offer to mend its text.
 - **Move.** Change `in`. What is inside the thing follows it. So may the owner: a part with no
-  `owner` of its own takes it from what it is in. Look in `ownership` of `seefore list --json`
+  `owner` of its own takes it from what it is in. And so may when it is there: a thing has the
+  `only` of what it is in, and a connection that of its ends. Look in `conditions` of
+  `seefore list --json` before and after, and say which conditions the thing, what is inside
+  it and their connections gain and lose. Look in `ownership` of `seefore list --json`
   for what the thing and the parts inside it take from above, and say whose each will be after
   the move. Write the old owner on the thing itself when the person says it stays. The same
   holds for a split.
@@ -411,6 +426,10 @@ batch.
   `seefore uses <id> --workdir=<folder>` on the store: when anything outside the app reaches
   it, it is not the app's alone, and it stays in the system (convention 10). Say what the store
   now goes with when the app is removed, and whose it is.
+- **Put a piece of infrastructure into a system**, or take it out. First run
+  `seefore uses <id> --workdir=<folder>` on the piece. A connection that names it in `via` and
+  starts or ends at that system itself would then pass through a thing inside its own end,
+  which is an error: give such a connection the part it starts or ends at first.
 - **Remove.** First run `seefore uses <id> --workdir=<folder>`. It answers in four lists: what
   goes with the thing, what must go or change, what would be left behind, and which records
   may speak of it. Show them. Say for each record what you will do: remove it, change it, or
@@ -442,15 +461,20 @@ store into `access`, who opened a channel into `opens`, and when a thing is ther
 When several kinds of fact are lifted, go in this order:
 
 - **What is in what** first, since a thing has a condition from what it is in. A store into
-  the app that keeps it and a piece of infrastructure into its system, one at a time, each
-  with its question and with what then goes with it when the app or the system goes.
+  the app that keeps it and a piece of infrastructure into its system, one at a time. Show
+  each with its question, with what then goes with it when the app or the system goes, with
+  whose it then is, and with the conditions it and its connections gain or lose. Section 6
+  says what to look at before each move.
 - **`access`** as one table for each store: who acts, the name, the value, so that the person
-  reads a store's readers and writers together. Leave out a use that is neither, and say so.
+  reads a store's readers and writers together. Take the connections that end at a store from
+  `seefore list --json`. Leave out a use that is neither, and say so.
 - **`opens`** as one table: the connection, and the words that say who opened the channel.
 - **`only`** on parts first, then on connections, so that you can show "its end says this
   already" and not write it again. One table for each wording: the record, the sentence
   quoted, the text as you would write it. Ask about a bare "optional"; never lift it as it
-  stands. Use one wording for one condition.
+  stands. Use one wording for one condition. Where a sentence says the condition and
+  something more, show it before and after: the words of the condition come out, and what
+  more it says stays.
 - Then the routes that `only` now allows: a thing that only some installs have, named in
   `via` (convention 7).
 
