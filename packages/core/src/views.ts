@@ -230,6 +230,9 @@ function sortedFor(followed: readonly Followed[], frame: Frame): Sorted {
       // An end in the system is always drawn, and so is anything that can be followed from it: the other end cannot be.
       if (from?.top === frame.scope || to?.top === frame.scope) sorted.left.broken.push(connection.id);
     } else if (start === end) {
+      // What goes on inside a box that stands outside the system in scope is not this view's to tell.
+      // A person or a system outside that acts on its own copies is itself the box, and keeps its mark.
+      if (!frame.ours.has(start) && !(connection.from === start && connection.to === start)) continue;
       // The system to itself is at its own boundary in a container view, which has no box to mark: its context view marks it.
       const marks = connection.from === connection.to ? sorted.loops : sorted.within;
       marks.set(start, [...(marks.get(start) ?? []), connection.id]);

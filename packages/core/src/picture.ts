@@ -31,9 +31,13 @@ export interface ViewBox {
   scope: boolean;
   /** True when it stands inside the boundary. */
   inside: boolean;
-  /** Connections from this record to itself, one copy acting on another: their ids, in order of id. */
+  /**
+   * Connections from a record to itself, one copy acting on another, where that record is drawn
+   * as this box: their ids, in order of id. A box outside the system in scope has only those
+   * that name the box's own record: what goes on inside it is not the view's to tell.
+   */
   loops: string[];
-  /** Connections between two parts that are both drawn as this box: their ids, in order of id. */
+  /** Connections between two different records that are both drawn as this box: their ids, in order of id. Only on a box of the system in scope. */
   within: string[];
 }
 
@@ -69,7 +73,7 @@ export interface ViewArrow {
 export interface ViewLeft {
   /** Both ends stand outside the system in scope. */
   outside: string[];
-  /** One end is in the view; the other is a record with an error in its file, or inside one. */
+  /** One end is the system in scope or inside it; the other is a record with an error in its file, or inside one. */
   broken: string[];
 }
 

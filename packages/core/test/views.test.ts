@@ -324,6 +324,32 @@ describe('what is not drawn as an arrow', () => {
   });
 });
 
+describe('a box that stands outside the system in scope', () => {
+  const files = {
+    'systems/shop.yaml': 'name: Shop\n',
+    'apps/web.yaml': 'name: Web\nin: shop\n',
+    'systems/bank.yaml': 'name: Bank\n',
+    'apps/ledger.yaml': 'name: Ledger\nin: bank\n',
+    'apps/vault.yaml': 'name: Vault\nin: bank\n',
+    'connections/web-pays.yaml': 'from: web\nto: ledger\nname: Pays\n',
+    'connections/ledger-locks.yaml': 'from: ledger\nto: vault\nname: Locks\n',
+    'connections/ledger-syncs.yaml': 'from: ledger\nto: ledger\nname: Syncs\n',
+    'connections/bank-mirrors.yaml': 'from: bank\nto: bank\nname: Mirrors\n',
+  };
+
+  it('does not carry what goes on inside it, only what names the box itself', () => {
+    const bank = view(files, 'shop.containers').boxes.find((box) => box.id === 'bank');
+    expect(bank?.within).toEqual([]);
+    expect(bank?.loops).toEqual(['bank-mirrors']);
+  });
+
+  it('carries all of it in the views where it is the system in scope', () => {
+    const bank = view(files, 'bank.context').boxes.find((box) => box.id === 'bank');
+    expect(bank?.within).toEqual(['ledger-locks']);
+    expect(bank?.loops).toEqual(['bank-mirrors', 'ledger-syncs']);
+  });
+});
+
 describe('a record with an error', () => {
   it('is not drawn, nor anything in it, and a connection between it and the view is counted on the view', () => {
     const files = {
