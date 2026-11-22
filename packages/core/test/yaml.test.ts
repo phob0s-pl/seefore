@@ -26,7 +26,7 @@ describe('reading a YAML file', () => {
 
   it('reports an empty file', () => {
     expect(only('')).toMatchObject({ code: 'yaml-empty', line: 1, column: 1, severity: 'error' });
-    expect(only('# only a comment\n').code).toBe('yaml-empty');
+    expect(only('\r\n  \n\n').code).toBe('yaml-empty');
   });
 
   it('reports YAML that cannot be parsed, at its place', () => {
@@ -156,8 +156,11 @@ describe('a comment', () => {
     expect(problems).toEqual([{ file: 'a/thing.yaml', line: 2, column: 30, severity: 'error', code: 'yaml-comment', message: cutShort }]);
   });
 
-  it('is the same after a tab as after a space', () => {
-    expect(problemsOf('name: Exporter\ndescription: Listens on port\t#9100 for scrapes.\n')).toEqual([`2:30 yaml-comment ${cutShort}`]);
+  it('is the same after a tab as after a space, and shows the comment with no space made up before it', () => {
+    expect(problemsOf('name: Exporter\ndescription: Listens on port\t#9100 for scrapes.\n')).toEqual([
+      `2:30 yaml-comment ${cutShort.replace('` #9100', '`#9100')}`,
+    ]);
+    expect(problemsOf('name: Test\t#oops\r\n')[0]).toContain('YAML reads `#oops` as a comment');
   });
 
   it('is refused where a value should be, and says the value is then empty', () => {
@@ -186,6 +189,11 @@ describe('a comment', () => {
 
   it('gives one error for each comment, and reads the file no further', () => {
     expect(placesOf('# a\nname: Thing #b\ndescription: #c\n')).toEqual(['1:1 yaml-comment', '2:13 yaml-comment', '3:14 yaml-comment']);
+  });
+
+  it('is placed at a column that counts as the yaml library counts: a character beyond the first 65,536 takes two', () => {
+    // `𐐀` is one character and two UTF-16 code units, so the `#` is the tenth character and stands at column 12.
+    expect(placesOf('name: 𐐀𐐀 #note\n')).toEqual(['1:12 yaml-comment']);
   });
 
   it('cuts a long comment short in the message', () => {
@@ -228,8 +236,10 @@ describe('a comment', () => {
     expect(placesOf('# a\nname: [unclosed\n')).toEqual(['2:7 yaml-syntax']);
   });
 
-  it('is not looked for in a file that holds only comments, which is empty', () => {
-    expect(placesOf('# only a comment\n')).toEqual(['1:1 yaml-empty']);
+  it('is refused at each `#` in a file that holds only comments, which is not called empty', () => {
+    const line = 'This line is a comment. A record holds no comments, since nothing reads them. Remove it, or say it in `description`.';
+    expect(problemsOf('\r\n  # first\r\n# second\r\n')).toEqual([`2:3 yaml-comment ${line}`, `3:1 yaml-comment ${line}`]);
+    expect(placesOf('# only a comment\n')).toEqual(['1:1 yaml-comment']);
   });
 });
 
@@ -255,7 +265,9 @@ describe('a slip in the YAML', () => {
     ['a text that starts with `*`', 'description: *star of the show\n', '2:14', `YAML reads the start of this value as something that ends before the line does. ${quoteIt}`],
     ['a text that starts with `- `', 'description: - first of all\n', '2:14', `YAML gives \`- \` a meaning at the start of a value. ${quoteIt}`],
     ['a text that starts with `? `', 'description: ? who knows\n', '2:14', `YAML gives \`? \` a meaning at the start of a value. ${quoteIt}`],
-    ['a tab that indents a key', '\tdescription: Takes orders.\n', '2:1', 'Indent this line with spaces. A tab cannot set the indent.'],
+    ['a tab before a key that belongs beside the one above', '\tdescription: Takes orders.\n', '2:1', 'Remove the tab and line `description` up with `name`.'],
+    ['a tab before a key, after a list', 'technology:\n  - go\n\tdescription: Takes orders.\n', '4:1', 'Remove the tab and line `description` up with `technology`.'],
+    ['a tab before a key under a key with no value', 'owner:\n\tteam: shop\n', '3:1', 'Indent this line with spaces. A tab cannot set the indent.'],
     ['a tab that indents a value', 'description:\n\tTakes orders.\n', '3:1', 'Indent this line with spaces. A tab cannot set the indent.'],
     ['a tab that indents a block', 'description: |\n\tTakes orders.\n', '3:1', 'Indent this line with spaces. A tab cannot set the indent.'],
     [
@@ -264,6 +276,43 @@ describe('a slip in the YAML', () => {
       '2:17',
       'In double quotes a backslash starts an escape, and `\\z` is not one YAML knows. To write a backslash, write two: `\\\\`.',
     ],
+    [
+      'a `\\u` with too few digits, at the first that is not one',
+      'description: "prefix\\u12XX"\n',
+      '2:25',
+      'After `\\u`, write four hexadecimal digits, or write the character itself. To write a backslash, write two: `\\\\`.',
+    ],
+    [
+      'a `\\x` with too few digits, at the first that is not one',
+      'description: "a\\x4"\n',
+      '2:19',
+      'After `\\x`, write two hexadecimal digits, or write the character itself. To write a backslash, write two: `\\\\`.',
+    ],
+    [
+      'a `\\U` with too few digits, at the first that is not one',
+      'description: "\\U0001F6"\n',
+      '2:23',
+      'After `\\U`, write eight hexadecimal digits, or write the character itself. To write a backslash, write two: `\\\\`.',
+    ],
+    [
+      'a `\\U` whose digits name no character',
+      'description: "\\UFFFFFFFF"\n',
+      '2:15',
+      'In double quotes `\\UFFFFFFFF` stands for no character. Write the character itself. To write a backslash, write two: `\\\\`.',
+    ],
+    [
+      'a `]` too many after a list',
+      'technology: [emoji]]\n',
+      '2:20',
+      'This `]` closes nothing. Remove it, or, if this is text, put the whole text in double quotes.',
+    ],
+    [
+      'a `}` too many after a mapping',
+      'owner: {team: a}}\n',
+      '2:17',
+      'This `}` closes nothing. Remove it, or, if this is text, put the whole text in double quotes.',
+    ],
+    ['a text that starts with `]`', 'description: ]x\n', '2:14', `This text starts with \`]\`, which YAML keeps for itself. ${quoteIt}`],
     ['a quote never closed', 'description: "Takes orders\nowner: shop-team\n', '2:14', 'This `"` is never closed. Put another `"` at the end of the text.'],
     [
       'a line indented under a key, with a colon in it',
@@ -276,6 +325,10 @@ describe('a slip in the YAML', () => {
   ])('explains %s, once, in plain words', (_what, text, place, message) => {
     const body = text.startsWith('- ') ? text : `name: Thing\n${text}`;
     expect(problemsOf(body)).toEqual([`${place} yaml-syntax ${message}`]);
+  });
+
+  it('says to take the tab off a first key, which starts its line', () => {
+    expect(problemsOf('\tname: Thing\n')).toEqual(['1:1 yaml-syntax Remove the tab, so that `name` starts the line.']);
   });
 
   it('explains each slip on its own line', () => {

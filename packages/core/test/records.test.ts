@@ -353,13 +353,27 @@ describe('`owner`', () => {
   it('never answers a sentence with an id made from its words', () => {
     expect(problemsOf('apps/thing.yaml', 'name: Thing\nin: shop\nowner: Two teams argue\n')).toEqual([
       '3:8 value-invalid `owner` holds the id of a record in `owners/`. ' +
-        'If who answers takes a sentence to say, leave `owner` out and put the sentence in the description.',
+        'If who answers takes a sentence to say, leave `owner` out and put the sentence in the description. ' +
+        'Left out, the owner is taken from what the part is in: check that this is true.',
     ]);
+  });
+
+  it('says that a part with `owner` left out takes the owner of what it is in, and a system nothing', () => {
+    const takes = 'Left out, the owner is taken from what the part is in: check that this is true.';
+    expect(problemsOf('stores/thing.yaml', 'name: Thing\nin: shop\nowner: Two teams argue\n')[0]).toContain(takes);
+    expect(problemsOf('components/thing.yaml', 'name: Thing\nin: order-api\nowner: Two teams argue\n')[0]).toContain(takes);
+    expect(problemsOf('systems/thing.yaml', 'name: Thing\nowner: Two teams argue\n')[0]).not.toContain('Left out');
   });
 
   it('answers a slip in an id with the id it was meant to be', () => {
     expect(problemsOf('systems/thing.yaml', 'name: Thing\nowner: Shop-Team\n')).toEqual([
       '2:8 value-invalid `owner` holds the id of a record in `owners/`. `Shop-Team` is not an id: an id is written in lowercase, like `shop-team`.',
+    ]);
+  });
+
+  it('never offers an id that is itself not allowed', () => {
+    expect(problemsOf('apps/thing.yaml', 'name: Thing\nin: shop\nowner: Con\n')).toEqual([
+      '3:8 value-invalid `owner` holds the id of a record in `owners/`. `Con` is not an id: an id is written in lowercase, like `order-events`.',
     ]);
   });
 });

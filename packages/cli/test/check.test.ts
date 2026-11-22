@@ -168,11 +168,74 @@ describe('seefore check', () => {
     expect(json(['check']).data.problems).toEqual([]);
   });
 
-  it('reports a file that is not UTF-8', () => {
+  it('reports a file that is not UTF-8, and says how to mend it', () => {
     write({ 'seefore.yaml': MARKER, 'things/bad.yaml': new Uint8Array([0x6e, 0x3a, 0x20, 0xff, 0xfe]) });
     const result = json(['check']);
     expect(result.code).toBe(1);
-    expect(result.data.problems).toMatchObject([{ file: 'things/bad.yaml', line: 1, column: 1, severity: 'error', code: 'not-utf8' }]);
+    // It is in a folder seefore does not read, which is said too.
+    expect(result.data.problems).toMatchObject([
+      { file: 'things/bad.yaml', line: 1, column: 1, severity: 'warning', code: 'not-read' },
+      {
+        file: 'things/bad.yaml',
+        line: 1,
+        column: 1,
+        severity: 'error',
+        code: 'not-utf8',
+        message: 'This file is not UTF-8 text, so it could not be read. Save it as UTF-8.',
+      },
+    ]);
+  });
+
+  it('keeps a record whose file is not UTF-8 for the records that name it, and for seefore uses', () => {
+    write({
+      'seefore.yaml': MARKER,
+      'apps/search.yaml': 'name: Search\nin: catalog\n',
+      'connections/find.yaml': 'from: search\nto: catalog\n',
+      'systems/catalog.yaml': new Uint8Array([0xff, 0x0a]),
+    });
+    const result = json(['check']);
+    expect(result.code).toBe(1);
+    expect(result.data.records).toBe(2);
+    expect(result.data.problems.map((problem) => `${problem.file} ${problem.code}`)).toEqual(['systems/catalog.yaml not-utf8']);
+    const uses = run(['uses', 'catalog', '--json']);
+    expect(uses.code).toBe(0);
+    expect(JSON.parse(uses.out)).toMatchObject({ record: { id: 'catalog', family: 'systems', file: 'systems/catalog.yaml' }, complete: false });
+  });
+
+  it.skipIf(process.getuid?.() === 0)('keeps a record whose file the disk would not give, and says how to mend it', () => {
+    write({ 'seefore.yaml': MARKER, 'apps/search.yaml': 'name: Search\nin: catalog\n', 'systems/catalog.yaml': 'name: Catalog\n' });
+    chmodSync(join(root, 'systems', 'catalog.yaml'), 0o000);
+    try {
+      const result = json(['check']);
+      expect(result.code).toBe(1);
+      expect(result.data.problems).toEqual([
+        { file: 'systems/catalog.yaml', line: 1, column: 1, severity: 'error', code: 'file-unreadable', message: 'This file could not be read: EACCES. Make it readable.' },
+      ]);
+    } finally {
+      chmodSync(join(root, 'systems', 'catalog.yaml'), 0o644);
+    }
+  });
+
+  it('reads no record under a marker spelt another way in a format it cannot read', () => {
+    write({ 'seefore.yml': 'format: 2\nname: Future\n', 'systems/later.yaml': 'name: Future app\n' });
+    const result = json(['check']);
+    expect(result.code).toBe(1);
+    expect(result.data).toMatchObject({ name: 'Future', format: 2, records: 0 });
+    expect(result.data.problems.map((problem) => `${problem.file}:${problem.line}:${problem.column} ${problem.code}`)).toEqual([
+      'seefore.yml:1:1 format-not-readable',
+      'seefore.yml:1:1 marker-name',
+    ]);
+    expect(JSON.parse(run(['list', '--json']).out)).toMatchObject({ systems: [] });
+  });
+
+  it('reads no record when the marker writes `format` twice', () => {
+    write({ 'seefore.yaml': 'format: 1\nformat: 2\nname: Test\n', 'systems/future.yaml': 'name: Future thing\n' });
+    const result = json(['check']);
+    expect(result.data.records).toBe(0);
+    expect(result.data.problems.map((problem) => `${problem.file}:${problem.line}:${problem.column} ${problem.code}`)).toEqual([
+      'seefore.yaml:1:1 format-unknown',
+      'seefore.yaml:2:1 yaml-key-twice',
+    ]);
   });
 
   it('does not follow links, and says so', () => {
@@ -274,15 +337,16 @@ describe('seefore check', () => {
     ]);
   });
 
-  it('takes a marker that is a link as a marker, and says it must be a file', () => {
-    write({ 'real/seefore.yaml': MARKER, 'linked/x.txt': '', 'dangling/x.txt': '' });
+  it('takes a marker that is a link as a marker, says it must be a file, and reads nothing else', () => {
+    write({ 'real/seefore.yaml': MARKER, 'linked/systems/shop.yaml': 'name: Shop\n', 'dangling/x.txt': '' });
     symlinkSync(join(root, 'real', 'seefore.yaml'), join(root, 'linked', 'seefore.yaml'));
     symlinkSync(join(root, 'nowhere.yaml'), join(root, 'dangling', 'seefore.yaml'));
     for (const folder of ['linked', 'dangling']) {
       const result = json(['check'], folder);
       expect(result.code).toBe(1);
       expect(result.data.directory).toBe(join(root, folder));
-      expect(result.data.problems.map((problem) => `${problem.file} ${problem.code}`)).toEqual(['seefore.yaml marker-link']);
+      expect(result.data.records).toBe(0);
+      expect(result.data.problems.map((problem) => `${problem.file} ${problem.code}`)).toEqual(['seefore.yaml format-unknown', 'seefore.yaml marker-link']);
     }
   });
 
@@ -398,7 +462,10 @@ describe('seefore check', () => {
     });
     const result = run(['check']);
     expect(result.code).toBe(0);
-    expect(result.out).toContain('connections/buys.yaml:1:1: warning: This connection has the same `from`, `to` and `name` as `connections/buys-again.yaml`. Keep one.');
+    expect(result.out).toContain(
+      'connections/buys.yaml:1:1: warning: This connection has the same `from`, `to` and `name` as `connections/buys-again.yaml`. ' +
+        'If these are the same exchange, keep one. If their purposes differ, give each a name that says which.',
+    );
     expect(result.out.endsWith('4 records read. 0 errors, 2 warnings.')).toBe(true);
   });
 

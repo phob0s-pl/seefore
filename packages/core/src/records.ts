@@ -76,11 +76,22 @@ const From = idIn('`from` holds the id of the one that acts: a person, a system,
 /** The one it acts on. */
 const To = idIn('`to` holds the id of the one it acts on: a person, a system, an app, a store or a component.', fileOf("that record's"));
 
-/** Who answers for a part. Who cannot be named by an id is said in the description. */
-const OwnerId = idIn(
-  '`owner` holds the id of a record in `owners/`.',
-  'If who answers takes a sentence to say, leave `owner` out and put the sentence in the description.',
-);
+/**
+ * Who answers for a part. Who cannot be named by an id is said in the description. `leftOut`
+ * says what the part has for an owner when `owner` is left out.
+ */
+function ownerId(leftOut: string) {
+  return idIn(
+    '`owner` holds the id of a record in `owners/`.',
+    `If who answers takes a sentence to say, leave \`owner\` out and put the sentence in the description.${leftOut}`,
+  );
+}
+
+/** A system is in nothing, so with no `owner` it has none. */
+const SystemOwner = ownerId('');
+
+/** An app, a store or a component with no `owner` has the owner of what it is in. */
+const PartOwner = ownerId(' Left out, the owner is taken from what the part is in: check that this is true.');
 
 /**
  * One id in `technology`. A value with a space in it is a phrase, not a slip in an id; `phrase`
@@ -143,7 +154,7 @@ export const PersonSchema = z.strictObject({
 export const SystemSchema = z.strictObject({
   name: Name,
   description: Description.optional(),
-  owner: OwnerId.optional(),
+  owner: SystemOwner.optional(),
 });
 
 /** Something that runs code, in a system. */
@@ -153,7 +164,7 @@ export const AppSchema = z.strictObject({
   description: Description.optional(),
   kind: z.enum(APP_KINDS).optional(),
   technology: PartTechnologies.optional(),
-  owner: OwnerId.optional(),
+  owner: PartOwner.optional(),
 });
 
 /** Something that holds data, in a system. */
@@ -163,7 +174,7 @@ export const StoreSchema = z.strictObject({
   description: Description.optional(),
   kind: StoreKind.optional(),
   technology: PartTechnologies.optional(),
-  owner: OwnerId.optional(),
+  owner: PartOwner.optional(),
 });
 
 /** A piece inside an app. */
@@ -172,7 +183,7 @@ export const ComponentSchema = z.strictObject({
   in: InApp,
   description: Description.optional(),
   technology: PartTechnologies.optional(),
-  owner: OwnerId.optional(),
+  owner: PartOwner.optional(),
 });
 
 /**

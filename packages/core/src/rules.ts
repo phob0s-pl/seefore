@@ -110,7 +110,10 @@ function storesActing(format: Format, records: RecordsById, references: readonly
   return problems;
 }
 
-/** Two connections with the same ends and the same name say one thing twice. */
+/**
+ * Two connections with the same ends and the same name may say one thing twice. They may also
+ * be two exchanges whose name does not yet say which is which, so neither is simply dropped.
+ */
 function connectionsTwice(connections: readonly ModelRecord<Connection>[]): Problem[] {
   const groups = new Map<string, ModelRecord<Connection>[]>();
   for (const connection of connections) {
@@ -126,7 +129,13 @@ function connectionsTwice(connections: readonly ModelRecord<Connection>[]): Prob
     for (const connection of same) {
       const others = same.filter((other) => other !== connection).map((other) => other.file);
       problems.push(
-        warning(connection.file, START, 'connection-twice', `This connection has the same \`from\`, \`to\` and \`name\` as ${list(others)}. Keep one.`),
+        warning(
+          connection.file,
+          START,
+          'connection-twice',
+          `This connection has the same \`from\`, \`to\` and \`name\` as ${list(others)}. ` +
+            'If these are the same exchange, keep one. If their purposes differ, give each a name that says which.',
+        ),
       );
     }
   }

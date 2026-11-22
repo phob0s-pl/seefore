@@ -3,7 +3,7 @@ import { CURRENT_FORMAT } from './format.ts';
 import type { Family, Format, ReferenceField } from './format.ts';
 import { idProblem, isId } from './id.ts';
 import { MARKER_FILE, readMarker } from './marker.ts';
-import type { Marker } from './marker.ts';
+import type { Marker, MarkerRead } from './marker.ts';
 import { emptyModel } from './model.ts';
 import type { Model, ModelRecord } from './model.ts';
 import { START, compareProblems, error, list, quote, warning } from './problem.ts';
@@ -18,7 +18,12 @@ import type { YamlFile } from './yaml.ts';
 export interface SourceFile {
   /** The path from the top of the source directory, with forward slashes. */
   path: string;
-  text: string;
+  /**
+   * What the file holds. Missing when the file is there but could not be read, as when it is
+   * not UTF-8 or the disk would not give it. Whoever read the disk says why; the file still
+   * counts for what its path makes it, so a record's file still stands for its record.
+   */
+  text?: string;
 }
 
 /** A file that stands for a record: directly in a family's folder, and named by a good id. */
@@ -75,7 +80,10 @@ const TEXT_FIELDS = ['name', 'description'];
 
 /** A source directory after reading: what could be read, and everything that is wrong. */
 export interface Loaded {
-  /** What `seefore.yaml` says. Missing when the marker is absent or broken. */
+  /**
+   * What the marker says: `seefore.yaml`, or a marker spelt another way where there is no
+   * `seefore.yaml`. Missing when the marker is absent or broken.
+   */
   marker?: Marker;
   /** The records whose file could be read, whatever their shape, in order of id. */
   records: SourceRecord[];
@@ -107,7 +115,11 @@ export function isMarkerName(name: string): boolean {
   return /^seefore\.ya?ml$/i.test(name);
 }
 
-/** Reads a source directory, given its YAML files as text. */
+/**
+ * Reads a source directory, given its YAML files as text. Its records are read only when the
+ * marker says, once, that they are in a format this seefore reads: else there is no telling
+ * which rules they follow.
+ */
 export function load(files: readonly SourceFile[]): Loaded {
   return loadAs(CURRENT_FORMAT, files);
 }
@@ -131,32 +143,34 @@ export function loadAs(format: Format, files: readonly SourceFile[]): Loaded {
   const families = new Map(format.families.map((family) => [family.folder, family]));
 
   const sources = files
-    .map((file) => ({ path: normalise(file.path), text: file.text }))
+    .map((file): SourceFile => ({ ...file, path: normalise(file.path) }))
     .filter((file) => isSourcePath(file.path))
     .sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
 
-  let marker: Marker | undefined;
-  const markerFile = sources.find((file) => file.path === MARKER_FILE);
-  // A marker under another spelling, such as `seefore.yml` or `SEEFORE.YAML`.
+  // A marker under another spelling, such as `seefore.yml` or `SEEFORE.YAML`, still marks the
+  // folder. It is reported, and where there is no `seefore.yaml` it is read in its place.
+  const exact = sources.find((file) => file.path === MARKER_FILE);
   const misnamed = sources.filter((file) => file.path !== MARKER_FILE && !file.path.includes('/') && isMarkerName(file.path));
   for (const file of misnamed) {
     problems.push(error(file.path, START, 'marker-name', `The marker file is named ${quote(MARKER_FILE)}, in lowercase, not ${quote(file.path)}.`));
   }
-  if (!markerFile) {
-    if (misnamed.length === 0) {
-      problems.push(error(MARKER_FILE, START, 'marker-missing', `There is no ${quote(MARKER_FILE)} here, so this is not a seefore source directory.`));
-    }
-  } else {
-    const read = readMarker(markerFile.text);
-    problems.push(...read.problems);
-    marker = read.marker;
-    if (!read.readable) {
-      if (!read.problems.some((problem) => problem.code === 'format-not-readable')) {
-        problems.push(warning(MARKER_FILE, START, 'format-unknown', 'The marker file does not say which format this directory is written in, so nothing else in it was read.'));
-      }
-      return { ...(marker ? { marker } : {}), records, unread, references: [], texts: [], model: emptyModel(), problems: problems.sort(compareProblems) };
-    }
+  const markers = exact ? [exact] : misnamed;
+  if (markers.length === 0) {
+    problems.push(error(MARKER_FILE, START, 'marker-missing', `There is no ${quote(MARKER_FILE)} here, so this is not a seefore source directory.`));
+    return nothingRead(undefined, problems);
   }
+
+  // The format comes first. Nothing else is read unless every marker says, once, that the
+  // directory is in a format this seefore reads.
+  let marker: Marker | undefined;
+  let readable = true;
+  for (const file of markers) {
+    const read = formatOf(file);
+    problems.push(...read.problems);
+    marker ??= read.marker;
+    if (!read.readable) readable = false;
+  }
+  if (!readable) return nothingRead(marker, problems);
 
   // A second marker further down, under any spelling of its name, starts a second source
   // directory. It is reported once, and what lies under it is left alone.
@@ -164,8 +178,12 @@ export function loadAs(format: Format, files: readonly SourceFile[]): Loaded {
   for (const file of sources) {
     const slash = file.path.lastIndexOf('/');
     if (slash < 0 || !isMarkerName(file.path.slice(slash + 1))) continue;
-    nested.push(file.path.slice(0, slash + 1));
-    problems.push(error(file.path, START, 'marker-nested', 'A source directory cannot sit inside another one. Remove this file, or move its folder out.'));
+    const folder = file.path.slice(0, slash);
+    nested.push(folder + '/');
+    const message = families.has(folder)
+      ? markerAmongRecords(file.path.slice(slash + 1), folder)
+      : 'A source directory cannot sit inside another one. Remove this file, or move its folder out.';
+    problems.push(error(file.path, START, 'marker-nested', message));
   }
 
   for (const file of sources) {
@@ -204,6 +222,12 @@ export function loadAs(format: Format, files: readonly SourceFile[]): Loaded {
     const wrongId = idProblem(id);
     if (wrongId) problems.push(error(file.path, START, 'id-invalid', `${wrongId} A record's id is its file's name.`));
 
+    if (file.text === undefined) {
+      // Why the file could not be read is said by whoever read the disk. It still stands for
+      // its record, so what names that record is not wrong.
+      if (!wrongId) unread.push({ id, family: folder, file: file.path });
+      continue;
+    }
     const yaml = readYaml(file.path, file.text, 'A record');
     problems.push(...yaml.problems);
     if (wrongId) continue;
@@ -258,6 +282,40 @@ export function loadAs(format: Format, files: readonly SourceFile[]): Loaded {
     model: modelOf(typed, problems),
     problems: problems.sort(compareProblems),
   };
+}
+
+/** A source directory of which nothing but the marker was read. */
+function nothingRead(marker: Marker | undefined, problems: Problem[]): Loaded {
+  return { ...(marker ? { marker } : {}), records: [], unread: [], references: [], texts: [], model: emptyModel(), problems: problems.sort(compareProblems) };
+}
+
+/**
+ * Reads a marker for the format the directory is in, and for what is wrong with it. When it
+ * leaves the format unknown, a warning on it says that nothing else was read.
+ */
+function formatOf(file: SourceFile): MarkerRead {
+  if (file.text === undefined) {
+    // Why it could not be read is said by whoever read the disk.
+    return { problems: [warning(file.path, START, 'format-unknown', 'The marker file could not be read, so nothing else in this directory was read.')], readable: false };
+  }
+  const read = readMarker(file.text, file.path);
+  if (read.readable || read.problems.some((problem) => problem.code === 'format-not-readable')) return read;
+  const unknown = warning(file.path, START, 'format-unknown', 'The marker file does not say which format this directory is written in, so nothing else in it was read.');
+  return { ...read, problems: [...read.problems, unknown] };
+}
+
+/**
+ * Why a folder of records was taken for a source directory: a file in it is named like the
+ * marker. Such a file is more likely a record whose id is `seefore` than a source directory
+ * put there, so the message gives both ways out.
+ */
+function markerAmongRecords(name: string, folder: string): string {
+  const where = quote(folder + '/');
+  return (
+    `A file named ${quote(name)} marks a source directory, so ${where} was taken for a source directory inside this one, ` +
+    `and none of its other files were read. If this file is meant as a record, give it another id: ${quote('seefore')} cannot be an id. ` +
+    `If ${where} really is a source directory, move it out of this one.`
+  );
 }
 
 /** Every id a record names in the fields its family names records in, with where it is written. */

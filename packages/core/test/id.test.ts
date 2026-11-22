@@ -28,10 +28,27 @@ describe('an id', () => {
     ['prn', 'Windows cannot hold'],
     ['com1', 'Windows cannot hold'],
     ['lpt9', 'Windows cannot hold'],
+    ['seefore', 'a file named `seefore.yaml` marks a source directory'],
     ['a'.repeat(ID_MAX + 1), 'at most 80'],
   ])('refuses %s', (id, reason) => {
     expect(idProblem(id)).toContain(reason);
     expect(isId(id)).toBe(false);
+  });
+
+  it('refuses `seefore`, and says why', () => {
+    expect(idProblem('seefore')).toBe('`seefore` cannot be an id, because a file named `seefore.yaml` marks a source directory.');
+  });
+
+  it('counts its length in characters, as every limit on text does', () => {
+    expect(idProblem('🛒'.repeat(ID_MAX + 1))).toBe(`This id has ${ID_MAX + 1} characters. An id has at most ${ID_MAX}.`);
+    // Under the limit, what is wrong is the letters it is made of.
+    expect(idProblem('🛒'.repeat(41))).toContain('is not an id. An id is lowercase letters and digits in groups joined by single hyphens');
+  });
+
+  it('never offers as an example an id that is itself not allowed', () => {
+    expect(idProblem('Con')).toBe('`Con` is not an id: an id is written in lowercase, like `order-events`.');
+    expect(idProblem('Seefore')).toBe('`Seefore` is not an id: an id is written in lowercase, like `order-events`.');
+    expect(idProblem('True')).toBe('`True` is not an id: an id is written in lowercase, like `order-events`.');
   });
 
   it('starts with the candidate in backticks, or with what the caller names it', () => {

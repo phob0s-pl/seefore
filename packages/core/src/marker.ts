@@ -29,38 +29,38 @@ export interface MarkerRead {
   marker?: Marker;
   problems: Problem[];
   /**
-   * True when the marker says the directory is in a format this seefore reads. False when
-   * the format is another one, and also when the marker cannot say which format it is. The
+   * True when the marker says, once, that the directory is in a format this seefore reads.
+   * False when the format is another one, and also when the marker cannot say which format it
+   * is, as when `format` is missing, is not a whole number or is written twice. The
    * directory's records must then be left alone: there is no telling which rules they follow.
    */
   readable: boolean;
 }
 
-/** Reads the text of `seefore.yaml`. */
-export function readMarker(text: string): MarkerRead {
-  const yaml = readYaml(MARKER_FILE, text, 'The marker file', { notesIn: null });
+/**
+ * Reads the text of the marker. `file` is the name it is read under, which every problem
+ * names: `seefore.yaml`, or the name of a marker spelt another way.
+ */
+export function readMarker(text: string, file: string = MARKER_FILE): MarkerRead {
+  const yaml = readYaml(file, text, 'The marker file', { notesIn: null });
 
   // The format comes first, before any rule of this format is applied. A directory in a
-  // format this seefore does not know is refused whole, whatever else its marker holds.
+  // format this seefore does not know is refused whole, whatever else its marker holds. A
+  // format written twice says no one format, and so is not known.
   const format = peekTop(text, 'format');
   const known = typeof format === 'number' && Number.isInteger(format) && format >= 1;
   if (known && !READABLE_VERSIONS.includes(format)) {
     const reads = READABLE_VERSIONS.map((version) => `format ${version}`).join(' and ');
     const advice = format > CURRENT_FORMAT.version ? 'Install a newer seefore to read it.' : 'This seefore no longer reads it.';
     const where = yaml.map ? keyPosition(yaml, yaml.map, 'format') : START;
-    const problem = error(
-      MARKER_FILE,
-      where,
-      'format-not-readable',
-      `This directory is written in format ${format}. This seefore reads ${reads}. ${advice}`,
-    );
+    const problem = error(file, where, 'format-not-readable', `This directory is written in format ${format}. This seefore reads ${reads}. ${advice}`);
     const name = peekTop(text, 'name');
     return { ...(typeof name === 'string' ? { marker: { format, name } } : {}), problems: [problem], readable: false };
   }
 
   if (!yaml.doc || !yaml.map) return { problems: yaml.problems, readable: known };
 
-  const { value, problems } = checkShape(MARKER_FILE, yaml, MarkerSchema, 'the marker file');
+  const { value, problems } = checkShape(file, yaml, MarkerSchema, 'the marker file');
   if (!value) return { problems, readable: known };
   return { marker: value, problems: [], readable: true };
 }

@@ -130,12 +130,7 @@ export function openSource(options: CheckOptions, io: Io, rerun: Rerun = CHECK):
 
   const read = readSourceFiles(directory);
   const loaded = load(read.files);
-  const linked = read.problems.some((problem) => problem.code === 'marker-link');
-  const problems = [
-    ...read.problems,
-    // A marker that is a link is already reported as such; "there is no marker" would mislead.
-    ...loaded.problems.filter((problem) => !(linked && problem.code === 'marker-missing')),
-  ];
+  const problems = [...read.problems, ...loaded.problems];
 
   const above = dirname(directory) === directory ? undefined : findSourceDirectory(dirname(directory));
   const outer = above && 'directory' in above ? above.directory : undefined;

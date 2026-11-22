@@ -87,6 +87,12 @@ describe('a reference that names no record', () => {
     expect(found(shop({ 'systems/shop.yaml': '' }))).toEqual(['systems/shop.yaml:1:1 error yaml-empty']);
   });
 
+  it('is not an error when the record it names has a file that could not be read at all', () => {
+    const files = shop().map((file) => (file.path === 'systems/shop.yaml' ? { path: file.path } : file));
+    expect(found(files)).toEqual([]);
+    expect(load(files).unread).toEqual([{ id: 'shop', family: 'systems', file: 'systems/shop.yaml' }]);
+  });
+
   it('is not an error when the record it names has the wrong shape', () => {
     expect(found(shop({ 'systems/shop.yaml': 'name: Shop\ncolour: blue\n' }))).toEqual(['systems/shop.yaml:2:1 error key-unknown']);
   });
@@ -226,6 +232,9 @@ describe('a store acts on nothing but another store', () => {
 });
 
 describe('two connections that say the same', () => {
+  /** What to do, said after the files: a purpose of its own is not thrown away. */
+  const either = 'If these are the same exchange, keep one. If their purposes differ, give each a name that says which.';
+
   it('are reported on each, naming the other, as a warning', () => {
     const files = shop({
       'connections/writes.yaml': 'from: checkout\nto: orders-database\nname: Writes each order\n',
@@ -238,7 +247,7 @@ describe('two connections that say the same', () => {
         column: 1,
         severity: 'warning',
         code: 'connection-twice',
-        message: 'This connection has the same `from`, `to` and `name` as `connections/writes.yaml`. Keep one.',
+        message: `This connection has the same \`from\`, \`to\` and \`name\` as \`connections/writes.yaml\`. ${either}`,
       },
       {
         file: 'connections/writes.yaml',
@@ -246,7 +255,7 @@ describe('two connections that say the same', () => {
         column: 1,
         severity: 'warning',
         code: 'connection-twice',
-        message: 'This connection has the same `from`, `to` and `name` as `connections/writes-again.yaml`. Keep one.',
+        message: `This connection has the same \`from\`, \`to\` and \`name\` as \`connections/writes-again.yaml\`. ${either}`,
       },
     ]);
   });
@@ -254,7 +263,7 @@ describe('two connections that say the same', () => {
   it('names every other one when there are more than two', () => {
     const same = 'from: checkout\nto: orders-database\nname: Writes each order\n';
     const files = shop({ 'connections/a.yaml': same, 'connections/b.yaml': same, 'connections/c.yaml': same });
-    expect(messages(files)[1]).toBe('This connection has the same `from`, `to` and `name` as `connections/a.yaml` and `connections/c.yaml`. Keep one.');
+    expect(messages(files)[1]).toBe(`This connection has the same \`from\`, \`to\` and \`name\` as \`connections/a.yaml\` and \`connections/c.yaml\`. ${either}`);
   });
 
   it('are not the same when a name differs, even in case, or when either has none', () => {

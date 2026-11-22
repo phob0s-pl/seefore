@@ -108,6 +108,20 @@ describe('the marker file', () => {
     expect(readMarker('').readable).toBe(false);
   });
 
+  it('is not readable when it writes `format` twice, even once in a format it reads', () => {
+    for (const text of ['format: 1\nformat: 2\nname: Test\n', 'format: 2\nformat: 1\nname: Test\n', 'format: 1\nformat: 1\nname: Test\n']) {
+      const read = readMarker(text);
+      expect(read.readable).toBe(false);
+      expect(read.problems.map((problem) => `${problem.line}:${problem.column} ${problem.code}`)).toEqual(['2:1 yaml-key-twice']);
+    }
+  });
+
+  it('names the file it is read under in every problem', () => {
+    const read = readMarker('format: 2\nname: Future\n', 'seefore.yml');
+    expect(read.problems.map((problem) => `${problem.file}:${problem.line}:${problem.column} ${problem.code}`)).toEqual(['seefore.yml:1:1 format-not-readable']);
+    expect(readMarker('format: 1\n', 'SEEFORE.YAML').problems.map((problem) => problem.file)).toEqual(['SEEFORE.YAML']);
+  });
+
   it('is readable when the format is known, though something else is wrong', () => {
     expect(readMarker('format: 1\n').readable).toBe(true);
     expect(readMarker('format: 1\nname: !!str Test\n').readable).toBe(true);

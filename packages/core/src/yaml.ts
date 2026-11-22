@@ -56,13 +56,21 @@ export function readYaml(file: string, text: string, what: string, options: Read
     schema: 'core',
   });
 
+  const tokens = tokensOf(source);
+  const notesIn = options.notesIn === undefined ? 'description' : options.notesIn;
+  const report = (found: readonly Mark[]): void => {
+    for (const mark of found) problems.push(error(file, atOffset(mark.offset), MARK_CODES[mark.type], markMessage(mark, what, notesIn)));
+  };
+
   if (docs.length === 0) {
-    problems.push(error(file, START, 'yaml-empty', `This file is empty. ${what} is a mapping of keys and values.`));
+    // A file of blank lines and comments holds no document. Each comment is refused where it
+    // stands, as it is anywhere else; only a file with nothing written in it is empty.
+    report(marks(tokens, []));
+    if (problems.length === 0) problems.push(error(file, START, 'yaml-empty', `This file is empty. ${what} is a mapping of keys and values.`));
     return broken();
   }
 
   const doc = docs[0] as Document;
-  const tokens = tokensOf(source);
 
   const faults: YAMLError[] = [];
   for (const fault of doc.errors) {
@@ -79,10 +87,7 @@ export function readYaml(file: string, text: string, what: string, options: Read
 
   // Directives, anchors, aliases, tags and comments are found in the text itself, so each is
   // reported exactly where it is written.
-  const notesIn = options.notesIn === undefined ? 'description' : options.notesIn;
-  for (const mark of marks(tokens, emptyValues(doc))) {
-    problems.push(error(file, atOffset(mark.offset), MARK_CODES[mark.type], markMessage(mark, what, notesIn)));
-  }
+  report(marks(tokens, emptyValues(doc)));
   if (problems.length > 0) return broken();
 
   // Anything else the parser was unsure about is a fault here: a file is read fully or not at all.
@@ -120,12 +125,15 @@ export function readYaml(file: string, text: string, what: string, options: Read
 /**
  * Reads one key at the top of a file without holding the file to seefore's rules. It is for
  * the one question that must be answered before any rule applies: which format a directory
- * is written in. Returns nothing when the text cannot be parsed or has no mapping at the top.
+ * is written in. Returns nothing when the text cannot be parsed or has no mapping at the top,
+ * and when the key is not written there exactly once: a key written twice gives no one answer.
  */
 export function peekTop(text: string, key: string): unknown {
   const docs = parseAllDocuments(text.replace(/\r(?!\n)/g, '\n'), { prettyErrors: false, version: '1.2', schema: 'core' });
   const doc = docs[0];
   if (!doc || doc.errors.some((fault) => fault.code !== 'DUPLICATE_KEY') || !isMap(doc.contents)) return undefined;
+  const written = doc.contents.items.filter((pair) => isScalar(pair.key) && pair.key.value === key);
+  if (written.length !== 1) return undefined;
   const value: unknown = doc.contents.get(key);
   return value;
 }
@@ -209,6 +217,8 @@ interface Mark {
   source: string;
   /** Only for a comment: what stands before it on its line. */
   place?: CommentPlace;
+  /** Only for a comment: true when a space stands right before its `#`, and not a tab. */
+  spaced?: boolean;
 }
 
 /** The problem code for each kind of mark. */
@@ -223,16 +233,21 @@ const MARK_CODES: Record<Mark['type'], string> = {
 /** Finds every directive, anchor, alias, tag and comment as it is written in the text. */
 function marks(tokens: readonly Token[], empties: readonly number[]): Mark[] {
   const found: Mark[] = [];
-  // The last token so far on the line that is not blank.
+  // The last token so far on the line that is not blank, and the one right before this one.
   let last: Token | undefined;
+  let previous: Token | undefined;
   for (const token of tokens) {
     const { type, offset, source } = token;
     if (type === 'directive-line') found.push({ type: 'directive', offset, source });
     else if (type === 'anchor' || type === 'alias' || type === 'tag') found.push({ type, offset, source });
-    else if (type === 'comment') found.push({ type: 'comment', offset, source, place: commentPlace(last, token, empties) });
+    else if (type === 'comment') {
+      const spaced = previous?.type === 'space' && previous.source.endsWith(' ');
+      found.push({ type: 'comment', offset, source, place: commentPlace(last, token, empties), spaced });
+    }
 
     if (endsLine(token)) last = undefined;
     else if (!isBlank(token)) last = token;
+    if (token.type !== 'flow-error-end') previous = token;
   }
   return found;
 }
@@ -285,7 +300,9 @@ function markMessage(mark: Mark, what: string, notesIn: string | null): string {
  * without a word, so a file holds none.
  */
 function commentMessage(mark: Mark, what: string, notesIn: string | null): string {
-  const lost = quote(' ' + cut(mark.source.trimEnd()));
+  // The space before the `#` is shown, since it is what makes a comment. A tab would not show
+  // between the backticks, so after one the comment is shown by itself.
+  const lost = quote((mark.spaced ? ' ' : '') + cut(mark.source.trimEnd()));
   const none = `${what.charAt(0).toLowerCase()}${what.slice(1)} holds no comments`;
   const remove = notesIn === null ? 'Remove it.' : `Remove it, or say it in ${quote(notesIn)}.`;
   const either = 'If this is part of the text, put the whole text in double quotes. If it is a note, remove it:';
@@ -352,10 +369,10 @@ function explain(fault: YAMLError, source: string, tokens: readonly Token[]): Sl
 
   switch (fault.code) {
     case 'TAB_AS_INDENT':
-      return known(tabInIndent(source, at) ?? at, TAB_INDENT);
+      return tabSlip(source, at) ?? known(at, TAB_INDENT);
     case 'BAD_INDENT': {
-      const tab = tabInIndent(source, at);
-      if (tab !== undefined) return known(tab, TAB_INDENT);
+      const tab = tabSlip(source, at);
+      if (tab) return tab;
       const opener = openerCutAt(tokens, at);
       if (opener) return known(opener.offset, unclosedBracket(opener.source));
       break;
@@ -378,17 +395,19 @@ function explain(fault: YAMLError, source: string, tokens: readonly Token[]): Sl
       if (token.type === 'block-scalar-header') return known(token.offset, reservedStart(token.source.charAt(0)));
       if (token.type === 'seq-item-ind' && before(tokens, index)?.type === 'map-value-ind') return known(token.offset, meaningAtStart('-'));
       const start = valueStart(tokens, index);
+      // A closing bracket is looked at before the start of its value: `[go]]` is a list with
+      // one bracket too many, not a text that starts with a bracket.
+      if (isCloser(token)) {
+        if (!start) return known(token.offset, reservedStart(token.source));
+        if (closesNothing(tokens, index)) return known(token.offset, extraBracket(token.source));
+      }
       if (!start || start.offset >= token.offset) break;
       if (start.type === 'block-scalar-header') return known(start.offset, reservedStart(start.source.charAt(0)));
       if (ENDS_BEFORE_THE_LINE.has(start.type)) return known(start.offset, ENDS_EARLY);
       break;
     }
     case 'BAD_DQ_ESCAPE':
-      return known(
-        at,
-        `In double quotes a backslash starts an escape, and ${quote(source.slice(at, at + 2))} is not one YAML knows. ` +
-          `To write a backslash, write two: ${quote('\\\\')}.`,
-      );
+      return badEscape(source, at);
     case 'MISSING_CHAR': {
       const opener = openerCutAt(tokens, at);
       if (opener) return known(opener.offset, unclosedBracket(opener.source));
@@ -429,6 +448,97 @@ function meaningAtStart(indicator: string): string {
 function unclosedBracket(opener: string): string {
   const closer = opener === '[' ? ']' : '}';
   return `This ${quote(opener)} is never closed. Close it with ${quote(closer)}, or, if this is text, put the whole text in double quotes.`;
+}
+
+/** For a `]` or a `}` with no bracket open for it to close. */
+function extraBracket(closer: string): string {
+  return `This ${quote(closer)} closes nothing. Remove it, or, if this is text, put the whole text in double quotes.`;
+}
+
+function isCloser(token: Token): boolean {
+  return token.type === 'flow-seq-end' || token.type === 'flow-map-end';
+}
+
+/** True when no bracket is open at the token at an index, so that a closing bracket there closes nothing. */
+function closesNothing(tokens: readonly Token[], index: number): boolean {
+  let depth = 0;
+  for (let other = 0; other < index; other++) {
+    const token = tokens[other] as Token;
+    if (token.type === 'flow-seq-start' || token.type === 'flow-map-start') depth++;
+    else if (isCloser(token) && depth > 0) depth--;
+    // Where the lexer cuts a list or a mapping off, every bracket open there ends.
+    else if (token.type === 'flow-error-end') depth = 0;
+  }
+  return depth === 0;
+}
+
+/** The escapes that write a character by its code, with how many hexadecimal digits each takes. */
+const CODE_ESCAPES: Readonly<Record<string, { digits: number; words: string }>> = {
+  x: { digits: 2, words: 'two' },
+  u: { digits: 4, words: 'four' },
+  U: { digits: 8, words: 'eight' },
+};
+
+/**
+ * A backslash in double quotes that starts no escape YAML reads. An escape that writes a
+ * character by its code is pointed at the first character that is not one of its digits.
+ */
+function badEscape(source: string, at: number): Slip {
+  const escape = source.slice(at, at + 2);
+  const backslash = `To write a backslash, write two: ${quote('\\\\')}.`;
+  const code = CODE_ESCAPES[source.charAt(at + 1)];
+  if (!code) {
+    return { offset: at, message: `In double quotes a backslash starts an escape, and ${quote(escape)} is not one YAML knows. ${backslash}`, known: true };
+  }
+  for (let offset = at + 2; offset < at + 2 + code.digits; offset++) {
+    if (!/[0-9A-Fa-f]/.test(source.charAt(offset))) {
+      return { offset, message: `After ${quote(escape)}, write ${code.words} hexadecimal digits, or write the character itself. ${backslash}`, known: true };
+    }
+  }
+  const whole = source.slice(at, at + 2 + code.digits);
+  return { offset: at, message: `In double quotes ${quote(whole)} stands for no character. Write the character itself. ${backslash}`, known: true };
+}
+
+/**
+ * A tab in the indent of a line. Where the line holds a key that belongs beside a key above it,
+ * spaces in place of the tab could put the key inside the value above, so the writer is told
+ * which key to line it up with. A key under a key whose value is below it, and a line that is
+ * not a key, are indented with spaces.
+ */
+function tabSlip(source: string, at: number): Slip | undefined {
+  const tab = tabInIndent(source, at);
+  if (tab === undefined) return undefined;
+  const key = keyOf(lineAt(source, tab));
+  const above = linesAbove(source, tab);
+  if (key === undefined || /:\s*$/.test(above[0] ?? '')) return { offset: tab, message: TAB_INDENT, known: true };
+  const beside = above.filter((line) => !/^ *\t/.test(line)).map(keyOf).find((found) => found !== undefined);
+  const message =
+    beside === undefined ? `Remove the tab, so that ${quote(key)} starts the line.` : `Remove the tab and line ${quote(key)} up with ${quote(beside)}.`;
+  return { offset: tab, message, known: true };
+}
+
+/** The key a line starts with, after its indent, when it starts with one written plainly. */
+function keyOf(line: string): string | undefined {
+  return /^[ \t]*([^\s#:'"[\]{},&*!|>%@`?-][^:#]*?)[ \t]*:(?:[ \t]|$)/.exec(line)?.[1];
+}
+
+/** The line that holds an offset, without what ends it. */
+function lineAt(source: string, offset: number): string {
+  const start = source.lastIndexOf('\n', offset - 1) + 1;
+  const end = source.indexOf('\n', offset);
+  return source.slice(start, end < 0 ? source.length : end).replace(/\r$/, '');
+}
+
+/** The lines above the one that holds an offset, nearest first, leaving out blank lines and comments. */
+function linesAbove(source: string, offset: number): string[] {
+  const start = source.lastIndexOf('\n', offset - 1) + 1;
+  if (start === 0) return [];
+  return source
+    .slice(0, start - 1)
+    .split('\n')
+    .map((line) => line.replace(/\r$/, ''))
+    .filter((line) => line.trim() !== '' && !line.trim().startsWith('#'))
+    .reverse();
 }
 
 /** The index of the token that holds an offset: the last one that starts at or before it. */
