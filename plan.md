@@ -109,15 +109,23 @@ Decided:
 | The word for C4's "relationship" | "Connection" | 2026-11-22 |
 | The format of stage 4 | Eight kinds of record: person, system, app, store, component, connection, owner, technology. Eight field names: `name`, `description`, `in`, `kind`, `technology`, `owner`, `from`, `to` | 2026-11-22 |
 | Owner | A record, named by id. It may be left out everywhere, so who answers for a part can be said later. A person has none | 2026-11-22 |
-| Technology | A record, named by id: a language, a framework, a product or a protocol with a name | 2026-11-22 |
+| Technology | A record, named by id: a thing with a name that a part is built with or an exchange is carried in. A library, a query language and a data format are one; a style such as REST, an algorithm, a setting of a protocol and a version are not | 2026-11-22 |
 | Somebody else's system | No stored mark at stage 4. Its description says whose it is. Whether a mark is stored is settled at stage 6 | 2026-11-22 |
 | A connection one level up | A summary of the ones beneath it, written only when it says more than they do | 2026-11-22 |
+| Comments in a file | None. A comment in any file seefore reads is an error. This adds one refusal to the YAML rules of stage 3, after the trial of stage 4 lost text at a space and `#` | 2026-11-22 |
+| Where an arrow starts | At the one that acts, also where no packet starts there: at the software that chooses where a browser is sent, and at the reader of a queue or a topic | 2026-11-22 |
+| What a connection is | One exchange with one purpose. It keeps its id and its file when another part takes the exchange over | 2026-11-22 |
+| What sits in between, and a condition | Ordinary words in a description until stage 6, in no fixed form. Stage 6 proposes each lift to a person; no script lifts them unread | 2026-11-22 |
+| Showing a large change | For more than twenty files the skill shows the count for each folder, a line for each record and three files in full | 2026-11-22 |
 
 To settle in the stage named, with the recommendation the two proposals reached:
 
 | Decision | Stage | Recommendation |
 | --- | --- | --- |
 | A stored mark for somebody else's system | 6 | Open: `external` on a system, or nothing stored and the description says whose it is |
+| Several stores in one server | 6 | Open. The candidate for stage 6 cut "a store in a store"; five of the eight trial systems have the case |
+| Who opens a channel, as against who sends down it | 6 | Open. At stage 4 the description says who opens it |
+| Who makes a part, as against who runs it | 6 | Open. It bears on the stored mark above: four trial systems have a case that a yes or no would not settle |
 | Layout | 5, 7 | ELK, which runs in Node and in the browser. No stored coordinates; hints written by the skill. Proven or rejected at stage 7 |
 
 ## Status
@@ -127,7 +135,7 @@ To settle in the stage named, with the recommendation the two proposals reached:
 | 1 | Baseline research | done |
 | 2 | Trial systems | done, accepted 2026-11-21 |
 | 3 | Source directory | done, accepted 2026-11-21 |
-| 4 | Basic modelling | in work; the format accepted 2026-11-22 |
+| 4 | Basic modelling | built and tried; the ten changes of the trial made 2026-11-22; awaits acceptance |
 | 5 | Automatic diagrams | |
 | 6 | Hard cases | |
 | 7 | Layout stability (gate) | |
@@ -192,10 +200,10 @@ To settle in the stage named, with the recommendation the two proposals reached:
   person has no owner, and who answers for a part may be said later. One convention says what
   an arrow's direction means.
 - **Ends with:** checks that ids are unique, parents exist and are of the right kind, nothing
-  contains itself, every reference resolves, and a connection is not written again one level
-  up in the same words. A modelling skill that adds, changes, renames, moves and removes, and
-  shows what a removal would break. A plain listing of the model to read before the viewer
-  exists.
+  contains itself, every reference resolves, and a connection is not written again higher up
+  in the same words. A modelling skill that adds, changes, renames, moves, splits and removes,
+  and shows what a removal would break and leave behind. A plain listing of the model to read
+  before the viewer exists.
 - **Trial:** a first slice of each trial system: its people, the systems around it, its apps
   and stores, and the components of one app.
 - **Leaves out:** custom kinds, queues and the other hard cases, views, deployment, any

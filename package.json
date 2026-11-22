@@ -12,7 +12,8 @@
     "typecheck": "tsc -p packages/core && tsc -p packages/cli",
     "test": "vitest run",
     "build": "npm run build --workspace seefore",
-    "check": "npm run typecheck && npm run build && npm run test",
+    "check": "node scripts/sync-skill.mjs --check && npm run typecheck && npm run build && npm run test",
+    "sync:skill": "node scripts/sync-skill.mjs",
     "install:local": "npm run build && node scripts/install-local.mjs"
   },
   "devDependencies": {

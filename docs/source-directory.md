@@ -68,6 +68,11 @@ that start with `%`), so a file cannot change what its own values mean. No ancho
 or tags. No key twice in one mapping. A line may end in a line feed, a carriage return, or
 both.
 
+No comments. Nothing reads a comment, so what one says is lost to every tool. And in YAML a
+`#` after a space starts one, which cuts a value short without a word: `port #9100` is read as
+`port`. A comment is an error, wherever it stands. This rule was added at stage 4, whose trial
+lost text that way.
+
 A record's file ends in `.yaml`, in lowercase.
 
 ## Finding the directory
@@ -145,7 +150,7 @@ Every problem has a code. A code keeps its meaning from one version to the next.
 | --- | --- |
 | The marker | `marker-missing`, `marker-name`, `marker-link`, `marker-nested`, `format-not-readable`, `format-unknown` |
 | What a file may hold | `key-missing`, `key-unknown`, `value-wrong-kind`, `value-too-small`, `value-too-big`, `value-not-allowed`, `value-invalid` |
-| YAML | `yaml-empty`, `yaml-syntax`, `yaml-key-twice`, `yaml-many-documents`, `yaml-not-mapping`, `yaml-key-not-text`, `yaml-directive`, `yaml-anchor`, `yaml-alias`, `yaml-tag` |
+| YAML | `yaml-empty`, `yaml-syntax`, `yaml-key-twice`, `yaml-many-documents`, `yaml-not-mapping`, `yaml-key-not-text`, `yaml-directive`, `yaml-anchor`, `yaml-alias`, `yaml-tag`, `yaml-comment` |
 | Records | `id-invalid`, `id-twice`, `record-nested`, `record-extension` |
 | Reading the disk | `not-read`, `link-not-followed`, `not-utf8`, `file-unreadable`, `folder-unreadable` |
 
