@@ -69,7 +69,13 @@ Three more, after the six of `modelling.md`. The skill carries them word for wor
    - **`via` holds what is on the way every time this exchange is made.** A thing that is
      there only in some installs, or only when another way fails, stays in the description.
      Where the ways differ, `via` holds what they share, in order. Leaving something out of
-     `via` claims nothing. A second route with a reason of its own is a second connection.
+     `via` claims nothing.
+   - A way that is taken only when a condition holds, such as a fallback, may be a connection
+     of its own: its name says when, and its `via` holds what is on that way.
+   - A place on the way that each install fills with a product of its own is one piece of
+     infrastructure, named for the place, with the products in its description.
+   - What a person works in, such as a browser or a command line, is the one that acts, and
+     not something on the way.
    - What a piece of infrastructure passes on is never written as one connection to it and
      another from it: that is one connection, with the piece in `via`.
    - `via` names a piece of infrastructure, an app, a component or a system. Never a store.
@@ -79,10 +85,13 @@ Three more, after the six of `modelling.md`. The skill carries them word for wor
 8. **Queues and topics.** A queue is a store that one reader takes each message from. A topic
    is a store whose every subscriber gets each message. The one that puts in and the one that
    takes out each act on the store, as convention 1 says, and no arrow runs from a writer to
-   a reader. So a queue or a topic is never in `via`.
+   a reader. So a queue or a topic is never in `via`. A stream that a second reader could
+   follow is a topic, though one group reads it today.
    - **The broker is a technology**, the `technology` of each queue and topic it carries. It
      has no record of its own. A broker that has work of its own, such as a call it makes to
-     check a login, is an app beside its topics.
+     check a login, is an app beside its topics. A connection that manages the broker itself,
+     such as one that creates its topics, ends at that app, or at the store that holds what
+     the facts do not tell apart.
    - A queue or a topic gets a store of its own when the facts name it and say who puts in or
      who takes out. The other side may be unknown. Those the facts do not tell apart may be
      one store, named for what it holds and never for the broker.

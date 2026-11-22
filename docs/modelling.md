@@ -203,7 +203,7 @@ topic, and an external system (`hard-cases.md`). Stage 6b adds the others. Until
 
 ## The commands
 
-`seefore check` now reads the eight folders and reports the problems above, each with its
+`seefore check` reads the nine folders and reports the problems above, each with its
 file, line and column. Nothing about how it is called has changed.
 
 ```

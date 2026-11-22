@@ -195,7 +195,13 @@ These conventions are the spec's, word for word. No check can hold them, so you 
    - **`via` holds what is on the way every time this exchange is made.** A thing that is
      there only in some installs, or only when another way fails, stays in the description.
      Where the ways differ, `via` holds what they share, in order. Leaving something out of
-     `via` claims nothing. A second route with a reason of its own is a second connection.
+     `via` claims nothing.
+   - A way that is taken only when a condition holds, such as a fallback, may be a connection
+     of its own: its name says when, and its `via` holds what is on that way.
+   - A place on the way that each install fills with a product of its own is one piece of
+     infrastructure, named for the place, with the products in its description.
+   - What a person works in, such as a browser or a command line, is the one that acts, and
+     not something on the way.
    - What a piece of infrastructure passes on is never written as one connection to it and
      another from it: that is one connection, with the piece in `via`.
    - `via` names a piece of infrastructure, an app, a component or a system. Never a store.
@@ -205,10 +211,13 @@ These conventions are the spec's, word for word. No check can hold them, so you 
 8. **Queues and topics.** A queue is a store that one reader takes each message from. A topic
    is a store whose every subscriber gets each message. The one that puts in and the one that
    takes out each act on the store, as convention 1 says, and no arrow runs from a writer to
-   a reader. So a queue or a topic is never in `via`.
+   a reader. So a queue or a topic is never in `via`. A stream that a second reader could
+   follow is a topic, though one group reads it today.
    - **The broker is a technology**, the `technology` of each queue and topic it carries. It
      has no record of its own. A broker that has work of its own, such as a call it makes to
-     check a login, is an app beside its topics.
+     check a login, is an app beside its topics. A connection that manages the broker itself,
+     such as one that creates its topics, ends at that app, or at the store that holds what
+     the facts do not tell apart.
    - A queue or a topic gets a store of its own when the facts name it and say who puts in or
      who takes out. The other side may be unknown. Those the facts do not tell apart may be
      one store, named for what it holds and never for the broker.
@@ -317,6 +326,11 @@ batch.
   id. Show where each connection goes. When both parts now make an exchange, the old
   connection stays with the part that goes on, and the other part gets a new one.
 - **Merge.** The reverse: say which id goes on, and keep each exchange that is still its own.
+- **Turn an app into a piece of infrastructure**, or the other way. Move its file to the other
+  folder under the same name, so that its id stays and every record that names it still does.
+  A piece of infrastructure has no `in` and no `kind`: take them out, move or remove what was
+  inside it first, and write its `owner` on it if it took one from its system. An app needs
+  its `in`.
 - **Remove.** First run `seefore uses <id> --workdir=<folder>`. It answers in four lists: what
   goes with the thing, what must go or change, what would be left behind, and which records
   may speak of it. Show them. Say for each record what you will do: remove it, change it, or
@@ -338,7 +352,8 @@ passes through into `via`, a queue or a topic into `kind`, whose a system is int
 - The person answers each: yes, no, or yes but for these. Ask an open choice on its own:
   infrastructure or an app, the order when the words give none.
 - Take out of a description only the words the field now says in full. A sentence that says
-  more stays whole: when a thing is on the way, what it does to this exchange.
+  more stays whole: when a thing is on the way, what it does to this exchange. When nothing
+  is left that says anything, take the description out.
 - The summary of section 5 for a large change does not stand in for this. Every lift is
   shown, however many there are.
 
