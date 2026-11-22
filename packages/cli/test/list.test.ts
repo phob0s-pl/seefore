@@ -305,6 +305,162 @@ describe('what a connection passes through, and whose a system is', () => {
   });
 });
 
+describe('what is in what, reads and writes, who opened a channel, and conditions', () => {
+  /**
+   * An archive whose Desk keeps its drafts, with a proxy that is part of the archive, an office
+   * proxy that is part of the office and there only in the head office, and a CDN in no system.
+   */
+  const DESK: Readonly<Record<string, string>> = {
+    'seefore.yaml': MARKER,
+    'people/staff.yaml': 'name: Staff\nonly: in the head office\n',
+    'systems/archive.yaml': 'name: Archive\nowner: archive-team\n',
+    'systems/office.yaml': 'name: Office\n',
+    'apps/desk.yaml': 'name: Desk\nin: archive\nkind: service\n',
+    'apps/staff-browser.yaml': 'name: Staff browser\nin: archive\nkind: browser\n',
+    'components/editor.yaml': 'name: Editor\nin: desk\n',
+    'stores/drafts.yaml': 'name: Drafts\nin: desk\ndescription: Edits that are not yet saved, in a file beside Desk.\nkind: files\n',
+    'stores/records.yaml': 'name: Records\nin: archive\nkind: database\n',
+    'infrastructure/proxy.yaml': 'name: HTTPS proxy\nin: archive\n',
+    'infrastructure/office-proxy.yaml': 'name: Office proxy\nin: office\nonly: in the head office\n',
+    'infrastructure/cdn.yaml': 'name: CDN\n',
+    'connections/staff-browser-asks-desk.yaml': 'from: staff-browser\nto: desk\nvia: [proxy]\nname: Asks for pages\n',
+    'connections/desk-keeps-drafts.yaml': 'from: desk\nto: drafts\naccess: read-write\nname: Keeps edits not yet saved\n',
+    'connections/editor-reads-drafts.yaml': 'from: editor\nto: drafts\naccess: read\n',
+    'connections/desk-saves-records.yaml': 'from: desk\nto: records\naccess: write\nname: Saves each record\n',
+    'connections/desk-tells-browser.yaml': 'from: desk\nto: staff-browser\nvia: [proxy, office-proxy]\nopens: to\nname: Says a job is done\nonly: with jobs in the background\n',
+    'connections/staff-edits.yaml': 'from: staff\nto: staff-browser\nname: Edits records\n',
+    'owners/archive-team.yaml': 'name: Archive team\n',
+  };
+
+  it('puts a store under the app that keeps it, after its components, and a piece of infrastructure under its system', () => {
+    write(DESK);
+    const out = run(['list']).out;
+    expect(run(['check']).code).toBe(0);
+    // Each record is counted once, under one heading.
+    expect(body(out).filter((line) => /^[A-Z]/.test(line))).toEqual([
+      'People (1)',
+      'Systems with parts (2)',
+      'An owner holds for what is beneath it until a part names its own.',
+      'Infrastructure (1)',
+      'Connections (6)',
+      'Owners (1)',
+      'Conditions (2)',
+    ]);
+    expect(out.split('\n').at(-1)).toBe('18 records read. No problems.');
+    expect(section(out, 'Systems with parts (2)')).toEqual([
+      'Systems with parts (2)',
+      'An owner holds for what is beneath it until a part names its own.',
+      '  archive: Archive (owner: Archive team)',
+      '    app desk: Desk (service)',
+      '      component editor: Editor',
+      '      store drafts: Drafts (files) - Edits that are not yet saved, in a file beside Desk.',
+      '    app staff-browser: Staff browser (browser)',
+      '    store records: Records (database)',
+      '    infrastructure proxy: HTTPS proxy (2 connections pass through it)',
+      '  office: Office',
+      '    infrastructure office-proxy: Office proxy (only in the head office) (1 connection passes',
+      '        through it)',
+    ]);
+    // A piece in no system stays under the heading it had.
+    expect(section(out, 'Infrastructure (1)')).toEqual(['Infrastructure (1)', '  cdn: CDN (no connection passes through it)']);
+  });
+
+  it('writes what a connection does to a store, and that the far side opened its channel, before its name, and a condition after a name', () => {
+    write(DESK);
+    const out = run(['list']).out;
+    expect(section(out, 'People (1)')).toEqual(['People (1)', '  staff: Staff (only in the head office)']);
+    expect(section(out, 'Connections (6)')).toEqual([
+      'Connections (6)',
+      '  from Staff (person staff)',
+      '    staff-edits: -> Staff browser: Edits records',
+      '  from Desk (app desk)',
+      '    desk-keeps-drafts: -> Drafts: [read-write] Keeps edits not yet saved',
+      '    desk-saves-records: -> Records: [write] Saves each record',
+      '    desk-tells-browser: -> Staff browser, via HTTPS proxy, (Office proxy):',
+      '        [opened by the far side] Says a job is done (only with jobs in the background)',
+      '    editor-reads-drafts: Editor -> Drafts: [read]',
+      '  from Staff browser (app staff-browser)',
+      '    staff-browser-asks-desk: -> Desk, via HTTPS proxy: Asks for pages',
+    ]);
+  });
+
+  it('lists each wording of a condition once, with how many records hold it, most first', () => {
+    write({
+      ...DESK,
+      'apps/staff-browser.yaml': 'name: Staff browser\nin: archive\nkind: browser\nonly: In the head office\n',
+      'components/editor.yaml': 'name: Editor\nin: desk\nonly: with jobs in the background\n',
+      'stores/records.yaml': 'name: Records\nin: archive\nkind: database\nonly: in the head office\n',
+    });
+    expect(section(run(['list']).out, 'Conditions (3)')).toEqual([
+      'Conditions (3)',
+      '  only in the head office (3 records)',
+      '  only with jobs in the background (2 records)',
+      '  only In the head office (1 record)',
+    ]);
+    // Two wordings that one record each holds stand in order of their words, in any case.
+    write({ 'apps/desk.yaml': 'name: Desk\nin: archive\nkind: service\nonly: in the hosted edition\n' });
+    expect(section(run(['list']).out, 'Conditions (4)').slice(3)).toEqual(['  only In the head office (1 record)', '  only in the hosted edition (1 record)']);
+  });
+
+  it('has no heading for conditions when no record has `only`', () => {
+    write(PARTS);
+    expect(run(['list']).out).not.toContain('Conditions');
+    expect(run(['list']).out).not.toContain('only');
+  });
+
+  it('puts a kept store of an app with an error, and a piece in a system with an error, under the last heading, and a loose app with what it keeps', () => {
+    write({ ...DESK, 'apps/desk.yaml': 'name: [Desk\n', 'systems/office.yaml': 'name: [Office\n' });
+    const result = run(['list']);
+    expect(section(result.out, 'Parts in a record with an error (3)')).toEqual([
+      'Parts in a record with an error (3)',
+      '  store drafts: Drafts (in: desk; files) - Edits that are not yet saved, in a file beside Desk.',
+      '  component editor: Editor (in: desk)',
+      '  infrastructure office-proxy: Office proxy (only in the head office) (in: office; 1 connection',
+      '      passes through it)',
+    ]);
+    write({ ...DESK, 'systems/archive.yaml': 'name: [Archive\n' });
+    const loose = section(run(['list']).out, 'Parts in a record with an error (6)');
+    expect(loose.slice(0, 5)).toEqual([
+      'Parts in a record with an error (6)',
+      '  app desk: Desk (in: archive; service)',
+      '    component editor: Editor',
+      '    store drafts: Drafts (files) - Edits that are not yet saved, in a file beside Desk.',
+      '  app staff-browser: Staff browser (in: archive; browser)',
+    ]);
+  });
+
+  it('gives in the data the three fields, `in` of a kept store and of a piece, and the conditions each record has from others', () => {
+    write({ ...DESK, 'systems/office.yaml': 'name: Office\nonly: in the head office edition\n' });
+    const data = JSON.parse(run(['list', '--json']).out) as ListResult;
+    expect(data.stores.find((store) => store.id === 'drafts')).toMatchObject({ in: 'desk' });
+    expect(data.infrastructure.find((piece) => piece.id === 'office-proxy')).toEqual({
+      id: 'office-proxy',
+      file: 'infrastructure/office-proxy.yaml',
+      name: 'Office proxy',
+      in: 'office',
+      only: 'in the head office',
+    });
+    expect(data.connections.find((connection) => connection.id === 'desk-tells-browser')).toEqual({
+      id: 'desk-tells-browser',
+      file: 'connections/desk-tells-browser.yaml',
+      from: 'desk',
+      to: 'staff-browser',
+      via: ['proxy', 'office-proxy'],
+      opens: 'to',
+      name: 'Says a job is done',
+      only: 'with jobs in the background',
+    });
+    expect(data.connections.find((connection) => connection.id === 'desk-keeps-drafts')).toMatchObject({ access: 'read-write' });
+    expect(data.conditions).toEqual({
+      'office-proxy': [{ only: 'in the head office edition', from: 'office' }],
+      'staff-edits': [{ only: 'in the head office', from: 'staff' }],
+    });
+    expect(data.ownership['drafts']).toEqual({ owner: 'archive-team', from: 'archive' });
+    expect(data.ownership['proxy']).toEqual({ owner: 'archive-team', from: 'archive' });
+    expect(Object.keys(data.ownership)).not.toContain('cdn');
+  });
+});
+
 describe('a description', () => {
   it('shows its whole first sentence, by the rules of the platform', () => {
     expect(firstSentence('Takes orders. Says how far each has got.')).toBe('Takes orders.');

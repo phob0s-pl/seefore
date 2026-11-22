@@ -630,7 +630,7 @@ describe('an app or a system that only passes exchanges on', () => {
   const saw = (n: string, noun: string): string =>
     `${n} this ${noun} in \`via\`, and no connection starts or ends at it or at anything in it. ` +
     `Does passing exchanges on account for everything this ${noun} does? If so, it is a piece of infrastructure, a record in \`infrastructure/\`, ` +
-    'which is in nothing and holds nothing.';
+    'which holds nothing.';
   const ends = 'If it has work of its own, a connection for that work ends the warning.';
 
   /** The shop with a system that one connection passes through, as written here, and an app in it. */
@@ -641,7 +641,7 @@ describe('an app or a system that only passes exchanges on', () => {
       'connections/customer-buys.yaml': 'from: customer\nto: storefront\nvia: [edge]\n',
     });
 
-  it('is a warning on the app, which says what it saw, asks, and says that it would lose the owner of what it is in', () => {
+  it('is a warning on the app, which says what it saw, asks, and says that it may keep its `in`, since a piece may be in a system', () => {
     expect(load(shop(GATEWAY)).problems).toEqual([
       {
         file: 'apps/gateway.yaml',
@@ -649,11 +649,26 @@ describe('an app or a system that only passes exchanges on', () => {
         column: 1,
         severity: 'warning',
         code: 'passes-on-only',
-        message: `${saw('2 connections name', 'app')} There it no longer takes the owner of \`shop\`. ${ends}`,
+        message: `${saw('2 connections name', 'app')} It may keep \`in: shop\` there. ${ends}`,
       },
     ]);
-    // An owner of its own goes with it, since a piece of infrastructure may have one.
-    expect(messages(shop({ ...GATEWAY, 'apps/gateway.yaml': 'name: Gateway\nin: shop\nowner: shop-team\n' }))).toEqual([`${saw('2 connections name', 'app')} ${ends}`]);
+    // An owner of its own goes with it too, since a piece of infrastructure may have one.
+    expect(messages(shop({ ...GATEWAY, 'apps/gateway.yaml': 'name: Gateway\nin: shop\nowner: shop-team\n' }))).toEqual([
+      `${saw('2 connections name', 'app')} It may keep \`in: shop\` there. ${ends}`,
+    ]);
+  });
+
+  it('is mended as its message says: moved with its `in`, the piece is in the system and has its owner', () => {
+    const moved = shop({ ...GATEWAY, 'apps/gateway.yaml': null, 'infrastructure/gateway.yaml': 'name: Gateway\nin: shop\n' });
+    expect(load(moved).problems).toEqual([]);
+    expect(ownership(load(moved).model).get('gateway')).toEqual({ owner: 'shop-team', from: 'shop' });
+  });
+
+  it('says of an app that keeps a store and has nothing else that the store has to go elsewhere first', () => {
+    const files = shop({ ...GATEWAY, 'stores/routes.yaml': 'name: Routes\nin: gateway\n' });
+    expect(messages(files)).toEqual([
+      `${saw('2 connections name', 'app')} To move it there, what is in it has to go elsewhere first. It may keep \`in: shop\` there. ${ends}`,
+    ]);
   });
 
   it('is one for a system, and says that what is in it has to go elsewhere first, and then no longer takes its owner', () => {
@@ -704,8 +719,10 @@ describe('an app or a system that only passes exchanges on', () => {
 });
 
 describe('two connections that say the same', () => {
-  /** What to do, said after the files: a purpose of its own is not thrown away. */
-  const either = 'If these are the same exchange, keep one. If their purposes differ, give each a name that says which.';
+  /** What to do, said after the files: a way or a purpose of its own is not thrown away. */
+  const either =
+    'If these are the same exchange, keep one. If they are two ways of one exchange, give each its route in `via`, or say in `only` when each is taken. ' +
+    'If their purposes differ, give each a name that says which.';
 
   it('are reported on each, naming the other, as a warning', () => {
     const files = shop({
@@ -830,5 +847,356 @@ describe('the model', () => {
     expect(loaded.model.systems.map((system) => system.id)).toEqual(['card-provider']);
     expect(loaded.model.apps.map((app) => app.id)).toEqual(['order-api', 'storefront']);
     expect(loaded.unread).toEqual([{ id: 'shop', family: 'systems', file: 'systems/shop.yaml' }]);
+  });
+});
+
+describe('what a connection does to a store, and who opened its channel', () => {
+  it('reports `access` on a connection that does not end at a store, once, at its value', () => {
+    const files = shop({ 'connections/thing.yaml': 'from: storefront\nto: order-api\naccess: read\nname: Reads the orders\n' });
+    expect(load(files).problems).toEqual([
+      {
+        file: 'connections/thing.yaml',
+        line: 3,
+        column: 9,
+        severity: 'error',
+        code: 'access-not-store',
+        message:
+          '`access` says what a connection does to the data of the store it ends at, and this connection ends at the app `order-api`. ' +
+          'If it reads or writes a store, make that store its `to`. If not, take `access` out, and let the name say what it asks for or sends.',
+      },
+    ]);
+    expect(load(files).model.connections.map((connection) => connection.id)).not.toContain('thing');
+  });
+
+  it.each([
+    ['a person', 'customer', 'the person `customer`'],
+    ['a system', 'card-provider', 'the system `card-provider`'],
+    ['a component', 'checkout', 'the component `checkout`'],
+    ['a piece of infrastructure', 'proxy', 'the piece of infrastructure `proxy`'],
+  ])('says what it ends at when that is %s', (_what, to, said) => {
+    const files = shop({ 'connections/thing.yaml': `from: storefront\nto: ${to}\naccess: write\n` });
+    expect(found(files)).toEqual(['connections/thing.yaml:3:9 error access-not-store']);
+    expect(messages(files)[0]).toContain(`and this connection ends at ${said}. `);
+  });
+
+  it('lets `access` stand on a connection to a store, also one that an app keeps or whose file has an error', () => {
+    for (const access of ['read', 'write', 'read-write']) {
+      expect(found(shop({ 'connections/thing.yaml': `from: checkout\nto: orders-database\naccess: ${access}\n` }))).toEqual([]);
+    }
+    const kept = shop({ 'stores/index.yaml': 'name: Index\nin: order-api\n', 'connections/thing.yaml': 'from: checkout\nto: index\naccess: read-write\n' });
+    expect(found(kept)).toEqual([]);
+    expect(found(shop({ 'stores/orders-database.yaml': 'name: [Orders\n', 'connections/thing.yaml': 'from: checkout\nto: orders-database\naccess: read\n' }))).toEqual([
+      'stores/orders-database.yaml:1:7 error yaml-syntax',
+    ]);
+  });
+
+  it('reports `opens` on a connection that ends at a store, once, at its value', () => {
+    const files = shop({ 'connections/thing.yaml': 'from: checkout\nto: orders-database\nopens: to\nname: Writes each order\n' });
+    expect(load(files).problems).toEqual([
+      {
+        file: 'connections/thing.yaml',
+        line: 3,
+        column: 8,
+        severity: 'error',
+        code: 'opens-at-store',
+        message:
+          '`opens: to` says that the far side opened the channel this exchange travels down, and this connection ends at the store `orders-database`. ' +
+          'A store opens nothing. Take `opens` out.',
+      },
+    ]);
+  });
+
+  it('lets `opens` stand on a connection to anything but a store, a piece of infrastructure too', () => {
+    for (const to of ['customer', 'card-provider', 'storefront', 'basket', 'proxy']) {
+      expect(found(shop({ 'connections/thing.yaml': `from: order-api\nto: ${to}\nopens: to\nname: Says what is new\n` }))).toEqual([]);
+    }
+  });
+
+  it('reports each of the two where it is wrong, and only that one, when a connection has both', () => {
+    expect(found(shop({ 'connections/thing.yaml': 'from: checkout\nto: order-api\nopens: to\naccess: read\n' }))).toEqual([
+      'connections/thing.yaml:4:9 error access-not-store',
+    ]);
+    expect(found(shop({ 'connections/thing.yaml': 'from: checkout\nto: orders-database\nopens: to\naccess: read\n' }))).toEqual([
+      'connections/thing.yaml:3:8 error opens-at-store',
+    ]);
+  });
+
+  it('says nothing more of a `to` that names no record or the wrong kind, nor of a value that is not allowed', () => {
+    expect(found(shop({ 'connections/thing.yaml': 'from: checkout\nto: nowhere\naccess: read\n' }))).toEqual(['connections/thing.yaml:2:5 error reference-unknown']);
+    expect(found(shop({ 'connections/thing.yaml': 'from: checkout\nto: go\naccess: read\n' }))).toEqual(['connections/thing.yaml:2:5 error reference-wrong-kind']);
+    expect(found(shop({ 'connections/thing.yaml': 'from: checkout\nto: order-api\naccess: reads\n' }))).toEqual(['connections/thing.yaml:3:9 error value-not-allowed']);
+    expect(found(shop({ 'connections/thing.yaml': 'from: checkout\nto: orders-database\nopens: from\n' }))).toEqual(['connections/thing.yaml:3:8 error value-not-allowed']);
+  });
+
+  it('is reported beside another slip in the same file, so that one does not hide the other', () => {
+    expect(found(shop({ 'connections/thing.yaml': 'from: checkout\nto: order-api\naccess: read\ncolour: blue\n' }))).toEqual([
+      'connections/thing.yaml:3:9 error access-not-store',
+      'connections/thing.yaml:4:1 error key-unknown',
+    ]);
+  });
+});
+
+describe('a connection to a store that an app keeps', () => {
+  /** The shop, where the order API keeps an index and a log of its own. */
+  const KEPT = { 'stores/index.yaml': 'name: Index\nin: order-api\n', 'stores/log.yaml': 'name: Log\nin: order-api\n' };
+
+  it('is a warning when it comes from outside the app, at the end that names the store, saying the two ways out', () => {
+    const files = shop({ ...KEPT, 'connections/thing.yaml': 'from: storefront\nto: index\nname: Looks up an order\n' });
+    expect(load(files).problems).toEqual([
+      {
+        file: 'connections/thing.yaml',
+        line: 2,
+        column: 5,
+        severity: 'warning',
+        code: 'kept-store-reached',
+        message:
+          'This connection goes from the app `storefront` to the store `index`, which the app `order-api` keeps. ' +
+          'Nothing reaches a store that an app keeps but through that app, so one of two things may be so. ' +
+          "The store is not `order-api`'s alone: then it is in the system, `in: shop`. " +
+          'Or the exchange is with `order-api`, which reads or writes the store in turn: then the connection ends at `order-api`.',
+      },
+    ]);
+    expect(load(files).model.connections.map((connection) => connection.id)).toContain('thing');
+  });
+
+  it('is mended either way its message says', () => {
+    const reached = { ...KEPT, 'connections/thing.yaml': 'from: storefront\nto: index\nname: Looks up an order\n' };
+    expect(found(shop({ ...reached, 'stores/index.yaml': 'name: Index\nin: shop\n' }))).toEqual([]);
+    expect(found(shop({ ...reached, 'connections/thing.yaml': 'from: storefront\nto: order-api\nname: Looks up an order\n' }))).toEqual([]);
+  });
+
+  it('is not one from inside the app: the app, a component in it, or another store it keeps', () => {
+    for (const from of ['order-api', 'checkout', 'log']) {
+      expect(found(shop({ ...KEPT, 'connections/thing.yaml': `from: ${from}\nto: index\nname: Keeps it\n` }))).toEqual([]);
+    }
+    expect(found(shop({ ...KEPT, 'connections/thing.yaml': 'from: index\nto: index\nname: Copies itself to each copy\n' }))).toEqual([]);
+  });
+
+  it.each([
+    ['a person', 'customer', 'the person `customer`'],
+    ['the system the app is in', 'shop', 'the system `shop`'],
+    ['a component of another app', 'basket', 'the component `basket`'],
+    ['a piece of infrastructure in the same system', 'ingress', 'the piece of infrastructure `ingress`'],
+  ])('is one from %s', (_what, from, said) => {
+    const files = shop({ ...KEPT, 'infrastructure/ingress.yaml': 'name: Ingress\nin: shop\n', 'connections/thing.yaml': `from: ${from}\nto: index\n` });
+    expect(found(files)).toEqual(['connections/thing.yaml:2:5 warning kept-store-reached']);
+    expect(messages(files)[0]?.startsWith(`This connection goes from ${said} to the store \`index\`, which`)).toBe(true);
+  });
+
+  it('is one when the kept store acts on a store outside the app, at its `from`, and asks whether the app makes the exchange', () => {
+    const files = shop({ ...KEPT, 'connections/thing.yaml': 'from: index\nto: orders-copy\nname: Copies each order\n' });
+    expect(found(files)).toEqual(['connections/thing.yaml:1:7 warning kept-store-reached']);
+    expect(messages(files)[0]).toBe(
+      'This connection goes from the store `index`, which the app `order-api` keeps, to the store `orders-copy`. ' +
+        'Nothing reaches a store that an app keeps but through that app, so one of two things may be so. ' +
+        "The store is not `order-api`'s alone: then it is in the system, `in: shop`. " +
+        'Or `order-api` makes this exchange, and reads the store for it: then the connection starts at `order-api`.',
+    );
+  });
+
+  it('is one for each connection, at its `to`, when both ends are stores that two apps keep', () => {
+    const files = shop({ ...KEPT, 'stores/drafts.yaml': 'name: Drafts\nin: storefront\n', 'connections/thing.yaml': 'from: drafts\nto: index\n' });
+    expect(found(files)).toEqual(['connections/thing.yaml:2:5 warning kept-store-reached']);
+  });
+
+  it('is not one for a store in a system, nor for a connection or a keeper with an error in its file', () => {
+    expect(found(shop({ 'connections/thing.yaml': 'from: storefront\nto: orders-database\n' }))).toEqual([]);
+    expect(found(shop({ ...KEPT, 'connections/thing.yaml': 'from: storefront\nto: index\ncolour: blue\n' }))).toEqual(['connections/thing.yaml:3:1 error key-unknown']);
+    expect(found(shop({ ...KEPT, 'apps/order-api.yaml': 'name: Order API\nin: shop\ncolour: blue\n', 'connections/thing.yaml': 'from: storefront\nto: index\n' }))).toEqual([
+      'apps/order-api.yaml:3:1 error key-unknown',
+    ]);
+  });
+
+  it('reads a part with an error in its file as inside the app, when its `in` says so, and as nowhere when nothing of it can be read', () => {
+    expect(found(shop({ ...KEPT, 'components/checkout.yaml': 'name: Checkout\nin: order-api\ncolour: blue\n', 'connections/thing.yaml': 'from: checkout\nto: index\n' }))).toEqual([
+      'components/checkout.yaml:3:1 error key-unknown',
+    ]);
+    expect(found(shop({ ...KEPT, 'components/checkout.yaml': 'name: [Checkout\nin: order-api\n', 'connections/thing.yaml': 'from: checkout\nto: index\n' }))).toEqual([
+      'components/checkout.yaml:1:7 error yaml-syntax',
+    ]);
+  });
+});
+
+describe('a condition said again', () => {
+  /** What each message of `only-said-again` asks, after what it saw. */
+  const asks = (noun: string): string => `Does something more hold for this ${noun} alone? Then say that. If not, \`only\` can come out.`;
+  const part = 'A part has the conditions of what it is in, and of what that is in, so these words add nothing here.';
+  const connection = 'A connection has the conditions of its ends and of what they are in, so these words add nothing here.';
+
+  it('is a warning at the `only` of a part that says what the thing it is in says', () => {
+    const files = shop({
+      'apps/order-api.yaml': 'name: Order API\nin: shop\nonly: in the hosted edition\n',
+      'components/checkout.yaml': 'name: Checkout\nin: order-api\nonly: in the hosted edition\n',
+    });
+    expect(load(files).problems).toEqual([
+      {
+        file: 'components/checkout.yaml',
+        line: 3,
+        column: 7,
+        severity: 'warning',
+        code: 'only-said-again',
+        message: `\`only\` says "in the hosted edition", and so does \`order-api\`, the app it is in. ${part} ${asks('component')}`,
+      },
+    ]);
+    expect(load(files).model.components.find((record) => record.id === 'checkout')?.only).toBe('in the hosted edition');
+  });
+
+  it.each([
+    ['a store in a system', 'stores/orders-database.yaml', 'name: Orders database\nin: shop\n', '`shop`, the system it is in', 'store'],
+    ['a store that an app keeps', 'stores/index.yaml', 'name: Index\nin: storefront\n', '`storefront`, the app that keeps it', 'store'],
+    ['a piece of infrastructure in a system', 'infrastructure/ingress.yaml', 'name: Ingress\nin: shop\n', '`shop`, the system it is in', 'piece of infrastructure'],
+    ['a component, two levels down', 'components/basket.yaml', 'name: Basket\nin: storefront\n', '`shop`, the system it is in', 'component'],
+  ])('names how the two are related, for %s', (_what, file, text, related, noun) => {
+    const files = shop({
+      'systems/shop.yaml': 'name: Shop\nowner: shop-team\nonly: in the hosted edition\n',
+      'apps/storefront.yaml': `name: Storefront\nin: shop\n${file === 'stores/index.yaml' ? 'only: in the head office\n' : ''}`,
+      [file]: `${text}only: ${file === 'stores/index.yaml' ? 'in the head office' : 'in the hosted edition'}\n`,
+    });
+    const problems = load(files).problems.filter((problem) => problem.file === file);
+    expect(problems.map((problem) => problem.code)).toEqual(['only-said-again']);
+    const only = file === 'stores/index.yaml' ? 'in the head office' : 'in the hosted edition';
+    expect(problems[0]?.message).toBe(`\`only\` says "${only}", and so does ${related}. ${part} ${asks(noun)}`);
+  });
+
+  it('names the nearest that says it, once, though several do', () => {
+    const files = shop({
+      'systems/shop.yaml': 'name: Shop\nowner: shop-team\nonly: on Linux\n',
+      'apps/order-api.yaml': 'name: Order API\nin: shop\nonly: on Linux\n',
+      'components/checkout.yaml': 'name: Checkout\nin: order-api\nonly: on Linux\n',
+    });
+    expect(found(files)).toEqual(['apps/order-api.yaml:3:7 warning only-said-again', 'components/checkout.yaml:3:7 warning only-said-again']);
+    expect(messages(files)[1]).toMatch(/^`only` says "on Linux", and so does `order-api`, the app it is in\./);
+  });
+
+  it('is one on a connection that says what an end, or what an end is in, says', () => {
+    const conditioned = {
+      'systems/shop.yaml': 'name: Shop\nowner: shop-team\nonly: in the hosted edition\n',
+      'apps/order-api.yaml': 'name: Order API\nin: shop\nonly: when payments are on\n',
+      'systems/card-provider.yaml': 'name: Card provider\nonly: for card payments\n',
+    };
+    const said = (only: string): SourceFile[] => shop({ ...conditioned, 'connections/thing.yaml': `from: checkout\nto: card-provider\nonly: ${only}\n` });
+    expect(found(said('for card payments'))).toEqual(['connections/thing.yaml:3:7 warning only-said-again']);
+    expect(messages(said('for card payments'))).toEqual([
+      `\`only\` says "for card payments", and so does \`card-provider\`, the \`to\` of this connection. ${connection} ${asks('connection')}`,
+    ]);
+    expect(messages(said('when payments are on'))[0]).toMatch(/and so does `order-api`, the app the `from` of this connection is in\./);
+    expect(messages(said('in the hosted edition'))[0]).toMatch(/and so does `shop`, the system the `from` of this connection is in\./);
+    // Its own words, or another wording, say something more.
+    expect(found(said('when the card provider is up'))).toEqual([]);
+    expect(found(said('For card payments'))).toEqual([]);
+  });
+
+  it('is not one for what a connection passes through, even on a route with two things that have `only`', () => {
+    const files = shop({
+      'infrastructure/proxy.yaml': 'name: HTTPS proxy\nonly: in the head office\n',
+      'infrastructure/edge.yaml': 'name: Edge\nonly: in the hosted edition\n',
+      'connections/thing.yaml': 'from: customer\nto: storefront\nvia: [edge, proxy]\nonly: in the head office\n',
+    });
+    expect(load(files).problems).toEqual([]);
+  });
+
+  it('is one when the two ends have different conditions and the connection says that of one of them', () => {
+    const files = shop({
+      'apps/order-api.yaml': 'name: Order API\nin: shop\nonly: when payments are on\n',
+      'apps/storefront.yaml': 'name: Storefront\nin: shop\nonly: in the hosted edition\n',
+      'connections/thing.yaml': 'from: basket\nto: order-api\nonly: in the hosted edition\n',
+    });
+    expect(messages(files)).toEqual([
+      `\`only\` says "in the hosted edition", and so does \`storefront\`, the app the \`from\` of this connection is in. ${connection} ${asks('connection')}`,
+    ]);
+  });
+
+  it('is one at a connection to a piece of infrastructure in a system that says the same', () => {
+    const files = shop({
+      'systems/shop.yaml': 'name: Shop\nowner: shop-team\nonly: on Kubernetes\n',
+      'infrastructure/ingress.yaml': 'name: Ingress\nin: shop\n',
+      'connections/thing.yaml': 'from: customer\nto: ingress\nname: Reloads it\nonly: on Kubernetes\n',
+    });
+    expect(messages(files)).toEqual([
+      `\`only\` says "on Kubernetes", and so does \`shop\`, the system the \`to\` of this connection is in. ${connection} ${asks('connection')}`,
+    ]);
+  });
+
+  it('is not one for a record with an error in its file, nor from one', () => {
+    const files = shop({
+      'apps/order-api.yaml': 'name: Order API\nin: shop\nonly: on Linux\ncolour: blue\n',
+      'components/checkout.yaml': 'name: Checkout\nin: order-api\nonly: on Linux\n',
+    });
+    expect(found(files)).toEqual(['apps/order-api.yaml:4:1 error key-unknown']);
+  });
+});
+
+describe('two ways of one exchange', () => {
+  const pays = 'from: checkout\nto: card-provider\nname: Takes the payment\n';
+
+  it('are two connections, not one said twice, when their routes or their conditions differ', () => {
+    expect(found(shop({ 'connections/a.yaml': pays, 'connections/b.yaml': `${pays}via: [proxy]\n` }))).toEqual([]);
+    expect(found(shop({ 'connections/a.yaml': pays, 'connections/b.yaml': `${pays}only: when the proxy is down\n` }))).toEqual([]);
+    expect(found(shop({ 'connections/a.yaml': `${pays}via: [proxy, basket]\n`, 'connections/b.yaml': `${pays}via: [basket, proxy]\n` }))).toEqual([]);
+  });
+
+  it('are one said twice when the route and the condition are the same too, and the warning names the keys they share', () => {
+    const both = `${pays}via: [proxy]\nonly: in the head office\n`;
+    const files = shop({ 'connections/a.yaml': both, 'connections/b.yaml': both });
+    expect(found(files)).toEqual(['connections/a.yaml:1:1 warning connection-twice', 'connections/b.yaml:1:1 warning connection-twice']);
+    expect(messages(files)[0]).toBe(
+      'This connection has the same `from`, `to`, `via`, `name` and `only` as `connections/b.yaml`. If these are the same exchange, keep one. ' +
+        'If they are two ways of one exchange, give each its route in `via`, or say in `only` when each is taken. ' +
+        'If their purposes differ, give each a name that says which.',
+    );
+  });
+
+  it('are not a summary a level up when the route or the condition differs, and are one when both are the same', () => {
+    const lower = 'from: checkout\nto: card-provider\nname: Takes the payment\nonly: for card payments\n';
+    const upper = 'from: order-api\nto: card-provider\nname: Takes the payment\n';
+    expect(found(shop({ 'connections/a.yaml': lower, 'connections/b.yaml': upper }))).toEqual([]);
+    expect(found(shop({ 'connections/a.yaml': lower, 'connections/b.yaml': `${upper}only: for card payments\nvia: [proxy]\n` }))).toEqual([]);
+    expect(found(shop({ 'connections/a.yaml': lower, 'connections/b.yaml': `${upper}only: for card payments\n` }))).toEqual([
+      'connections/b.yaml:1:1 warning connection-repeated-above',
+    ]);
+  });
+});
+
+describe('a store in an app and a piece of infrastructure in a system, at the ends of a connection', () => {
+  it('make `via` an error where it names what a kept store at the `from` is in', () => {
+    const files = shop({ 'stores/index.yaml': 'name: Index\nin: order-api\n', 'connections/thing.yaml': 'from: index\nto: index\nvia: [order-api]\n' });
+    expect(found(files)).toEqual(['connections/thing.yaml:3:7 error via-end']);
+    expect(messages(files)[0]).toMatch(/^`via` names `order-api`, which `index`, the `from` of this connection, is in\./);
+  });
+
+  it('make `via` an error where it names the system a piece at the `from` is in, or a piece in the system at the `from`', () => {
+    const placed = { 'infrastructure/proxy.yaml': 'name: HTTPS proxy\nin: shop\n' };
+    const from = shop({ ...placed, 'connections/thing.yaml': 'from: proxy\nto: card-provider\nvia: [shop]\n' });
+    expect(found(from)).toEqual(['connections/thing.yaml:3:7 error via-end']);
+    expect(messages(from)[0]).toMatch(/^`via` names `shop`, which `proxy`, the `from` of this connection, is in\./);
+    const inFrom = shop({ ...placed, 'connections/thing.yaml': 'from: shop\nto: card-provider\nvia: [proxy]\n' });
+    expect(messages(inFrom)).toEqual([
+      '`via` names `proxy`, which is in `shop`, the `from` of this connection. What a connection passes through stands between its two ends. ' +
+        'Take `proxy` out of `via`. If nothing is left in the list, take the `via` key out too. ' +
+        'Or, if the exchange starts before it, make the part of `shop` that it starts at the `from`.',
+    ]);
+  });
+
+  it('let a piece in one system stand on the way between parts of another, as a piece in no system does', () => {
+    expect(found(shop({ 'infrastructure/proxy.yaml': 'name: HTTPS proxy\nin: card-provider\n', 'connections/thing.yaml': 'from: basket\nto: checkout\nvia: [proxy]\n' }))).toEqual([]);
+  });
+
+  it('put a piece beneath its system for a connection higher up that says the same', () => {
+    const files = shop({
+      'infrastructure/proxy.yaml': 'name: HTTPS proxy\nin: shop\n',
+      'connections/proxy-checks.yaml': 'from: proxy\nto: card-provider\nname: Checks that it is up\n',
+      'connections/shop-checks.yaml': 'from: shop\nto: card-provider\nname: Checks that it is up\n',
+    });
+    expect(found(files)).toEqual(['connections/shop-checks.yaml:1:1 warning connection-repeated-above']);
+  });
+
+  it('make a system with a piece in it that a connection ends at do more than pass on', () => {
+    const files = shop({
+      'systems/edge.yaml': 'name: Edge\n',
+      'infrastructure/cdn.yaml': 'name: CDN\nin: edge\n',
+      'connections/customer-buys.yaml': 'from: customer\nto: storefront\nvia: [edge]\n',
+      'connections/storefront-purges.yaml': 'from: storefront\nto: cdn\nname: Purges the cache\n',
+    });
+    expect(found(files)).toEqual([]);
   });
 });

@@ -1,10 +1,12 @@
+import { conditionsOf, keeperOf, systemOf } from './conditions.ts';
 import { nounOf, oneOf, referenceField } from './format.ts';
 import type { Format } from './format.ts';
-import type { RecordFile, Reference } from './load.ts';
+import type { RecordFile, Reference, SourceRecord } from './load.ts';
 import { ownership } from './model.ts';
 import type { Model, ModelRecord } from './model.ts';
 import { START, error, list, quote, warning } from './problem.ts';
 import type { Position, Problem } from './problem.ts';
+import { ACCESS, OPENS } from './records.ts';
 import type { Connection, Store, Technology } from './records.ts';
 
 /**
@@ -17,6 +19,12 @@ const CONNECTIONS = 'connections';
 
 /** Every file that stands for a record, by id. One for each id, unless an id is used twice. */
 export type RecordsById = ReadonlyMap<string, readonly RecordFile[]>;
+
+/**
+ * Where the value of a key is written in a record's file, for a key whose value names no record,
+ * such as `access` or `only`. The start of the file when the key is not there.
+ */
+export type PlaceOf = (file: string, field: string) => Position;
 
 export function byId(records: readonly RecordFile[]): Map<string, RecordFile[]> {
   const found = new Map<string, RecordFile[]>();
@@ -48,6 +56,50 @@ export function referenceProblems(format: Format, records: RecordsById, referenc
       const advice = field.wrongFamily?.[family];
       const message = `${said}, which is ${oneOf(format, family)}. ${field.rule}${advice === undefined ? '' : ` ${advice}`}`;
       problems.push(error(reference.file, placeOf(reference), 'reference-wrong-kind', message));
+    }
+  }
+  return problems;
+}
+
+/**
+ * The rules of what a connection says about its `to`. `access` says what it does to the data of
+ * the store it ends at, so it is an error on one that ends at anything else. `opens: to` says the
+ * far side opened the channel, and a store opens nothing, so it is an error on one that ends at a
+ * store. Each is reported once, at its value. Every record that could be read is looked at, so
+ * that one slip does not hide another; a value that is not allowed is the shape's to report, and
+ * a `to` that names no record, or one a connection may not end at, the rule of references'.
+ */
+export function accessOpensProblems(format: Format, records: RecordsById, references: readonly Reference[], read: readonly SourceRecord[], placeOf: PlaceOf): Problem[] {
+  const ends = endsOf(references);
+  const allowed = referenceField(format, CONNECTIONS, 'to')?.families ?? [];
+  const problems: Problem[] = [];
+  for (const record of read) {
+    if (record.family !== CONNECTIONS) continue;
+    const to = ends.get(record.file)?.to;
+    const family = to === undefined ? undefined : familyOf(records, to);
+    if (to === undefined || family === undefined || !allowed.includes(family)) continue;
+    const theTo = `the ${nounOf(format, family)} ${quote(to)}`;
+    if ((ACCESS as readonly unknown[]).includes(record.value['access']) && family !== 'stores') {
+      problems.push(
+        error(
+          record.file,
+          placeOf(record.file, 'access'),
+          'access-not-store',
+          `\`access\` says what a connection does to the data of the store it ends at, and this connection ends at ${theTo}. ` +
+            'If it reads or writes a store, make that store its `to`. If not, take `access` out, and let the name say what it asks for or sends.',
+        ),
+      );
+    }
+    if ((OPENS as readonly unknown[]).includes(record.value['opens']) && family === 'stores') {
+      problems.push(
+        error(
+          record.file,
+          placeOf(record.file, 'opens'),
+          'opens-at-store',
+          `\`opens: to\` says that the far side opened the channel this exchange travels down, and this connection ends at ${theTo}. ` +
+            'A store opens nothing. Take `opens` out.',
+        ),
+      );
     }
   }
   return problems;
@@ -119,14 +171,25 @@ function storesActing(format: Format, records: RecordsById, references: readonly
 }
 
 /**
+ * What makes two connections with the same ends one exchange, besides their ends: the same name,
+ * the same route in the same order, and the same condition. Two ways of one exchange, such as one
+ * through a proxy that only some installs have, differ in `via` or in `only`, and are two.
+ */
+function exchangeOf(connection: Connection): string {
+  return JSON.stringify([connection.name, connection.via ?? null, connection.only ?? null]);
+}
+
+/**
  * Two connections with the same ends and the same name may say one thing twice. They may also
  * be two exchanges whose name does not yet say which is which, so neither is simply dropped.
+ * Two that differ in their route or their condition are two ways of one exchange, and say two
+ * things.
  */
 function connectionsTwice(connections: readonly ModelRecord<Connection>[]): Problem[] {
   const groups = new Map<string, ModelRecord<Connection>[]>();
   for (const connection of connections) {
     if (connection.name === undefined) continue;
-    const key = JSON.stringify([connection.from, connection.to, connection.name]);
+    const key = JSON.stringify([connection.from, connection.to, exchangeOf(connection)]);
     const same = groups.get(key);
     if (same) same.push(connection);
     else groups.set(key, [connection]);
@@ -134,6 +197,9 @@ function connectionsTwice(connections: readonly ModelRecord<Connection>[]): Prob
   const problems: Problem[] = [];
   for (const same of groups.values()) {
     if (same.length < 2) continue;
+    // The keys they share, as each writes them: a route and a condition are named only where written.
+    const first = same[0] as ModelRecord<Connection>;
+    const keys = ['from', 'to', ...(first.via ? ['via'] : []), 'name', ...(first.only !== undefined ? ['only'] : [])];
     for (const connection of same) {
       const others = same.filter((other) => other !== connection).map((other) => other.file);
       problems.push(
@@ -141,8 +207,9 @@ function connectionsTwice(connections: readonly ModelRecord<Connection>[]): Prob
           connection.file,
           START,
           'connection-twice',
-          `This connection has the same \`from\`, \`to\` and \`name\` as ${list(others)}. ` +
-            'If these are the same exchange, keep one. If their purposes differ, give each a name that says which.',
+          `This connection has the same ${list(keys)} as ${list(others)}. If these are the same exchange, keep one. ` +
+            'If they are two ways of one exchange, give each its route in `via`, or say in `only` when each is taken. ' +
+            'If their purposes differ, give each a name that says which.',
         ),
       );
     }
@@ -152,16 +219,18 @@ function connectionsTwice(connections: readonly ModelRecord<Connection>[]): Prob
 
 /**
  * A connection a level up is a summary of the ones beneath it, worth writing only when it says
- * more. One with the same name as a connection beneath it, whose ends are each the same as that
- * one's or what that one's end is in, says nothing more.
+ * more. One with the same name, route and condition as a connection beneath it, whose ends are
+ * each the same as that one's or what that one's end is in, says nothing more. A kept store is
+ * beneath its app, and a piece of infrastructure beneath its system, as `parents` has them.
  */
 function connectionsRepeatedAbove(parents: ReadonlyMap<string, string>, connections: readonly ModelRecord<Connection>[]): Problem[] {
   const byName = new Map<string, ModelRecord<Connection>[]>();
   for (const connection of connections) {
     if (connection.name === undefined) continue;
-    const same = byName.get(connection.name);
+    const key = exchangeOf(connection);
+    const same = byName.get(key);
     if (same) same.push(connection);
-    else byName.set(connection.name, [connection]);
+    else byName.set(key, [connection]);
   }
 
   const problems: Problem[] = [];
@@ -270,7 +339,7 @@ export function passesOnOnlyProblems(format: Format, records: RecordsById, paren
         'passes-on-only',
         `${n} ${n === 1 ? 'connection names' : 'connections name'} this ${noun} in \`via\`, and no connection starts or ends at it or at anything in it. ` +
           `Does passing exchanges on account for everything this ${noun} does? If so, it is a piece of infrastructure, a record in \`infrastructure/\`, ` +
-          `which is in nothing and holds nothing.${movingOut(id, parents, model)} If it has work of its own, a connection for that work ends the warning.`,
+          `which holds nothing.${movingOut(id, parents, model)} If it has work of its own, a connection for that work ends the warning.`,
       ),
     );
   }
@@ -280,9 +349,9 @@ export function passesOnOnlyProblems(format: Format, records: RecordsById, paren
 /**
  * What moving a record to `infrastructure/` would mean, by what it holds, as sentences that each
  * start with a space, or nothing. What is in it has to go elsewhere first, its kept stores too,
- * and its parts then no longer take its owner. An app with no `owner` of its own no longer takes
- * that of the system it is in. An `external` mark does not go with it, since a piece of
- * infrastructure has none.
+ * and its parts then no longer take its owner. An app may keep its `in`, since a piece of
+ * infrastructure may be in a system, and with it the owner it takes from there. An `external`
+ * mark does not go with it, since a piece of infrastructure has none.
  */
 function movingOut(id: string, parents: ReadonlyMap<string, string>, model: Model): string {
   const owners = ownership(model);
@@ -291,10 +360,106 @@ function movingOut(id: string, parents: ReadonlyMap<string, string>, model: Mode
     const taking = [...owners].some(([part, found]) => part !== id && found.from === id);
     said.push(`To move it there, what is in it has to go elsewhere first${taking ? ', and its parts then no longer take its owner' : ''}.`);
   }
-  const from = owners.get(id)?.from;
-  if (from !== undefined && from !== id) said.push(`There it no longer takes the owner of ${quote(from)}.`);
+  const app = model.apps.find((record) => record.id === id);
+  if (app !== undefined) said.push(`It may keep \`in: ${app.in}\` there.`);
   if (model.systems.some((system) => system.id === id && system.external === true)) said.push('Its `external` mark does not go with it.');
   return said.map((sentence) => ` ${sentence}`).join('');
+}
+
+/**
+ * The check of a store that an app keeps. Nothing reaches such a store but through its app, so a
+ * connection between it and anything outside that app is doubtful: the store may not be the
+ * app's alone, or the exchange may be with the app. Inside the app are the app itself, its
+ * components and the other stores it keeps. The warning asks, once for each connection, at the
+ * end that names the kept store, its `to` before its `from`. It reads the connections of the
+ * model, whose ends are read right.
+ */
+export function keptStoreProblems(format: Format, records: RecordsById, parents: ReadonlyMap<string, string>, references: readonly Reference[], model: Model): Problem[] {
+  // An end with an error in its file, whose `in` could not be read either, may be inside the
+  // app: it is not taken to be outside.
+  const known = new Set(elementsOf(model).map((record) => record.id));
+  const problems: Problem[] = [];
+  for (const connection of model.connections) {
+    for (const [side, other] of [['to', 'from'], ['from', 'to']] as const) {
+      const store = connection[side];
+      const app = keeperOf(model, store);
+      if (app === undefined || upwards(parents, connection[other]).includes(app)) continue;
+      if (!known.has(connection[other]) && !parents.has(connection[other])) continue;
+      const place = references.find((reference) => reference.file === connection.file && reference.field === side);
+      // An id that two records have is reported as such, and has no one kind to name.
+      const family = familyOf(records, connection[other]);
+      const otherEnd = family === undefined ? quote(connection[other]) : `the ${nounOf(format, family)} ${quote(connection[other])}`;
+      const kept = `the store ${quote(store)}, which the app ${quote(app)} keeps`;
+      const goes = side === 'to' ? `goes from ${otherEnd} to ${kept}` : `goes from ${kept}, to ${otherEnd}`;
+      // The app is in the model, so its `in` names its system, even where that system's file has an error.
+      const system = systemOf(model, app) ?? model.apps.find((record) => record.id === app)?.in ?? '';
+      const instead =
+        side === 'to'
+          ? `the exchange is with ${quote(app)}, which reads or writes the store in turn: then the connection ends at ${quote(app)}`
+          : `${quote(app)} makes this exchange, and reads the store for it: then the connection starts at ${quote(app)}`;
+      problems.push(
+        warning(
+          connection.file,
+          place ? placeOf(place) : START,
+          'kept-store-reached',
+          `This connection ${goes}. Nothing reaches a store that an app keeps but through that app, so one of two things may be so. ` +
+            `The store is not ${quote(app)}'s alone: then it is in the system, \`in: ${system}\`. Or ${instead}.`,
+        ),
+      );
+      break;
+    }
+  }
+  return problems;
+}
+
+/**
+ * The check of a condition said again. A part has the conditions of what it is in, and a
+ * connection those of its ends and of what they are in, as `conditionsOf` gives them. A record
+ * whose own `only` is, letter for letter, one it has already says nothing more with it, or meant
+ * something more and did not say it. The warning asks, once for each record, at its `only`,
+ * naming the nearest record that says the same and how the two are related.
+ */
+export function onlySaidAgainProblems(format: Format, records: RecordsById, model: Model, placeOf: PlaceOf): Problem[] {
+  const problems: Problem[] = [];
+  for (const record of [...model.apps, ...model.stores, ...model.components, ...model.infrastructure, ...model.connections]) {
+    if (record.only === undefined) continue;
+    const again = conditionsOf(model, record.id).find((condition) => condition.from !== record.id && condition.only === record.only);
+    if (again === undefined) continue;
+    const family = familyOf(records, record.id) ?? '';
+    const noun = nounOf(format, family);
+    const has =
+      family === CONNECTIONS
+        ? 'A connection has the conditions of its ends and of what they are in'
+        : 'A part has the conditions of what it is in, and of what that is in';
+    problems.push(
+      warning(
+        record.file,
+        placeOf(record.file, 'only'),
+        'only-said-again',
+        `\`only\` says "${record.only}", and so does ${quote(again.from)}, ${relationOf(format, records, model, record, again.from)}. ${has}, so these words add nothing here. ` +
+          `Does something more hold for this ${noun} alone? Then say that. If not, \`only\` can come out.`,
+      ),
+    );
+  }
+  return problems;
+}
+
+/**
+ * How a record that a condition comes from stands to the record that has it, as words that
+ * follow its id: "the system it is in", "the `to` of this connection", or for what an end of a
+ * connection is in, "the app the `from` of this connection is in".
+ */
+function relationOf(format: Format, records: RecordsById, model: Model, record: { id: string; from?: string; to?: string }, source: string): string {
+  const noun = nounOf(format, familyOf(records, source) ?? '');
+  const { from, to } = record;
+  if (from === undefined || to === undefined) {
+    return keeperOf(model, record.id) === source ? 'the app that keeps it' : `the ${noun} it is in`;
+  }
+  for (const [side, end] of [['from', from], ['to', to]] as const) {
+    if (end === source) return `the ${quote(side)} of this connection`;
+    if (conditionsOf(model, end).some((condition) => condition.from === source)) return `the ${noun} the ${quote(side)} of this connection is in`;
+  }
+  return `the ${noun} it is in`;
 }
 
 /**
@@ -358,6 +523,11 @@ function endsOf(references: readonly Reference[]): Map<string, Ends> {
     found.set(reference.file, ends);
   }
   return found;
+}
+
+/** The records of the model that a connection may start or end at. */
+function elementsOf(model: Model): { id: string }[] {
+  return [...model.people, ...model.systems, ...model.apps, ...model.stores, ...model.components, ...model.infrastructure];
 }
 
 /** A record and what it is in, and what that is in, to the top. */

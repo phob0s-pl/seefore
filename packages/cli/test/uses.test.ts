@@ -141,7 +141,7 @@ describe('seefore uses, in words', () => {
       '',
       '3 more parts take it from what they are in. Their files hold no `owner` to change.',
       '',
-      'No other record\'s name or description holds "maintainers".',
+      'No other record\'s name, `only` or description holds "maintainers".',
     ]);
   });
 
@@ -153,7 +153,7 @@ describe('seefore uses, in words', () => {
       '1 record names it in `technology`. It must name another in its place, or leave it out:',
       '  apps/relay-pool-server.yaml:4:18: `technology`',
       '',
-      'No other record\'s name or description holds "geoip".',
+      'No other record\'s name, `only` or description holds "geoip".',
     ]);
   });
 
@@ -170,7 +170,7 @@ describe('seefore uses, in words', () => {
       'If the record left with no connection goes too, 1 more record is named by nothing:',
       '  owner geo-company: The geo company (owners/geo-company.yaml)',
       '',
-      'No other record\'s name or description holds "Downloads the database" or "pool downloads geo".',
+      'No other record\'s name, `only` or description holds "Downloads the database" or "pool downloads geo".',
     ]);
   });
 
@@ -249,7 +249,7 @@ describe('seefore uses, in words', () => {
     // With nothing that stays speaking of it, the first sentence says so of what stays alone.
     write({ 'people/buyer.yaml': 'name: Buyer\n' });
     expect(run(['uses', 'shop']).out).toContain(
-      'No name or description of a record that stays holds "Old Shop" or "shop", or the name or the id of anything inside it.\n\n' +
+      'No name, `only` or description of a record that stays holds "Old Shop" or "shop", or the name or the id of anything inside it.\n\n' +
         '3 records that go with it speak of it too. For a rename, read these as well:',
     );
     expect(json(['uses', 'shop']).data.mentions.map((mention) => `${mention.record} ${mention.goes}`)).toEqual([
@@ -274,7 +274,7 @@ describe('seefore uses, in words', () => {
       'A name of one or two characters is looked for as it is written, capitals and all, and an id that short is not looked for.',
     ]);
     expect(run(['uses', 'ux']).out.split('\n').slice(-3)).toEqual([
-      'No other record\'s name or description holds "Design team".',
+      'No other record\'s name, `only` or description holds "Design team".',
       '',
       'An id of one or two characters is not looked for.',
     ]);
@@ -356,7 +356,7 @@ describe('seefore uses, for what a connection passes through', () => {
       '',
       'If the connection with one end in it goes, nothing is left with no connection.',
       '',
-      'No other record\'s name or description holds "workhorse", or the name or the id of anything inside it.',
+      'No other record\'s name, `only` or description holds "workhorse", or the name or the id of anything inside it.',
     ]);
   });
 
@@ -377,7 +377,7 @@ describe('seefore uses, for what a connection passes through', () => {
       '1 record is named by nothing but it and those connections:',
       '  piece of infrastructure balancer: Balancer (infrastructure/balancer.yaml)',
       '',
-      'No other record\'s name or description holds "web".',
+      'No other record\'s name, `only` or description holds "web".',
     ]);
     expect(json(['uses', 'web']).data.left.map((one) => `${one.record.id} ${one.reason} ${one.assumes}`)).toContain('balancer no-user connections-go');
   });
@@ -399,7 +399,7 @@ describe('seefore uses, for what a connection passes through', () => {
       '1 record is named by nothing but it and the connection with one end in it:',
       '  technology nginx: nginx (technologies/nginx.yaml)',
       '',
-      'No other record\'s name or description holds "ingress".',
+      'No other record\'s name, `only` or description holds "ingress".',
     ]);
     // One that only connections pass through has nothing else to say of them.
     expect(run(['uses', 'balancer']).out.split('\n').slice(2, 5)).toEqual([
@@ -486,6 +486,83 @@ describe('seefore uses, for a connection with one end in the thing that also pas
     expect(run(['uses', 'middle']).out.split('\n')[8]).toBe(
       `2 connections have one end in it and pass through it too. Each must go or get another end. One that gets another end must also ${ROUTE}:`,
     );
+  });
+});
+
+describe('seefore uses, for what is in what and a condition', () => {
+  /** An archive whose Desk, there only in the desk edition, keeps its drafts, with an ingress that is part of the archive. */
+  const DESK: Readonly<Record<string, string>> = {
+    'seefore.yaml': 'format: 1\nname: Desk\n',
+    'people/staff.yaml': 'name: Staff\n',
+    'systems/archive.yaml': 'name: Archive\n',
+    'apps/desk.yaml': 'name: Desk\nin: archive\nonly: in the desk edition\n',
+    'apps/worker.yaml': 'name: Worker\nin: archive\nonly: when Desk saves in the background\n',
+    'components/editor.yaml': 'name: Editor\nin: desk\n',
+    'stores/drafts.yaml': 'name: Drafts\nin: desk\n',
+    'stores/records.yaml': 'name: Records\nin: archive\n',
+    'infrastructure/ingress.yaml': 'name: Ingress\nin: archive\n',
+    'connections/staff-uses-desk.yaml': 'from: staff\nto: desk\nvia: [ingress]\nname: Edits records\n',
+    'connections/editor-keeps-drafts.yaml': 'from: editor\nto: drafts\naccess: read-write\nname: Keeps edits not yet saved\n',
+    'connections/desk-tells-staff.yaml': 'from: desk\nto: staff\nopens: to\nname: Says when a record is saved\n',
+    'connections/worker-saves-records.yaml': 'from: worker\nto: records\naccess: write\nname: Saves the records\n',
+  };
+
+  it('says how many records have its condition from it, and puts the store it keeps with it', () => {
+    write(DESK);
+    expect(run(['uses', 'desk']).out.split('\n')).toEqual([
+      'app desk: Desk (apps/desk.yaml)',
+      '',
+      '2 records inside it and 3 connections that start or end at it or at something inside it have its condition from it: ' +
+        'only in the desk edition. A connection that gets another end no longer has it: give it that `only` if it still holds.',
+      '',
+      'Goes with it: 2 records inside it, and 1 connection with both ends in it:',
+      '  component editor: Editor (components/editor.yaml)',
+      '  store drafts: Drafts (stores/drafts.yaml)',
+      '  connection editor-keeps-drafts: Keeps edits not yet saved (connections/editor-keeps-drafts.yaml)',
+      '',
+      '2 connections have one end in it. Each must go or get another end:',
+      '  connections/desk-tells-staff.yaml:1:7: `from`',
+      '  connections/staff-uses-desk.yaml:2:5: `to`',
+      '',
+      'If they go, 1 record is left with no connection:',
+      '  person staff: Staff (people/staff.yaml)',
+      '',
+      '1 record is named by nothing but it and those connections:',
+      '  piece of infrastructure ingress: Ingress (infrastructure/ingress.yaml)',
+      '',
+      // A condition may speak of a thing, as a name or a description may.
+      '1 record may speak of it ("desk") or of something inside it. Read each:',
+      '  apps/worker.yaml:3:1: `only` says "Desk"',
+    ]);
+  });
+
+  it('puts a piece of infrastructure with its system, and says nothing of a condition where nothing has one from it', () => {
+    write(DESK);
+    const lines = run(['uses', 'archive']).out.split('\n');
+    expect(lines.slice(0, 9)).toEqual([
+      'system archive: Archive (systems/archive.yaml)',
+      '',
+      'Goes with it: 6 records inside it, and 2 connections with both ends in it:',
+      '  app desk: Desk (apps/desk.yaml)',
+      '    component editor: Editor (components/editor.yaml)',
+      '    store drafts: Drafts (stores/drafts.yaml)',
+      '  app worker: Worker (apps/worker.yaml)',
+      '  store records: Records (stores/records.yaml)',
+      '  piece of infrastructure ingress: Ingress (infrastructure/ingress.yaml)',
+    ]);
+    expect(lines.join('\n')).not.toContain('condition');
+    // A condition that only the record itself holds is said nowhere else.
+    write({ 'apps/worker.yaml': 'name: Worker\nin: archive\nonly: when Desk saves in the background\n', 'connections/worker-saves-records.yaml': 'from: staff\nto: records\n' });
+    expect(run(['uses', 'worker']).out).not.toContain('its condition');
+  });
+
+  it('says it of one connection, for a thing that holds nothing', () => {
+    write({ ...DESK, 'stores/records.yaml': 'name: Records\nin: archive\nonly: where records are kept\n' });
+    expect(run(['uses', 'records']).out.split('\n')[2]).toBe(
+      '1 connection that starts or ends at it has its condition from it: only where records are kept. ' +
+        'A connection that gets another end no longer has it: give it that `only` if it still holds.',
+    );
+    expect(json(['uses', 'records']).data.condition).toEqual({ only: 'where records are kept', parts: [], connections: ['worker-saves-records'] });
   });
 });
 

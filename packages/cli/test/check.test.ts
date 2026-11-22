@@ -463,7 +463,8 @@ describe('seefore check', () => {
     expect(result.code).toBe(0);
     expect(result.out).toContain(
       'connections/buys.yaml:1:1: warning: This connection has the same `from`, `to` and `name` as `connections/buys-again.yaml`. ' +
-        'If these are the same exchange, keep one. If their purposes differ, give each a name that says which.',
+        'If these are the same exchange, keep one. If they are two ways of one exchange, give each its route in `via`, or say in `only` when each is taken. ' +
+        'If their purposes differ, give each a name that says which.',
     );
     expect(result.out.endsWith('4 records read. 0 errors, 2 warnings.')).toBe(true);
   });
