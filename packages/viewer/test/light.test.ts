@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { holds, litBy } from '../src/light.ts';
+import type { View, ViewBox } from '@seefore/core';
 import { CONTAINERS, CONTEXT, HARD_CONTAINERS } from './fixture.ts';
 
 /** Which boxes and arrows a hover, the focus or a choice lights. */
@@ -63,5 +64,47 @@ describe('what passes through', () => {
   it('lights, for what has no box, the arrows that pass through it and their ends', () => {
     expect(lit({ kind: 'passed', id: 'balancer' }, HARD_CONTAINERS)).toEqual({ boxes: ['cards', 'web'], arrows: ['web~cards'] });
     expect(lit({ kind: 'passed', id: 'nothing' }, HARD_CONTAINERS)).toEqual({ boxes: [], arrows: [] });
+  });
+});
+
+/** A box of a made-up view, with nothing in its marks unless given. */
+function made(id: string, more: Partial<ViewBox> = {}): ViewBox {
+  return { id, family: 'apps', look: 'app', name: id, line: '[App]', scope: false, inside: true, loops: [], within: [], passing: [], ...more };
+}
+
+/**
+ * A view in which a runner reloads a proxy, a request passes through it on an arrow, and the
+ * copies of a jobs app, which has no arrow, tell each other through it and through a load
+ * balancer that has no box.
+ */
+const HELD: View = {
+  id: 'vellum.containers',
+  kind: 'containers',
+  scope: 'vellum',
+  title: 'Container view: Vellumoak',
+  boxes: [
+    made('browser'),
+    made('jobs', { loops: ['jobs-tell-jobs'] }),
+    made('proxy', { family: 'infrastructure', look: 'infrastructure', inside: false, passing: ['browser-asks-web', 'jobs-tell-jobs'] }),
+    made('runner'),
+    made('web'),
+  ],
+  boundary: { id: 'vellum', name: 'Vellumoak', line: '[System]', title: 'Vellumoak [System]' },
+  arrows: [
+    { id: 'browser~web', from: 'browser', to: 'web', connections: ['browser-asks-web'], names: ['Asks'], technology: [], route: { count: 1, names: ['proxy'], line: 'via proxy' } },
+    { id: 'runner~proxy', from: 'runner', to: 'proxy', connections: ['runner-reloads-proxy'], names: ['Reloads'], technology: [] },
+  ],
+  left: { outside: [], broken: [] },
+  legend: [],
+  passed: [{ id: 'balancer', name: 'Load balancer', connections: ['jobs-tell-jobs'], arrows: [] }],
+};
+
+describe('what passes through a connection held in a box', () => {
+  it('lights, with a box, the box that holds a connection passing through it, since that connection has no arrow', () => {
+    expect(lit({ kind: 'box', id: 'proxy' }, HELD)).toEqual({ boxes: ['browser', 'jobs', 'proxy', 'runner', 'web'], arrows: ['browser~web', 'runner~proxy'] });
+  });
+
+  it('lights, for what has no box, the box that holds a connection passing through it', () => {
+    expect(lit({ kind: 'passed', id: 'balancer' }, HELD)).toEqual({ boxes: ['jobs'], arrows: [] });
   });
 });

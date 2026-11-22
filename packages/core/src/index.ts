@@ -64,4 +64,4 @@ export type { App, Component, Connection, Infrastructure, Owner, Person, Store, 
 export { DESCRIPTION_MAX, NAME_MAX, firstSentence } from './text.ts';
 export { isShort, readInFull, recordsWithId, removalOf, usesOf, wordsFor } from './uses.ts';
 export type { Change, Left, Mention, Removal, RemovalOptions, UsedRecord, Uses } from './uses.ts';
-export { UNNAMED_CONNECTION, viewsOf } from './views.ts';
+export { UNNAMED_CONNECTION, connectionsInNoView, viewsOf } from './views.ts';

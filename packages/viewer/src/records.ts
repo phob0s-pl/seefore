@@ -135,3 +135,13 @@ export function passingWords(count: number): string {
 export function passingThrough(model: Model, id: string): string[] {
   return model.connections.filter((connection) => connection.via?.includes(id) === true).map((connection) => connection.id);
 }
+
+/**
+ * How many connections of a model pass through each record that some connection names in
+ * `via`, by id, counted in one pass. `via` names no id twice, so each id in it is one connection.
+ */
+export function passingCounts(model: Model): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const connection of model.connections) for (const id of connection.via ?? []) counts.set(id, (counts.get(id) ?? 0) + 1);
+  return counts;
+}

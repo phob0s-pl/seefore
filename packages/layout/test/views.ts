@@ -39,15 +39,15 @@ export function contextView(scope: string, boxes: ViewBox[], arrows: ViewArrow[]
   return { id: `${scope}.context`, kind: 'context', scope, title: `Context view: ${scope}`, boxes, arrows, left: { outside: [], broken: [] }, legend: [], passed: [] };
 }
 
-/** A container view of a system, with its boundary. */
-export function containerView(scope: string, boxes: ViewBox[], arrows: ViewArrow[], title = `${scope} [System]`): View {
+/** A container view of a system, with its boundary, which says the system's name and its kind line. */
+export function containerView(scope: string, boxes: ViewBox[], arrows: ViewArrow[], name = scope, line = '[System]'): View {
   return {
     id: `${scope}.containers`,
     kind: 'containers',
     scope,
-    title: `Container view: ${scope}`,
+    title: `Container view: ${name}`,
     boxes,
-    boundary: { id: scope, name: scope, title },
+    boundary: { id: scope, name, line, title: `${name} ${line}` },
     arrows,
     left: { outside: [], broken: [] },
     legend: [],

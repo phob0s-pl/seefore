@@ -88,7 +88,7 @@ function placedBox(box: ViewBox, shape: ElkShape): PlacedBox {
 /** The boundary at its place, with its title in the top padding, cut to the room inside. */
 function placedBoundary(boundary: ViewBoundary, shape: ElkShape): PlacedBoundary {
   const rect = rectOf(shape);
-  const title = titleText(boundary.title, rect.width - BOUNDARY_PADDING.left - BOUNDARY_PADDING.right);
+  const title = titleText(boundary, rect.width - BOUNDARY_PADDING.left - BOUNDARY_PADDING.right);
   const titleAt = {
     x: rect.x + BOUNDARY_PADDING.left,
     y: rect.y + (BOUNDARY_PADDING.top - TITLE_LINE_HEIGHT) / 2,

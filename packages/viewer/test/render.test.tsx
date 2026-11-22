@@ -5,7 +5,22 @@ import type { Route } from '../src/address.ts';
 import type { Selection } from '../src/follow.ts';
 import type { Shown } from '../src/live.ts';
 import { Page, pageTitle } from '../src/page.tsx';
-import { CONTAINERS, CONTAINER_PICTURE, CONTEXT, CONTEXT_PICTURE, FAILED_PICTURE, HARD_CONTAINERS, HARD_PICTURE, HARD_STATE, MODEL, PROBLEMS, STATE } from './fixture.ts';
+import {
+  BROKEN_HOP_STATE,
+  CONTAINERS,
+  CONTAINER_PICTURE,
+  CONTEXT,
+  CONTEXT_PICTURE,
+  FAILED_PICTURE,
+  HARD_CONTAINERS,
+  HARD_MODEL,
+  HARD_OUTLINE,
+  HARD_PICTURE,
+  HARD_STATE,
+  MODEL,
+  PROBLEMS,
+  STATE,
+} from './fixture.ts';
 
 /** The page drawn without a browser, as React's server rendering draws it. */
 
@@ -327,10 +342,19 @@ describe('the hard cases in a picture', () => {
     expect(shapeOf(html, 'queue-or-topic')).toContain('class="outline rim"');
     // Pointed at both ends.
     expect(shapeOf(html, 'infrastructure')).toMatch(/<polygon class="outline" points="15,1 225,1 239,75 225,149 15,149 1,75"/);
-    // One line, where a system has two.
+    // A system's double line, with a solid tab in its top left corner that a system with no mark has not.
     expect(shapeOf(html, 'system-external')).toContain('<rect class="outline"');
-    expect(shapeOf(html, 'system-external')).not.toContain('rim');
+    expect(shapeOf(html, 'system-external')).toContain('<rect class="outline rim"');
+    expect(shapeOf(html, 'system-external')).toContain('<path class="tab" d="M0,0 L28,0 L0,28 Z">');
+    expect(shapeOf(render(containers, CONTAINER_PICTURE), 'system')).not.toContain('class="tab"');
     expect(shapeOf(html, 'app')).toMatch(/<rect class="outline"[^>]*rx="10"/);
+  });
+
+  it('draws a box’s text in the room the layout broke it for, and a little more', () => {
+    // The layout leaves 12 px each side for an app, 12 and 20 for a topic, 16 for a piece of infrastructure: the page 2 px less.
+    expect(html).toMatch(/data-id="web"[^]*?<div class="box-text" style="padding-left:10px;padding-right:10px"/);
+    expect(html).toMatch(/data-id="events"[^]*?<div class="box-text" style="padding-left:10px;padding-right:18px"/);
+    expect(html).toMatch(/data-id="proxy"[^]*?<div class="box-text" style="padding-left:14px;padding-right:14px"/);
   });
 
   it('colours a piece of infrastructure by a family of its own, and a queue as a store', () => {
@@ -469,3 +493,89 @@ describe('the listing of the hard cases', () => {
 function name(text: string): string {
   return `>${escaped(text)}</button>`;
 }
+
+describe('a step of a route whose record has an error in its file', () => {
+  const desk: Route = { page: 'view', view: HARD_CONTAINERS.id };
+
+  it('is shown by its id in the panel of the arrow, as a link like any other step', () => {
+    const html = render(desk, HARD_PICTURE, { kind: 'arrow', id: 'web~cards' }, BROKEN_HOP_STATE);
+    const panel = html.slice(html.indexOf('aria-label="Details"'));
+    expect(panel).toContain('<button type="button" class="record-name">Gateway</button>, <button type="button" class="record-name">balancer</button>');
+  });
+
+  it('keeps the panel open when chosen there, and says that its file has a problem, with a link to the problems', () => {
+    // What the step's link chooses: the record by its id.
+    const html = render(desk, HARD_PICTURE, { kind: 'record', id: 'balancer' }, BROKEN_HOP_STATE);
+    expect(html).toContain('class="page with-panel"');
+    const panel = html.slice(html.indexOf('aria-label="Details"'));
+    expect(panel).toContain('>balancer</h2>');
+    expect(panel).toContain(
+      '<p class="record-problem"><code>infrastructure/balancer.yaml</code> has a problem, so <code>balancer</code> is not in the model: <a href="#/problems">see the problems</a>.</p>',
+    );
+    // The connection that passes through it is still there, with its whole route.
+    expect(panel).toContain('Passing through it (1)');
+    expect(panel).toContain('Web → Card provider');
+  });
+});
+
+describe('the legend of an external system', () => {
+  it('draws for an external system the shape the picture draws: a system with its tab', () => {
+    const html = hard();
+    const sample = html.slice(html.indexOf('data-key="system-external"'), html.indexOf('</svg>', html.indexOf('data-key="system-external"')));
+    expect(sample).toContain('class="outline rim"');
+    expect(sample).toContain('<path class="tab"');
+  });
+
+  it('draws for the system in scope, when it is external, its thicker line with the tab', () => {
+    const legend = { ...HARD_CONTAINERS, legend: [{ key: 'system-scope-external' as const, text: 'This system, which is external: what the view is about' }] };
+    const html = render(desk(legend), HARD_PICTURE, null, { ...HARD_STATE, views: [legend] });
+    const start = html.indexOf('data-key="system-scope-external"');
+    const sample = html.slice(start, html.indexOf('</svg>', start));
+    expect(sample).toContain('stroke-width="3"');
+    expect(sample).toContain('class="outline rim"');
+    expect(sample).toContain('<path class="tab"');
+    expect(html).toContain('<span>This system, which is external: what the view is about</span>');
+  });
+});
+
+/** The route of a view of the hard cases. */
+function desk(view: View): Route {
+  return { page: 'view', view: view.id };
+}
+
+describe('the listing, for what passes through and what is in no picture', () => {
+  it('says how many connections pass through a system, an app and a component, as `seefore list` does', () => {
+    const model = {
+      ...HARD_MODEL,
+      components: [{ id: 'signer', file: 'components/signer.yaml', name: 'Signer', in: 'gateway' }],
+      connections: HARD_MODEL.connections.map((one) => (one.id === 'web-calls-cards' ? { ...one, via: ['gateway', 'signer', 'balancer'] } : one)),
+    };
+    const outline = { ...HARD_OUTLINE, withParts: [{ id: 'desk', apps: [{ id: 'gateway', components: ['signer'] }, { id: 'web', components: [] }], stores: ['events'] }] };
+    const whole = render({ page: 'model' }, null, null, { ...HARD_STATE, model, outline });
+    const html = whole.slice(whole.indexOf('<article class="listing"'));
+    expect(html).toContain('<code>gateway</code></span><span class="entry-facts"> (service; 1 connection passes through it)</span>');
+    expect(html).toContain('<code>signer</code></span><span class="entry-facts"> (1 connection passes through it)</span>');
+    expect(html).toContain('<code>balancer</code></span><span class="entry-facts"> (1 connection passes through it)</span>');
+    // An app nothing passes through says nothing of it, as `seefore list` does; a piece of infrastructure says so.
+    expect(html).toContain('<code>web</code></span><span class="entry-facts"> (service)</span>');
+    const none = render({ page: 'model' }, null, null, { ...HARD_STATE, model: { ...model, connections: model.connections.filter((one) => one.id !== 'clerk-uses-web') } });
+    expect(none).toContain('<code>proxy</code></span><span class="entry-facts"> (nginx; no connection passes through it)</span>');
+    const external = render({ page: 'model' }, null, null, { ...HARD_STATE, model: { ...HARD_MODEL, connections: [...HARD_MODEL.connections, { id: 'clerk-asks-desk', file: 'connections/clerk-asks-desk.yaml', from: 'clerk', to: 'desk', via: ['cards'] }] } });
+    expect(external).toContain('<code>cards</code></span><span class="entry-facts"> (external; 1 connection passes through it)</span>');
+  });
+
+  it('says at its top how many connections are in no picture, and marks each on its line', () => {
+    const html = render({ page: 'model' }, null, null, { ...HARD_STATE, inNoView: ['proxy-checks-web', 'web-asks-cards'] });
+    const listing = html.slice(html.indexOf('<article class="listing"'));
+    const notice = '<p class="in-no-picture" role="note">2 connections are in no picture, since no view draws both their ends. Each is marked “in no picture” under Connections.</p>';
+    expect(listing).toContain(notice);
+    // Under the name of the model and where it is, before every section.
+    expect(listing.indexOf(notice)).toBeLessThan(listing.indexOf('<section'));
+    expect(times(listing, '(in no picture)')).toBe(2);
+    expect(listing).toMatch(/<code>proxy-checks-web<\/code><\/span><span class="entry-facts"> \(in no picture\)<\/span>/);
+    expect(render({ page: 'model' }, null, null, { ...HARD_STATE, inNoView: ['proxy-checks-web'] })).toContain(
+      '1 connection is in no picture, since no view draws both its ends. It is marked “in no picture” under Connections.',
+    );
+    expect(render({ page: 'model' }, null, null, HARD_STATE)).not.toContain('in no picture');
+  });
+});

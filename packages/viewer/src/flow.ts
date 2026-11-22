@@ -1,12 +1,15 @@
 import type { Drawn, PlacedArrow, PlacedBoundary, PlacedBox, PlacedLabel, Point, View, ViewArrow, ViewBoundary, ViewBox } from '@seefore/core';
 import type { Edge, Node, NodeHandle } from '@xyflow/react';
 import { Position } from '@xyflow/react';
+import { onOutlines } from './outline.ts';
+import type { Outlined } from './outline.ts';
 import { LINE_HEIGHT } from './theme.ts';
 
 /**
  * A picture as React Flow's nodes and edges. React Flow is only the canvas: every place, route
  * and line of text comes from the picture, and nothing is worked out again but what React Flow
- * asks for, a child's place from its parent's.
+ * asks for, a child's place from its parent's, and where an arrow's end touches the outline its
+ * box draws.
  */
 
 /** What a box node draws. */
@@ -25,6 +28,7 @@ export interface BoundaryData extends Record<string, unknown> {
 /** What an arrow edge draws. */
 export interface ArrowData extends Record<string, unknown> {
   arrow: ViewArrow;
+  /** Its place in the picture, with each end moved to touch the outline of its box. */
   placed: PlacedArrow;
   /** Its place among the arrows of the picture, which makes a name for its label's clip that no other arrow has. */
   index: number;
@@ -146,10 +150,18 @@ export function toFlow(view: View, drawn: Drawn): { nodes: PictureNode[]; edges:
   const drawnIds = new Set(nodes.map((node) => node.id));
   const arrows = new Map(view.arrows.map((arrow) => [arrow.id, arrow]));
   const names = namesIn(view);
+  const places = new Map(drawn.boxes.map((placed) => [placed.id, placed]));
+  // A box with the outline its look draws, where an arrow's end is moved to touch it.
+  const outlined = (id: string): Outlined | undefined => {
+    const box = boxes.get(id);
+    const placed = places.get(id);
+    return box === undefined || placed === undefined ? undefined : { look: box.look, scope: box.scope, x: placed.x, y: placed.y, width: placed.width, height: placed.height };
+  };
   const edges: ArrowEdge[] = [];
   for (const placed of drawn.arrows) {
     const arrow = arrows.get(placed.id);
     if (arrow === undefined || !drawnIds.has(arrow.from) || !drawnIds.has(arrow.to)) continue;
+    const sections = onOutlines(placed.sections, outlined(arrow.from), outlined(arrow.to));
     edges.push({
       id: placed.id,
       type: 'arrow',
@@ -157,7 +169,7 @@ export function toFlow(view: View, drawn: Drawn): { nodes: PictureNode[]; edges:
       target: arrow.to,
       sourceHandle: HANDLE_OUT,
       targetHandle: HANDLE_IN,
-      data: { arrow, placed, index: edges.length },
+      data: { arrow, placed: { ...placed, sections }, index: edges.length },
       ariaLabel: arrowSaid(arrow, names),
       selectable: false,
       // Above the boundary's tint, which is a node of its own.

@@ -1,7 +1,7 @@
-import type { Model, ViewerState } from '@seefore/core';
+import type { ViewerState } from '@seefore/core';
 import { useMemo } from 'react';
 import type { ReactNode } from 'react';
-import { SORT, descriptionOf, endName, indexOf, nameOf, passingThrough, passingWords, technologyNames } from './records.ts';
+import { SORT, descriptionOf, endName, indexOf, nameOf, passingCounts, passingWords, technologyNames } from './records.ts';
 import type { Found, Index } from './records.ts';
 
 /**
@@ -27,30 +27,50 @@ interface ListingProps {
   onOpen(id: string, byKeyboard: boolean): void;
 }
 
+/** What the listing looks up once for the facts of every record. */
+interface Known {
+  index: Index;
+  /** How many connections pass through each record that some connection names in `via`, by id. */
+  through: ReadonlyMap<string, number>;
+  /** The connections that no view holds. */
+  inNoView: ReadonlySet<string>;
+}
+
+/** What a connection is marked with on its line when no view holds it. */
+export const IN_NO_PICTURE = 'in no picture';
+
 /**
- * The facts of a record, in brackets after it, as the listing gives them. `where` comes first
- * when given. A piece of infrastructure says last how many connections pass through it.
+ * The facts of a record, in brackets after it, as `seefore list` gives them. `where` comes first
+ * when given. A system, an app or a component says last how many connections pass through it
+ * when any does, and a piece of infrastructure always. A connection that no view holds says so.
  */
-function factsOf(found: Found, index: Index, where: string | undefined, model: Model): string[] {
+function factsOf(found: Found, known: Known, where: string | undefined): string[] {
+  const { index, through } = known;
   const facts: (string | undefined)[] = [where];
   const owner = (id: string | undefined) => (id === undefined ? undefined : `owner: ${nameOf(index, id)}`);
   const technologies = (ids: readonly string[] | undefined) => (ids === undefined ? undefined : technologyNames(index, ids).join(', '));
+  const passing = (id: string) => {
+    const n = through.get(id) ?? 0;
+    return n === 0 ? undefined : passingWords(n);
+  };
   switch (found.family) {
     case 'systems':
-      facts.push(found.record.external === true ? 'external' : undefined, owner(found.record.owner));
+      facts.push(found.record.external === true ? 'external' : undefined, owner(found.record.owner), passing(found.record.id));
       break;
     case 'infrastructure':
-      facts.push(technologies(found.record.technology), owner(found.record.owner), passingWords(passingThrough(model, found.record.id).length));
+      facts.push(technologies(found.record.technology), owner(found.record.owner), passingWords(through.get(found.record.id) ?? 0));
       break;
     case 'apps':
+      facts.push(found.record.kind, technologies(found.record.technology), owner(found.record.owner), passing(found.record.id));
+      break;
     case 'stores':
       facts.push(found.record.kind, technologies(found.record.technology), owner(found.record.owner));
       break;
     case 'components':
-      facts.push(technologies(found.record.technology), owner(found.record.owner));
+      facts.push(technologies(found.record.technology), owner(found.record.owner), passing(found.record.id));
       break;
     case 'connections':
-      facts.push(technologies(found.record.technology));
+      facts.push(technologies(found.record.technology), known.inNoView.has(found.record.id) ? IN_NO_PICTURE : undefined);
       break;
     default:
       break;
@@ -60,8 +80,7 @@ function factsOf(found: Found, index: Index, where: string | undefined, model: M
 
 interface EntryProps {
   id: string;
-  index: Index;
-  model: Model;
+  known: Known;
   onOpen(id: string, byKeyboard: boolean): void;
   said?: string;
   where?: string;
@@ -69,7 +88,8 @@ interface EntryProps {
 }
 
 /** One record: its name, which opens its panel, its sort and id, its facts, and its description, which the panel shows whole. */
-function Entry({ id, index, model, onOpen, said, where, children }: EntryProps) {
+function Entry({ id, known, onOpen, said, where, children }: EntryProps) {
+  const { index } = known;
   const found = index.get(id);
   if (found === undefined) {
     return (
@@ -79,7 +99,7 @@ function Entry({ id, index, model, onOpen, said, where, children }: EntryProps) 
       </li>
     );
   }
-  const facts = factsOf(found, index, where, model);
+  const facts = factsOf(found, known, where);
   const description = descriptionOf(found);
   // A part says what sort it is, as `seefore list` does; a connection says where it goes instead.
   const sort = found.family === 'apps' || found.family === 'stores' || found.family === 'components' ? `${SORT[found.family]} ` : '';
@@ -117,18 +137,26 @@ function Section({ title, count: n, note, children }: { title: string; count: nu
 /** The listing of the model. */
 export function Listing({ state, onOpen }: ListingProps) {
   const index = useMemo(() => indexOf(state.model), [state.model]);
+  const through = useMemo(() => passingCounts(state.model), [state.model]);
+  const inNoView = useMemo(() => new Set(state.inNoView), [state.inNoView]);
+  const known: Known = { index, through, inNoView };
   const { outline, model } = state;
   const looseCount = outline.loose.reduce((sum, part) => sum + 1 + part.components.length, 0);
   // The note is needed only where a part shows no owner and has one all the same.
   const taken = Object.entries(state.ownership).some(([id, found]) => found.from !== id);
   const families = [model.people, model.systems, model.apps, model.stores, model.components, model.infrastructure, model.connections, model.owners, model.technologies];
   const listed = families.reduce((sum, family) => sum + family.length, 0);
-  const entry = (id: string, more: { said?: string; where?: string; children?: ReactNode } = {}) => <Entry key={id} id={id} index={index} model={model} onOpen={onOpen} {...more} />;
+  const entry = (id: string, more: { said?: string; where?: string; children?: ReactNode } = {}) => <Entry key={id} id={id} known={known} onOpen={onOpen} {...more} />;
 
   return (
     <article className="listing">
       <h1>{state.name ?? '(no name: the marker file could not be read)'}</h1>
       <p className="where">{`${state.format === null ? 'format unknown' : `format ${state.format}`}, ${state.directory}`}</p>
+      {state.inNoView.length > 0 && (
+        <p className="in-no-picture" role="note">
+          {inNoPictureWords(state.inNoView.length)}
+        </p>
+      )}
 
       <Section title="People" count={outline.people.length}>
         <ul>{outline.people.map((id) => entry(id))}</ul>
@@ -181,6 +209,16 @@ export function Listing({ state, onOpen }: ListingProps) {
       </p>
     </article>
   );
+}
+
+/**
+ * The line at the top of the listing that says how many connections no view holds, and why: a
+ * view draws a connection only where it draws both its ends, or one end is in its system.
+ */
+export function inNoPictureWords(n: number): string {
+  const which = n === 1 ? '1 connection is' : `${n} connections are`;
+  const marked = n === 1 ? 'It is' : 'Each is';
+  return `${which} in no picture, since no view draws both ${n === 1 ? 'its' : 'their'} ends. ${marked} marked “${IN_NO_PICTURE}” under Connections.`;
 }
 
 /** The sort of what a group of connections stands under, as a person reads it. */

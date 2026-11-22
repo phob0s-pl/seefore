@@ -209,7 +209,7 @@ export const CONTAINERS: View = {
       passing: [],
     },
   ],
-  boundary: { id: 'shop', name: 'Shop', title: 'Shop [System]' },
+  boundary: { id: 'shop', name: 'Shop', line: '[System]', title: 'Shop [System]' },
   arrows: [
     { id: 'customer~shop', from: 'customer', to: 'shop', connections: ['customer-uses-shop'], names: ['Buys goods'], technology: [] },
     { id: 'order-api~card-provider', from: 'order-api', to: 'card-provider', ...PAYMENTS },
@@ -254,9 +254,9 @@ export const CARD_CONTEXT: View = {
   passed: [],
 };
 
-/** A box of 240 by 150 at a place. */
-function at(x: number, y: number) {
-  return { x, y, width: 240, height: 150 };
+/** A box of 240 by 150 at a place, with its text as far in from its sides as the layout puts it for its look. */
+function at(x: number, y: number, inset = { left: 12, right: 12 }) {
+  return { x, y, width: 240, height: 150, inset };
 }
 
 export const CONTEXT_PICTURE: Drawn = {
@@ -355,6 +355,7 @@ export const STATE: ViewerState = {
   },
   outline: OUTLINE,
   views: [CONTEXT, CONTAINERS, CARD_CONTEXT],
+  inNoView: [],
 };
 
 /** The picture of each view of the state. */
@@ -451,7 +452,7 @@ export const HARD_CONTAINERS: View = {
     }),
     hardBox({ id: 'web', family: 'apps', look: 'app', name: 'Web', line: '[App: service]', sentence: 'The pages of the desk.', inside: true }),
   ],
-  boundary: { id: 'desk', name: 'Desk', title: 'Desk [System]' },
+  boundary: { id: 'desk', name: 'Desk', line: '[System]', title: 'Desk [System]' },
   arrows: [
     {
       id: 'clerk~web',
@@ -498,9 +499,9 @@ export const HARD_PICTURE: Drawn = {
   boxes: [
     { id: 'cards', ...at(1220, 200), name: ['Card provider'], line: '[System: external]', sentence: ['Takes card payments.'] },
     { id: 'clerk', ...at(40, 330), name: ['Clerk'], line: '[Person]', sentence: ['Answers the tickets.'] },
-    { id: 'events', ...at(820, 360), name: ['Ticket events'], line: '[Store: topic · Kafka]', sentence: ['What changed on a ticket.'] },
+    { id: 'events', ...at(820, 360, { left: 12, right: 20 }), name: ['Ticket events'], line: '[Store: topic · Kafka]', sentence: ['What changed on a ticket.'] },
     { id: 'gateway', ...at(820, 104), name: ['Gateway'], line: '[App: service]', sentence: ['Signs the calls that leave the desk.'] },
-    { id: 'proxy', ...at(40, 60), name: ['HTTPS proxy'], line: '[Infrastructure · nginx]', sentence: ["Ends HTTPS on the desk's host and", 'passes requests on.'] },
+    { id: 'proxy', ...at(40, 60, { left: 16, right: 16 }), name: ['HTTPS proxy'], line: '[Infrastructure · nginx]', sentence: ["Ends HTTPS on the desk's host and", 'passes requests on.'] },
     { id: 'web', ...at(400, 200), name: ['Web'], line: '[App: service]', sentence: ['The pages of the desk.'] },
   ],
   arrows: [
@@ -549,4 +550,19 @@ export const HARD_STATE: ViewerState = {
   ownership: {},
   outline: HARD_OUTLINE,
   views: [HARD_CONTAINERS],
+  inNoView: [],
+};
+
+/**
+ * The hard cases with an error in the file of the load balancer: it is not in the model, though
+ * the payment still passes through it, and the view names it by its id.
+ */
+export const BROKEN_HOP_STATE: ViewerState = {
+  ...HARD_STATE,
+  revision: 'h2',
+  errors: 1,
+  problems: [{ file: 'infrastructure/balancer.yaml', line: 2, column: 1, severity: 'error', code: 'key-unknown', message: 'A piece of infrastructure has no `colour`.' }],
+  model: { ...HARD_MODEL, infrastructure: HARD_MODEL.infrastructure.filter((piece) => piece.id !== 'balancer') },
+  outline: { ...HARD_OUTLINE, infrastructure: ['proxy'] },
+  views: [{ ...HARD_CONTAINERS, passed: [{ id: 'balancer', name: 'balancer', connections: ['web-calls-cards'], arrows: ['web~cards'] }] }],
 };

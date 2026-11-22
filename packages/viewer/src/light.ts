@@ -15,9 +15,11 @@ export interface Lit {
 
 /**
  * What lights when the reader points at a target. A box lights itself, every arrow that starts
- * or ends at it or passes through it, and the boxes at the ends of each. An arrow lights itself,
- * its two ends and the boxes it passes through. Something with no box lights the arrows that
- * pass through it and their ends. A target the view does not hold lights nothing.
+ * or ends at it or passes through it, and the boxes at the ends of each, and every box that
+ * holds, inside it or between its copies, a connection that passes through it. An arrow lights
+ * itself, its two ends and the boxes it passes through. Something with no box lights the arrows
+ * that pass through it and their ends, and the boxes that hold a connection that passes through
+ * it. A target the view does not hold lights nothing.
  */
 export function litBy(view: View, target: Target): Lit {
   const lit: Lit = { boxes: new Set(), arrows: new Set() };
@@ -29,6 +31,10 @@ export function litBy(view: View, target: Target): Lit {
       lit.boxes.add(arrow.to);
     }
   };
+  // A connection held in a box has no arrow: the box that holds it lights in its place.
+  const lightHolders = (connections: ReadonlySet<string>) => {
+    for (const box of view.boxes) if ([...box.within, ...box.loops].some((id) => connections.has(id))) lit.boxes.add(box.id);
+  };
   if (target.kind === 'arrow') {
     light(new Set([target.id]));
     const connections = new Set(view.arrows.find((arrow) => arrow.id === target.id)?.connections ?? []);
@@ -36,7 +42,9 @@ export function litBy(view: View, target: Target): Lit {
     return lit;
   }
   if (target.kind === 'passed') {
-    light(new Set(view.passed.find((each) => each.id === target.id)?.arrows ?? []));
+    const passed = view.passed.find((each) => each.id === target.id);
+    light(new Set(passed?.arrows ?? []));
+    lightHolders(new Set(passed?.connections ?? []));
     return lit;
   }
   if (!holdsBox(view, target.id)) return lit;
@@ -44,6 +52,7 @@ export function litBy(view: View, target: Target): Lit {
   const passing = new Set(view.boxes.find((box) => box.id === target.id)?.passing ?? []);
   const arrows = view.arrows.filter((arrow) => arrow.from === target.id || arrow.to === target.id || arrow.connections.some((id) => passing.has(id)));
   light(new Set(arrows.map((arrow) => arrow.id)));
+  lightHolders(passing);
   return lit;
 }
 

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { graphOf, sorted, straightened } from '../src/graph.ts';
 import { layOut } from '../src/index.ts';
 import { ELLIPSIS, widthOf } from '../src/measure.ts';
-import { BOUNDARY_PADDING, BOX_HEIGHT, BOX_TEXT_WIDTH, BOX_WIDTH, LABEL_LINE_HEIGHT, NAME_FONT, ROUTE_LINE_HEIGHT, TECHNOLOGY_LINE_HEIGHT, TITLE_FONT } from '../src/sizes.ts';
+import { BOUNDARY_PADDING, BOX_HEIGHT, BOX_PADDING, BOX_TEXT_WIDTH, BOX_WIDTH, LABEL_LINE_HEIGHT, NAME_FONT, ROUTE_LINE_HEIGHT, TECHNOLOGY_LINE_HEIGHT, TITLE_FONT } from '../src/sizes.ts';
 import { onEdge, troubles, within } from './geometry.ts';
 import { arrow, box, containerView, contextView, crowded, fan, inside, route, shopContainers, shopContext } from './views.ts';
 
@@ -33,7 +33,7 @@ describe('the layout of a view', () => {
       view: 'alone.context',
       width: BOX_WIDTH + 24,
       height: BOX_HEIGHT + 24,
-      boxes: [{ id: 'alone', x: 12, y: 12, width: BOX_WIDTH, height: BOX_HEIGHT, name: ['Alone'], line: '[System]', sentence: [] }],
+      boxes: [{ id: 'alone', x: 12, y: 12, width: BOX_WIDTH, height: BOX_HEIGHT, name: ['Alone'], line: '[System]', sentence: [], inset: { left: BOX_PADDING, right: BOX_PADDING } }],
       arrows: [],
     });
   });
@@ -114,13 +114,16 @@ describe('the layout of a view', () => {
     });
   });
 
-  it('cuts the title of a boundary narrower than it', async () => {
-    const title = 'The system that keeps every record of every customer [System]';
-    const picture = await drawn(containerView('long', [inside('one', 'apps')], [], title));
-    const boundary = picture.boundary;
-    expect(boundary?.title.endsWith(ELLIPSIS)).toBe(true);
-    expect(title.startsWith(boundary?.title.slice(0, -1) ?? '')).toBe(true);
-    expect(boundary?.titleAt.width).toBeLessThanOrEqual((boundary?.width ?? 0) - BOUNDARY_PADDING.left - BOUNDARY_PADDING.right);
+  it('cuts the name in the title of a boundary narrower than it, and keeps its kind line whole', async () => {
+    const name = 'The system that keeps every record of every customer';
+    for (const line of ['[System]', '[System: external]']) {
+      const picture = await drawn(containerView('long', [inside('one', 'apps')], [], name, line));
+      const boundary = picture.boundary;
+      const cut = boundary?.title.slice(0, -` ${line}`.length) ?? '';
+      expect(boundary?.title.endsWith(`${ELLIPSIS} ${line}`)).toBe(true);
+      expect(name.startsWith(cut.slice(0, -1))).toBe(true);
+      expect(boundary?.titleAt.width).toBeLessThanOrEqual((boundary?.width ?? 0) - BOUNDARY_PADDING.left - BOUNDARY_PADDING.right);
+    }
   });
 
   it('draws a boundary with nothing inside it at the size of one box, with its title', async () => {

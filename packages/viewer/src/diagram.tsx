@@ -9,6 +9,7 @@ import { litBy } from './light.ts';
 import { passingWords } from './records.ts';
 import type { Lit, Target } from './light.ts';
 import { LOOP_MARK, PASSING_MARK, Sample, Shape } from './shapes.tsx';
+import { TEXT_SLACK } from './theme.ts';
 import { MAX_ZOOM, MOVE_MS, detailAt, fitViewport, litBounds, minZoomFor, percent, smallNote, whole } from './zoom.ts';
 import type { Room } from './zoom.ts';
 
@@ -63,7 +64,7 @@ function BoxView({ id, data }: NodeProps<BoxNode>) {
       <svg className="shape" width={placed.width} height={placed.height} aria-hidden="true">
         <Shape look={box.look} scope={box.scope} width={placed.width} height={placed.height} />
       </svg>
-      <div className="box-text" aria-hidden="true">
+      <div className="box-text" style={{ paddingLeft: placed.inset.left - TEXT_SLACK, paddingRight: placed.inset.right - TEXT_SLACK }} aria-hidden="true">
         <div className="box-name">
           {placed.name.map((line, at) => (
             <div key={at} className="text-line">

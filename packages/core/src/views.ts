@@ -18,6 +18,7 @@ export const UNNAMED_CONNECTION = 'Unnamed connection';
 const LEGEND: readonly LegendEntry[] = [
   { key: 'person', text: 'Person: a role that uses the software, runs it or takes part' },
   { key: 'system-scope', text: 'This system: what the view is about' },
+  { key: 'system-scope-external', text: 'This system, which is external: what the view is about' },
   { key: 'system', text: "Other system: software seen as one thing, ours or somebody else's" },
   { key: 'system-external', text: "External system: somebody else's, used as it is given" },
   { key: 'app', text: 'App: something that runs code' },
@@ -32,8 +33,11 @@ const LEGEND: readonly LegendEntry[] = [
   { key: 'passing', text: "Passing through: how many of this view's connections pass through it" },
 ];
 
-/** What the legend says of the boundary when an arrow starts or ends at its edge. */
-const BOUNDARY_WITH_ARROWS = 'Boundary: this system, with its apps and stores inside; an arrow at its edge is to or from the system itself';
+/** What the legend says of the boundary of an external system, in place of what it says of the boundary of another. */
+const BOUNDARY_EXTERNAL = "Boundary: this system, which is external: somebody else's, used as it is given, with its apps and stores inside";
+
+/** What the legend adds to what it says of the boundary when an arrow starts or ends at its edge. */
+const BOUNDARY_ARROWS = '; an arrow at its edge is to or from the system itself';
 
 /** The kinds of store that hold messages on their way, drawn with a look of their own. */
 const MESSAGE_KINDS: ReadonlySet<string> = new Set(['queue', 'topic']);
@@ -160,6 +164,8 @@ interface Sorted {
   loops: Map<string, string[]>;
   /** By the id of a box: the connections between two records that are both drawn as that box. */
   within: Map<string, string[]>;
+  /** Each connection held in a box, as a mark or as a line of its panel, with that box's id. */
+  inBoxes: { box: string; connection: ModelRecord<Connection> }[];
   left: ViewLeft;
 }
 
@@ -181,7 +187,7 @@ function viewOf(kind: ViewKind, system: ModelRecord<System>, index: Index, follo
   const ours = new Set([scope, ...inside]);
   const frame: Frame = { kind, scope, ours, drawn: new Set([scope, ...boxes]) };
   const sorted = sortedFor(followed, frame);
-  const passing = passingOf(sorted.bundles, frame, new Set(boxes), index);
+  const passing = passingOf(sorted, frame, new Set(boxes), index);
 
   const viewBoxes = boxes.map((id): ViewBox => {
     const record = recordOf(id, scope, index);
@@ -199,8 +205,9 @@ function viewOf(kind: ViewKind, system: ModelRecord<System>, index: Index, follo
       passing: passing.boxes.get(id) ?? [],
     };
   });
-  const arrows = [...sorted.bundles.entries()].sort(([a], [b]) => (a < b ? -1 : 1)).map(([id, bundle]) => arrowOf(id, bundle, index));
-  const boundary = kind === 'containers' ? { id: scope, name: system.name, title: `${system.name} ${systemLine(system)}` } : undefined;
+  const arrows = [...sorted.bundles.entries()].sort(([a], [b]) => (a < b ? -1 : 1)).map(([id, bundle]) => arrowOf(id, bundle, frame, index));
+  const line = systemLine(system);
+  const boundary = kind === 'containers' ? { id: scope, name: system.name, line, title: `${system.name} ${line}` } : undefined;
   return {
     id: `${scope}.${kind}`,
     kind,
@@ -210,9 +217,26 @@ function viewOf(kind: ViewKind, system: ModelRecord<System>, index: Index, follo
     ...(boundary === undefined ? {} : { boundary }),
     arrows,
     left: sorted.left,
-    legend: legendOf(viewBoxes, boundary !== undefined, arrows, scope),
+    legend: legendOf(viewBoxes, boundary !== undefined, arrows, system),
     passed: passing.passed,
   };
+}
+
+/**
+ * The connections of a model that none of its views holds in any way: not on an arrow, not
+ * inside a box or between its copies, and not counted as left out. A view is about a system
+ * and holds only what it draws both ends of, or what has an end in its system, so a connection
+ * between things that are in no system, such as a person and a piece of infrastructure, is in
+ * a view only where both stand beside a system it is about. In order of id.
+ */
+export function connectionsInNoView(model: Model, views: readonly View[]): string[] {
+  const held = new Set<string>();
+  for (const view of views) {
+    for (const arrow of view.arrows) for (const id of arrow.connections) held.add(id);
+    for (const box of view.boxes) for (const id of [...box.loops, ...box.within]) held.add(id);
+    for (const id of [...view.left.outside, ...view.left.broken]) held.add(id);
+  }
+  return inOrder(model.connections.map((connection) => connection.id).filter((id) => !held.has(id)));
 }
 
 /** Each person, other system and piece of infrastructure with a connection to the system or to anything in it. */
@@ -235,7 +259,7 @@ function neighboursOf(scope: string, followed: readonly Followed[]): Set<string>
  * nothing says that record is in the system. Any other is not the view's.
  */
 function sortedFor(followed: readonly Followed[], frame: Frame): Sorted {
-  const sorted: Sorted = { bundles: new Map(), loops: new Map(), within: new Map(), left: { outside: [], broken: [] } };
+  const sorted: Sorted = { bundles: new Map(), loops: new Map(), within: new Map(), inBoxes: [], left: { outside: [], broken: [] } };
   const at = (end: End | undefined): string | undefined => {
     const place = end === undefined ? undefined : placeOf(end, frame.kind, frame.scope);
     return place !== undefined && frame.drawn.has(place) ? place : undefined;
@@ -253,6 +277,7 @@ function sortedFor(followed: readonly Followed[], frame: Frame): Sorted {
       // The system to itself is at its own boundary in a container view, which has no box to mark: its context view marks it.
       const marks = connection.from === connection.to ? sorted.loops : sorted.within;
       marks.set(start, [...(marks.get(start) ?? []), connection.id]);
+      sorted.inBoxes.push({ box: start, connection });
     } else if (frame.ours.has(start) || frame.ours.has(end)) {
       const id = `${start}~${end}`;
       const bundle = sorted.bundles.get(id) ?? { from: start, to: end, own: [], others: [] };
@@ -265,7 +290,7 @@ function sortedFor(followed: readonly Followed[], frame: Frame): Sorted {
   return sorted;
 }
 
-/** What the arrows of a view pass through: on each box, and apart from the boxes. */
+/** What the connections a view holds pass through: on each box, and apart from the boxes. */
 interface Passing {
   /** By the id of a box: the connections that pass through it, in order of id. */
   boxes: Map<string, string[]>;
@@ -273,30 +298,41 @@ interface Passing {
   passed: ViewPassed[];
 }
 
+/** A connection a view holds, with where it is drawn: the ends of its arrow, or the box that holds it, and the arrow if it has one. */
+interface Held {
+  connection: ModelRecord<Connection>;
+  from: string;
+  to: string;
+  arrow?: string;
+}
+
 /**
- * Where each id that the connections of the arrows name in `via` is drawn. One drawn as a box
- * counts its connections on that box, unless the box is an end of the connection's own arrow:
- * what is passed through inside an end does not show at this level. One drawn as no box, such
- * as a piece of infrastructure that nothing in the view starts or ends at, is listed with its
- * connections and their arrows.
+ * Where each id is drawn that `via` names on a connection the view holds: on an arrow, inside
+ * a box, or between the copies of what a box stands for. One drawn as a box counts the
+ * connection on that box, unless the box is an end of the connection's own arrow or the box
+ * that holds it: what is passed through inside an end does not show at this level. One drawn as
+ * no box, such as a piece of infrastructure that nothing in the view starts or ends at, is
+ * listed with its connections and the arrows of those that have one. A connection the view
+ * leaves out passes through nothing in it.
  */
-function passingOf(bundles: ReadonlyMap<string, Bundle>, frame: Frame, boxes: ReadonlySet<string>, index: Index): Passing {
+function passingOf(sorted: Sorted, frame: Frame, boxes: ReadonlySet<string>, index: Index): Passing {
+  const held: Held[] = [
+    ...[...sorted.bundles].flatMap(([arrow, bundle]) => [...bundle.own, ...bundle.others].map((connection) => ({ connection, from: bundle.from, to: bundle.to, arrow }))),
+    ...sorted.inBoxes.map(({ box, connection }) => ({ connection, from: box, to: box })),
+  ];
   const onBoxes = new Map<string, Set<string>>();
   const apart = new Map<string, { connections: Set<string>; arrows: Set<string> }>();
-  for (const [arrow, bundle] of bundles) {
-    for (const connection of [...bundle.own, ...bundle.others]) {
-      for (const id of connection.via ?? []) {
-        const end = follow(id, index);
-        const place = end === undefined ? undefined : placeOf(end, frame.kind, frame.scope);
-        if (place === bundle.from || place === bundle.to) continue;
-        if (place !== undefined && boxes.has(place)) {
-          onBoxes.set(place, (onBoxes.get(place) ?? new Set()).add(connection.id));
-        } else {
-          const found = apart.get(id) ?? { connections: new Set(), arrows: new Set() };
-          found.connections.add(connection.id);
-          found.arrows.add(arrow);
-          apart.set(id, found);
-        }
+  for (const { connection, from, to, arrow } of held) {
+    for (const id of connection.via ?? []) {
+      const place = hopPlace(id, frame, index);
+      if (place === from || place === to) continue;
+      if (place !== undefined && boxes.has(place)) {
+        onBoxes.set(place, (onBoxes.get(place) ?? new Set()).add(connection.id));
+      } else {
+        const found = apart.get(id) ?? { connections: new Set(), arrows: new Set() };
+        found.connections.add(connection.id);
+        if (arrow !== undefined) found.arrows.add(arrow);
+        apart.set(id, found);
       }
     }
   }
@@ -317,11 +353,17 @@ function inOrder(ids: Iterable<string>): string[] {
 /**
  * One arrow: the connections between the two drawn records themselves first, then the others,
  * each in order of id; a text for each; the technologies, when every connection names the
- * same ones; and what they pass through, when any does.
+ * same ones; and what they pass through at this level, when any does.
  */
-function arrowOf(id: string, bundle: Bundle, index: Index): ViewArrow {
+function arrowOf(id: string, bundle: Bundle, frame: Frame, index: Index): ViewArrow {
   const connections = [...bundle.own, ...bundle.others];
-  const route = routeOf(connections, index.names);
+  // A hop drawn as either end of the arrow is passed inside that end, which this level does not show.
+  const atEnd = (hop: string) => {
+    const place = hopPlace(hop, frame, index);
+    return place === bundle.from || place === bundle.to;
+  };
+  const routes = connections.map((connection) => (connection.via ?? []).filter((hop) => !atEnd(hop)));
+  const route = routeOf(routes, index.names);
   return {
     id,
     from: bundle.from,
@@ -331,6 +373,15 @@ function arrowOf(id: string, bundle: Bundle, index: Index): ViewArrow {
     technology: sharedTechnology(connections, index.technologies),
     ...(route === undefined ? {} : { route }),
   };
+}
+
+/**
+ * Where a view draws something a connection passes through: the id of its box, or of the
+ * boundary, as for an end. Nothing when it is a record with an error in its file, or inside one.
+ */
+function hopPlace(id: string, frame: Frame, index: Index): string | undefined {
+  const end = follow(id, index);
+  return end === undefined ? undefined : placeOf(end, frame.kind, frame.scope);
 }
 
 /**
@@ -346,14 +397,14 @@ function sharedTechnology(connections: readonly ModelRecord<Connection>[], names
 }
 
 /**
- * What the connections of an arrow pass through: how many name something in `via`, and, when
- * every one names the same in the same order, those names in the order of travel, as the line
+ * What the connections of an arrow pass through at its level, given for each the hops that are
+ * not drawn as an end of the arrow: how many pass through anything, and, when every one passes
+ * through the same in the same order, those names in the order of travel, as the line
  * `via Ingress, Workhorse`. When the routes differ, or only some connections have one, the line
  * says on how many: `via on 2 of 5`. Something whose file has an error is named by its id.
- * Nothing when no connection names anything there.
+ * Nothing when no connection passes through anything at this level.
  */
-function routeOf(connections: readonly ModelRecord<Connection>[], names: ReadonlyMap<string, string>): ViewRoute | undefined {
-  const routes = connections.map((connection) => connection.via ?? []);
+function routeOf(routes: readonly (readonly string[])[], names: ReadonlyMap<string, string>): ViewRoute | undefined {
   const count = routes.filter((route) => route.length > 0).length;
   if (count === 0) return undefined;
   const [first = []] = routes;
@@ -411,13 +462,16 @@ function recordOf(id: string, scope: string, index: Index): Described {
 }
 
 /**
- * The legend of a view: what it draws, and no more, in the legend's order. The boundary says
- * what an arrow at its edge means when the view draws one.
+ * The legend of a view: what it draws, and no more, in the legend's order. An external system
+ * in scope is drawn with the outline of an external system and the thicker line of the system
+ * in scope, and the legend explains both. The boundary says when it is an external system's,
+ * and what an arrow at its edge means when the view draws one.
  */
-function legendOf(boxes: readonly ViewBox[], boundary: boolean, arrows: readonly ViewArrow[], scope: string): LegendEntry[] {
+function legendOf(boxes: readonly ViewBox[], boundary: boolean, arrows: readonly ViewArrow[], scope: ModelRecord<System>): LegendEntry[] {
   const drawn = new Set<LegendKey>();
   for (const box of boxes) {
     drawn.add(box.look);
+    if (box.scope && box.look === 'system-external') drawn.add('system-scope-external');
     if (box.loops.length > 0) drawn.add('loop');
     if (box.passing.length > 0) drawn.add('passing');
   }
@@ -425,6 +479,7 @@ function legendOf(boxes: readonly ViewBox[], boundary: boolean, arrows: readonly
   if (arrows.length > 0) drawn.add('arrow');
   if (arrows.some((arrow) => arrow.connections.length > 1)) drawn.add('arrow-many');
   if (arrows.some((arrow) => arrow.route !== undefined)) drawn.add('route');
-  const atEdge = boundary && arrows.some((arrow) => arrow.from === scope || arrow.to === scope);
-  return LEGEND.filter((entry) => drawn.has(entry.key)).map(({ key, text }) => ({ key, text: key === 'boundary' && atEdge ? BOUNDARY_WITH_ARROWS : text }));
+  const atEdge = boundary && arrows.some((arrow) => arrow.from === scope.id || arrow.to === scope.id);
+  const boundaryText = (text: string) => `${scope.external === true ? BOUNDARY_EXTERNAL : text}${atEdge ? BOUNDARY_ARROWS : ''}`;
+  return LEGEND.filter((entry) => drawn.has(entry.key)).map(({ key, text }) => ({ key, text: key === 'boundary' ? boundaryText(text) : text }));
 }

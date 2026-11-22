@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { load } from '../src/load.ts';
 import type { Model } from '../src/model.ts';
 import type { View, ViewArrow } from '../src/picture.ts';
-import { viewsOf } from '../src/views.ts';
+import { connectionsInNoView, viewsOf } from '../src/views.ts';
 import { EXAMPLE } from './example.ts';
 
 /** `viewsOf`: which views a model has, and which boxes, arrows, marks and legend each holds. */
@@ -80,7 +80,7 @@ describe('which views a model has', () => {
   });
 
   it('gives a container view its boundary, and a context view none', () => {
-    expect(view(SHOP, 'shop.containers').boundary).toEqual({ id: 'shop', name: 'Shop', title: 'Shop [System]' });
+    expect(view(SHOP, 'shop.containers').boundary).toEqual({ id: 'shop', name: 'Shop', line: '[System]', title: 'Shop [System]' });
     expect(view(SHOP, 'shop.context')).not.toHaveProperty('boundary');
   });
 });
@@ -725,7 +725,7 @@ describe('the legend of the hard cases', () => {
       'passing',
     ]);
     expect(view(DESK, 'desk.context').legend.map((entry) => entry.key)).toEqual(['person', 'system-scope', 'system-external', 'infrastructure', 'arrow', 'route', 'passing']);
-    expect(view(DESK, 'cards.context').legend.map((entry) => entry.key)).toEqual(['system', 'system-external', 'arrow', 'route']);
+    expect(view(DESK, 'cards.context').legend.map((entry) => entry.key)).toEqual(['system-scope-external', 'system', 'system-external', 'arrow', 'route']);
     // Without a route, a mark or a new look, none of their lines.
     expect(view(SHOP, 'shop.containers').legend.map((entry) => entry.key)).toEqual(['app', 'store', 'boundary']);
   });
@@ -738,5 +738,173 @@ describe('the legend of the hard cases', () => {
       route: 'Route: what the connections pass through, in order; “via on 2 of 5” when they differ',
       passing: "Passing through: how many of this view's connections pass through it",
     });
+  });
+});
+
+/**
+ * Vellumoak as it was lifted by hand: a runner reloads the HTTPS proxy, so the proxy has a box,
+ * and the requests of the staff's browser, an app of the same system, pass through it to the
+ * web app. One copy of the web app tells another through the proxy, and through a load balancer
+ * that nothing starts or ends at.
+ */
+const VELLUM: Readonly<Record<string, string>> = {
+  'systems/vellum.yaml': 'name: Vellumoak\n',
+  'apps/browser.yaml': 'name: Staff browser\nin: vellum\n',
+  'apps/web.yaml': 'name: Web\nin: vellum\n',
+  'apps/runner.yaml': 'name: Runner\nin: vellum\n',
+  'infrastructure/proxy.yaml': 'name: HTTPS proxy\n',
+  'infrastructure/balancer.yaml': 'name: Load balancer\n',
+  'connections/runner-reloads-proxy.yaml': 'from: runner\nto: proxy\nname: Reloads it\n',
+  'connections/browser-asks-pages.yaml': 'from: browser\nto: web\nvia: [proxy]\nname: Asks for pages\n',
+  'connections/browser-sends-audio.yaml': 'from: browser\nto: web\nvia: [proxy]\nname: Sends audio\n',
+  'connections/browser-polls-jobs.yaml': 'from: browser\nto: web\nvia: [proxy, balancer]\nname: Polls the jobs\n',
+  'connections/web-tells-web.yaml': 'from: web\nto: web\nvia: [proxy, balancer]\nname: Tells another copy\n',
+};
+
+describe('what passes through a box, though both ends are one box', () => {
+  const requests = ['browser-asks-pages', 'browser-polls-jobs', 'browser-sends-audio'];
+
+  it('counts on a box every connection the view holds that passes through it: on an arrow, inside a box and between its copies', () => {
+    const context = view(VELLUM, 'vellum.context');
+    // All three requests are inside the Vellumoak box, and the copies of the web app are too.
+    expect(context.boxes.find((box) => box.id === 'vellum')?.within).toEqual(requests);
+    expect(context.boxes.find((box) => box.id === 'vellum')?.loops).toEqual(['web-tells-web']);
+    expect(context.arrows.map((one) => one.id)).toEqual(['vellum~proxy']);
+    expect(passingOn(context)).toEqual({ proxy: [...requests, 'web-tells-web'] });
+    const containers = view(VELLUM, 'vellum.containers');
+    expect(arrow(containers, 'browser~web').connections).toEqual(requests);
+    expect(containers.boxes.find((box) => box.id === 'web')?.loops).toEqual(['web-tells-web']);
+    expect(passingOn(containers)).toEqual({ proxy: [...requests, 'web-tells-web'] });
+  });
+
+  it('lists what has no box with the connections held in a box, which have no arrow', () => {
+    expect(view(VELLUM, 'vellum.context').passed).toEqual([{ id: 'balancer', name: 'Load balancer', connections: ['browser-polls-jobs', 'web-tells-web'], arrows: [] }]);
+    expect(view(VELLUM, 'vellum.containers').passed).toEqual([
+      { id: 'balancer', name: 'Load balancer', connections: ['browser-polls-jobs', 'web-tells-web'], arrows: ['browser~web'] },
+    ]);
+  });
+
+  it('does not count what passes through the box that holds it, nor a connection the view leaves out', () => {
+    const files = {
+      ...VELLUM,
+      'apps/gate.yaml': 'name: Gate\nin: vellum\n',
+      'connections/browser-asks-web.yaml': 'from: browser\nto: web\nvia: [gate]\n',
+      'people/clerk.yaml': 'name: Clerk\n',
+      'connections/clerk-uses-web.yaml': 'from: clerk\nto: web\n',
+      'connections/clerk-reloads-proxy.yaml': 'from: clerk\nto: proxy\nvia: [balancer]\n',
+    };
+    const context = view(files, 'vellum.context');
+    expect(context.left.outside).toEqual(['clerk-reloads-proxy']);
+    // The gate is drawn as the Vellumoak box, which holds the request: it passes through nothing this level shows.
+    expect(passingOn(context)).toEqual({ proxy: [...requests, 'web-tells-web'] });
+    expect(context.passed.map((one) => [one.id, one.connections])).toEqual([['balancer', ['browser-polls-jobs', 'web-tells-web']]]);
+  });
+});
+
+describe('the route of an arrow at its level', () => {
+  /** Home Assistant: a component of Core reaches the Whisper app through another component of Core. */
+  const HOME: Readonly<Record<string, string>> = {
+    'systems/home.yaml': 'name: Home Assistant\n',
+    'systems/voice.yaml': 'name: Voice\n',
+    'apps/core.yaml': 'name: Core\nin: home\n',
+    'apps/whisper.yaml': 'name: Whisper\nin: voice\n',
+    'components/assist.yaml': 'name: Assist\nin: core\n',
+    'components/wyoming.yaml': 'name: wyoming integration\nin: core\n',
+    'infrastructure/proxy.yaml': 'name: HTTPS proxy\n',
+    'connections/assist-asks-whisper.yaml': 'from: assist\nto: whisper\nvia: [wyoming]\nname: Asks for the words\n',
+    'connections/assist-sends-audio.yaml': 'from: assist\nto: whisper\nvia: [wyoming, proxy]\nname: Sends the audio\n',
+  };
+
+  it('leaves out a hop drawn as an end of the arrow, and has no route when that leaves none', () => {
+    const only = { ...HOME, 'connections/assist-sends-audio.yaml': 'from: assist\nto: core\n' };
+    for (const id of ['home.containers', 'home.context', 'voice.context']) {
+      const shown = view(only, id);
+      expect(shown.arrows).toHaveLength(1);
+      expect(shown.arrows[0]).not.toHaveProperty('route');
+      expect(shown.legend.map((entry) => entry.key)).not.toContain('route');
+    }
+  });
+
+  it('keeps the hops that are not drawn as an end, in order', () => {
+    // Only the audio passes through anything at this level.
+    expect(arrow(view(HOME, 'home.containers'), 'core~voice').route).toEqual({ count: 1, names: [], line: 'via on 1 of 2' });
+    const both = { ...HOME, 'connections/assist-asks-whisper.yaml': 'from: assist\nto: whisper\nvia: [proxy, wyoming]\n' };
+    expect(arrow(view(both, 'home.context'), 'home~voice').route).toEqual({ count: 2, names: ['HTTPS proxy'], line: 'via HTTPS proxy' });
+  });
+
+  it('keeps the whole route on each connection, for the panel', () => {
+    const model = modelOf(HOME);
+    expect(model.connections.find((one) => one.id === 'assist-sends-audio')?.via).toEqual(['wyoming', 'proxy']);
+  });
+});
+
+describe('the connections that no view holds', () => {
+  /** A system, and beside it a person who reloads a proxy, the proxy checking a peer and itself: none of it touches the system. */
+  const OPS: Readonly<Record<string, string>> = {
+    'systems/desk.yaml': 'name: Desk\n',
+    'apps/api.yaml': 'name: API\nin: desk\n',
+    'people/operator.yaml': 'name: Operator\n',
+    'infrastructure/proxy.yaml': 'name: Proxy\n',
+    'infrastructure/peer.yaml': 'name: Peer proxy\n',
+    'connections/operator-reloads-proxy.yaml': 'from: operator\nto: proxy\n',
+    'connections/proxy-checks-peer.yaml': 'from: proxy\nto: peer\n',
+    'connections/proxy-syncs-proxy.yaml': 'from: proxy\nto: proxy\n',
+  };
+
+  it('are those no view draws on an arrow, holds in a box, marks or counts as left out', () => {
+    const model = modelOf(OPS);
+    const views = viewsOf(model);
+    for (const one of views) expect([one.arrows, one.left]).toEqual([[], { outside: [], broken: [] }]);
+    expect(connectionsInNoView(model, views)).toEqual(['operator-reloads-proxy', 'proxy-checks-peer', 'proxy-syncs-proxy']);
+  });
+
+  it('leave out a connection that a view holds in any way', () => {
+    const files = {
+      ...OPS,
+      // Now the proxy and the operator stand beside the desk: what is between them is left out there, and the proxy's copies are its mark.
+      'connections/proxy-checks-api.yaml': 'from: proxy\nto: api\n',
+      'connections/operator-uses-api.yaml': 'from: operator\nto: api\n',
+      'connections/api-wakes-api.yaml': 'from: api\nto: api\n',
+      'systems/bank.yaml': 'name: Bank\ncolour: blue\n',
+      'connections/api-calls-bank.yaml': 'from: api\nto: bank\n',
+      'connections/peer-calls-bank.yaml': 'from: peer\nto: bank\n',
+    };
+    const model = modelOf(files);
+    expect(connectionsInNoView(model, viewsOf(model))).toEqual(['peer-calls-bank', 'proxy-checks-peer']);
+  });
+
+  it('are every connection of a model with no system, which has no view', () => {
+    const model = modelOf({ 'people/a.yaml': 'name: A\n', 'people/b.yaml': 'name: B\n', 'connections/a-asks-b.yaml': 'from: a\nto: b\n' });
+    expect(connectionsInNoView(model, viewsOf(model))).toEqual(['a-asks-b']);
+  });
+});
+
+describe('an external system that a view is about', () => {
+  const files = { ...DESK, 'apps/terminal.yaml': 'name: Terminal\nin: cards\n', 'connections/terminal-calls-api.yaml': 'from: terminal\nto: api\n' };
+
+  it('gives its boundary its kind line apart, so that the layout keeps it whole', () => {
+    expect(view(files, 'cards.containers').boundary).toEqual({ id: 'cards', name: 'Card provider', line: '[System: external]', title: 'Card provider [System: external]' });
+  });
+
+  it('explains in the legend both its outline and the thicker line of the system in scope, where the view draws them', () => {
+    const context = view(files, 'cards.context');
+    expect(context.legend.filter((entry) => entry.key.startsWith('system'))).toEqual([
+      { key: 'system-scope-external', text: 'This system, which is external: what the view is about' },
+      { key: 'system', text: "Other system: software seen as one thing, ours or somebody else's" },
+      { key: 'system-external', text: "External system: somebody else's, used as it is given" },
+    ]);
+    // The view of a system of ours draws no such line.
+    expect(view(files, 'desk.context').legend.map((entry) => entry.key)).not.toContain('system-scope-external');
+  });
+
+  it('says in the legend that the boundary is an external system', () => {
+    const inside = { ...files, 'connections/api-pays-cards.yaml': 'from: api\nto: terminal\nname: Takes a payment\n' };
+    expect(view(inside, 'cards.containers').legend.find((entry) => entry.key === 'boundary')?.text).toBe(
+      "Boundary: this system, which is external: somebody else's, used as it is given, with its apps and stores inside",
+    );
+    // The payment ends at the card provider itself, at the edge of its boundary.
+    expect(view(files, 'cards.containers').legend.find((entry) => entry.key === 'boundary')?.text).toBe(
+      "Boundary: this system, which is external: somebody else's, used as it is given, with its apps and stores inside; an arrow at its edge is to or from the system itself",
+    );
   });
 });

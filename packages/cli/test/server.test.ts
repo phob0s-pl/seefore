@@ -316,6 +316,35 @@ describe('a reading of the source directory', () => {
     expect(reading.problems.map((problem) => problem.code)).toContain('format-not-readable');
   });
 
+  it('gives the connections that no view holds, which the listing of the model still has', () => {
+    // A person reloads a proxy, the proxy checks a peer and itself, and none of it touches the one system.
+    write({
+      'seefore.yaml': 'format: 1\nname: Desk\n',
+      'systems/desk.yaml': 'name: Desk\n',
+      'apps/api.yaml': 'name: API\nin: desk\n',
+      'people/operator.yaml': 'name: Operator\n',
+      'infrastructure/proxy.yaml': 'name: Proxy\n',
+      'infrastructure/peer.yaml': 'name: Peer proxy\n',
+      'connections/operator-reloads-proxy.yaml': 'from: operator\nto: proxy\n',
+      'connections/proxy-checks-peer.yaml': 'from: proxy\nto: peer\n',
+      'connections/proxy-syncs-proxy.yaml': 'from: proxy\nto: proxy\n',
+      'connections/operator-uses-api.yaml': 'from: operator\nto: api\n',
+    });
+    const reading = readingOf(join(root, 'arch'));
+    const unseen = ['operator-reloads-proxy', 'proxy-checks-peer', 'proxy-syncs-proxy'];
+    expect(reading.problems).toEqual([]);
+    expect(reading.inNoView).toEqual(unseen);
+    // No view draws them, leaves them out or marks them, and the listing of the model has each under where it starts.
+    expect(JSON.stringify(reading.views)).not.toMatch(/operator-reloads-proxy|proxy-checks-peer|proxy-syncs-proxy/);
+    expect(reading.outline.connections.flatMap((group) => group.connections)).toEqual(expect.arrayContaining(unseen));
+    expect(reading.model.connections.map((one) => one.id)).toEqual(expect.arrayContaining(unseen));
+    // Once the proxy stands beside the system, what it does with the operator is left out there, and its copies are its mark.
+    write({ 'connections/proxy-checks-api.yaml': 'from: proxy\nto: api\n' });
+    expect(readingOf(join(root, 'arch')).inNoView).toEqual(['proxy-checks-peer']);
+    // With no model there is nothing in no view.
+    expect(readingOf(join(root, 'gone')).inNoView).toEqual([]);
+  });
+
   it('says that the directory is gone, when it is', () => {
     const reading = readingOf(join(root, 'gone'));
     expect(reading.available).toBe(false);

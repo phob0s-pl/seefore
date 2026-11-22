@@ -324,23 +324,23 @@ summary:focus-visible,
   fill: none;
 }
 
+/* The tab of an external system: solid, in the colour of its line, so that it is seen by its shape when the picture is small. */
+.tab {
+  fill: var(--line-colour);
+}
+
+/* The room at its sides is the picture's, set on the element: what the layout broke the lines for, and a little more. */
 .box-text {
   position: absolute;
   inset: 0;
   overflow: hidden;
-  padding: 12px var(--box-padding) 0;
+  padding-top: 12px;
   text-align: center;
 }
 
 /* Under a store's lid. */
 .box[data-look='store'] .box-text {
   padding-top: 18px;
-}
-
-/* Clear of the near end of a queue or a topic, on its right, with the room the engine breaks lines for. */
-.box[data-look='queue-or-topic'] .box-text {
-  padding-left: calc(var(--box-padding) - 2px);
-  padding-right: calc(var(--box-padding) + 6px);
 }
 
 .text-line {
@@ -705,6 +705,15 @@ summary:focus-visible,
 .listing .note {
   color: var(--quiet);
   margin: 4px 0;
+}
+
+/* How many connections are in no picture: a line that stands out, by its rule and its weight, not by colour alone. */
+.listing .in-no-picture {
+  margin: 12px 0 4px;
+  padding: 8px 12px;
+  border-left: 4px solid var(--accent);
+  background: var(--side);
+  font-weight: bold;
 }
 
 .listing ul {

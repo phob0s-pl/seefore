@@ -112,8 +112,12 @@ export const LINE_HEIGHT = {
   route: 14,
 } as const;
 
-/** How far a box's text stands in from its edge, in CSS pixels. The engine breaks lines for a box 220 pixels wide inside. */
-export const BOX_PADDING = 10;
+/**
+ * How much more room the page gives a box's text on each side than the layout broke its lines
+ * for, in CSS pixels, so that a browser whose font is a hair wider than the one measured does
+ * not clip a line. The shape of each look leaves this room clear.
+ */
+export const TEXT_SLACK = 2;
 
 /** The CSS custom properties of one theme. */
 function properties(colours: Colours): string {
@@ -134,7 +138,7 @@ export function themeCss(): string {
     .map(([name, value]) => `--height-${name}: ${value}px;`)
     .join(' ');
   return [
-    `:root { color-scheme: light dark; --font: ${FONT}; --box-padding: ${BOX_PADDING}px; ${sizes} ${heights} ${properties(LIGHT)} }`,
+    `:root { color-scheme: light dark; --font: ${FONT}; ${sizes} ${heights} ${properties(LIGHT)} }`,
     `@media (prefers-color-scheme: dark) { :root { ${properties(DARK)} } }`,
   ].join('\n');
 }

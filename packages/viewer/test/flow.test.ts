@@ -2,7 +2,7 @@ import type { Drawn } from '@seefore/core';
 import { describe, expect, it } from 'vitest';
 import { HANDLE_IN, HANDLE_OUT, HEAD_LENGTH, headOf, labelLines, pathOf, relativeTo, toFlow } from '../src/flow.ts';
 import { LINE_HEIGHT } from '../src/theme.ts';
-import { CONTAINERS, CONTAINER_PICTURE, CONTEXT, CONTEXT_PICTURE } from './fixture.ts';
+import { CONTAINERS, CONTAINER_PICTURE, CONTEXT, CONTEXT_PICTURE, HARD_CONTAINERS, HARD_PICTURE } from './fixture.ts';
 
 /** A picture as React Flow's nodes and edges: parents first, children from their parent, the routes as they are. */
 
@@ -53,7 +53,7 @@ describe('places relative to the parent', () => {
   it('leaves out a box or an arrow that the view does not hold', () => {
     const drawn: Drawn = {
       ...CONTEXT_PICTURE,
-      boxes: [...CONTEXT_PICTURE.boxes, { id: 'stranger', x: 0, y: 0, width: 240, height: 150, name: ['Stranger'], line: '[Person]', sentence: [] }],
+      boxes: [...CONTEXT_PICTURE.boxes, { id: 'stranger', x: 0, y: 0, width: 240, height: 150, name: ['Stranger'], line: '[Person]', sentence: [], inset: { left: 12, right: 12 } }],
       arrows: [...CONTEXT_PICTURE.arrows, { id: 'stranger~shop', from: 'stranger', to: 'shop', sections: [] }],
     };
     const { nodes, edges } = toFlow(CONTEXT, drawn);
@@ -131,5 +131,37 @@ describe('the lines of a label', () => {
   it('draws the lines it is given and breaks none', () => {
     const long = 'A name far too long for a label of this width';
     expect(labelLines({ x: 0, y: 0, width: 40, height: 15, lines: [long] }).map((line) => line.text)).toEqual([long]);
+  });
+});
+
+describe('where an arrow meets its box', () => {
+  /** The hard cases with the check from the proxy leaving 25 px above its point, and the event put in 55 px above the middle of the topic. */
+  const moved: Drawn = {
+    ...HARD_PICTURE,
+    arrows: HARD_PICTURE.arrows.map((arrow) => {
+      if (arrow.id === 'proxy~web') return { ...arrow, sections: [[{ x: 280, y: 110 }, { x: 330, y: 110 }, { x: 330, y: 250 }, { x: 400, y: 250 }]] };
+      if (arrow.id === 'web~events') return { ...arrow, sections: [[{ x: 520, y: 350 }, { x: 520, y: 380 }, { x: 820, y: 380 }]] };
+      return arrow;
+    }),
+  };
+  const sections = (id: string) => toFlow(HARD_CONTAINERS, moved).edges.find((edge) => edge.id === id)?.data?.placed.sections ?? [];
+
+  it('starts on the sloping side of a piece of infrastructure, not on the box around it', () => {
+    // The point is at the box's edge, 279 px; 25 px above it the side is 14 × 25 / 74 px further in, less half the line.
+    const [start] = sections('proxy~web')[0] ?? [];
+    expect(start?.y).toBe(110);
+    expect(start?.x).toBeCloseTo(279 - (14 * 25) / 74 + 1, 1);
+  });
+
+  it('ends on the round end of a queue or a topic', () => {
+    // The end's ellipse has its middle 8 px in and is 7 px wide and 74 px high.
+    const end = sections('web~events')[0]?.at(-1);
+    expect(end?.y).toBe(380);
+    expect(end?.x).toBeCloseTo(820 + 8 - 7 * Math.sqrt(1 - (55 / 74) ** 2) - 1, 1);
+  });
+
+  it('keeps an end on a box that fills its rectangle, and an end at the boundary, where they are', () => {
+    expect(sections('web~cards')).toEqual(HARD_PICTURE.arrows.find((arrow) => arrow.id === 'web~cards')?.sections);
+    expect(toFlow(CONTAINERS, CONTAINER_PICTURE).edges.map((edge) => edge.data?.placed.sections)).toEqual(CONTAINER_PICTURE.arrows.map((arrow) => arrow.sections));
   });
 });

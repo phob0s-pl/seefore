@@ -49,9 +49,10 @@ export interface ViewBox {
   /** Connections between two different records that are both drawn as this box: their ids, in order of id. Only on a box of the system in scope. */
   within: string[];
   /**
-   * Connections of the view's arrows that pass through this box: that name in `via` its record,
-   * or anything drawn as it. Their ids, in order of id. A connection is not counted on a box
-   * that its own arrow starts or ends at.
+   * Connections the view holds that pass through this box: that name in `via` its record, or
+   * anything drawn as it. Those on its arrows count, and those a box holds inside it or between
+   * its copies. Their ids, in order of id. A connection is not counted on a box that its own
+   * arrow starts or ends at, nor on the box that holds it.
    */
   passing: string[];
 }
@@ -61,7 +62,9 @@ export interface ViewBoundary {
   /** The id of the system. */
   id: string;
   name: string;
-  /** What is written at its top left: `Shop [System]`. */
+  /** The system's kind line: `[System]`, or `[System: external]` for somebody else's. */
+  line: string;
+  /** What is written at its top left: its name, then its kind line, as in `Shop [System]`. */
   title: string;
 }
 
@@ -82,13 +85,17 @@ export interface ViewArrow {
   names: string[];
   /** The names of the technologies that every one of its connections names. Empty when they differ, or when one names none. */
   technology: string[];
-  /** What its connections pass through. Missing when none of them names anything in `via`. */
+  /**
+   * What its connections pass through at this level: what they name in `via`, less what is
+   * drawn as either end of the arrow, which is passed inside that end. Missing when that leaves
+   * nothing for every one of them.
+   */
   route?: ViewRoute;
 }
 
 /** What the connections of an arrow pass through. */
 export interface ViewRoute {
-  /** How many of the arrow's connections name something in `via`: at least one. */
+  /** How many of the arrow's connections pass through something at this level: at least one. */
   count: number;
   /**
    * When every connection of the arrow names the same in `via`, in the same order: the names of
@@ -100,15 +107,18 @@ export interface ViewRoute {
   line: string;
 }
 
-/** Something the view's arrows pass through that has no box in the view. */
+/** Something that connections the view holds pass through, and that has no box in the view. */
 export interface ViewPassed {
   /** The id `via` names: a piece of infrastructure, an app, a component or a system. */
   id: string;
   /** Its name, or its id when its file has an error. */
   name: string;
-  /** The connections of the view's arrows that name it in `via`, in order of id. */
+  /**
+   * The connections the view holds that name it in `via`, in order of id: on its arrows, and
+   * inside a box or between its copies.
+   */
   connections: string[];
-  /** The arrows those connections are drawn as, in order of id. */
+  /** The arrows of those connections that are drawn as one, in order of id. One held in a box has none. */
   arrows: string[];
 }
 
@@ -121,11 +131,12 @@ export interface ViewLeft {
 }
 
 /**
- * What a legend can explain: each look of a box, the boundary, an arrow, an arrow for several
- * connections, the route on an arrow, and the marks for copies and for what passes through a
- * box. A view lists only what it draws.
+ * What a legend can explain: each look of a box, the thicker line of an external system the
+ * view is about, the boundary, an arrow, an arrow for several connections, the route on an
+ * arrow, and the marks for copies and for what passes through a box. A view lists only what it
+ * draws.
  */
-export type LegendKey = BoxLook | 'boundary' | 'arrow' | 'arrow-many' | 'route' | 'loop' | 'passing';
+export type LegendKey = BoxLook | 'system-scope-external' | 'boundary' | 'arrow' | 'arrow-many' | 'route' | 'loop' | 'passing';
 
 /** One line of the legend. */
 export interface LegendEntry {
@@ -176,12 +187,17 @@ export interface PlacedBox extends Rect {
   line: string;
   /** The first sentence, in at most four lines. Empty when there is none. */
   sentence: string[];
+  /**
+   * How far its text stands in from its left and its right edge: the room the lines were broken
+   * for, which the shape of its look leaves. The page draws the text there.
+   */
+  inset: { left: number; right: number };
 }
 
 /** The boundary with its place and the place of its title. */
 export interface PlacedBoundary extends Rect {
   id: string;
-  /** The title in one line, cut when the boundary is narrower than it. */
+  /** The title in one line. When the boundary is narrower than it, the name is cut and the kind line kept whole. */
   title: string;
   titleAt: Rect;
 }
@@ -305,6 +321,11 @@ export interface ViewerState {
   outline: Outline;
   /** Every view, in the order the sidebar lists them: the systems with parts first. */
   views: View[];
+  /**
+   * The connections that no view holds in any way, in order of id: not on an arrow, not inside
+   * a box or between its copies, and not counted as left out. They are in no picture.
+   */
+  inNoView: string[];
 }
 
 /** The server's answer when asked for the picture of a view at a revision. */

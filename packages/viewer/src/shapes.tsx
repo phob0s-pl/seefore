@@ -1,87 +1,17 @@
 import type { BoxFamily, BoxLook, LegendKey } from '@seefore/core';
+import { APP_RADIUS, EXTERNAL_TAB, INFRASTRUCTURE_POINT, OUTLINE, PERSON_RADIUS, QUEUE_LID, SCOPE_OUTLINE, STORE_LID, SYSTEM_GAP, SYSTEM_INNER, cylinder, hexagon, pipe, tab } from './geometry.ts';
 
 /**
  * The shape of each look of a box, so that each is told apart with no colour at all: a person
- * very round, a system with a double line, an external system with a single one, an app with
- * small round corners, a store an upright cylinder, a queue or a topic a cylinder on its side,
- * a piece of infrastructure pointed at both ends. Colour comes from the style sheet, by family.
+ * very round, a system with a double line, an external system as a system with a solid tab in
+ * its top left corner, an app with small round corners, a store an upright cylinder, a queue or
+ * a topic a cylinder on its side, a piece of infrastructure pointed at both ends. Colour comes
+ * from the style sheet, by family.
  */
-
-/** The radius of a person's corners, in CSS pixels: round enough to tell at a glance, not so round that it cuts the text. */
-export const PERSON_RADIUS = 40;
-
-/** The radius of an app's corners, in CSS pixels. */
-export const APP_RADIUS = 10;
-
-/** Half the height of the ellipse at a store's top and bottom, in CSS pixels. */
-export const STORE_LID = 7;
-
-/** Half the width of the ellipse at each end of a queue or a topic, in CSS pixels: narrow, so that the text keeps its room. */
-export const QUEUE_LID = 7;
-
-/** How far the top and bottom edges of a piece of infrastructure stand in from its points, in CSS pixels. */
-export const INFRASTRUCTURE_POINT = 14;
-
-/** How far the middle of a system's inner line stands in from the inner edge of its outer one, in CSS pixels. */
-export const SYSTEM_GAP = 3.5;
-
-/** The width of a system's inner line, in CSS pixels. */
-export const SYSTEM_INNER = 1;
-
-/** The width of an outline, in CSS pixels. */
-export const OUTLINE = 2;
-
-/** The width of the outline of the system a view is about: thicker than the others. */
-export const SCOPE_OUTLINE = 4;
 
 /** A rectangle whose line has its middle this far in from the edge of the box. */
 function inset(width: number, height: number, at: number) {
   return { x: at, y: at, width: Math.max(width - 2 * at, 0), height: Math.max(height - 2 * at, 0) };
-}
-
-/** The path of a store's cylinder: the outline, and the near half of its lid. */
-export function cylinder(width: number, height: number, lid: number, line: number): { outline: string; rim: string } {
-  const left = line / 2;
-  const right = width - line / 2;
-  const top = lid + line / 2;
-  const bottom = height - lid - line / 2;
-  const radius = (right - left) / 2;
-  return {
-    outline: `M${left},${top} A${radius},${lid} 0 0 1 ${right},${top} L${right},${bottom} A${radius},${lid} 0 0 1 ${left},${bottom} Z`,
-    rim: `M${left},${top} A${radius},${lid} 0 0 0 ${right},${top}`,
-  };
-}
-
-/** The path of a cylinder on its side, for a queue or a topic: the outline, and the near half of its right end. */
-export function pipe(width: number, height: number, lid: number, line: number): { outline: string; rim: string } {
-  const left = lid + line / 2;
-  const right = width - lid - line / 2;
-  const top = line / 2;
-  const bottom = height - line / 2;
-  const radius = (bottom - top) / 2;
-  return {
-    outline: `M${left},${top} L${right},${top} A${lid},${radius} 0 0 1 ${right},${bottom} L${left},${bottom} A${lid},${radius} 0 0 1 ${left},${top} Z`,
-    rim: `M${right},${top} A${lid},${radius} 0 0 0 ${right},${bottom}`,
-  };
-}
-
-/** The points of a piece of infrastructure: a long hexagon, pointed at its left and right, as what an exchange passes along. */
-export function hexagon(width: number, height: number, point: number, line: number): string {
-  const left = line / 2;
-  const right = width - line / 2;
-  const top = line / 2;
-  const bottom = height - line / 2;
-  const middle = height / 2;
-  return [
-    [left + point, top],
-    [right - point, top],
-    [right, middle],
-    [right - point, bottom],
-    [left + point, bottom],
-    [left, middle],
-  ]
-    .map(([x, y]) => `${x},${y}`)
-    .join(' ');
 }
 
 /** The outline of a box of a look, at a size. `scope` draws the thicker line of the system a view is about. */
@@ -111,17 +41,15 @@ export function Shape({ look, scope, width, height }: { look: BoxLook; scope: bo
     }
     case 'infrastructure':
       return <polygon className="outline" points={hexagon(width, height, INFRASTRUCTURE_POINT, OUTLINE)} strokeWidth={OUTLINE} strokeLinejoin="round" />;
-    case 'system-external': {
-      const line = scope ? SCOPE_OUTLINE : OUTLINE;
-      return <rect className="outline" {...inset(width, height, line / 2)} strokeWidth={line} />;
-    }
     case 'system':
-    case 'system-scope': {
+    case 'system-scope':
+    case 'system-external': {
       const line = scope ? SCOPE_OUTLINE : OUTLINE;
       return (
         <>
           <rect className="outline" {...inset(width, height, line / 2)} strokeWidth={line} />
           <rect className="outline rim" {...inset(width, height, line + SYSTEM_GAP)} strokeWidth={SYSTEM_INNER} />
+          {look === 'system-external' && <path className="tab" d={tab(EXTERNAL_TAB)} />}
         </>
       );
     }
@@ -155,9 +83,10 @@ export const LOOP_MARK = '↻';
 export const PASSING_MARK = '⇢';
 
 /**
- * The sample the legend draws for a key, at the sample's size: the shape of a look of a box, the
- * boundary's dashed line, an arrow, an arrow for several connections, an arrow with its route,
- * or the mark of a box whose copies act on each other or that connections pass through.
+ * The sample the legend draws for a key, at the sample's size: the shape of a look of a box, an
+ * external system as the view about it draws it, the boundary's dashed line, an arrow, an arrow
+ * for several connections, an arrow with its route, or the mark of a box whose copies act on
+ * each other or that connections pass through.
  */
 export function Sample({ name }: { name: LegendKey }) {
   const { width, height } = SAMPLE;
@@ -167,6 +96,12 @@ export function Sample({ name }: { name: LegendKey }) {
     drawn = (
       <g className={`sample-box family-${SAMPLE_FAMILY[name]}`}>
         <SampleShape look={name} />
+      </g>
+    );
+  } else if (name === 'system-scope-external') {
+    drawn = (
+      <g className="sample-box family-systems">
+        <SampleShape look="system-external" scope />
       </g>
     );
   } else if (name === 'boundary') {
@@ -206,8 +141,14 @@ export function Sample({ name }: { name: LegendKey }) {
   );
 }
 
-/** A box's shape drawn small for the legend, with lines and corners a reader can still tell apart. */
-function SampleShape({ look }: { look: BoxLook }) {
+/** How far the tab of an external system runs from its corner in a sample of the legend. */
+const SAMPLE_TAB = 16;
+
+/**
+ * A box's shape drawn small for the legend, with lines and corners a reader can still tell
+ * apart. `scope` draws the thicker line of the system a view is about.
+ */
+function SampleShape({ look, scope = false }: { look: BoxLook; scope?: boolean }) {
   const { width, height } = SAMPLE;
   switch (look) {
     case 'person':
@@ -234,15 +175,15 @@ function SampleShape({ look }: { look: BoxLook }) {
     }
     case 'infrastructure':
       return <polygon className="outline" points={hexagon(width, height, 8, OUTLINE)} strokeWidth={OUTLINE} strokeLinejoin="round" />;
-    case 'system-external':
-      return <rect className="outline" x={0.75} y={0.75} width={width - 1.5} height={height - 1.5} strokeWidth={1.5} />;
     case 'system':
-    case 'system-scope': {
-      const line = look === 'system-scope' ? SCOPE_OUTLINE - 1 : OUTLINE - 0.5;
+    case 'system-scope':
+    case 'system-external': {
+      const line = look === 'system-scope' || scope ? SCOPE_OUTLINE - 1 : OUTLINE - 0.5;
       return (
         <>
           <rect className="outline" x={line / 2} y={line / 2} width={width - line} height={height - line} strokeWidth={line} />
           <rect className="outline rim" x={line + 2.5} y={line + 2.5} width={width - 2 * line - 5} height={height - 2 * line - 5} strokeWidth={1} />
+          {look === 'system-external' && <path className="tab" d={tab(SAMPLE_TAB)} />}
         </>
       );
     }

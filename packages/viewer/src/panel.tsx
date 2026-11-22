@@ -113,10 +113,13 @@ function RecordDetails({ state, index, id, box, scope, passing, onOpen }: Record
     </section>
   );
   if (found === undefined) {
+    const file = fileOf(state, id);
     return (
       <>
-        <p>
-          The record <code>{id}</code> is not in the model. Its file may have an error: <a href="#/problems">see the problems</a>.
+        <p className="record-problem">
+          {file === undefined ? 'Its file has a problem' : <code>{file}</code>}
+          {file === undefined ? ', so ' : ' has a problem, so '}
+          <code>{id}</code> is not in the model: <a href="#/problems">see the problems</a>.
         </p>
         {throughList}
       </>
@@ -162,6 +165,18 @@ function RecordDetails({ state, index, id, box, scope, passing, onOpen }: Record
       {throughList}
     </>
   );
+}
+
+/**
+ * The file of a record that is not in the model, as a problem names it: a file directly in a
+ * folder, named for the id. Missing when no problem names one.
+ */
+function fileOf(state: ViewerState, id: string): string | undefined {
+  return state.problems.find((problem) => {
+    const parts = problem.file.split('/');
+    const name = parts[1];
+    return parts.length === 2 && name !== undefined && name.slice(0, name.lastIndexOf('.')) === id;
+  })?.file;
 }
 
 /** What a connection passes through, in the order of travel, each step a link that opens its record. */
