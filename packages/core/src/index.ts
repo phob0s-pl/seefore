@@ -13,6 +13,33 @@ export { MARKER_FILE, MarkerSchema, readMarker } from './marker.ts';
 export type { Marker, MarkerRead } from './marker.ts';
 export { emptyModel, ownership } from './model.ts';
 export type { Model, ModelRecord, Ownership } from './model.ts';
+export type {
+  BoxFamily,
+  Drawn,
+  Failed,
+  LegendEntry,
+  LegendKey,
+  Outline,
+  OutlineApp,
+  OutlineGroup,
+  OutlineLoose,
+  OutlineSystem,
+  Picture,
+  PictureAnswer,
+  PlacedArrow,
+  PlacedBoundary,
+  PlacedBox,
+  PlacedLabel,
+  Point,
+  Rect,
+  View,
+  ViewArrow,
+  ViewBoundary,
+  ViewBox,
+  ViewKind,
+  ViewLeft,
+  ViewerState,
+} from './picture.ts';
 export { compareProblems } from './problem.ts';
 export type { Position, Problem, Severity } from './problem.ts';
 export {

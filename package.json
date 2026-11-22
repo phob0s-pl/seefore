@@ -9,9 +9,9 @@
     "node": ">=22"
   },
   "scripts": {
-    "typecheck": "tsc -p packages/core && tsc -p packages/cli",
+    "typecheck": "tsc -p packages/core && tsc -p packages/layout && tsc -p packages/cli && tsc -p packages/viewer",
     "test": "vitest run",
-    "build": "npm run build --workspace seefore",
+    "build": "npm run build --workspace @seefore/viewer && npm run build --workspace seefore",
     "check": "node scripts/sync-skill.mjs --check && npm run typecheck && npm run build && npm run test",
     "sync:skill": "node scripts/sync-skill.mjs",
     "install:local": "npm run build && node scripts/install-local.mjs"

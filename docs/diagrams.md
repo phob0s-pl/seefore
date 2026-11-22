@@ -6,83 +6,92 @@ The viewer: a page that draws the model, with nobody placing a box. This is stag
 ## What it is
 
 `seefore --server` reads a source directory and serves one page on this machine. The page
-draws two diagrams for each system, lists the model and the problems of the check, and follows
-the files as they change. It never writes.
+draws the views of each system, lists the model and the problems of the check, and follows the
+files as they change. It never writes.
 
 No position is stored and nothing can be dragged. The engine works out every place: where each
-box stands, how each arrow runs, where each label sits. The page only draws what it is given.
+box stands, how each arrow runs, where each label sits and how its words break. The page draws
+what it is given.
 
 ## The views
 
-A system is **in scope** when it has an app or a store. When no system has one, every system
-is. Each system in scope gets two views, worked out from the model; none is stored.
+Every system has a context view. A system that has an app or a store also has a container
+view. A view is worked out from the model and is not stored.
 
 | View | What it holds |
 | --- | --- |
 | Context | The system as one box, and each person and other system that has a connection with it or with anything inside it |
-| Containers | The system's apps and stores inside its boundary, and outside it each person and other system that has a connection with one of them, or with the system itself |
+| Containers | The system's apps and stores inside its boundary, and outside it each person and other system that has a connection with one of them or with the system itself |
 
-- **An end is drawn at the box that stands for it.** A component is drawn at its app. A part
-  of another system is drawn at that system. A connection that names the system in scope
-  itself ends, in its container view, at the boundary.
+- **Where an end is drawn.** In a context view, at the person or the system it belongs to. In
+  a container view: a component at its app; a part of another system at that system; the
+  system in scope itself at its boundary.
 - **One arrow for each pair of boxes and direction.** It stands for every connection between
-  the two. Its label is their names, one to a line; with more than three, two names and
-  "+ n more". A click lists them all.
-- **Not drawn:** a connection between two boxes outside the system; a connection whose two
-  ends are one box. The panel of that box and the listing still show them.
+  the two. Its label is their names, one to a line: first a connection written between the two
+  boxes themselves, then the others by id. A connection with no name reads "Unnamed
+  connection". When the lines run out the last reads "+ n more". The technology stands under
+  the names only when every connection of the arrow names the same. A click lists each
+  connection with its own two ends, its name, its technology and its file.
+- **Not drawn as an arrow:**
+  - a connection between two boxes that both stand outside. It is in the listing;
+  - a connection from a record to itself, one copy acting on another. The box carries a mark
+    with their number, and its panel lists them;
+  - a connection between two parts that are drawn as one box. The panel of the box lists it.
 - A box with no arrow stands where the layout puts it.
+- **A record whose file has an error** is not drawn, and nothing inside it is. A connection
+  with one end in the view and the other in such a record is counted on the view. When the
+  marker cannot be read there are no views, and the page shows that problem in their place.
 
 ## The picture
 
-- **A box** has one size for every kind, 240 by 150: the name in bold; a line
-  `[App: service · Go]`; the first sentence of the description, in at most four lines. The
-  whole text is in the panel.
-- **The kind** is told by the text line and by the shape: a person, a system, an app and a
-  store each have their own. Colour comes third, and never alone. The system in scope has a
-  thicker line. Ours and somebody else's look alike until stage 6 decides on a stored mark.
+- **A box** has one size for every kind: the name in bold, a line such as
+  `[App: service · Go]`, and the first sentence of the description. The whole text is in the
+  panel.
+- **The kind** is told by that line and by the shape: a person, a system, an app and a store
+  each have their own. Colour comes third, and never alone. The system in scope has a thicker
+  line. Ours and somebody else's look alike until stage 6 decides on a stored mark.
 - **The boundary** is a dashed line with a light tint and `Name [System]` at its top left.
-- **An arrow** runs in right angles, from the one that acts. Its label sits on its own line.
-- **The title** names the type and the scope: "Container view: Shop". **The legend** is made
-  from what this view draws, and shows each kind of box and line that is in it.
-- **Outlines and dark text**, in a light and a dark theme. Every colour meets the contrast
-  rule of WCAG 2.2: 4.5 to 1 for text and 3 to 1 for lines.
+- **An arrow** runs in right angles, from the one that acts, with its label on its own line.
+- **The title** names the type and the scope: "Container view: Shop". **The legend** shows each
+  kind of box, line and mark that this view draws, and no other.
+- Boxes are outlines, in a light and a dark theme. Text and lines meet the contrast rule of
+  WCAG 2.2, also while the rest is faded.
 
 ## The layout
 
-The engine lays out each view with ELK: layered, left to right, the boundary and what is in it
-in one run, right-angled lines, each label given to ELK at its measured size.
+The engine lays out each view with ELK: layered, left to right, the boundary and its inside in
+one run, each label placed by ELK at its measured size.
 
-- **The same input gives the same picture.** The input is sorted by id, the seed is fixed, and
-  the version of ELK is pinned.
-- **Text is measured, not seen.** The engine counts widths from a table for one family of
-  fonts, Arial and those made to its measure, and the page draws with that family.
-- **A layout runs apart from the server, under a limit of five seconds.** Some settings make
-  ELK crash or never end. A view whose layout fails says so in place of its picture, and the
-  other views still draw.
+- **The same model gives the same picture.** What goes in is sorted by id, the seed is fixed
+  and the version of ELK is pinned.
+- **The engine breaks every text into lines** and cuts what does not fit with an ellipsis. It
+  measures for one family of fonts, Arial and those made to its measure, and the page draws
+  with that family and clips at the edge of the box. The whole text stays in the panel and in
+  the name a screen reader gets.
+- **One layout runs at a time, apart from the server, for at most five seconds.** A view whose
+  layout fails says so in place of its picture; the other views still draw.
 - A window that changes size, a hover or a click never lays a view out again.
 
 ## The page
 
-- **The sidebar** lists each system in scope with its two views, then "Model", then
-  "Problems" with their count when there are any.
-- **Moving.** The page opens with the picture fitted, never larger than full size. A hover
-  lights a box, its arrows and the boxes at their other ends, and fades the rest. A click
-  keeps that and opens the panel. A second click fits the picture to the box and its
-  neighbours. Escape clears.
+- **The sidebar** lists the systems that have parts, each with its views; then the other
+  systems, folded; then "Model"; then "Problems" with their number.
+- **Moving.** The page opens with the picture fitted to the room it has, never larger than
+  full size. "Fit diagram", "Fit selection" and the zoom are buttons. A hover, or the keyboard's
+  focus, lights a box, its arrows and the boxes at their other ends, and fades the rest. A
+  click, or Enter, keeps that and opens the panel. Escape clears.
 - **The panel** shows a record: its name, kind, technologies, owner and where the owner comes
-  from, its whole description and its file. For an arrow it lists the connections it stands
-  for.
-- **Detail follows the zoom.** Below 75 % descriptions are hidden, below 60 % the kind lines
-  and the words on arrows, below 40 % the names. A fitted picture too small to read says so:
-  how many boxes and arrows it has, and from which zoom names can be read.
-- **Model** is the listing of `seefore list`, in the same order, worked out by the same code.
-  A click on a record opens the same panel.
-- **Problems** lists what the check found, each with its file, line and column.
-- **A broken file** takes its record out of the pictures; the rest still draws. Each view
-  says how many connections it could not draw for that reason.
+  from, its whole description and its file.
+- **Detail follows the zoom.** Zoomed out, the description goes first, then the kind line and
+  the words on arrows, then the names. A fitted picture too small to read says so: how many
+  boxes and arrows it has, and from which zoom names can be read.
+- **Model** is the listing of `seefore list`, in the same order, from the same code. A click on
+  a record opens the same panel. **Problems** lists what the check found, each with its file,
+  line and column.
 - **Following the files.** When a file changes the page takes the new model in place. It keeps
-  the zoom and the selection, and fits again only when the reader has not moved.
-- The address names the view, so a view can be opened again.
+  the zoom and the selection, and fits again only when the reader has not moved. A selection
+  that is gone is cleared; when the view itself is gone the page opens the first one.
+- The address reopens the view it names.
 
 ## The command
 
@@ -90,34 +99,35 @@ in one run, right-angled lines, each label given to ELK at its measured size.
 seefore --server [--workdir=<directory>] [--port=<number>] [--no-open]
 ```
 
-- It serves on `127.0.0.1` only, and answers no request that names another host.
-- Without `--port` it takes 4173, or the next free one. It prints the address, and opens it in
-  the browser unless `--no-open` is given or the output is not a terminal.
-- It keeps running until it is stopped. A directory that cannot be found ends with exit code
-  2, as for `seefore check`.
-- What the page gets is JSON over HTTP: the model with its problems and the list of views, and
-  for each view its boxes, arrows and labels with their places.
+- It listens on `127.0.0.1` only and answers no request made under another host's name. It
+  serves its own page, and the model and the pictures to read. It takes no path from a request
+  to the disk.
+- Without `--port` it takes 4173, or the next free one. A `--port` that is taken ends with
+  exit code 2. Once it listens it prints the address, and opens it in the browser unless
+  `--no-open` is given or the output is not a terminal.
+- It watches the source directory it found when it started. If that directory goes, the page
+  says so and waits for it to come back; it never moves to another one.
+- A directory that cannot be found ends with exit code 2, as for `seefore check`.
 
 ## Decisions taken at this stage
 
 | Decision | Outcome |
 | --- | --- |
-| What draws and what lays out | React Flow draws. ELK lays out, in the engine, so a picture can be tested without a browser (the owner; `research/diagrams/`) |
-| Direction | Left to right for every view. A rule for each view would flip on a small edit |
-| Arrows | One for each pair of boxes and direction. Measured: 29 to 77 % fewer crossings |
-| Labels | Placed by ELK, on their line. Measured: none over a box or a line; placed afterwards, a line ran through half of them |
-| A box | One size, 240 by 150. Two lines of description would cut most first sentences |
-| The font | Arial and the fonts made to its measure, so the engine can measure text without a browser |
+| What draws and what lays out | React Flow draws. ELK lays out, in the engine, so that a picture can be tested without a browser (the owner) |
+| Which systems get views | A context view for every system; a container view where there is something inside |
+| Direction | Left to right for every view. A choice for each view would flip on a small edit |
+| Arrows | One for each pair of boxes and direction |
+| Labels | Placed by ELK. Placed after the layout, a line ran through half of them |
+| The font | Arial and the fonts made to its measure, so that the engine can measure text |
 | A view too large to read | Drawn, with its counts and a note. The limit is stage 7's to set |
 | The sidebar | The views by system, the model's listing, and the problems (the owner) |
-| ELK in the package | A dependency at a pinned version, not copied into the command's file. ELK's licence is EPL-2.0 |
+| ELK in the package | A dependency at a pinned version, under its licence EPL-2.0. Not copied into the command's file |
 
 ## Names this stage adds
 
 One way to run the command, `seefore --server`, with two options, `--port` and `--no-open`.
-Two kinds of view, context and containers. Nothing in the format: a source directory is read
-as it was. Four libraries: ELK (`elkjs`), React (`react`, `react-dom`) and React Flow
-(`@xyflow/react`).
+Two kinds of view, context and containers. Nothing in the format. Four libraries: ELK
+(`elkjs`), React (`react`, `react-dom`) and React Flow (`@xyflow/react`).
 
 ## Skips
 
@@ -125,46 +135,43 @@ Of "Every stage ends the same way": part 3, since nothing new can be written, an
 
 ## Leaves out
 
-Editing, dragging, stored positions and styling controls. Search, links to a box and
-drill-down: stage 10. Component views, a landscape and "this box and its neighbours" as a view
-of its own: stage 9. The limit for a crowded view, and what holds a picture still when the
-model changes: stage 7. What a connection passes through: stage 6. A mark on a box for a
-connection to itself. Export of a picture.
+Editing, dragging, stored positions and styling controls. Search, a link to a box and
+drill-down: stage 10. Component views, a landscape and "this box and its neighbours" as a view:
+stage 9. The limit for a crowded view, and what holds a picture still when the model changes:
+stage 7. What a connection passes through, and a mark for somebody else's system: stage 6.
+Export of a picture.
 
 ## Against the research
 
-Checked against `research/synthesis.md`, and against `research/diagrams/recommendations.md`,
+Checked against `research/synthesis.md` and against `research/diagrams/recommendations.md`,
 which checks seven reports on diagram craft and on six tools by measuring on the trial models.
 
 Follows it:
 
-- **Automatic layout that copes with nesting** (synthesis, layout). ELK lays out the boundary
-  and its inside in one run. Dagre, which the synthesis warns of, was not used.
-- **A typed model apart from its views** (1.1). A view is worked out and holds nothing the
-  model does not.
-- **A title, a key and labelled arrows on every diagram** (the C4 checklist, in the practices
-  report). The legend is made from what is drawn.
-- **Never colour alone, and contrast that holds** (practices report). The classic C4 fills with
-  white text fail the contrast rule, so boxes are outlines with dark text.
-- **Following one box by eye** (practices, IcePanel, Ilograph, LikeC4): hover and click light
-  its arrows and neighbours.
+- **Automatic layout that copes with nesting** (synthesis, layout). The boundary and its inside
+  are one run of ELK. Dagre, which the synthesis warns of, is not used.
+- **A typed model apart from its views** (1.1). A view holds nothing the model does not.
+- **A title, a key and labelled arrows on every diagram**, and **never colour alone**: the
+  checklist of C4's author and the accessibility guidelines, both in the practices report.
+- **Following one box by eye**: hover and click light its arrows and neighbours, as four of the
+  six tools do.
 - **A broken file is reported and the rest still loads** (the plan, stage 3).
 
 Departs from it, with the reason:
 
-- **Left to right, not top-down.** The studies and two tools favour top-down. Measured on the
-  eight trial models the two fit within 17 % of each other; left to right puts labels on
-  level runs and sent no arrow through a boundary's title.
-- **One arrow for many connections.** C4's own notation draws each. Measured, that gives up to
-  3.4 times the crossings.
+- **Left to right, not top-down**, which the studies and two tools favour. On the trial models
+  the two fit within 17 % of each other, and left to right sent no arrow through a boundary's
+  title.
+- **One arrow for many connections**, where C4's notation draws each. Drawn each, the trial
+  models have up to 4.4 times the crossings.
 - **No last good picture.** Five tools keep the last picture when the source breaks. Here the
-  rest of the model draws and the error is shown at its place, as the plan asks.
+  rest of the model draws, as the plan asks.
 
 Risks it takes on:
 
 - **The largest views cannot be read when fitted.** A container view of 59 to 88 boxes shows
   names 2 to 4 pixels high on a screen of 1600 by 1000, whatever the settings. Until stages 7
-  and 9 the answer is zoom, the light on one box, and a note.
-- **Text is measured in one family of fonts.** On a machine without it, words may not fit
-  their boxes.
-- **Nobody but a program has judged these pictures.** The counts are geometry.
+  and 9 the answer is the zoom, the light on one box, and a note.
+- **Text is measured for one family of fonts.** With another font, or with signs outside the
+  table, words may be cut early or clipped.
+- **Nobody but a program has judged these pictures.** The trial with the owner is still to do.
