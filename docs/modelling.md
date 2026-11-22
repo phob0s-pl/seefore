@@ -249,16 +249,16 @@ all that is inside it. It answers in four lists, and counts records:
 | Goes with it | What is inside the thing, and each connection with both ends in it |
 | Must go or change | Each connection with one end in the thing, and each that names it in `via`. For an owner or a technology, each record that names it |
 | Left behind | A part that has a connection now and would have none if those connections went. An owner or a technology that only those records name |
-| May speak of it | Another record whose `name` or `description` holds the thing's name, its id, or its id with spaces for hyphens |
+| May speak of it | Another record whose `name`, `only` or `description` holds the thing's name, its id, or its id with spaces for hyphens |
 
 - The last two are suggestions. What is left behind may well stay, and a mention is a place
   to read, not to replace. Each heading says what it assumes: "If they go, 1 record is left
   with no connection".
 - For an owner it also says how many parts take it from what they are in, since their files
   hold no `owner` to change.
-- A mention points at the key, `name` or `description`, and gives the words found. A name of
-  one or two characters is looked for as it is written, capitals and all, and an id that
-  short is not looked for.
+- A mention points at the key, `name`, `only` or `description`, and gives the words found. A
+  name of one or two characters is looked for as it is written, capitals and all, and an id
+  that short is not looked for.
 - Records that go with the thing and speak of it are listed apart: a rename leaves them, so
   they are to be read then.
 - When the directory has errors it prints what is known, says that other uses may exist, and
