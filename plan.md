@@ -128,6 +128,8 @@ To settle in the stage named, with the recommendation the two proposals reached:
 
 | Decision | Stage | Recommendation |
 | --- | --- | --- |
+| Whether a piece of infrastructure may be in a system | 6b | Open. It is in none, so one of ours is drawn outside our boundary: Teleport's relay, Geena's edge |
+| A route when a view is zoomed out | 7 | Open. The words on an arrow are hidden below 60 %, and the largest views open between 7 and 52 % |
 | Several stores in one server | 6b | Open. The candidate for stage 6 cut "a store in a store"; five of the eight trial systems have the case |
 | Who opens a channel, as against who sends down it | 6b | Open. At stage 4 the description says who opens it |
 | Layout | 7 | ELK is in use since stage 5, with no stored coordinates. Whether it holds when the model changes, and the limit for a crowded view, are proven or rejected at stage 7. Measured at stage 5: a container view of 59 to 88 boxes cannot be read when fitted to a screen |
@@ -141,7 +143,7 @@ To settle in the stage named, with the recommendation the two proposals reached:
 | 3 | Source directory | done, accepted 2026-11-21 |
 | 4 | Basic modelling | built and tried; the ten changes of the trial made 2026-11-22; awaits acceptance |
 | 5 | Automatic diagrams | built 2026-11-22; the trial with the owner is still to do |
-| 6a | Hard cases in a picture | in work |
+| 6a | Hard cases in a picture | built 2026-11-22; the trial with the owner is still to do |
 | 6b | Hard cases in a record | |
 | 7 | Layout stability (gate) | |
 | 8 | C4 checks | |
