@@ -38,8 +38,11 @@ Commands:
 
 Options:
   --workdir=<directory>   Where to start looking. Without it, the current directory.
-  --full                  For list: show each description whole, beneath its record.
-  --json                  Print the result as data.
+  --full                  For list: show each description whole, beneath its record,
+                          and each condition a record has from another.
+  --json                  Print the result as data. For list: the records of each
+                          family, and by id who answers for each part and the
+                          conditions each record is under, its own first.
   --port=<number>         For --server: the port to listen on. Without it, ${FIRST_PORT},
                           or the next free one.
   --no-open               For --server: do not open the browser.

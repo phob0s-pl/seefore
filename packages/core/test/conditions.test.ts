@@ -142,6 +142,24 @@ describe('the conditions a record is under', () => {
     grown.components.push({ id: 'search', file: 'components/search.yaml', name: 'Search', in: 'storefront', only: 'with search on' });
     expect(said(grown, 'search')).toEqual(['search: with search on', 'shop: in the hosted edition']);
   });
+
+  it('are those of a record put in the place of another, in a model that keeps as many records as it had', () => {
+    const changed = modelOf();
+    expect(said(changed, 'cache')).toEqual(['cache: with a cache configured', 'order-api: when payments are on', 'shop: in the hosted edition']);
+    expect(keeperOf(changed, 'cache')).toBe('order-api');
+    expect(systemOf(changed, 'cache')).toBe('shop');
+    // Asked, then one record replaced by another with the same id, then asked again.
+    const at = changed.stores.findIndex((store) => store.id === 'cache');
+    changed.stores[at] = { id: 'cache', file: 'stores/cache.yaml', name: 'Cache', in: 'card-provider', only: 'with a cache configured' };
+    expect(said(changed, 'cache')).toEqual(['cache: with a cache configured']);
+    expect(keeperOf(changed, 'cache')).toBeUndefined();
+    expect(systemOf(changed, 'cache')).toBe('card-provider');
+    // And one record in the place of another with another id.
+    changed.stores[at] = { id: 'cache-two', file: 'stores/cache-two.yaml', name: 'Cache', in: 'storefront' };
+    expect(said(changed, 'cache')).toEqual([]);
+    expect(said(changed, 'cache-two')).toEqual(['shop: in the hosted edition']);
+    expect(keeperOf(changed, 'cache-two')).toBe('storefront');
+  });
 });
 
 describe('the app that keeps a store', () => {
@@ -202,5 +220,21 @@ describe('the system a thing is in', () => {
     expect(systemOf(broken, 'checkout')).toBeUndefined();
     expect(systemOf(broken, 'cache')).toBeUndefined();
     expect(systemOf(broken, 'storefront')).toBe('shop');
+  });
+});
+
+describe('an id that is also the name of what every object has', () => {
+  it('is an id like any other: `constructor` and `tostring` find only what the model holds', () => {
+    const model = modelOf({
+      'people/constructor.yaml': 'name: Constructor\n',
+      'systems/tostring.yaml': 'name: To string\n',
+      'apps/valueof.yaml': 'name: Value of\nin: tostring\nonly: when asked\n',
+      'connections/constructor-asks.yaml': 'from: constructor\nto: valueof\nname: Asks\n',
+    });
+    expect(conditionsOf(model, 'constructor')).toEqual([]);
+    expect(keeperOf(model, 'constructor')).toBeUndefined();
+    expect(systemOf(model, 'constructor')).toBeUndefined();
+    expect(systemOf(model, 'tostring')).toBe('tostring');
+    expect(said(model, 'constructor-asks')).toEqual(['valueof: when asked']);
   });
 });

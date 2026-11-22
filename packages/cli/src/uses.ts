@@ -71,7 +71,7 @@ function report(result: UsesResult, unread: number, here: Here): string {
   };
   const blocks = [
     [head(result.record)],
-    conditioned(result),
+    conditioned(result, here),
     goesWith(result, head),
     ...mustChange(result, path, here),
     inherited(result.inherited),
@@ -88,9 +88,11 @@ function report(result: UsesResult, unread: number, here: Here): string {
 /**
  * How many records have its condition from it, when it has one of its own and any do: the parts
  * inside it, and the connections that start or end at it or at something inside it. Said first,
- * since a change to its `only`, a removal and a new end each change what they have.
+ * since a change to its `only`, a removal and a new end each change what they have. A connection
+ * that gets another end may have the same words from that end or from what that is in, so the
+ * advice is to read what the model then says, not to copy the words at once.
  */
-function conditioned(result: UsesResult): string[] {
+function conditioned(result: UsesResult, here: Here): string[] {
   const condition = result.condition;
   if (condition === undefined) return [];
   const p = condition.parts.length;
@@ -102,7 +104,10 @@ function conditioned(result: UsesResult): string[] {
     ...(c === 0 ? [] : [`${count(c, 'connection')} that ${c === 1 ? 'starts or ends' : 'start or end'} ${where}`]),
   ];
   const has = `${joined(who, 'and')} ${p + c === 1 ? 'has' : 'have'} its condition from it: only ${condition.only}.`;
-  return [c === 0 ? has : `${has} A connection that gets another end no longer has it: give it that \`only\` if it still holds.`];
+  const another =
+    'A connection that gets another end may still have this condition, from that end or from what it is in. ' +
+    `Look at what \`${seefore('list --full', here)}\` says of it afterwards, before any words are copied.`;
+  return [c === 0 ? has : `${has} ${another}`];
 }
 
 /** What is inside it, as a tree, and each connection with both ends in it. */

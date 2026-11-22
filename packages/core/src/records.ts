@@ -61,6 +61,15 @@ const Only = z
   // Only for words that are on one line and not empty, so that one slip is reported once.
   .refine((only) => !/\S/.test(only) || LINE_BREAK.test(only) || only === only.trim(), {
     message: '`only` starts or ends with a space. Take the space off.',
+  })
+  // Two wordings that differ only in their spaces look the same in a listing, which is there to
+  // show two wordings of one condition apart. Only for words that passed the rules above.
+  .refine((only) => !/\S/.test(only) || LINE_BREAK.test(only) || only !== only.trim() || !/\s\s|[^\S ]/.test(only), {
+    message: '`only` has two spaces in a row, or a space that is not a plain one. Write its words with single spaces.',
+  })
+  // The field's name is the first word of what it says, so words that start with it say it twice.
+  .refine((only) => !/^only(?![\p{L}\p{M}\p{N}_])/iu.test(only), {
+    message: '`only` holds the words that read after "only". Take the first word off.',
   });
 
 /** What a record is for, in a sentence or a few. It may have several lines. */
@@ -201,7 +210,8 @@ const ViaId = z.string().refine(isId, {
 const Via = z
   .array(ViaId)
   .refine((ids) => ids.length > 0, {
-    message: '`via` is an empty list. Leave `via` out until something that is always on the way is known.',
+    // Since stage 6b a thing that is there only in some installs may be named too, so the advice is not "always".
+    message: '`via` is an empty list. Leave `via` out until something on the way is known.',
     params: { code: 'value-too-small' },
   })
   .superRefine((ids, context) => {

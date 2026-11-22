@@ -7,7 +7,8 @@ import { EXAMPLE } from '../../core/test/example.ts';
 import type { Failure } from '../src/check.ts';
 import { LINE_WIDTH, widthOf } from '../src/list.ts';
 import type { ListResult } from '../src/list.ts';
-import { main } from '../src/main.ts';
+import { HELP, main } from '../src/main.ts';
+import { readingOf } from '../src/server/source.ts';
 
 /** `seefore list` as a person reads it in a terminal: the order, the connections, the sentences, the width. */
 
@@ -384,22 +385,56 @@ describe('what is in what, reads and writes, who opened a channel, and condition
     ]);
   });
 
-  it('lists each wording of a condition once, with how many records hold it, most first', () => {
+  it('lists each wording of a condition once, in order of its words in any case, with how many records hold it and how many more have it from them', () => {
     write({
       ...DESK,
       'apps/staff-browser.yaml': 'name: Staff browser\nin: archive\nkind: browser\nonly: In the head office\n',
       'components/editor.yaml': 'name: Editor\nin: desk\nonly: with jobs in the background\n',
       'stores/records.yaml': 'name: Records\nin: archive\nkind: database\nonly: in the head office\n',
     });
+    // Two wordings that differ only in capitals stand side by side, in the order of their characters.
     expect(section(run(['list']).out, 'Conditions (3)')).toEqual([
       'Conditions (3)',
-      '  only in the head office (3 records)',
-      '  only with jobs in the background (2 records)',
-      '  only In the head office (1 record)',
+      // The three connections at the staff browser.
+      '  only In the head office (1 record, 3 more have it from it)',
+      // The staff's connection to the browser, and Desk's to the records.
+      '  only in the head office (3 records, 2 more have it from them)',
+      // The editor's connection to the drafts.
+      '  only with jobs in the background (2 records, 1 more has it from them)',
     ]);
-    // Two wordings that one record each holds stand in order of their words, in any case.
     write({ 'apps/desk.yaml': 'name: Desk\nin: archive\nkind: service\nonly: in the hosted edition\n' });
-    expect(section(run(['list']).out, 'Conditions (4)').slice(3)).toEqual(['  only In the head office (1 record)', '  only in the hosted edition (1 record)']);
+    expect(section(run(['list']).out, 'Conditions (4)').slice(1)).toEqual([
+      '  only In the head office (1 record, 3 more have it from it)',
+      '  only in the head office (3 records, 2 more have it from them)',
+      // Desk's editor and drafts, and the five connections that start or end at Desk or in it.
+      '  only in the hosted edition (1 record, 7 more have it from it)',
+      '  only with jobs in the background (2 records, 1 more has it from them)',
+    ]);
+    // A wording no other record has from the records that hold it says only how many hold it.
+    write({ 'stores/records.yaml': 'name: Records\nin: archive\nkind: database\nonly: while records are kept\n', 'connections/desk-saves-records.yaml': 'from: desk\nto: drafts\n' });
+    expect(run(['list']).out.split('\n')).toContain('  only while records are kept (1 record)');
+  });
+
+  it('counts as having a wording from others only a record that does not hold it as its own', () => {
+    write({ ...DESK, 'systems/archive.yaml': 'name: Archive\nowner: archive-team\nonly: on site\n', 'apps/desk.yaml': 'name: Desk\nin: archive\nkind: service\nonly: on site\n' });
+    const archived = ['desk-keeps-drafts', 'desk-saves-records', 'desk-tells-browser', 'drafts', 'editor', 'editor-reads-drafts', 'proxy', 'records', 'staff-browser', 'staff-browser-asks-desk', 'staff-edits'];
+    expect(section(run(['list']).out, 'Conditions (3)')[2]).toBe(`  only on site (2 records, ${archived.length} more have it from them)`);
+  });
+
+  it('puts a thing on a route in brackets when it has a condition from what it is in, so that taking out an `only` said again changes nothing', () => {
+    const said = { ...DESK, 'systems/office.yaml': 'name: Office\nonly: in the head office\n' };
+    write(said);
+    expect(run(['check']).out).toContain('`only` says "in the head office", and so does `office`, the system it is in.');
+    const route = (): string[] => {
+      const lines = section(run(['list']).out, 'Connections (6)');
+      const at = lines.findIndex((line) => line.startsWith('    desk-tells-browser:'));
+      return lines.slice(at, at + 2);
+    };
+    const before = route();
+    expect(before).toEqual(['    desk-tells-browser: -> Staff browser, via HTTPS proxy, (Office proxy):', '        [opened by the far side] Says a job is done (only with jobs in the background)']);
+    write({ 'infrastructure/office-proxy.yaml': 'name: Office proxy\nin: office\n' });
+    expect(run(['check']).code).toBe(0);
+    expect(route()).toEqual(before);
   });
 
   it('has no heading for conditions when no record has `only`', () => {
@@ -429,7 +464,7 @@ describe('what is in what, reads and writes, who opened a channel, and condition
     ]);
   });
 
-  it('gives in the data the three fields, `in` of a kept store and of a piece, and the conditions each record has from others', () => {
+  it('gives in the data the three fields, `in` of a kept store and of a piece, and the conditions each record is under, its own first', () => {
     write({ ...DESK, 'systems/office.yaml': 'name: Office\nonly: in the head office edition\n' });
     const data = JSON.parse(run(['list', '--json']).out) as ListResult;
     expect(data.stores.find((store) => store.id === 'drafts')).toMatchObject({ in: 'desk' });
@@ -451,13 +486,28 @@ describe('what is in what, reads and writes, who opened a channel, and condition
       only: 'with jobs in the background',
     });
     expect(data.connections.find((connection) => connection.id === 'desk-keeps-drafts')).toMatchObject({ access: 'read-write' });
+    // As the server gives the page: each record under any condition, its own first, then from others, nearest first.
     expect(data.conditions).toEqual({
-      'office-proxy': [{ only: 'in the head office edition', from: 'office' }],
+      staff: [{ only: 'in the head office', from: 'staff' }],
+      office: [{ only: 'in the head office edition', from: 'office' }],
+      'office-proxy': [
+        { only: 'in the head office', from: 'office-proxy' },
+        { only: 'in the head office edition', from: 'office' },
+      ],
+      'desk-tells-browser': [{ only: 'with jobs in the background', from: 'desk-tells-browser' }],
       'staff-edits': [{ only: 'in the head office', from: 'staff' }],
     });
     expect(data.ownership['drafts']).toEqual({ owner: 'archive-team', from: 'archive' });
     expect(data.ownership['proxy']).toEqual({ owner: 'archive-team', from: 'archive' });
     expect(Object.keys(data.ownership)).not.toContain('cdn');
+    // The same contract as the state the server gives the page, and as the help says.
+    const state = readingOf(root);
+    expect(data.conditions).toEqual(state.conditions);
+    expect(data.ownership).toEqual(state.ownership);
+    expect(HELP.replace(/\s+/g, ' ')).toContain(
+      '--json Print the result as data. For list: the records of each family, and by id who answers for each part and the conditions each record is under, its own first.',
+    );
+    expect(HELP.replace(/\s+/g, ' ')).toContain('--full For list: show each description whole, beneath its record, and each condition a record has from another.');
   });
 });
 
@@ -587,6 +637,35 @@ describe('--full', () => {
     expect(section(run(['list']).out, 'People (1)')[1]).toBe('  clerk: Clerk - Accepts the token "A B".');
   });
 
+  it('says beneath a part or a connection each condition it has from another record, nearest first, before its description', () => {
+    write({
+      'seefore.yaml': MARKER,
+      'people/fan.yaml': 'name: Fan\n',
+      'systems/stadium.yaml': 'name: Stadium\nonly: on match days\n',
+      'apps/gates.yaml': 'name: Gates\nin: stadium\nonly: at the eleven venues with gates\n',
+      'components/reader.yaml': 'name: Ticket reader\nin: gates\ndescription: Reads each ticket.\n',
+      'connections/fan-shows-ticket.yaml': 'from: fan\nto: reader\nname: Shows a ticket\n',
+    });
+    const out = run(['list', '--full']).out;
+    expect(section(out, 'Systems with parts (1)')).toEqual([
+      'Systems with parts (1)',
+      '  stadium: Stadium (only on match days)',
+      '    app gates: Gates (only at the eleven venues with gates)',
+      '        has from Stadium: only on match days',
+      '      component reader: Ticket reader',
+      '          has from Gates: only at the eleven venues with gates',
+      '          has from Stadium: only on match days',
+      '          Reads each ticket.',
+    ]);
+    expect(section(out, 'Connections (1)').slice(2)).toEqual([
+      '    fan-shows-ticket: -> Gates / Ticket reader: Shows a ticket',
+      '        has from Gates: only at the eleven venues with gates',
+      '        has from Stadium: only on match days',
+    ]);
+    // The short listing shows a record's own condition alone.
+    expect(run(['list']).out).not.toContain('has from');
+  });
+
   it('changes nothing in the data', () => {
     write(EXAMPLE);
     expect(run(['list', '--full', '--json']).out).toBe(run(['list', '--json']).out);
@@ -710,6 +789,29 @@ describe('the command it names', () => {
   it('is the command alone when the listing was started inside the directory', () => {
     write(BROKEN);
     expect(run(['list']).out.split('\n').at(-1)).toBe('2 records read, 1 listed. 1 error, 0 warnings: run `seefore check` to see them.');
+  });
+});
+
+describe('an id that is also the name of what every object has', () => {
+  it('lists `constructor` and `tostring` as any other, and the data holds for them only what was put there', () => {
+    write({
+      'seefore.yaml': MARKER,
+      'people/constructor.yaml': 'name: Constructor\n',
+      'systems/tostring.yaml': 'name: To string\nonly: on Tuesdays\n',
+      'apps/valueof.yaml': 'name: Value of\nin: tostring\n',
+      'connections/constructor-asks.yaml': 'from: constructor\nto: valueof\nname: Asks\n',
+    });
+    expect(run(['check']).code).toBe(0);
+    const result = run(['list', '--full']);
+    expect(result.code).toBe(0);
+    expect(section(result.out, 'People (1)')).toEqual(['People (1)', '  constructor: Constructor']);
+    const data = JSON.parse(run(['list', '--json']).out) as ListResult;
+    // A person has no owner and no condition: neither object holds a key for it of its own.
+    expect(Object.hasOwn(data.conditions, 'constructor')).toBe(false);
+    expect(Object.hasOwn(data.ownership, 'constructor')).toBe(false);
+    expect(data.conditions['tostring']).toEqual([{ only: 'on Tuesdays', from: 'tostring' }]);
+    expect(Object.keys(data.conditions)).toEqual(['tostring', 'valueof', 'constructor-asks']);
+    expect(run(['uses', 'constructor']).code).toBe(0);
   });
 });
 

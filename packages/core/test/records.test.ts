@@ -478,7 +478,7 @@ describe('`via`', () => {
   });
 
   it.each([
-    ['an empty list', 'via: []\n', '3:6 value-too-small `via` is an empty list. Leave `via` out until something that is always on the way is known.'],
+    ['an empty list', 'via: []\n', '3:6 value-too-small `via` is an empty list. Leave `via` out until something on the way is known.'],
     ['one id that is not in a list', 'via: proxy\n', '3:6 value-wrong-kind `via` must be a list, but this is text.'],
     ['an id written twice, at the second', 'via: [proxy, order-api, proxy]\n', '3:25 value-invalid `proxy` is in `via` twice. Keep one.'],
     [
@@ -534,6 +534,8 @@ describe('`only`', () => {
     ['a hundred characters', 'x'.repeat(100)],
     ['a hundred characters outside the first plane of Unicode, each counted once', '🛒'.repeat(100)],
     ['words with commas', 'when LDAP is configured, so not on GitLab.com or Dedicated'],
+    ['words that start with a longer word that starts with "only"', 'onlyoffice is installed'],
+    ['"only" later in the words', 'where the one only admin allows it'],
   ])('takes %s', (_what, only) => {
     accepted('connections/thing.yaml', `from: customer\nto: shop\nonly: ${only}\n`);
   });
@@ -558,6 +560,19 @@ describe('`only`', () => {
     ],
     ['a space at the start', 'only: " in production"\n', '3:7 value-invalid `only` starts or ends with a space. Take the space off.'],
     ['a tab at the end', 'only: "in production\\t"\n', '3:7 value-invalid `only` starts or ends with a space. Take the space off.'],
+    [
+      'two spaces in a row between its words, which a listing would show as one',
+      'only: "in the hosted  edition"\n',
+      '3:7 value-invalid `only` has two spaces in a row, or a space that is not a plain one. Write its words with single spaces.',
+    ],
+    [
+      'a tab between its words',
+      'only: "in the\\thosted edition"\n',
+      '3:7 value-invalid `only` has two spaces in a row, or a space that is not a plain one. Write its words with single spaces.',
+    ],
+    ['words that start with "only"', 'only: only in the hosted edition\n', '3:7 value-invalid `only` holds the words that read after "only". Take the first word off.'],
+    ['words that start with "Only", in any case', 'only: Only, in the hosted edition\n', '3:7 value-invalid `only` holds the words that read after "only". Take the first word off.'],
+    ['the word "only" alone', 'only: only\n', '3:7 value-invalid `only` holds the words that read after "only". Take the first word off.'],
     ['a number', 'only: 3\n', '3:7 value-wrong-kind `only` must be text, but this is a whole number.'],
     ['a list', 'only: [in production]\n', '3:7 value-wrong-kind `only` must be text, but this is a list.'],
   ])('refuses %s, at the value', (_what, text, problem) => {

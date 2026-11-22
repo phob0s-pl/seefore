@@ -58,16 +58,20 @@ export interface Left {
 }
 
 /**
- * The condition of the record asked about, and what has it from that record. What has it keeps
- * it only while the record is what it is in, or an end: a connection that gets another end loses
- * it, and a change to the record's `only` changes it for all of them.
+ * The condition of the record asked about, and what has it from that record. What has it has it
+ * from this record while the record is what it is in, or an end, and a change to the record's
+ * `only` changes it for all of them. A connection that gets another end may still have the same
+ * words from that end, or from what it is in: only the model afterwards can say.
  */
 export interface Conditioned {
   /** The words of the record's own `only`. */
   only: string;
   /** The ids of the parts inside it that have the condition from it, in the order of `inside`. */
   parts: string[];
-  /** The ids of the connections that start or end at it or at something inside it, and so have it from it, in order of id. */
+  /**
+   * The ids of the connections that start or end at it or at something inside it, and so have it
+   * from it, in order of id. Never the record asked about, which has its own `only` from nothing.
+   */
   connections: string[];
 }
 
@@ -263,14 +267,15 @@ export function removalOf(loaded: Loaded, id: string, options: RemovalOptions = 
 /**
  * The condition of the record asked about, when it has an `only` of its own, and what has it
  * from that record: the parts inside it, and the connections that start or end at it or at
- * something inside it, as `conditionsOf` says. A record with an error in its file is not in the
- * model, so nothing is known of what it has or gives.
+ * something inside it, as `conditionsOf` says. The record itself is not among them: its `only`
+ * is its own, and a connection asked about has it from none of its ends. A record with an error
+ * in its file is not in the model, so nothing is known of what it has or gives.
  */
 function conditionedBy(model: Model, uses: Uses): Conditioned | undefined {
   const id = uses.record.id;
   const own = conditionsOf(model, id)[0];
   if (own === undefined || own.from !== id) return undefined;
-  const has = (other: string): boolean => conditionsOf(model, other).some((condition) => condition.from === id);
+  const has = (other: string): boolean => other !== id && conditionsOf(model, other).some((condition) => condition.from === id);
   return {
     only: own.only,
     parts: uses.inside.map((record) => record.id).filter(has),

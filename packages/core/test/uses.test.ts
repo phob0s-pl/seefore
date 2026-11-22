@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { conditionsOf } from '../src/conditions.ts';
 import { load } from '../src/load.ts';
 import type { SourceFile } from '../src/load.ts';
 import type { Problem } from '../src/problem.ts';
@@ -652,6 +653,21 @@ describe('a store that an app keeps, a piece in a system, and a condition', () =
     });
     // Nothing comes from what a connection passes through.
     expect(review(DESK, 'office').condition).toEqual({ only: 'in the head office', parts: ['office-proxy'], connections: [] });
+  });
+
+  it('does not count a connection with an `only` of its own among those that have its condition from it', () => {
+    const files = { ...DESK, 'connections/editor-keeps-drafts.yaml': 'from: editor\nto: drafts\naccess: read-write\nonly: with drafts kept\n' };
+    expect(review(files, 'editor-keeps-drafts').condition).toEqual({ only: 'with drafts kept', parts: [], connections: [] });
+  });
+
+  it('drops a connection that gets another end from those that have the condition of the old one, though both ends still give it the condition of the app they share', () => {
+    const kept = { ...DESK, 'stores/drafts.yaml': 'name: Drafts\nin: desk\nonly: with drafts kept\n' };
+    expect(review(kept, 'drafts').condition).toEqual({ only: 'with drafts kept', parts: [], connections: ['editor-keeps-drafts', 'worker-reads-drafts'] });
+    // The editor's connection goes to the cache in the place of the drafts: both ends are still in Desk.
+    const moved = { ...kept, 'connections/editor-keeps-drafts.yaml': 'from: editor\nto: cache\naccess: read-write\nname: Keeps edits not yet saved\n' };
+    expect(review(moved, 'drafts').condition?.connections).toEqual(['worker-reads-drafts']);
+    expect(review(moved, 'desk').condition?.connections).toContain('editor-keeps-drafts');
+    expect(conditionsOf(load(directory(moved)).model, 'editor-keeps-drafts')).toEqual([{ only: 'in the desk edition', from: 'desk' }]);
   });
 
   it('says nothing of a condition for a record with none of its own, nor for one with an error in its file', () => {

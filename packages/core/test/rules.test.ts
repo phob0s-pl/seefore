@@ -20,6 +20,11 @@ const SHOP: Record<string, string> = {
   'technologies/go.yaml': 'name: Go\n',
 };
 
+/** The way out of a store in a store, which convention 10 gives. */
+const STORE_IN_STORE =
+  'A store is never in a store. Databases on one server are each a store in the system, and each description names the server. ' +
+  'A queue kept as rows is a store of its own in the system, with the database named in its description.';
+
 /** The shop, with files added or replaced, and a text of `null` to take a file away. */
 function shop(changes: Record<string, string | null> = {}): SourceFile[] {
   const files = { ...SHOP, ...changes };
@@ -188,7 +193,7 @@ describe('a reference that names a record of the wrong kind', () => {
       'stores/thing.yaml',
       'name: Thing\nin: orders-database\n',
       '2:5',
-      '`in` names `orders-database`, which is a store. A store is in a system, or in the app that keeps it.',
+      '`in` names `orders-database`, which is a store. A store is in a system, or in the app that keeps it. ' + STORE_IN_STORE,
     ],
     [
       'a store in a piece of infrastructure',
@@ -310,7 +315,7 @@ describe('a reference that names a record of the wrong kind', () => {
       '`in` names `checkout`, which is a component. A component is in an app.',
     ]);
     expect(messages(shop({ 'stores/orders-database.yaml': 'name: Orders database\nin: orders-database\n' }))).toEqual([
-      '`in` names `orders-database`, which is a store. A store is in a system, or in the app that keeps it.',
+      '`in` names `orders-database`, which is a store. A store is in a system, or in the app that keeps it. ' + STORE_IN_STORE,
     ]);
     expect(messages(shop({ 'infrastructure/proxy.yaml': 'name: HTTPS proxy\nin: proxy\n' }))).toEqual([
       '`in` names `proxy`, which is a piece of infrastructure. A piece of infrastructure is in a system, or in none.',
@@ -664,6 +669,16 @@ describe('an app or a system that only passes exchanges on', () => {
     expect(ownership(load(moved).model).get('gateway')).toEqual({ owner: 'shop-team', from: 'shop' });
   });
 
+  it('says of an app with a `kind` that it comes out, and is mended as it says', () => {
+    const kinded = { ...GATEWAY, 'apps/gateway.yaml': 'name: Gateway\nin: shop\nkind: service\n' };
+    expect(messages(shop(kinded))).toEqual([
+      `${saw('2 connections name', 'app')} It may keep \`in: shop\` there. Its \`kind\` comes out, since a piece of infrastructure has none. ${ends}`,
+    ]);
+    const moved = (text: string): SourceFile[] => shop({ ...kinded, 'apps/gateway.yaml': null, 'infrastructure/gateway.yaml': text });
+    expect(found(moved('name: Gateway\nin: shop\n'))).toEqual([]);
+    expect(found(moved('name: Gateway\nin: shop\nkind: service\n'))).toEqual(['infrastructure/gateway.yaml:3:1 error key-unknown']);
+  });
+
   it('says of an app that keeps a store and has nothing else that the store has to go elsewhere first', () => {
     const files = shop({ ...GATEWAY, 'stores/routes.yaml': 'name: Routes\nin: gateway\n' });
     expect(messages(files)).toEqual([
@@ -989,14 +1004,119 @@ describe('a connection to a store that an app keeps', () => {
     expect(messages(files)[0]).toBe(
       'This connection goes from the store `index`, which the app `order-api` keeps, to the store `orders-copy`. ' +
         'Nothing reaches a store that an app keeps but through that app, so one of two things may be so. ' +
-        "The store is not `order-api`'s alone: then it is in the system, `in: shop`. " +
-        'Or `order-api` makes this exchange, and reads the store for it: then the connection starts at `order-api`.',
+        "The store `index` is not `order-api`'s alone: then it is in the system, `in: shop`. " +
+        'Or `order-api` makes this exchange, and reads `index` for it: then the connection starts at `order-api`.',
     );
   });
 
   it('is one for each connection, at its `to`, when both ends are stores that two apps keep', () => {
     const files = shop({ ...KEPT, 'stores/drafts.yaml': 'name: Drafts\nin: storefront\n', 'connections/thing.yaml': 'from: drafts\nto: index\n' });
     expect(found(files)).toEqual(['connections/thing.yaml:2:5 warning kept-store-reached']);
+  });
+});
+
+describe('the ways out that the warning on a kept store offers', () => {
+  /** The shop, where the order API keeps an index of its own. */
+  const KEPT = { 'stores/index.yaml': 'name: Index\nin: order-api\n' };
+
+  /** Every problem of the shop with these files, which a way out must leave with none. */
+  const after = (files: Record<string, string | null>): string[] => found(shop({ ...KEPT, ...files }));
+
+  it('says that `access` comes off when the connection is to end at the app, and each way out leaves the model sound', () => {
+    const reached = { 'connections/thing.yaml': 'from: storefront\nto: index\naccess: read\nname: Looks up an order\n' };
+    expect(messages(shop({ ...KEPT, ...reached }))).toEqual([
+      'This connection goes from the app `storefront` to the store `index`, which the app `order-api` keeps. ' +
+        'Nothing reaches a store that an app keeps but through that app, so one of two things may be so. ' +
+        "The store is not `order-api`'s alone: then it is in the system, `in: shop`. " +
+        'Or the exchange is with `order-api`, which reads or writes the store in turn: then the connection ends at `order-api`, ' +
+        'and `access` comes off, since it no longer ends at a store.',
+    ]);
+    expect(after({ ...reached, 'stores/index.yaml': 'name: Index\nin: shop\n' })).toEqual([]);
+    expect(after({ 'connections/thing.yaml': 'from: storefront\nto: order-api\nname: Looks up an order\n' })).toEqual([]);
+    // The edit the message warned of: a new end alone, with `access` left in.
+    expect(after({ 'connections/thing.yaml': 'from: storefront\nto: order-api\naccess: read\nname: Looks up an order\n' })).toEqual([
+      'connections/thing.yaml:3:9 error access-not-store',
+    ]);
+  });
+
+  it('turns round a connection from a store in a system, never making a store act on the app, and each way out leaves the model sound', () => {
+    const reached = { 'connections/thing.yaml': 'from: orders-database\nto: index\naccess: write\nname: Copies each order\n' };
+    expect(messages(shop({ ...KEPT, ...reached }))).toEqual([
+      'This connection goes from the store `orders-database` to the store `index`, which the app `order-api` keeps. ' +
+        'Nothing reaches a store that an app keeps but through that app, so one of two things may be so. ' +
+        "The store `index` is not `order-api`'s alone: then it is in the system, `in: shop`. " +
+        'Or `order-api` takes what it keeps from `orders-database`: then the connection goes from `order-api` to `orders-database`, ' +
+        'and its name and its `access` say what `order-api` does there.',
+    ]);
+    expect(after({ ...reached, 'stores/index.yaml': 'name: Index\nin: shop\n' })).toEqual([]);
+    expect(after({ 'connections/thing.yaml': 'from: order-api\nto: orders-database\naccess: read\nname: Reads each order to keep it\n' })).toEqual([]);
+    // With no `access`, the name alone is to say it.
+    expect(messages(shop({ ...KEPT, 'connections/thing.yaml': 'from: orders-database\nto: index\n' }))[0]).toMatch(
+      /then the connection goes from `order-api` to `orders-database`, and its name says what `order-api` does there\.$/,
+    );
+    // The edit the message no longer offers: the app in the place of the kept store.
+    expect(after({ 'connections/thing.yaml': 'from: orders-database\nto: order-api\nname: Copies each order\n' })).toEqual(['connections/thing.yaml:1:7 error store-acts']);
+  });
+
+  it('says that a connection whose route passes through a part of the keeping app ends at that part, and the edit leaves the model sound', () => {
+    const routed = { 'connections/thing.yaml': 'from: storefront\nto: index\nvia: [proxy, checkout]\naccess: write\nname: Adds an order\n' };
+    expect(messages(shop({ ...KEPT, ...routed }))).toEqual([
+      'This connection goes from the app `storefront` to the store `index`, which the app `order-api` keeps, and passes through `checkout`, which is in `order-api`. ' +
+        'Then the exchange is with `checkout`, which reads or writes the store in turn: the connection ends at `checkout`, with `via: [proxy]`, ' +
+        'and `access` comes off, since it no longer ends at a store.',
+    ]);
+    expect(after({ 'connections/thing.yaml': 'from: storefront\nto: checkout\nvia: [proxy]\nname: Adds an order\n' })).toEqual([]);
+    // With nothing else on the way, `via` goes.
+    const alone = shop({ ...KEPT, 'connections/thing.yaml': 'from: storefront\nto: index\nvia: [checkout]\n' });
+    expect(messages(alone)[0]).toMatch(/the connection ends at `checkout`, with no `via`\.$/);
+    expect(after({ 'connections/thing.yaml': 'from: storefront\nto: checkout\n' })).toEqual([]);
+  });
+
+  it('turns a connection from a store in a system through a part of the keeping app round, its route with it', () => {
+    const routed = { 'connections/thing.yaml': 'from: orders-database\nto: index\nvia: [proxy, checkout]\n' };
+    expect(messages(shop({ ...KEPT, ...routed }))[0]).toMatch(
+      /Then `checkout` takes what it keeps from `orders-database`: the connection goes from `checkout` to `orders-database`, with `via: \[proxy\]`, and its name says what `checkout` does there\.$/,
+    );
+    expect(after({ 'connections/thing.yaml': 'from: checkout\nto: orders-database\nvia: [proxy]\nname: Reads the orders to index them\n' })).toEqual([]);
+  });
+
+  it('leaves the model sound either way when the kept store acts on a store outside', () => {
+    const reached = { 'connections/thing.yaml': 'from: index\nto: orders-copy\naccess: write\nname: Copies each order\n' };
+    expect(found(shop({ ...KEPT, ...reached }))).toEqual(['connections/thing.yaml:1:7 warning kept-store-reached']);
+    expect(after({ ...reached, 'stores/index.yaml': 'name: Index\nin: shop\n' })).toEqual([]);
+    expect(after({ 'connections/thing.yaml': 'from: order-api\nto: orders-copy\naccess: write\nname: Copies each order\n' })).toEqual([]);
+  });
+
+  it('names both keepers when each end is a store an app of its own keeps, asks which records exchange the data, and each way out leaves the model sound', () => {
+    const two = { 'stores/drafts.yaml': 'name: Drafts\nin: storefront\n', 'connections/thing.yaml': 'from: drafts\nto: index\naccess: write\nname: Copies each draft\n' };
+    expect(messages(shop({ ...KEPT, ...two }))).toEqual([
+      'This connection goes from the store `drafts`, which the app `storefront` keeps, to the store `index`, which the app `order-api` keeps. ' +
+        'Nothing reaches a store that an app keeps but through that app, so which records exchange the data? ' +
+        'If the apps do, `storefront` sending what is in its store and `order-api` keeping it in its own: then the connection goes from `storefront` to `order-api`, ' +
+        'and `access` comes off, since it no longer ends at a store. ' +
+        "If the stores do, with neither app between: then neither is its app's alone, and both are in the system, `in: shop`.",
+    ]);
+    expect(after({ ...two, 'connections/thing.yaml': 'from: storefront\nto: order-api\nname: Copies each draft\n' })).toEqual([]);
+    expect(after({ ...two, 'stores/drafts.yaml': 'name: Drafts\nin: shop\n', 'stores/index.yaml': 'name: Index\nin: shop\n' })).toEqual([]);
+    // The two edits the warning no longer offers: a new end in place of a store, and one store moved alone.
+    expect(after({ ...two, 'connections/thing.yaml': 'from: drafts\nto: order-api\naccess: write\n' })).toEqual([
+      'connections/thing.yaml:1:7 error store-acts',
+      'connections/thing.yaml:3:9 error access-not-store',
+    ]);
+    expect(after({ ...two, 'stores/index.yaml': 'name: Index\nin: shop\n' })).toEqual(['connections/thing.yaml:1:7 warning kept-store-reached']);
+  });
+
+  it('names the system of each app when the two keepers are in two systems', () => {
+    const files = shop({
+      ...KEPT,
+      'apps/card-api.yaml': 'name: Card API\nin: card-provider\n',
+      'stores/cards.yaml': 'name: Cards\nin: card-api\n',
+      'connections/thing.yaml': 'from: cards\nto: index\n',
+    });
+    expect(messages(files)[0]).toMatch(
+      /then the connection goes from `card-api` to `order-api`\. If the stores do, with neither app between: then neither is its app's alone, and each is in the system of its app, `in: card-provider` for `cards` and `in: shop` for `index`\.$/,
+    );
+    expect(after({ 'apps/card-api.yaml': 'name: Card API\nin: card-provider\n', 'stores/cards.yaml': 'name: Cards\nin: card-provider\n', 'stores/index.yaml': 'name: Index\nin: shop\n', 'connections/thing.yaml': 'from: cards\nto: index\n' })).toEqual([]);
   });
 
   it('is not one for a store in a system, nor for a connection or a keeper with an error in its file', () => {
@@ -1144,6 +1264,43 @@ describe('two ways of one exchange', () => {
         'If they are two ways of one exchange, give each its route in `via`, or say in `only` when each is taken. ' +
         'If their purposes differ, give each a name that says which.',
     );
+  });
+
+  it('name who opened the channel, or what is done to a store, where one says it and the other does not, before one is kept', () => {
+    const tells = 'from: order-api\nto: customer\nname: Says the order is ready\n';
+    const opened = shop({ 'connections/a.yaml': `${tells}`, 'connections/b.yaml': tells.replace('name:', 'opens: to\nname:') });
+    expect(messages(opened)).toEqual([
+      'This connection has the same `from`, `to` and `name` as `connections/b.yaml`. They differ in `opens`: this one has none, and `connections/b.yaml` has `opens: to`. ' +
+        'If these are the same exchange, keep one, and carry `opens: to` over to it if it holds there. ' +
+        'If they are two ways of one exchange, give each its route in `via`, or say in `only` when each is taken. If their purposes differ, give each a name that says which.',
+      'This connection has the same `from`, `to` and `name` as `connections/a.yaml`. They differ in `opens`: this one has `opens: to`, and `connections/a.yaml` has none. ' +
+        'If these are the same exchange, keep one, and carry `opens: to` over to it if it holds there. ' +
+        'If they are two ways of one exchange, give each its route in `via`, or say in `only` when each is taken. If their purposes differ, give each a name that says which.',
+    ]);
+    const writes = 'from: checkout\nto: orders-database\nname: Keeps the order\n';
+    const three = shop({ 'connections/a.yaml': `${writes}access: read\n`, 'connections/b.yaml': `${writes}access: write\n`, 'connections/c.yaml': `${writes}access: read\n` });
+    expect(messages(three)[0]).toContain(
+      'They differ in `access`: this one and `connections/c.yaml` have `access: read`, and `connections/b.yaml` has `access: write`. ' +
+        'If these are the same exchange, keep one, and give it the `access` that holds there. ',
+    );
+    // The same fact on both says nothing more.
+    expect(messages(shop({ 'connections/a.yaml': `${writes}access: read\n`, 'connections/b.yaml': `${writes}access: read\n` }))[0]).not.toContain('They differ');
+  });
+
+  it('name a fact a level up that the connection beneath it lacks, and say where it may go before the upper one is removed', () => {
+    const upper = 'from: order-api\nto: customer\nopens: to\nname: Says the order is ready\n';
+    const lower = 'from: checkout\nto: customer\nname: Says the order is ready\n';
+    const files = shop({ 'connections/upper.yaml': upper, 'connections/lower.yaml': lower });
+    expect(messages(files)).toEqual([
+      'This connection says in the same words, higher up, what `connections/lower.yaml` says. It has `opens: to`, and `connections/lower.yaml` has none. ' +
+        'A connection higher up is a summary: give it a name that says more than the ones beneath it, or remove it, ' +
+        'carrying `opens: to` over to `connections/lower.yaml` if it holds there.',
+    ]);
+    // Done as it says, nothing is lost and nothing is left to warn of.
+    expect(found(shop({ 'connections/lower.yaml': lower.replace('name:', 'opens: to\nname:') }))).toEqual([]);
+    // A fact the one beneath has, and the upper one lacks, is not lost when the upper one goes.
+    const plain = shop({ 'connections/upper.yaml': upper.replace('opens: to\n', ''), 'connections/lower.yaml': lower.replace('name:', 'opens: to\nname:') });
+    expect(messages(plain)[0]).not.toContain('opens');
   });
 
   it('are not a summary a level up when the route or the condition differs, and are one when both are the same', () => {

@@ -73,30 +73,17 @@ interface Entry {
   record: { in?: string | undefined; only?: string | undefined; from?: string; to?: string };
 }
 
-/** The records of a model by id, with the number of records it was made from. */
-interface Lookup {
-  size: number;
-  entries: Map<string, Entry>;
-}
-
 const FAMILIES: readonly Family[] = ['people', 'systems', 'apps', 'stores', 'components', 'infrastructure', 'connections'];
 
 /**
- * Each model looked up so far. The rules, the listing and the views ask of every record in turn,
- * so a model is looked up once, the first time it is asked of. Each entry holds the record itself,
- * so what is read of it is always what it says now; a model that gains or loses a record is
- * looked up again.
+ * The model's records by id, as the model holds them now. An id names one record in a model,
+ * since one used twice is an error. It is made again on every call: a model can change and keep
+ * as many records as it had, as when one record takes the place of another, and nothing short of
+ * reading every record tells. A model is small enough that this costs little.
  */
-const LOOKUPS = new WeakMap<Model, Lookup>();
-
-/** The model's records by id. An id names one record in a model, since one used twice is an error. */
 function lookUp(model: Model): Map<string, Entry> {
-  const size = FAMILIES.reduce((sum, family) => sum + model[family].length, 0);
-  const known = LOOKUPS.get(model);
-  if (known?.size === size) return known.entries;
   const entries = new Map<string, Entry>();
   for (const family of FAMILIES) for (const record of model[family]) entries.set(record.id, { family, record });
-  LOOKUPS.set(model, { size, entries });
   return entries;
 }
 

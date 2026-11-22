@@ -490,6 +490,11 @@ describe('seefore uses, for a connection with one end in the thing that also pas
 });
 
 describe('seefore uses, for what is in what and a condition', () => {
+  /** What is said after the count of connections that have the condition: what a new end may leave, and where to look. */
+  const ANOTHER_END =
+    'A connection that gets another end may still have this condition, from that end or from what it is in. ' +
+    'Look at what `seefore list --full` says of it afterwards, before any words are copied.';
+
   /** An archive whose Desk, there only in the desk edition, keeps its drafts, with an ingress that is part of the archive. */
   const DESK: Readonly<Record<string, string>> = {
     'seefore.yaml': 'format: 1\nname: Desk\n',
@@ -513,7 +518,7 @@ describe('seefore uses, for what is in what and a condition', () => {
       'app desk: Desk (apps/desk.yaml)',
       '',
       '2 records inside it and 3 connections that start or end at it or at something inside it have its condition from it: ' +
-        'only in the desk edition. A connection that gets another end no longer has it: give it that `only` if it still holds.',
+        `only in the desk edition. ${ANOTHER_END}`,
       '',
       'Goes with it: 2 records inside it, and 1 connection with both ends in it:',
       '  component editor: Editor (components/editor.yaml)',
@@ -559,10 +564,26 @@ describe('seefore uses, for what is in what and a condition', () => {
   it('says it of one connection, for a thing that holds nothing', () => {
     write({ ...DESK, 'stores/records.yaml': 'name: Records\nin: archive\nonly: where records are kept\n' });
     expect(run(['uses', 'records']).out.split('\n')[2]).toBe(
-      '1 connection that starts or ends at it has its condition from it: only where records are kept. ' +
-        'A connection that gets another end no longer has it: give it that `only` if it still holds.',
+      `1 connection that starts or ends at it has its condition from it: only where records are kept. ${ANOTHER_END}`,
     );
     expect(json(['uses', 'records']).data.condition).toEqual({ only: 'where records are kept', parts: [], connections: ['worker-saves-records'] });
+  });
+
+  it('does not count a connection among those that have its own condition from it, and says nothing of one then', () => {
+    write({ ...DESK, 'connections/editor-keeps-drafts.yaml': 'from: editor\nto: drafts\naccess: read-write\nonly: with drafts kept\n' });
+    expect(json(['uses', 'editor-keeps-drafts']).data.condition).toEqual({ only: 'with drafts kept', parts: [], connections: [] });
+    expect(run(['uses', 'editor-keeps-drafts']).out).not.toContain('its condition');
+  });
+
+  it('says that a connection given another end may still have the condition, from an app both ends are in, and to read the listing before copying words', () => {
+    write({ ...DESK, 'stores/drafts.yaml': 'name: Drafts\nin: desk\nonly: with drafts kept\n', 'stores/cache.yaml': 'name: Cache\nin: desk\n' });
+    expect(run(['uses', 'drafts']).out.split('\n')[2]).toBe(`1 connection that starts or ends at it has its condition from it: only with drafts kept. ${ANOTHER_END}`);
+    // Given the cache in the place of the drafts, the connection has Desk's condition still, from both its ends, and the listing says so.
+    write({ 'connections/editor-keeps-drafts.yaml': 'from: editor\nto: cache\naccess: read-write\nname: Keeps edits not yet saved\n' });
+    expect(json(['uses', 'drafts']).data.condition).toEqual({ only: 'with drafts kept', parts: [], connections: [] });
+    const listing = run(['list', '--full']).out.split('\n');
+    const at = listing.findIndex((line) => line.startsWith('    editor-keeps-drafts:'));
+    expect(listing.slice(at, at + 2)).toEqual(['    editor-keeps-drafts: Editor -> Cache: [read-write] Keeps edits not yet saved', '        has from Desk: only in the desk edition']);
   });
 });
 
