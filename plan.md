@@ -105,12 +105,19 @@ Decided:
 | Where the meaning lives | All in the core library, which touches neither disk nor network. The command reads files and prints. The viewer draws and never writes | 2026-11-21 |
 | Packaging | One npm package, `seefore`, with the command built into one file; the server and the viewer join it at stage 5. The skills are a Claude Code plugin | 2026-11-21 |
 | The command line | Verbs are subcommands, starting with `seefore check`. `--workdir` works with every one. The server keeps the form `seefore --server` | 2026-11-21 |
+| The words for C4's "container" | "App" for what runs code and "store" for what holds data | 2026-11-22 |
+| The word for C4's "relationship" | "Connection" | 2026-11-22 |
+| The format of stage 4 | Eight kinds of record: person, system, app, store, component, connection, owner, technology. Eight field names: `name`, `description`, `in`, `kind`, `technology`, `owner`, `from`, `to` | 2026-11-22 |
+| Owner | A record, named by id. It may be left out everywhere, so who answers for a part can be said later. A person has none | 2026-11-22 |
+| Technology | A record, named by id: a language, a framework, a product or a protocol with a name | 2026-11-22 |
+| Somebody else's system | No stored mark at stage 4. Its description says whose it is. Whether a mark is stored is settled at stage 6 | 2026-11-22 |
+| A connection one level up | A summary of the ones beneath it, written only when it says more than they do | 2026-11-22 |
 
 To settle in the stage named, with the recommendation the two proposals reached:
 
 | Decision | Stage | Recommendation |
 | --- | --- | --- |
-| The words for C4's "container" | 4 | Open: "container", or "app" and "store" |
+| A stored mark for somebody else's system | 6 | Open: `external` on a system, or nothing stored and the description says whose it is |
 | Layout | 5, 7 | ELK, which runs in Node and in the browser. No stored coordinates; hints written by the skill. Proven or rejected at stage 7 |
 
 ## Status
@@ -120,7 +127,7 @@ To settle in the stage named, with the recommendation the two proposals reached:
 | 1 | Baseline research | done |
 | 2 | Trial systems | done, accepted 2026-11-21 |
 | 3 | Source directory | done, accepted 2026-11-21 |
-| 4 | Basic modelling | next |
+| 4 | Basic modelling | in work; the format accepted 2026-11-22 |
 | 5 | Automatic diagrams | |
 | 6 | Hard cases | |
 | 7 | Layout stability (gate) | |
@@ -178,15 +185,19 @@ To settle in the stage named, with the recommendation the two proposals reached:
 
 ### 4. Basic modelling
 
-- **Adds:** person, software system, container, component, and relationships between them.
-  Each element has a name, a description, a technology where one applies, and an owner. One
-  convention says what an arrow's direction means.
+- **Adds:** person, software system, app, store, component, and connections between them,
+  with the owner and the technology as records of their own. An app is what runs code and a
+  store is what holds data; C4 calls both a container, and calls a connection a relationship.
+  Each element has a name and, where it is known, a description, a technology and an owner. A
+  person has no owner, and who answers for a part may be said later. One convention says what
+  an arrow's direction means.
 - **Ends with:** checks that ids are unique, parents exist and are of the right kind, nothing
-  contains itself, every reference resolves, and a relationship is written once, at the lowest
-  level known. A modelling skill that adds, changes, renames, moves and removes, and shows
-  what a removal would break. A plain listing of the model to read before the viewer exists.
-- **Trial:** a first slice of each trial system: its people, the systems around it, its
-  containers, and the components of one container.
+  contains itself, every reference resolves, and a connection is not written again one level
+  up in the same words. A modelling skill that adds, changes, renames, moves and removes, and
+  shows what a removal would break. A plain listing of the model to read before the viewer
+  exists.
+- **Trial:** a first slice of each trial system: its people, the systems around it, its apps
+  and stores, and the components of one app.
 - **Leaves out:** custom kinds, queues and the other hard cases, views, deployment, any
   required depth.
 
@@ -205,12 +216,12 @@ To settle in the stage named, with the recommendation the two proposals reached:
 
 ### 6. Hard cases
 
-- **Adds:** queues and topics, an intermediary on a relationship ("via"), asynchronous
-  relationships, external services, and shared data stores. For each: one convention, one
+- **Adds:** queues and topics, an intermediary on a connection ("via"), asynchronous
+  connections, external services, and shared data stores. For each: one convention, one
   check, and guidance from the skill at the moment of modelling.
 - **Ends with:** a spec page with the conventions and their reasons. Checks that flag a
-  message broker drawn as one box, and infrastructure such as a load balancer drawn as a
-  container.
+  message broker drawn as one box, and infrastructure such as a load balancer drawn as an
+  app.
 - **Trial:** the real messaging, third-party services and shared stores of the trial systems.
 - **Leaves out:** deployment views, data models.
 
@@ -232,7 +243,7 @@ To settle in the stage named, with the recommendation the two proposals reached:
 
 - **Adds:** the C4 notation rules as one named set, each with a severity.
 - **Ends with:** checks for a missing description, a missing technology, an unlabelled or
-  vague relationship, and an element connected to nothing. "Unknown" is allowed while
+  vague connection, and an element connected to nothing. "Unknown" is allowed while
   exploring. Each check says how much it looked at, so a check that looked at nothing says so.
   An exit code for CI.
 - **Trial:** run on every trial system. Every finding is fixed in the model, or shows that
@@ -243,10 +254,10 @@ To settle in the stage named, with the recommendation the two proposals reached:
 
 - **Adds:** a view as a record: a name, a purpose, a scope, and a rule for what it includes.
   Component views, a landscape, "this element and its neighbours".
-- **Ends with:** the default views stay. Named views live in files. Relationships are rolled
+- **Ends with:** the default views stay. Named views live in files. Connections are rolled
   up to the level shown and still lead to the real ones beneath. A view cannot state anything
   the model does not.
-- **Trial:** on the trial systems: a component view of a real container, a "this service and
+- **Trial:** on the trial systems: a component view of a real app, a "this service and
   its neighbours" view, and a landscape with the systems around it.
 - **Leaves out:** a query language, a view for every element, deployment views.
 
@@ -254,7 +265,7 @@ To settle in the stage named, with the recommendation the two proposals reached:
 
 - **Adds:** search and navigation in the viewer.
 - **Ends with:** search over names, ids, descriptions, owners and technologies. A stable link
-  to every element and view. Drill-down from landscape to system to container. The element
+  to every element and view. Drill-down from landscape to system to app. The element
   panel shows what goes in and out, the owner, and the views it appears in.
 - **Trial:** someone who does not know a trial system finds a service, its owner and what
   depends on it, without help.
@@ -265,7 +276,7 @@ To settle in the stage named, with the recommendation the two proposals reached:
 ### 11. Flows
 
 - **Adds:** a flow: a named scenario with a trigger, an outcome and ordered steps. A step has
-  its own id. A message step uses a declared relationship. A step can also be an internal
+  its own id. A message step uses a declared connection. A step can also be an internal
   action or a note. Sends can be asynchronous, and a reply can travel against the arrow.
 - **Ends with:** checks that every step resolves. A flow skill. A sequence view.
 - **Trial:** one real path from end to end in each trial system.
@@ -276,7 +287,7 @@ To settle in the stage named, with the recommendation the two proposals reached:
 
 - **Adds:** reading a flow on the structure.
 - **Ends with:** the steps highlighted one by one on the diagram. A way from an element or a
-  relationship to the flows that use it. Each flow is marked exploratory or kept, and a kept
+  connection to the flows that use it. Each flow is marked exploratory or kept, and a kept
   flow has an owner.
 - **Trial:** walk the same paths with the owner.
 - **Leaves out:** runtime tracing, and any claim that a valid flow is how the system behaves.
@@ -297,7 +308,7 @@ To settle in the stage named, with the recommendation the two proposals reached:
 
 - **Adds:** the difference between two revisions of a source directory, by id.
 - **Ends with:** `seefore diff` between two Git revisions or two directories: added, removed,
-  changed, moved, changed in kind. It covers elements, relationships, views and flows, as text
+  changed, moved, changed in kind. It covers elements, connections, views and flows, as text
   and as data. Changes that only affect presentation are kept apart.
 - **Trial:** two real states of a trial model from the stages so far.
 - **Leaves out:** any workflow, merging.
@@ -341,7 +352,7 @@ From here on, every new concept also teaches the comparison.
 
 - **Adds:** the review of a proposal: who is accountable, who decides, who can block and on
   what concern, who is consulted, and by when. Findings.
-- **Ends with:** a finding is pinned to an element, a relationship, a flow step or a passage
+- **Ends with:** a finding is pinned to an element, a connection, a flow step or a passage
   of the brief, and to the revision reviewed. It is blocking or advisory. It ends as
   addressed, declined with a reason, or deferred to an action with an owner. A review skill
   runs a few reviewers, each with one lens. The viewer shows findings on the diagram and in a

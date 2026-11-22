@@ -1,4 +1,4 @@
-import { isMap } from 'yaml';
+import { isMap, isSeq } from 'yaml';
 import type { Document, YAMLMap } from 'yaml';
 import type { z } from 'zod';
 import { error, list, quote } from './problem.ts';
@@ -107,7 +107,7 @@ function parentPosition(yaml: YamlFile, doc: Document, path: Path): Position {
 }
 
 /** How a path is shown in a message: `name`, `owner.team`, `tags[2]`. */
-function label(path: Path): string {
+export function label(path: Path): string {
   let text = '';
   for (const part of path) {
     if (typeof part === 'number') text += `[${part}]`;
@@ -141,7 +141,8 @@ function describe(value: unknown): string {
   if (typeof value === 'string') return 'text';
   if (typeof value === 'number') return Number.isInteger(value) ? 'a whole number' : 'a number that is not whole';
   if (typeof value === 'boolean') return '`true` or `false`';
-  if (Array.isArray(value)) return 'a list';
+  // A list comes out of the document as a node of its own, not as an array.
+  if (Array.isArray(value) || isSeq(value)) return 'a list';
   return 'a mapping';
 }
 

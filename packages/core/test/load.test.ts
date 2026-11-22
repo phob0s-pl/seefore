@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Format } from '../src/format.ts';
 import { load, loadAs } from '../src/load.ts';
 import type { SourceFile } from '../src/load.ts';
+import { emptyModel } from '../src/model.ts';
 
 const MARKER: SourceFile = { path: 'seefore.yaml', text: 'format: 1\nname: Boxwick\n' };
 
@@ -18,7 +19,14 @@ function codes(problems: { file: string; code: string }[]) {
 
 describe('a source directory with only its marker', () => {
   it('loads with no records and no problems', () => {
-    expect(load([MARKER])).toEqual({ marker: { format: 1, name: 'Boxwick' }, records: [], problems: [] });
+    expect(load([MARKER])).toEqual({
+      marker: { format: 1, name: 'Boxwick' },
+      records: [],
+      unread: [],
+      references: [],
+      model: emptyModel(),
+      problems: [],
+    });
   });
 
   it('reports a missing marker', () => {
@@ -58,10 +66,15 @@ describe('a source directory with only its marker', () => {
       ['notes.yaml', 'warning', 'not-read'],
     ]);
     expect(loaded.problems[1]?.message).toBe(
-      'seefore does not read this file: it knows no records in `elements/`. This format has no folders of records yet.',
+      'seefore does not read this file: it knows no records in `elements/`. The folders it reads are `apps`, `components`, ' +
+        '`connections`, `owners`, `people`, `stores`, `systems` and `technologies`.',
     );
     expect(loaded.problems[2]?.message).toBe(
       'seefore does not read this file. Records sit in folders, and the only file at the top is `seefore.yaml`.',
+    );
+    const none = loadAs({ version: 1, families: [] }, [MARKER, file('elements/shop.yaml')]);
+    expect(none.problems[0]?.message).toBe(
+      'seefore does not read this file: it knows no records in `elements/`. This format has no folders of records yet.',
     );
   });
 

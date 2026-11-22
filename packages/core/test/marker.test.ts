@@ -38,6 +38,8 @@ describe('the marker file', () => {
       '1:9 value-wrong-kind `format` must be a whole number, but this is a number that is not whole.',
     ]);
     expect(problemsOf('format: 1\nname:\n')).toEqual(['2:6 value-wrong-kind `name` must be text, but this is empty.']);
+    expect(problemsOf('format: 1\nname: [Box, wick]\n')).toEqual(['2:7 value-wrong-kind `name` must be text, but this is a list.']);
+    expect(problemsOf('format: 1\nname: { first: Box }\n')).toEqual(['2:7 value-wrong-kind `name` must be text, but this is a mapping.']);
   });
 
   it('reports a key it does not have, at the key, and lists the ones it has', () => {

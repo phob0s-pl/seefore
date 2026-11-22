@@ -3,13 +3,14 @@ import { CURRENT_FORMAT, READABLE_VERSIONS } from './format.ts';
 import { START, error } from './problem.ts';
 import type { Problem } from './problem.ts';
 import { checkShape } from './shape.ts';
+import { NAME_MAX } from './text.ts';
 import { keyPosition, peekTop, readYaml } from './yaml.ts';
 
 /** The name of the file that makes a folder a source directory. */
 export const MARKER_FILE = 'seefore.yaml';
 
-/** The most characters the name of an architecture may have. */
-export const NAME_MAX = 100;
+/** The most characters the name of an architecture may have: the same as for any name. */
+export { NAME_MAX };
 
 export const MarkerSchema = z.strictObject({
   format: z.int().min(1),

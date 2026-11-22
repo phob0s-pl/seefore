@@ -1,11 +1,18 @@
+import { isScalar, isSeq } from 'yaml';
 import { CURRENT_FORMAT } from './format.ts';
-import type { Format } from './format.ts';
-import { idProblem } from './id.ts';
+import type { Family, Format, ReferenceField } from './format.ts';
+import { idProblem, isId } from './id.ts';
 import { MARKER_FILE, readMarker } from './marker.ts';
 import type { Marker } from './marker.ts';
+import { emptyModel } from './model.ts';
+import type { Model, ModelRecord } from './model.ts';
 import { START, compareProblems, error, list, quote, warning } from './problem.ts';
 import type { Problem } from './problem.ts';
+import type { Connection } from './records.ts';
+import { byId, connectionProblems, parentsOf, referenceProblems } from './rules.ts';
+import { checkShape } from './shape.ts';
 import { readYaml } from './yaml.ts';
+import type { YamlFile } from './yaml.ts';
 
 /** One file of a source directory, as text. */
 export interface SourceFile {
@@ -14,24 +21,52 @@ export interface SourceFile {
   text: string;
 }
 
-/** One record, read from its file. */
-export interface SourceRecord {
-  /** The record's id, which is its file's name without `.yaml`. */
+/** A file that stands for a record: directly in a family's folder, and named by a good id. */
+export interface RecordFile {
+  /** The record's id, which is its file's name without its ending. */
   id: string;
   /** The folder the record sits in. */
   family: string;
   /** The path of its file from the top of the source directory. */
   file: string;
+}
+
+/** One record, read from its file. */
+export interface SourceRecord extends RecordFile {
   /** What the file holds. */
   value: Record<string, unknown>;
+}
+
+/** A place where one record names another by its id. */
+export interface Reference {
+  /** The file of the record that names the other. */
+  file: string;
+  /** Where the id is written in that file. */
+  line: number;
+  column: number;
+  /** The id of the record that names the other. */
+  record: string;
+  /** The key it is named in, such as `in`. */
+  field: string;
+  /** The id it names. */
+  names: string;
 }
 
 /** A source directory after reading: what could be read, and everything that is wrong. */
 export interface Loaded {
   /** What `seefore.yaml` says. Missing when the marker is absent or broken. */
   marker?: Marker;
-  /** The records that could be read, in order of id. */
+  /** The records whose file could be read, whatever their shape, in order of id. */
   records: SourceRecord[];
+  /**
+   * The files that stand for a record and could not be read, in order of file. Each is still a
+   * record that others may name.
+   */
+  unread: RecordFile[];
+  /** Every id that a record names in a field for naming records, in order of file and place. */
+  references: Reference[];
+  /** The records whose own file has no error, typed, by family. */
+  model: Model;
   /** Everything that is wrong, in order of file and place. */
   problems: Problem[];
 }
@@ -54,14 +89,23 @@ export function load(files: readonly SourceFile[]): Loaded {
   return loadAs(CURRENT_FORMAT, files);
 }
 
+/** A record read from a sound YAML file, with what it takes to check it further. */
+interface ReadRecord {
+  record: SourceRecord;
+  yaml: YamlFile;
+  family: Family;
+}
+
 /**
  * Reads a source directory under a given format. `load` is this with the current format;
- * tests use it to try the rules for records before any family of records exists.
+ * tests use it to try the rules for records with families made up for the test.
  */
 export function loadAs(format: Format, files: readonly SourceFile[]): Loaded {
   const problems: Problem[] = [];
   const records: SourceRecord[] = [];
-  const families = new Set(format.families.map((family) => family.folder));
+  const unread: RecordFile[] = [];
+  const readRecords: ReadRecord[] = [];
+  const families = new Map(format.families.map((family) => [family.folder, family]));
 
   const sources = files
     .map((file) => ({ path: normalise(file.path), text: file.text }))
@@ -87,7 +131,7 @@ export function loadAs(format: Format, files: readonly SourceFile[]): Loaded {
       if (!read.problems.some((problem) => problem.code === 'format-not-readable')) {
         problems.push(warning(MARKER_FILE, START, 'format-unknown', 'The marker file does not say which format this directory is written in, so nothing else in it was read.'));
       }
-      return { ...(marker ? { marker } : {}), records, problems: problems.sort(compareProblems) };
+      return { ...(marker ? { marker } : {}), records, unread, references: [], model: emptyModel(), problems: problems.sort(compareProblems) };
     }
   }
 
@@ -107,13 +151,14 @@ export function loadAs(format: Format, files: readonly SourceFile[]): Loaded {
 
     const parts = file.path.split('/');
     const folder = parts[0] as string;
+    const family = families.get(folder);
 
     if (parts.length === 1) {
       problems.push(warning(file.path, START, 'not-read', `seefore does not read this file. Records sit in folders, and the only file at the top is ${quote(MARKER_FILE)}.`));
       continue;
     }
-    if (!families.has(folder)) {
-      const reads = families.size > 0 ? `The folders it reads are ${list([...families].sort())}.` : 'This format has no folders of records yet.';
+    if (!family) {
+      const reads = families.size > 0 ? `The folders it reads are ${list([...families.keys()].sort())}.` : 'This format has no folders of records yet.';
       problems.push(warning(file.path, START, 'not-read', `seefore does not read this file: it knows no records in ${quote(folder + '/')}. ${reads}`));
       continue;
     }
@@ -126,6 +171,9 @@ export function loadAs(format: Format, files: readonly SourceFile[]): Loaded {
     if (!name.endsWith('.yaml')) {
       const ending = name.slice(name.lastIndexOf('.'));
       problems.push(error(file.path, START, 'record-extension', `A record's file ends in ${quote('.yaml')}, in lowercase, not ${quote(ending)}.`));
+      // It is still meant as a record, so others may name it.
+      const stem = name.slice(0, name.lastIndexOf('.'));
+      if (isId(stem)) unread.push({ id: stem, family: folder, file: file.path });
       continue;
     }
 
@@ -135,27 +183,93 @@ export function loadAs(format: Format, files: readonly SourceFile[]): Loaded {
 
     const yaml = readYaml(file.path, file.text, 'A record');
     problems.push(...yaml.problems);
-    if (wrongId || !yaml.doc || !yaml.map) continue;
+    if (wrongId) continue;
+    if (!yaml.doc || !yaml.map) {
+      unread.push({ id, family: folder, file: file.path });
+      continue;
+    }
 
-    records.push({ id, family: folder, file: file.path, value: yaml.doc.toJS() as Record<string, unknown> });
+    const record: SourceRecord = { id, family: folder, file: file.path, value: yaml.doc.toJS() as Record<string, unknown> };
+    records.push(record);
+    readRecords.push({ record, yaml, family });
   }
 
-  const byId = new Map<string, SourceRecord[]>();
-  for (const record of records) {
-    const same = byId.get(record.id);
-    if (same) same.push(record);
-    else byId.set(record.id, [record]);
-  }
-  for (const [id, same] of byId) {
+  const everyRecord = byId([...records, ...unread]);
+  for (const [id, same] of everyRecord) {
     if (same.length < 2) continue;
-    const where = list(same.map((record) => record.file));
+    const where = list(same.map((record) => record.file).sort());
     for (const record of same) {
       problems.push(error(record.file, START, 'id-twice', `The id ${quote(id)} names ${same.length} records: ${where}. An id names one record in the whole directory.`));
     }
   }
 
+  // Each file is held to its family's shape by itself. What it names is gathered from every
+  // record that could be read, whatever its shape, so that one slip does not hide another.
+  const typed: ModelRecord<unknown>[] = [];
+  const references: Reference[] = [];
+  for (const { record, yaml, family } of readRecords) {
+    const kind = family.record;
+    if (!kind) continue;
+    const shape = checkShape(record.file, yaml, kind.schema, `this ${kind.noun}`);
+    problems.push(...shape.problems);
+    if (shape.value !== undefined) typed.push({ id: record.id, file: record.file, ...(shape.value as object) });
+    references.push(...referencesIn(record, yaml, kind.references));
+  }
+  references.sort(compareReferences);
+
+  problems.push(...referenceProblems(format, everyRecord, references));
+  // The checks of the conventions are about connections, and look at those of the right shape.
+  const connections = typed.filter((record) => record.file.startsWith('connections/')) as ModelRecord<Connection>[];
+  problems.push(...connectionProblems(format, everyRecord, parentsOf(format, everyRecord, references), references, connections));
+
   records.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : a.file < b.file ? -1 : 1));
-  return { ...(marker ? { marker } : {}), records, problems: problems.sort(compareProblems) };
+  unread.sort((a, b) => (a.file < b.file ? -1 : 1));
+  return {
+    ...(marker ? { marker } : {}),
+    records,
+    unread,
+    references,
+    model: modelOf(typed, problems),
+    problems: problems.sort(compareProblems),
+  };
+}
+
+/** Every id a record names in the fields its family names records in, with where it is written. */
+function referencesIn(record: SourceRecord, yaml: YamlFile, fields: readonly ReferenceField[]): Reference[] {
+  const found: Reference[] = [];
+  for (const field of fields) {
+    const node = yaml.map?.get(field.field, true);
+    const items = field.list ? (isSeq(node) ? node.items : []) : [node];
+    for (const item of items) {
+      // A value that is not an id is a matter for the shape, and names nothing.
+      if (!isScalar(item) || typeof item.value !== 'string' || !isId(item.value)) continue;
+      found.push({ file: record.file, ...yaml.at(item), record: record.id, field: field.field, names: item.value });
+    }
+  }
+  return found;
+}
+
+/**
+ * The records whose own file has no error, by family, in order of id. One that has an error
+ * cannot be read right, so it is left out, though others may still name it.
+ */
+function modelOf(typed: readonly ModelRecord<unknown>[], problems: readonly Problem[]): Model {
+  const broken = new Set(problems.filter((problem) => problem.severity === 'error').map((problem) => problem.file));
+  const model = emptyModel();
+  // Each family's records were held to the schema its type in the model is inferred from.
+  const families = model as unknown as Record<string, ModelRecord<unknown>[] | undefined>;
+  for (const record of typed) {
+    if (broken.has(record.file)) continue;
+    families[record.file.slice(0, record.file.indexOf('/'))]?.push(record);
+  }
+  for (const records of Object.values(families)) records?.sort((a, b) => (a.id < b.id ? -1 : 1));
+  return model;
+}
+
+function compareReferences(a: Reference, b: Reference): number {
+  if (a.file !== b.file) return a.file < b.file ? -1 : 1;
+  if (a.line !== b.line) return a.line - b.line;
+  return a.column - b.column;
 }
 
 /** Drops a leading `./`. A path already uses forward slashes; whoever reads the disk sees to that. */

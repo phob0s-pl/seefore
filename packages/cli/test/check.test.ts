@@ -318,6 +318,45 @@ describe('seefore check', () => {
     }
   });
 
+  it('reports what is wrong with the records, each at its place, and counts the records it read', () => {
+    write({
+      'seefore.yaml': MARKER,
+      'systems/shop.yaml': 'name: Shop\n',
+      'stores/orders.yaml': 'name: Orders\nin: shop\n',
+      'apps/order-api.yaml': 'name: Order API\nin: orders\nkind: server\n',
+      'connections/orders-tell.yaml': 'from: orders\nto: shop\nname: Says what is new\n',
+    });
+    const result = run(['check']);
+    expect(result.code).toBe(1);
+    expect(result.out.split('\n').slice(3)).toEqual([
+      'apps/order-api.yaml:2:5: error: `in` names `orders`, which is a store. An app is in a system.',
+      'apps/order-api.yaml:3:7: error: `kind` must be one of `service`, `browser`, `mobile`, `desktop`, `command`, `function` and `job`.',
+      'connections/orders-tell.yaml:1:7: error: This connection goes from the store `orders` to the system `shop`, but a store acts on nothing ' +
+        'but another store. Turn it round, so that it goes from the one that reads or writes the store, and say which in its name.',
+      '',
+      '4 records read. 3 errors, 0 warnings.',
+    ]);
+    expect(json(['check']).data.problems.map((problem) => `${problem.file}:${problem.line}:${problem.column} ${problem.code}`)).toEqual([
+      'apps/order-api.yaml:2:5 reference-wrong-kind',
+      'apps/order-api.yaml:3:7 value-not-allowed',
+      'connections/orders-tell.yaml:1:7 store-acts',
+    ]);
+  });
+
+  it('passes a directory whose records keep every rule, with a warning about a check', () => {
+    write({
+      'seefore.yaml': MARKER,
+      'people/customer.yaml': 'name: Customer\n',
+      'systems/shop.yaml': 'name: Shop\n',
+      'connections/buys.yaml': 'from: customer\nto: shop\nname: Buys\n',
+      'connections/buys-again.yaml': 'from: customer\nto: shop\nname: Buys\n',
+    });
+    const result = run(['check']);
+    expect(result.code).toBe(0);
+    expect(result.out).toContain('connections/buys.yaml:1:1: warning: This connection has the same `from`, `to` and `name` as `connections/buys-again.yaml`. Keep one.');
+    expect(result.out.endsWith('4 records read. 0 errors, 2 warnings.')).toBe(true);
+  });
+
   it('refuses a directory written in a newer format', () => {
     write({ 'seefore.yaml': 'format: 2\nname: Boxwick\n' });
     const result = run(['check']);
@@ -341,7 +380,7 @@ describe('the command line', () => {
   it('refuses a command it does not have', () => {
     const result = run(['frobnicate']);
     expect(result.code).toBe(2);
-    expect(result.err).toBe('seefore: `frobnicate` is not a seefore command. The commands are: check.\nRun `seefore --help` to see how it is used.');
+    expect(result.err).toBe('seefore: `frobnicate` is not a seefore command. The commands are: check, list, uses.\nRun `seefore --help` to see how it is used.');
   });
 
   it('refuses an option it does not have, in plain words', () => {
@@ -361,7 +400,7 @@ describe('the command line', () => {
     expect(JSON.parse(run(['--json', '--version']).out)).toEqual({ version: 'dev' });
     const none = run(['--json']);
     expect(none.code).toBe(2);
-    expect((JSON.parse(none.out) as Failure).error).toEqual({ code: 'usage', message: 'No command was given. The commands are: check.' });
+    expect((JSON.parse(none.out) as Failure).error).toEqual({ code: 'usage', message: 'No command was given. The commands are: check, list, uses.' });
   });
 
   it('answers a mistake in the options as data when asked for data', () => {
