@@ -1,4 +1,4 @@
-import { CURRENT_FORMAT } from './format.ts';
+import { CURRENT_FORMAT, referenceField } from './format.ts';
 import type { Format } from './format.ts';
 import type { Loaded, RecordFile, RecordText, Reference, SourceRecord } from './load.ts';
 import { ownership } from './model.ts';
@@ -67,6 +67,11 @@ export interface Mention {
   names: string;
   /** The words found, as the text writes them, each once, in the order they come. */
   words: string[];
+  /**
+   * True when the record whose text it is goes with the thing. A removal takes such text with
+   * it; a rename leaves it, still speaking of the old name.
+   */
+  goes: boolean;
 }
 
 /**
@@ -88,7 +93,12 @@ export interface Removal extends Uses {
   left: Left[];
   /** For an owner: how many parts take it from what they are in, and so hold no `owner` to change. */
   inherited: number;
-  /** Each name and description of a record that stays and holds a name or an id of the thing. */
+  /**
+   * Each name and description of another record that holds a name or an id of the thing, in
+   * order of file and place. A record that stays is read for the names and ids of the record
+   * asked about and of all inside it. A record that goes with it is read only for the name and
+   * the id of the record asked about, since a rename leaves it.
+   */
   mentions: Mention[];
   /** False when the directory has an error or a file that was not read: other uses may exist. */
   complete: boolean;
@@ -96,7 +106,10 @@ export interface Removal extends Uses {
 
 /** What `removalOf` needs besides the directory and the id. */
 export interface RemovalOptions {
-  /** Every problem of the directory, when there are more than the core library found, such as a folder that could not be read. */
+  /**
+   * More problems of the directory, such as a folder that could not be read. They can only
+   * make the answer less sure: the problems the core library found itself still count.
+   */
   problems?: readonly Problem[];
   format?: Format;
 }
@@ -117,16 +130,25 @@ const UNREAD = ['not-read', 'link-not-followed'];
 const WORD = '[\\p{L}\\p{M}\\p{N}_]';
 
 /**
- * What removing the record with this id would break, or nothing when no record has the id.
- * A record whose file cannot be read can still be asked about; what it names is not known.
- * When an id names more than one record, which is an error of its own, the first in order of
- * file is the one shown.
+ * Every record with this id, whether its file could be read or not, in order of file. There is
+ * one, unless the id names no record or, which is an error of its own, more than one.
+ */
+export function recordsWithId(loaded: Loaded, id: string): RecordFile[] {
+  return [...loaded.records, ...loaded.unread].filter((record) => record.id === id).sort((a, b) => (a.file < b.file ? -1 : 1));
+}
+
+/**
+ * What removing the record with this id would break, or nothing unless exactly one record has
+ * the id: `recordsWithId` tells none from several. A record whose file cannot be read can still
+ * be asked about; what it names is not known.
  */
 export function usesOf(loaded: Loaded, id: string, format: Format = CURRENT_FORMAT): Uses | undefined {
-  const files = [...loaded.records, ...loaded.unread].sort((a, b) => (a.file < b.file ? -1 : 1));
-  const asked = files.find((record) => record.id === id);
-  if (!asked) return undefined;
+  const named = recordsWithId(loaded, id);
+  // Which of two records with one id another record means cannot be told, so neither is answered for.
+  if (named.length !== 1) return undefined;
+  const asked = named[0] as RecordFile;
 
+  const files = [...loaded.records, ...loaded.unread];
   const records = byId(files);
   const parents = parentsOf(format, records, loaded.references);
   const children = new Map<string, string[]>();
@@ -159,29 +181,36 @@ export function usesOf(loaded: Loaded, id: string, format: Format = CURRENT_FORM
 }
 
 /**
- * What removing the record with this id would mean, or nothing when no record has the id: what
- * goes with it, what must go or change, what would be left behind, and which records may speak
- * of it in their text. What is left behind is said only when the directory was read in full.
+ * What removing the record with this id would mean, or nothing unless exactly one record has
+ * the id: what goes with it, what must go or change, what would be left behind, and which
+ * records may speak of it in their text. What is left behind is said only when the directory
+ * was read in full.
  */
 export function removalOf(loaded: Loaded, id: string, options: RemovalOptions = {}): Removal | undefined {
   const format = options.format ?? CURRENT_FORMAT;
   const uses = usesOf(loaded, id, format);
   if (!uses) return undefined;
-  const complete = readInFull(options.problems ?? loaded.problems);
+  // What the core library found counts whatever the caller passes, so a caller can only make the answer less sure.
+  const complete = readInFull(loaded.problems) && readInFull(options.problems ?? []);
 
   const files = [...loaded.records, ...loaded.unread];
   const byFile = new Map(files.map((record) => [record.file, record]));
   const parents = parentsOf(format, byId(files), loaded.references);
   const ends = connectionEnds(loaded.references);
   const thing = new Set([id, ...uses.inside.map((record) => record.id)]);
-  const inThing = (end: string | undefined): boolean => end !== undefined && thing.has(end);
+  // An end is in the thing only where it names a record of the thing that a connection may end at.
+  const families = new Map([uses.record, ...uses.inside].map((record) => [record.id, record.family]));
+  const endIn = (field: 'from' | 'to', end: string | undefined): boolean =>
+    end !== undefined && (referenceField(format, CONNECTIONS, field)?.families.includes(families.get(end) ?? '') ?? false);
+  const bothIn = (end: Ends): boolean => endIn('from', end.from) && endIn('to', end.to);
+  const oneIn = (end: Ends): boolean => endIn('from', end.from) || endIn('to', end.to);
 
   // A connection with both ends in the thing goes with it, once, even from a record to itself.
-  const within = [...ends].filter(([, end]) => inThing(end.from) && inThing(end.to)).map(([file]) => byFile.get(file) as RecordFile);
+  const within = [...ends].filter(([, end]) => bothIn(end)).map(([file]) => byFile.get(file) as RecordFile);
   const goes = [...uses.inside, ...within.map((file) => described(loaded.records, file))];
   const gone = new Set([uses.record.file, ...goes.map((record) => record.file)]);
   // Each connection with an end in the thing is taken to go, and so is the connection asked about.
-  const cut = new Set([...ends].filter(([file, end]) => file === uses.record.file || inThing(end.from) || inThing(end.to)).map(([file]) => file));
+  const cut = new Set([...ends].filter(([file, end]) => file === uses.record.file || oneIn(end)).map(([file]) => file));
 
   return {
     ...uses,
@@ -189,7 +218,7 @@ export function removalOf(loaded: Loaded, id: string, options: RemovalOptions = 
     changes: changesOf(loaded.records, byFile, uses.references, gone),
     left: complete ? leftBehind(loaded, format, parents, ends, { thing, gone, cut }) : [],
     inherited: uses.record.family === 'owners' ? inheritedFrom(loaded, id) : 0,
-    mentions: mentionsOf(loaded.texts, [uses.record, ...uses.inside], gone),
+    mentions: mentionsOf(loaded.texts, uses.record, uses.inside, gone),
     complete,
   };
 }
@@ -204,11 +233,21 @@ export function readInFull(problems: readonly Problem[]): boolean {
 
 /**
  * What a record's text is searched for: its name, and its id with spaces for its hyphens. A
- * term of fewer than three characters is left out, since it would be found everywhere, and a
- * name that is its id in other words is searched for once.
+ * name that is its id in other words is searched for once. Words are found in any case, but a
+ * short name is found only as it is written, capitals and all, and a short id not at all,
+ * since either would be found everywhere: see `isShort`.
  */
 export function wordsFor(record: { id: string; name?: string }): string[] {
   return termsOf(record).map((term) => term.shown);
+}
+
+/**
+ * True for words of one or two characters. A name that short is looked for only as it is
+ * written, so that the technology "Go" is found in "a driver for Go" and not in "must go". An
+ * id that short is not looked for.
+ */
+export function isShort(words: string): boolean {
+  return [...words].length < 3;
 }
 
 /** The two ends of a connection, as far as they are written as ids. */
@@ -333,19 +372,22 @@ function inheritedFrom(loaded: Loaded, owner: string): number {
 }
 
 /**
- * Each name and description of a record that stays and holds, as whole words in any case, the
- * name or the id of the thing or of anything inside it. One for each text and each of those it
- * may speak of, in order of file and place.
+ * Each name and description of another record that holds, as whole words, the name or the id
+ * of the thing or of anything inside it. The text of a record that goes with the thing is read
+ * only for the record asked about: a removal takes it, but a rename leaves it. One for each text
+ * and each of those it may speak of, in order of file and place.
  */
-function mentionsOf(texts: readonly RecordText[], targets: readonly UsedRecord[], gone: ReadonlySet<string>): Mention[] {
-  const searched = targets.map((target) => ({ id: target.id, terms: termsOf(target) })).filter((target) => target.terms.length > 0);
+function mentionsOf(texts: readonly RecordText[], asked: UsedRecord, inside: readonly UsedRecord[], gone: ReadonlySet<string>): Mention[] {
+  const searched = [asked, ...inside].map((target) => ({ id: target.id, terms: termsOf(target) })).filter((target) => target.terms.length > 0);
   const mentions: Mention[] = [];
   for (const text of texts) {
-    if (gone.has(text.file)) continue;
+    if (text.file === asked.file) continue;
+    const goes = gone.has(text.file);
     for (const target of searched) {
+      if (goes && target.id !== asked.id) continue;
       const found = outermost(target.terms.flatMap((term) => [...text.text.matchAll(term.pattern)]));
       if (found.length === 0) continue;
-      mentions.push({ file: text.file, line: text.line, column: text.column, record: text.record, field: text.field, names: target.id, words: once(found) });
+      mentions.push({ file: text.file, line: text.line, column: text.column, record: text.record, field: text.field, names: target.id, words: once(found), goes });
     }
   }
   return mentions;
@@ -384,14 +426,17 @@ function termsOf(record: { id: string; name?: string }): Term[] {
   const id = record.id.split('-');
   const name = record.name?.trim().split(/\s+/).filter((word) => word !== '') ?? [];
   const terms: Term[] = [];
-  if (name.length > 0 && same(name.join(' ')) !== same(id.join(' '))) terms.push(term(name.join(' '), name.map(escaped).join('\\s+')));
+  const named = name.join(' ');
+  const body = name.map(escaped).join('\\s+');
+  if (name.length > 0 && isShort(named)) terms.push(term(named, body, 'as written'));
+  else if (name.length > 0 && same(named) !== same(id.join(' '))) terms.push(term(named, body, 'any case'));
   // The id with a hyphen or a space, or a line break, between its words.
-  terms.push(term(id.join(' '), id.map(escaped).join('[-\\s]+')));
-  return terms.filter((found) => [...found.shown].length >= 3);
+  if (!isShort(id.join(' '))) terms.push(term(id.join(' '), id.map(escaped).join('[-\\s]+'), 'any case'));
+  return terms;
 }
 
-function term(shown: string, body: string): Term {
-  return { shown, pattern: new RegExp(`(?<!${WORD})(?:${body})(?!${WORD})`, 'giu') };
+function term(shown: string, body: string, found: 'any case' | 'as written'): Term {
+  return { shown, pattern: new RegExp(`(?<!${WORD})(?:${body})(?!${WORD})`, found === 'any case' ? 'giu' : 'gu') };
 }
 
 /** Words as a search in any case sees them, with a hyphen read as a space. */

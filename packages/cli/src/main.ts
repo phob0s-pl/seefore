@@ -41,7 +41,8 @@ The first folder that has one is the source directory.
 Exit code:
   0   check found no errors, or list or uses did its work.
   1   check found errors.
-  2   seefore could not start, or uses was given an id that no record has.`;
+  2   seefore could not start, or uses was given an id that no record has, or
+      that more than one has.`;
 
 /** Runs the command with the given arguments and returns its exit code. */
 export function main(argv: readonly string[], io: Io): number {

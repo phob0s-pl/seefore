@@ -381,7 +381,9 @@ describe('seefore uses', () => {
       '1 record names it in `technology`. It must name another in its place, or leave it out:',
       '  architecture/apps/order-api.yaml:5:14: `technology`',
       '',
-      'Its name and its id are too short to look for in text.',
+      'No other record\'s name or description holds "Go".',
+      '',
+      'A name of one or two characters is looked for as it is written, capitals and all, and an id that short is not looked for.',
     ]);
   });
 

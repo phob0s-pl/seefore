@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { load } from '../src/load.ts';
 import type { SourceFile } from '../src/load.ts';
 import type { Problem } from '../src/problem.ts';
-import { readInFull, removalOf, wordsFor } from '../src/uses.ts';
+import { isShort, readInFull, recordsWithId, removalOf, usesOf, wordsFor } from '../src/uses.ts';
 import type { Removal } from '../src/uses.ts';
 import { EXAMPLE } from './example.ts';
 
@@ -78,6 +78,31 @@ describe('what goes with it', () => {
   it('is nothing for a record with nothing inside it and no connection to itself', () => {
     expect(review(RELAYS, 'relay-pool-server').goes).toEqual([]);
   });
+
+  it('holds a connection from an app to the same app once, and one whose ends are no ends never', () => {
+    const files = {
+      'systems/shop.yaml': 'name: Shop\n',
+      'apps/api.yaml': 'name: API\nin: shop\n',
+      'connections/api-calls-itself.yaml': 'from: api\nto: api\n',
+      'connections/loop.yaml': 'from: loop\nto: loop\n',
+    };
+    expect(ids(review(files, 'api').goes)).toEqual(['api-calls-itself']);
+    // A connection is not an end, so the one that names itself as both is not inside itself.
+    const loop = review(files, 'loop');
+    expect(loop.goes).toEqual([]);
+    expect(loop.complete).toBe(false);
+  });
+});
+
+describe('an id that more than one record has', () => {
+  it('is answered for by neither, since a record that names it could mean either', () => {
+    const loaded = load(directory({ 'owners/twin.yaml': 'name: Owner twin\n', 'systems/twin.yaml': 'name: System twin\n', 'systems/buyer.yaml': 'name: Buyer\nowner: twin\n' }));
+    expect(recordsWithId(loaded, 'twin').map((record) => record.file)).toEqual(['owners/twin.yaml', 'systems/twin.yaml']);
+    expect(removalOf(loaded, 'twin')).toBeUndefined();
+    expect(usesOf(loaded, 'twin')).toBeUndefined();
+    expect(recordsWithId(loaded, 'buyer')).toHaveLength(1);
+    expect(recordsWithId(loaded, 'nothing')).toEqual([]);
+  });
 });
 
 describe('what must go or change', () => {
@@ -117,6 +142,20 @@ describe('what must go or change', () => {
 
   it('for a connection: nothing, since nothing names a connection', () => {
     expect(review(RELAYS, 'pool-keeps-relay-lists').changes).toEqual([]);
+  });
+
+  it('keeps at its own field a place that names it where it may not be named, and takes no connection to end in an owner', () => {
+    const removal = review(
+      { ...RELAYS, 'connections/run-by-maintainers.yaml': 'from: relay-server\nto: maintainers\n', 'connections/maintainers-meet.yaml': 'from: maintainers\nto: maintainers\n' },
+      'maintainers',
+    );
+    expect(removal.changes.map((change) => `${change.record.id} ${change.places.map((place) => place.field)}`)).toEqual([
+      'maintainers-meet from,to',
+      'run-by-maintainers to',
+      'sync owner',
+    ]);
+    expect(removal.goes).toEqual([]);
+    expect(removal.complete).toBe(false);
   });
 });
 
@@ -237,8 +276,38 @@ describe('what would be left behind', () => {
 describe('what may speak of it', () => {
   it('finds its id with spaces, also over a line break, and points at the key of the text', () => {
     expect(review(RELAYS, 'relay-pool-server').mentions).toEqual([
-      { file: 'stores/relay-lists.yaml', line: 3, column: 1, record: 'relay-lists', field: 'description', names: 'relay-pool-server', words: ['relay pool server'] },
-      { file: 'systems/geo.yaml', line: 2, column: 1, record: 'geo', field: 'description', names: 'relay-pool-server', words: ['relay pool server'] },
+      {
+        file: 'stores/relay-lists.yaml',
+        line: 3,
+        column: 1,
+        record: 'relay-lists',
+        field: 'description',
+        names: 'relay-pool-server',
+        words: ['relay pool server'],
+        goes: false,
+      },
+      { file: 'systems/geo.yaml', line: 2, column: 1, record: 'geo', field: 'description', names: 'relay-pool-server', words: ['relay pool server'], goes: false },
+    ]);
+  });
+
+  it('for a rename, finds its name and id in what goes with it too, and says that it goes', () => {
+    const removal = review(
+      {
+        'people/buyer.yaml': 'name: Buyer\ndescription: Shops at Old Shop and pays through Billing.\n',
+        'systems/shop.yaml': 'name: Old Shop\n',
+        'apps/billing.yaml': 'name: Billing\nin: shop\ndescription: Old Shop sends bills.\n',
+        'components/charge.yaml': 'name: Charge\nin: billing\ndescription: Charges a card for Billing, the shop part.\n',
+        'connections/charge-sends.yaml': 'from: charge\nto: billing\nname: Bills Old Shop\n',
+      },
+      'shop',
+    );
+    expect(removal.mentions.map((mention) => `${mention.record} ${mention.field} ${mention.names} ${mention.words.join(', ')} ${mention.goes ? 'goes' : 'stays'}`)).toEqual([
+      'billing description shop Old Shop goes',
+      'charge description shop shop goes',
+      'charge-sends name shop Old Shop goes',
+      // What stays is read for the names of what is inside the thing too; what goes only for the thing's own.
+      'buyer description shop Old Shop stays',
+      'buyer description billing Billing stays',
     ]);
   });
 
@@ -297,9 +366,20 @@ describe('what may speak of it', () => {
     ]);
   });
 
-  it('leaves out a name or an id of fewer than three characters', () => {
-    const removal = review({ 'apps/go.yaml': 'name: Go\nin: s\n', 'systems/s.yaml': 'name: S\ndescription: Written in Go, all of it.\n' }, 'go');
-    expect(removal.mentions).toEqual([]);
+  it('looks for a name of fewer than three characters only as it is written, and not for an id that short', () => {
+    const removal = review(
+      {
+        'technologies/go.yaml': 'name: Go\n',
+        'owners/ux.yaml': 'name: Design team\n',
+        'systems/driver.yaml': 'name: Driver\ndescription: A driver for Go, which the ux people and the design team look after.\n',
+        'systems/gate.yaml': 'name: Gate\ndescription: Every request must go through it. GO is not Go-based.\n',
+      },
+      'go',
+    );
+    expect(removal.mentions.map((mention) => `${mention.record} ${mention.words.join(', ')}`)).toEqual(['driver Go', 'gate Go']);
+    expect(review({ 'owners/ux.yaml': 'name: Design team\n', 'systems/driver.yaml': 'name: Driver\ndescription: For the ux people, the design team.\n' }, 'ux').mentions).toMatchObject([
+      { record: 'driver', words: ['design team'] },
+    ]);
   });
 });
 
@@ -313,10 +393,12 @@ describe('the words searched for', () => {
     expect(wordsFor({ id: 'push-rate-limits', name: 'Push  rate-limits' })).toEqual(['push rate limits']);
   });
 
-  it('leave out what has fewer than three characters', () => {
-    expect(wordsFor({ id: 'go', name: 'Go' })).toEqual([]);
-    expect(wordsFor({ id: 'golang', name: 'Go' })).toEqual(['golang']);
+  it('keep a short name, and leave out a short id', () => {
+    expect(wordsFor({ id: 'go', name: 'Go' })).toEqual(['Go']);
+    expect(wordsFor({ id: 'golang', name: 'Go' })).toEqual(['Go', 'golang']);
     expect(wordsFor({ id: 'ui' })).toEqual([]);
+    expect(isShort('Go')).toBe(true);
+    expect(isShort('a b')).toBe(false);
   });
 });
 
@@ -335,6 +417,11 @@ describe('a directory read in full', () => {
     const loaded = load(directory(RELAYS));
     expect(removalOf(loaded, 'relay-pool-server')?.complete).toBe(true);
     expect(removalOf(loaded, 'relay-pool-server', { problems: [problem('error', 'folder-unreadable')] })).toMatchObject({ complete: false, left: [] });
+  });
+
+  it('cannot be made surer by the problems given: those the directory has still count', () => {
+    const loaded = load(directory({ ...RELAYS, 'connections/broken.yaml': 'from: relay-pool-server\nto: [geo\n' }));
+    expect(removalOf(loaded, 'relay-pool-server', { problems: [] })).toMatchObject({ complete: false, left: [] });
   });
 });
 

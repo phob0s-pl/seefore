@@ -52,7 +52,7 @@ export interface CheckResult {
 /** What a command prints with `--json` when it could not start, or could not find the record it was asked about. */
 export interface Failure {
   error: {
-    /** `usage`, `not-a-directory`, `folder-unreadable`, `no-source-directory`, `no-such-record` or `unexpected`. */
+    /** `usage`, `not-a-directory`, `folder-unreadable`, `no-source-directory`, `no-such-record`, `id-twice` or `unexpected`. */
     code: string;
     message: string;
     /** With `no-source-directory`: the starting folder as it really is on disk. */

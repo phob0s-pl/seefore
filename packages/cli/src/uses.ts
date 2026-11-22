@@ -1,9 +1,10 @@
-import { CURRENT_FORMAT, idProblem, nounOf, removalOf, wordsFor } from '@seefore/core';
-import type { Left, Mention, Removal, UsedRecord } from '@seefore/core';
+import { CURRENT_FORMAT, idProblem, isShort, nounOf, recordsWithId, referenceField, removalOf, wordsFor } from '@seefore/core';
+import type { Left, Mention, Reference, Removal, UsedRecord } from '@seefore/core';
 import { EXIT_OK, forShell, notStarted, openSource } from './check.ts';
 import type { CheckOptions } from './check.ts';
 import type { Io } from './io.ts';
-import { count, fromHere, problemsInBrief } from './words.ts';
+import { count, fromHere, problemsInBrief, seefore } from './words.ts';
+import type { Here } from './words.ts';
 
 /**
  * What `seefore uses <id> --json` prints when a record has the id: the record, what is inside
@@ -18,23 +19,37 @@ export interface UsesResult extends Removal {
 
 /**
  * Shows what removing a record would mean: what goes with it, what must go or change, what
- * would be left behind, and which records may speak of it. An id that no record has is
- * answered as a command that could not start.
+ * would be left behind, and which records may speak of it. An id that no record has, or that
+ * more than one has, is answered as a command that could not start.
  */
 export function uses(id: string, options: CheckOptions, io: Io): number {
   const opened = openSource(options, io, { verb: 'read', command: `uses ${forShell(id)}` });
   if (typeof opened === 'number') return opened;
   const { directory, loaded, problems, errors, warnings } = opened;
+  const here: Here = { cwd: io.cwd, directory, workdir: options.workdir };
+
+  const named = recordsWithId(loaded, id);
+  if (named.length > 1) {
+    const files = named.map((record) => `\`${fromHere(io.cwd, directory, record.file)}\``);
+    const two = named.length === 2;
+    return notStarted(
+      options.json,
+      io,
+      'id-twice',
+      `${count(named.length, 'record')} have the id \`${id}\`: ${joined(files, 'and')}. A record that names \`${id}\` could mean ${two ? 'either' : 'any of them'}, ` +
+        `so what a removal or a rename would touch cannot be told. ${two ? 'One of them' : 'All of them but one'} must get another id first.`,
+    );
+  }
 
   const found = removalOf(loaded, id, { problems });
   if (!found) {
     const why = idProblem(id) ?? `No record has the id \`${id}\`.`;
-    const broken = errors > 0 ? ' This directory has errors too: `seefore check` shows them.' : '';
-    return notStarted(options.json, io, 'no-such-record', `${why} Run \`seefore list\` to see the records there are.${broken}`);
+    const broken = errors > 0 ? ` This directory has errors too: \`${seefore('check', here)}\` shows them.` : '';
+    return notStarted(options.json, io, 'no-such-record', `${why} Run \`${seefore('list', here)}\` to see the records there are.${broken}`);
   }
 
   const result: UsesResult = { directory, ...found, errors, warnings };
-  io.out(options.json ? JSON.stringify(result, null, 2) : report(result, loaded.unread.length, io.cwd));
+  io.out(options.json ? JSON.stringify(result, null, 2) : report(result, loaded.unread.length, here));
   return EXIT_OK;
 }
 
@@ -48,8 +63,8 @@ type Path = (file: string) => string;
  * The answer as a person reads it: the record, then what goes with it, what must go or change,
  * what would be left behind and which records may speak of it, each under a sentence of its own.
  */
-function report(result: UsesResult, unread: number, cwd: string): string {
-  const path: Path = (file) => fromHere(cwd, result.directory, file);
+function report(result: UsesResult, unread: number, here: Here): string {
+  const path: Path = (file) => fromHere(here.cwd, result.directory, file);
   const head: Head = (record) => {
     const named = record.name === undefined ? '' : `: ${record.name}`;
     return `${nounOf(CURRENT_FORMAT, record.family)} ${record.id}${named} (${path(record.file)})`;
@@ -60,8 +75,8 @@ function report(result: UsesResult, unread: number, cwd: string): string {
     mustChange(result, path),
     inherited(result.inherited),
     ...leftBehind(result, head),
-    maySpeak(result, path),
-    problems(result, unread),
+    ...maySpeak(result, path),
+    problems(result, unread, here),
   ];
   return blocks
     .filter((block) => block.length > 0)
@@ -90,20 +105,25 @@ function goesWith(result: UsesResult, head: Head): string[] {
   return lines;
 }
 
-/** Each record that names it and stays, with each place: what must go or change. */
+/**
+ * Each record that names it and stays, with each place: what must go or change. Each place is
+ * shown at its own field, and the advice fits every place: a place that names an owner where a
+ * connection's end must be is no end, and taking it out would not mend it.
+ */
 function mustChange(result: UsesResult, path: Path): string[] {
   const { changes, record } = result;
   const n = changes.length;
   const each = n === 1 ? 'It' : 'Each';
+  const places = changes.flatMap((change) => change.places);
+  const field = record.family === 'owners' ? 'owner' : record.family === 'technologies' ? 'technology' : undefined;
   let heading: string;
-  if (record.family === 'owners' || record.family === 'technologies') {
-    const field = record.family === 'owners' ? 'owner' : 'technology';
+  if (field !== undefined && places.every((place) => place.field === field)) {
     heading = n === 0 ? `No record names it in \`${field}\`.` : `${count(n, 'record')} ${n === 1 ? 'names' : 'name'} it in \`${field}\`. ${each} must name another in its place, or leave it out:`;
-  } else if (changes.every((change) => change.record.family === 'connections')) {
+  } else if (places.every(isEndOf(result))) {
     if (n === 0) heading = record.family === 'connections' ? 'Nothing names it.' : 'No connection has one end in it.';
     else heading = `${count(n, 'connection')} ${n === 1 ? 'has' : 'have'} one end in it. ${each} must go or get another end:`;
   } else {
-    // Only a directory with errors names an element anywhere but in a connection.
+    // Only a directory with errors names a record where it may not.
     heading = `${count(n, 'record')} ${n === 1 ? 'names' : 'name'} it. ${each} must go or change:`;
   }
 
@@ -133,7 +153,7 @@ function leftBehind(result: UsesResult, head: Head): string[][] {
   if (!result.complete) return [];
   const asConnection = result.record.family === 'connections';
   // The connections with one end in it: those it is an end of, not those that name it as a technology.
-  const crossing = result.changes.filter((change) => change.places.some((place) => place.field === 'from' || place.field === 'to')).length;
+  const crossing = result.changes.filter((change) => change.places.some(isEndOf(result))).length;
   const unconnected = result.left.filter((left) => left.reason === 'no-connection');
   const unusedFirst = result.left.filter((left) => left.reason === 'no-user' && left.assumes === 'connections-go');
   const unusedThen = result.left.filter((left) => left.assumes === 'left-go');
@@ -159,25 +179,63 @@ function leftBehind(result: UsesResult, head: Head): string[][] {
   return blocks;
 }
 
-/** Each name and description of a record that stays and may speak of it, with the words found. */
-function maySpeak(result: UsesResult, path: Path): string[] {
+/**
+ * Which records may speak of it: first each name and description of a record that stays, with
+ * the words found, then those of the records that go with it, which a rename leaves. Last, when
+ * a name or an id was short, how it was looked for.
+ */
+function maySpeak(result: UsesResult, path: Path): string[][] {
+  const staying = result.mentions.filter((mention) => !mention.goes);
+  const going = result.mentions.filter((mention) => mention.goes);
+  const blocks = [stayingSpeak(result, staying, going.length > 0, path)];
+  if (going.length > 0) {
+    const records = new Set(going.map((mention) => mention.file)).size;
+    const heading =
+      records === 1
+        ? '1 record that goes with it speaks of it too. For a rename, read it as well:'
+        : `${records} records that go with it speak of it too. For a rename, read these as well:`;
+    blocks.push([heading, ...said(going, path)]);
+  }
+  const note = shortNote([result.record, ...result.inside]);
+  if (note !== undefined) blocks.push([note]);
+  return blocks;
+}
+
+/** Each name and description of a record that stays and may speak of it. `more` is true when records that go speak of it too. */
+function stayingSpeak(result: UsesResult, mentions: readonly Mention[], more: boolean, path: Path): string[] {
   const searched = wordsFor(result.record).map((words) => `"${words}"`);
   const inside = result.inside.length > 0;
-  const records = new Set(result.mentions.map((mention) => mention.file)).size;
+  const records = new Set(mentions.map((mention) => mention.file)).size;
 
   if (records === 0) {
-    if (searched.length === 0 && !inside) return ['Its name and its id are too short to look for in text.'];
+    if (searched.length === 0 && !inside) return ['It has no name to look for in text.'];
     const what = [...(searched.length > 0 ? [joined(searched, 'or')] : []), ...(inside ? ['the name or the id of anything inside it'] : [])];
-    return [`No other record's name or description holds ${what.join(', or ')}.`];
+    return [`No ${more ? 'name or description of a record that stays' : "other record's name or description"} holds ${what.join(', or ')}.`];
   }
 
   const of = searched.length === 0 ? 'something inside it' : `it (${searched.join(', ')})${inside ? ' or of something inside it' : ''}`;
-  const lines = [`${count(records, 'record')} may speak of ${of}. Read each:`];
-  for (const text of byText(result.mentions)) {
+  return [`${count(records, 'record')} may speak of ${of}. Read each:`, ...said(mentions, path)];
+}
+
+/** A line for each text that holds words of it: where it is, and the words found. */
+function said(mentions: readonly Mention[], path: Path): string[] {
+  return byText(mentions).map((text) => {
     const words = joined(text.words.map((words) => `"${words}"`), 'and');
-    lines.push(`  ${path(text.file)}:${text.line}:${text.column}: \`${text.field}\` says ${words}`);
-  }
-  return lines;
+    return `  ${path(text.file)}:${text.line}:${text.column}: \`${text.field}\` says ${words}`;
+  });
+}
+
+/**
+ * How a short name or id of these records was looked for, when one was: a name of one or two
+ * characters only as it is written, and an id that short not at all.
+ */
+function shortNote(records: readonly UsedRecord[]): string | undefined {
+  const name = records.some((record) => record.name !== undefined && record.name.trim() !== '' && isShort(record.name.trim().split(/\s+/).join(' ')));
+  const id = records.some((record) => isShort(record.id.split('-').join(' ')));
+  if (name && id) return 'A name of one or two characters is looked for as it is written, capitals and all, and an id that short is not looked for.';
+  if (name) return 'A name of one or two characters is looked for as it is written, capitals and all.';
+  if (id) return 'An id of one or two characters is not looked for.';
+  return undefined;
 }
 
 /** The mentions of each text as one, with every word found in it. */
@@ -197,9 +255,9 @@ function byText(mentions: readonly Mention[]): Mention[] {
 }
 
 /** How many problems there are, and what they leave unknown. */
-function problems(result: UsesResult, unread: number): string[] {
+function problems(result: UsesResult, unread: number, here: Here): string[] {
   const said: string[] = [];
-  if (result.errors + result.warnings > 0) said.push(problemsInBrief(result.errors, result.warnings));
+  if (result.errors + result.warnings > 0) said.push(problemsInBrief(result.errors, result.warnings, here));
   // A file that cannot be read may name it too, and nobody can tell.
   if (unread > 0) said.push(`${count(unread, 'record')} could not be read, so what ${unread === 1 ? 'it names' : 'they name'} is not known.`);
   if (!result.complete) {
@@ -207,6 +265,17 @@ function problems(result: UsesResult, unread: number): string[] {
     said.push(`Since ${why}, other uses may exist, and nothing is named as left behind.`);
   }
   return said.length > 0 ? [said.join(' ')] : [];
+}
+
+/**
+ * Whether a place is a connection's end in the thing: `from` or `to` naming a record of the
+ * thing that a connection may end at, and not, say, an owner named there by mistake.
+ */
+function isEndOf(result: UsesResult): (place: Reference) => boolean {
+  const families = new Map([result.record, ...result.inside].map((record) => [record.id, record.family]));
+  return (place) =>
+    (place.field === 'from' || place.field === 'to') &&
+    (referenceField(CURRENT_FORMAT, 'connections', place.field)?.families.includes(families.get(place.names) ?? '') ?? false);
 }
 
 /** True when a record of this family can have others inside it, as a system and an app can. */

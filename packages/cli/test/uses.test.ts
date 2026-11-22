@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { CheckResult } from '../src/check.ts';
+import type { CheckResult, Failure } from '../src/check.ts';
 import { main } from '../src/main.ts';
 import type { UsesResult } from '../src/uses.ts';
 
@@ -210,10 +210,115 @@ describe('seefore uses, in words', () => {
     expect(json(['uses', 'relay-pool-server']).data).toMatchObject({ complete: false, left: [], errors: 1, warnings: 0 });
   });
 
+  it('for a system with parts inside it that speak of it: what stays, then what goes, which a rename leaves', () => {
+    write({
+      'seefore.yaml': 'format: 1\nname: Shop\n',
+      'people/buyer.yaml': 'name: Buyer\ndescription: Shops at Old Shop and pays through Billing.\n',
+      'systems/shop.yaml': 'name: Old Shop\n',
+      'apps/billing.yaml': 'name: Billing\nin: shop\ndescription: Old Shop sends bills.\n',
+      'components/charge.yaml': 'name: Charge\nin: billing\ndescription: Charges a card for Billing, the shop part.\n',
+      'connections/charge-sends.yaml': 'from: charge\nto: billing\nname: Bills Old Shop\ndescription: Old Shop inside.\n',
+      'connections/buyer-pays.yaml': 'from: buyer\nto: billing\nname: Pays\n',
+    });
+    expect(run(['uses', 'shop']).out.split('\n')).toEqual([
+      'system shop: Old Shop (systems/shop.yaml)',
+      '',
+      'Goes with it: 2 records inside it, and 1 connection with both ends in it:',
+      '  app billing: Billing (apps/billing.yaml)',
+      '    component charge: Charge (components/charge.yaml)',
+      '  connection charge-sends: Bills Old Shop (connections/charge-sends.yaml)',
+      '',
+      '1 connection has one end in it. It must go or get another end:',
+      '  connections/buyer-pays.yaml:2:5: `to` names `billing`',
+      '',
+      'If it goes, 1 record is left with no connection:',
+      '  person buyer: Buyer (people/buyer.yaml)',
+      '',
+      '1 record may speak of it ("Old Shop", "shop") or of something inside it. Read each:',
+      '  people/buyer.yaml:2:1: `description` says "Old Shop" and "Billing"',
+      '',
+      '3 records that go with it speak of it too. For a rename, read these as well:',
+      '  apps/billing.yaml:3:1: `description` says "Old Shop"',
+      '  components/charge.yaml:3:1: `description` says "shop"',
+      '  connections/charge-sends.yaml:3:1: `name` says "Old Shop"',
+      '  connections/charge-sends.yaml:4:1: `description` says "Old Shop"',
+    ]);
+    // With nothing that stays speaking of it, the first sentence says so of what stays alone.
+    write({ 'people/buyer.yaml': 'name: Buyer\n' });
+    expect(run(['uses', 'shop']).out).toContain(
+      'No name or description of a record that stays holds "Old Shop" or "shop", or the name or the id of anything inside it.\n\n' +
+        '3 records that go with it speak of it too. For a rename, read these as well:',
+    );
+    expect(json(['uses', 'shop']).data.mentions.map((mention) => `${mention.record} ${mention.goes}`)).toEqual([
+      'billing true',
+      'charge true',
+      'charge-sends true',
+      'charge-sends true',
+    ]);
+  });
+
+  it('says how a short name and a short id were looked for', () => {
+    write({
+      'seefore.yaml': 'format: 1\nname: Tools\n',
+      'systems/compiler.yaml': 'name: Compiler\ndescription: Compiles Go. Builds must go through it.\n',
+      'technologies/go.yaml': 'name: Go\n',
+      'owners/ux.yaml': 'name: Design team\n',
+    });
+    expect(run(['uses', 'go']).out.split('\n').slice(-4)).toEqual([
+      '1 record may speak of it ("Go"). Read each:',
+      '  systems/compiler.yaml:2:1: `description` says "Go"',
+      '',
+      'A name of one or two characters is looked for as it is written, capitals and all, and an id that short is not looked for.',
+    ]);
+    expect(run(['uses', 'ux']).out.split('\n').slice(-3)).toEqual([
+      'No other record\'s name or description holds "Design team".',
+      '',
+      'An id of one or two characters is not looked for.',
+    ]);
+  });
+
+  it('shows a place that names it where it may not be named at its own field, and asks for no edit that would not mend it', () => {
+    write({ ...RELAYS, 'connections/run-by-maintainers.yaml': 'from: relay-server\nto: maintainers\n' });
+    expect(run(['uses', 'maintainers']).out.split('\n').slice(2, 5)).toEqual([
+      '2 records name it. Each must go or change:',
+      '  connections/run-by-maintainers.yaml:2:5: `to`',
+      '  systems/sync.yaml:2:8: `owner`',
+    ]);
+  });
+
   it('says that other uses may exist when a file was not read, though there is no error', () => {
     write({ ...RELAYS, 'connection/pool-tests-relays.yaml': 'from: relay-pool-server\nto: relay-server\n' });
     expect(run(['uses', 'relay-pool-server']).out.split('\n').at(-1)).toBe(
       '0 errors, 1 warning: run `seefore check` to see them. Since not every file was read, other uses may exist, and nothing is named as left behind.',
+    );
+  });
+});
+
+describe('an id that more than one record has', () => {
+  const CLASH = {
+    'seefore.yaml': 'format: 1\nname: Clash\n',
+    'owners/twin.yaml': 'name: Owner twin\n',
+    'systems/twin.yaml': 'name: System twin\n',
+    'systems/buyer.yaml': 'name: Buyer\nowner: twin\n',
+    'connections/meet.yaml': 'from: buyer\nto: twin\n',
+  };
+  const MESSAGE =
+    '2 records have the id `twin`: `owners/twin.yaml` and `systems/twin.yaml`. A record that names `twin` could mean either, ' +
+    'so what a removal or a rename would touch cannot be told. One of them must get another id first.';
+
+  it('gives no lists, names both files, and ends with exit code 2', () => {
+    write(CLASH);
+    expect(run(['uses', 'twin'])).toEqual({ code: 2, out: '', err: `seefore: ${MESSAGE}` });
+    const { code, data } = json(['uses', 'twin']);
+    expect(code).toBe(2);
+    expect((data as unknown as Failure).error).toEqual({ code: 'id-twice', message: MESSAGE });
+  });
+
+  it('names each file from where the command was run, and says when there are more than two', () => {
+    write({ ...CLASH, 'technologies/twin.yaml': 'name: Tech twin\n' }, 'repo');
+    expect(run(['uses', 'twin', '--workdir=repo']).err).toBe(
+      'seefore: 3 records have the id `twin`: `repo/owners/twin.yaml`, `repo/systems/twin.yaml` and `repo/technologies/twin.yaml`. ' +
+        'A record that names `twin` could mean any of them, so what a removal or a rename would touch cannot be told. All of them but one must get another id first.',
     );
   });
 });
@@ -246,8 +351,17 @@ describe('seefore uses, as data', () => {
       { record: { id: 'geo-company', family: 'owners', file: 'owners/geo-company.yaml', name: 'The geo company' }, reason: 'no-user', assumes: 'left-go' },
     ]);
     expect(data.mentions).toEqual([
-      { file: 'stores/relay-lists.yaml', line: 3, column: 1, record: 'relay-lists', field: 'description', names: 'relay-pool-server', words: ['relay pool server'] },
-      { file: 'systems/geo.yaml', line: 2, column: 1, record: 'geo', field: 'description', names: 'relay-pool-server', words: ['relay pool server'] },
+      {
+        file: 'stores/relay-lists.yaml',
+        line: 3,
+        column: 1,
+        record: 'relay-lists',
+        field: 'description',
+        names: 'relay-pool-server',
+        words: ['relay pool server'],
+        goes: false,
+      },
+      { file: 'systems/geo.yaml', line: 2, column: 1, record: 'geo', field: 'description', names: 'relay-pool-server', words: ['relay pool server'], goes: false },
     ]);
     expect(data).toMatchObject({ goes: [], inherited: 0, complete: true });
     expect(json(['uses', 'maintainers']).data.inherited).toBe(3);
@@ -268,6 +382,30 @@ describe('paths', () => {
     ]);
     // From inside the directory, a path does not climb out.
     expect(run(['uses', 'geoip'], 'repo/architecture/apps').out.split('\n')[3]).toBe('  relay-pool-server.yaml:4:18: `technology`');
+  });
+
+  it('name the directory in a command to run next, when it was named to start with, so that the command works from there', () => {
+    const broken = { ...RELAYS, 'connections/pool-tests-relays.yaml': 'from: relay-pool-server\nto: [relay-server\n' };
+    write(broken, 'repo/architecture');
+    write({ 'elsewhere/x.txt': '' });
+    const full = join(root, 'repo/architecture');
+    const brief = (out: string): string | undefined => out.split('\n').at(-1)?.split('. ')[0];
+    expect(brief(run(['uses', 'geoip', '--workdir=../repo/architecture'], 'elsewhere').out)).toBe(`1 error, 0 warnings: run \`seefore check --workdir=${full}\` to see them`);
+    expect(brief(run(['uses', 'geoip', '--workdir=repo/architecture']).out)).toBe('1 error, 0 warnings: run `seefore check --workdir=repo/architecture` to see them');
+    // From the directory itself, or from inside it with no --workdir, the command finds it alone.
+    expect(brief(run(['uses', 'geoip', '--workdir=.'], 'repo/architecture').out)).toBe('1 error, 0 warnings: run `seefore check` to see them');
+    expect(brief(run(['uses', 'geoip'], 'repo/architecture/apps').out)).toBe('1 error, 0 warnings: run `seefore check` to see them');
+    expect(run(['uses', 'basket', '--workdir=../repo/architecture'], 'elsewhere').err).toBe(
+      `seefore: No record has the id \`basket\`. Run \`seefore list --workdir=${full}\` to see the records there are. ` +
+        `This directory has errors too: \`seefore check --workdir=${full}\` shows them.`,
+    );
+  });
+
+  it('quote the directory for the shell in a command to run next', () => {
+    write({ ...RELAYS, 'connection/typo.yaml': 'from: geo\nto: sync\n' }, 'my repo/architecture');
+    expect(run(['uses', 'geoip', '--workdir=my repo/architecture']).out.split('\n').at(-1)).toMatch(
+      /^0 errors, 1 warning: run `seefore check --workdir="my repo\/architecture"` to see them\./,
+    );
   });
 
   it('are in full for `seefore check` too, for a directory elsewhere', () => {

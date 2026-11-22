@@ -29,5 +29,5 @@ export {
 } from './records.ts';
 export type { App, Component, Connection, Owner, Person, Store, System, Technology } from './records.ts';
 export { DESCRIPTION_MAX, NAME_MAX } from './text.ts';
-export { readInFull, removalOf, usesOf, wordsFor } from './uses.ts';
+export { isShort, readInFull, recordsWithId, removalOf, usesOf, wordsFor } from './uses.ts';
 export type { Change, Left, Mention, Removal, RemovalOptions, UsedRecord, Uses } from './uses.ts';

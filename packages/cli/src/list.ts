@@ -4,6 +4,7 @@ import { EXIT_OK, openSource } from './check.ts';
 import type { CheckOptions } from './check.ts';
 import type { Io } from './io.ts';
 import { count, problemsInBrief } from './words.ts';
+import type { Here } from './words.ts';
 
 /** The widest a line of the listing may be, in columns. A narrower terminal makes it narrower. */
 export const LINE_WIDTH = 96;
@@ -56,7 +57,8 @@ export function list(options: ListOptions, io: Io): number {
     ownership: Object.fromEntries(ownership(loaded.model)),
   };
   const layout: Layout = { width: Math.min(LINE_WIDTH, io.columns ?? LINE_WIDTH), full: options.full };
-  io.out(options.json ? JSON.stringify(result, null, 2) : listing(result, layout));
+  const here: Here = { cwd: io.cwd, directory, workdir: options.workdir };
+  io.out(options.json ? JSON.stringify(result, null, 2) : listing(result, layout, here));
   return EXIT_OK;
 }
 
@@ -96,8 +98,9 @@ interface Section {
 /**
  * The model as a person reads it: each family under a heading that says how many, what is in a
  * thing beneath it, and each connection under what it starts from. Lines wrap at the width.
+ * `here` is where the command was run, so that the command the last line names works there.
  */
-function listing(result: ListResult, layout: Layout): string {
+function listing(result: ListResult, layout: Layout, here: Here): string {
   const index = indexOf(result);
   const places = placesOf(result, index);
   const { withParts, others, looseApps, looseStores, looseComponents } = places;
@@ -147,8 +150,8 @@ function listing(result: ListResult, layout: Layout): string {
   const families = [result.people, result.systems, result.apps, result.stores, result.components, result.connections, result.owners, result.technologies];
   const listed = families.reduce((sum, family) => sum + family.length, 0);
   const read = `${count(result.records, 'record')} read${listed < result.records ? `, ${listed} listed` : ''}.`;
-  const found = result.errors + result.warnings === 0 ? 'No problems.' : problemsInBrief(result.errors, result.warnings);
-  lines.push(...wrap(words(`${read} ${found}`), '', DEEPER, layout.width));
+  const found = result.errors + result.warnings === 0 ? 'No problems.' : problemsInBrief(result.errors, result.warnings, here);
+  lines.push(...wrap(commandWords(`${read} ${found}`), '', DEEPER, layout.width));
   return lines.join('\n');
 }
 
@@ -301,7 +304,8 @@ function farEnd(id: string, index: Index): string {
 /**
  * One record: who it is, what is known of it in brackets, and what it is for, wrapped at the
  * width. Its description is its first sentence on the same line, or under `--full` the whole
- * of it beneath, each paragraph starting a line of its own.
+ * of it beneath, as it is written: each line of it starts a line of its own, and keeps the
+ * spaces written in it, except where it wraps.
  */
 function entry(indent: string, head: string, said: string, facts: readonly (string | undefined)[], description: string | undefined, layout: Layout): string[] {
   const known = facts.filter((fact) => fact !== undefined);
@@ -310,12 +314,12 @@ function entry(indent: string, head: string, said: string, facts: readonly (stri
   const deeper = indent + DEEPER;
   if (layout.full) {
     // The record's own wrapped line goes on deeper than the description beneath it, so the two are told apart.
-    const beneath = (description === undefined ? [] : paragraphs(description)).flatMap((paragraph) => wrap(words(paragraph), deeper, deeper, layout.width));
+    const beneath = (description === undefined ? [] : linesOf(description)).flatMap((text) => wrap(written(text), deeper + leading(text), deeper, layout.width));
     return [...wrap(line, indent, deeper + DEEPER, layout.width), ...beneath];
   }
   if (description === undefined) return wrap(line, indent, deeper, layout.width);
   // The dash stays with the word before it, so that a wrapped line never starts with one, as a list would.
-  const dashed = line.map((word, at) => (at === line.length - 1 ? `${word} -` : word));
+  const dashed = line.map((word, at) => (at === line.length - 1 ? { ...word, text: `${word.text} -` } : word));
   return wrap([...dashed, ...words(firstSentence(description))], indent, deeper, layout.width);
 }
 
@@ -333,32 +337,80 @@ function owner(id: string | undefined, index: Index): string | undefined {
 const SENTENCES = new Intl.Segmenter('en', { granularity: 'sentence' });
 
 /**
- * The end of a short form after which a sentence goes on: letters each followed by a dot, as in
- * "e.g.", "i.e." and "U.S.", and a few short words. The platform's rules end a sentence there
- * when a capital follows.
+ * A full stop and a space before what the platform's rules do not take to start a sentence,
+ * though it does here: a small letter, as of a program's name written so, a backtick, a
+ * quotation mark or a digit.
  */
-const SHORT_FORM = /(?:^|[\s(])(?:(?:\p{L}\.){2,}|cf\.|vs\.|approx\.|incl\.)$/iu;
+const MISSED_START = /\. (?=[\p{Ll}\p{Nd}`"'\p{Pi}\u201A\u201E])/gu;
+
+/** The end of a sentence in a script that writes no space after one, as Chinese and Japanese do, with any closing marks. */
+const ENDS_WITHOUT_SPACE = /[\u3002\uFF61\uFF0E\uFF01\uFF1F][\p{Pe}\p{Pf}]*$/u;
+
+/** A title before a name, after which a sentence goes on: "Dr. Smith". Only with its capital, so that "in 5 ms." still ends one. */
+const TITLE = /(?:^|[\s(])(?:Dr|Mr|Mrs|Ms|Prof|St)\.$/u;
+
+/** A short word after which a sentence goes on, whatever follows. */
+const SHORT_WORD = /(?:^|[\s(])(?:cf|vs|approx|incl)\.$/iu;
+
+/** Letters each followed by a dot, as in "e.g." and "U.S.". */
+const LETTERS = /(?:^|[\s(])((?:\p{L}\.){2,})$/u;
+
+/** What ends a sentence only before a capital: "etc." and the dots of a pause, as in "waits... then". */
+const BEFORE_A_CAPITAL = /(?:(?:^|[\s(])etc|\.)\.$/iu;
 
 /**
- * The first sentence of a text, whole, on one line. A sentence ends only before a space, so
- * that a link such as `example.com/a?b=1` stays whole, and never after a short form such as
- * "e.g.". A text with no end of a sentence is given whole.
+ * The first sentence of a text, whole, on one line. It ends where the platform's rules end one,
+ * or at a full stop and a space before a small letter, a backtick, a quotation mark or a digit,
+ * but only before a space, so that a link such as `example.com/a?b=1` stays whole. It never
+ * ends after a short form such as "e.g." or a title such as "Dr.". In a script that writes no
+ * space between sentences, such as Chinese, it ends without one. A text with no end of a
+ * sentence is given whole. This is a rule of thumb: some words, such as "U.S.", can end a
+ * sentence or not.
  */
 export function firstSentence(text: string): string {
-  let first = '';
-  for (const { segment } of SENTENCES.segment(flat(text))) {
-    first += segment;
-    if (first.endsWith(' ') && !SHORT_FORM.test(first.trimEnd())) break;
+  const line = flat(text);
+  const ends = new Set([...SENTENCES.segment(line)].map(({ index, segment }) => index + segment.length));
+  for (const match of line.matchAll(MISSED_START)) ends.add(match.index + 2);
+  for (const end of [...ends].sort((a, b) => a - b)) {
+    const first = line.slice(0, end);
+    if (endsThere(first, line.charAt(end))) return first.trimEnd();
   }
-  return first.trimEnd();
+  return line;
 }
 
-/** The paragraphs of a text, each on one line: what its line breaks part, without the empty ones. */
-function paragraphs(text: string): string[] {
+/** True when a sentence ends with this text, given the character that follows it. */
+function endsThere(text: string, next: string): boolean {
+  if (ENDS_WITHOUT_SPACE.test(text)) return true;
+  if (!text.endsWith(' ')) return false;
+  const said = text.trimEnd();
+  return !said.endsWith('.') || !goesOn(said, next);
+}
+
+/**
+ * True when a sentence goes on after this text, which ends in a full stop, given the character
+ * that follows. It goes on after a title and a short word, after letters with dots when one of
+ * them is small, as in "e.g.", and after "U.S.", "etc." or the dots of a pause unless a capital
+ * follows.
+ */
+function goesOn(said: string, next: string): boolean {
+  if (TITLE.test(said) || SHORT_WORD.test(said)) return true;
+  const capital = /\p{Lu}/u.test(next);
+  const letters = LETTERS.exec(said)?.[1];
+  if (letters !== undefined) return !capital || /\p{Ll}/u.test(letters);
+  return !capital && BEFORE_A_CAPITAL.test(said);
+}
+
+/** The lines of a text as it is written, without the spaces at their ends and without the empty ones. */
+function linesOf(text: string): string[] {
   return text
     .split(/[\n\r\u0085\u2028\u2029]/)
-    .map(flat)
-    .filter((paragraph) => paragraph !== '');
+    .map((line) => line.trimEnd())
+    .filter((line) => line !== '');
+}
+
+/** The spaces a line starts with. */
+function leading(line: string): string {
+  return /^\s*/u.exec(line)?.[0] ?? '';
 }
 
 /** A text on one line: its line breaks and runs of spaces made one space, and none at either end. */
@@ -366,30 +418,49 @@ function flat(text: string): string {
   return text.trim().replace(/\s+/g, ' ');
 }
 
-/** The words of a text: what its spaces and line breaks part. */
-function words(text: string): string[] {
-  return text.split(/\s+/).filter((word) => word !== '');
+/** A word to lay out, and the spaces before it, which it keeps when it does not start a line. */
+interface Word {
+  text: string;
+  before: string;
+}
+
+/** The words of a text: what its spaces and line breaks part, with one space before each. */
+function words(text: string): Word[] {
+  return text
+    .split(/\s+/)
+    .filter((word) => word !== '')
+    .map((word) => ({ text: word, before: ' ' }));
+}
+
+/** The words of a text of the listing's own, keeping what is in backticks whole, so that a command to run is on one line. */
+function commandWords(text: string): Word[] {
+  return [...text.matchAll(/[^\s`]*`[^`]*`\S*|\S+/gu)].map((match) => ({ text: match[0], before: ' ' }));
+}
+
+/** The words of a line, each with the spaces written before it, so that a run of them is kept. */
+function written(line: string): Word[] {
+  return [...line.matchAll(/(\s*)(\S+)/gu)].map((match) => ({ text: match[2] ?? '', before: match[1] ?? '' }));
 }
 
 /**
- * Words on lines no wider than the width, a space between two on a line. The first line starts
- * with `first`, each after it with `rest`. A word is never broken, nor an id or a link: one too
- * long for the room has a line of its own.
+ * Words on lines no wider than the width, each with the spaces before it, except at the start
+ * of a line. The first line starts with `first`, each after it with `rest`. A word is never
+ * broken, nor an id or a link: one too long for the room has a line of its own.
  */
-function wrap(parts: readonly string[], first: string, rest: string, width: number): string[] {
+function wrap(parts: readonly Word[], first: string, rest: string, width: number): string[] {
   const lines: string[] = [];
   let line = first;
   let room = width - widthOf(first);
   let empty = true;
-  for (const word of parts) {
-    const needed = widthOf(word) + (empty ? 0 : 1);
+  for (const { text, before } of parts) {
+    const needed = widthOf(text) + (empty ? 0 : widthOf(before));
     if (!empty && needed > room) {
       lines.push(line);
-      line = rest + word;
-      room = width - widthOf(rest) - widthOf(word);
+      line = rest + text;
+      room = width - widthOf(rest) - widthOf(text);
       continue;
     }
-    line += empty ? word : ` ${word}`;
+    line += empty ? text : before + text;
     room -= needed;
     empty = false;
   }
@@ -397,16 +468,32 @@ function wrap(parts: readonly string[], first: string, rest: string, width: numb
   return lines;
 }
 
+/** What a terminal shows as one character, as an emoji joined of several is one. */
+const GRAPHEMES = new Intl.Segmenter('en', { granularity: 'grapheme' });
+
+/**
+ * A picture that a terminal shows two columns wide: an emoji, alone, joined to others or with a
+ * skin tone, a flag, and a character asked to look like an emoji, as in a heart or a keycap.
+ */
+const PICTURE = /\p{Emoji_Presentation}|\p{Regional_Indicator}|\p{Extended_Pictographic}\uFE0F|\uFE0F\u20E3/u;
+
 /** Characters that take no column on a terminal: marks that combine with the one before, and joiners and variant selectors. */
 const NO_COLUMN = /[\p{Mn}\p{Me}\u200B-\u200F\u2060\uFE00-\uFE0F]/u;
 
-/** Characters that take two columns on a terminal: the wide scripts of East Asia, and pictures such as emoji. */
+/** Characters that take two columns on a terminal: the wide scripts of East Asia. */
 const TWO_COLUMNS =
-  /[\u1100-\u115F\u2E80-\u303E\u3041-\u33FF\u3400-\u4DBF\u4E00-\u9FFF\uA000-\uA4CF\uAC00-\uD7A3\uF900-\uFAFF\uFE30-\uFE4F\uFF00-\uFF60\uFFE0-\uFFE6\u{1F300}-\u{1F64F}\u{1F900}-\u{1F9FF}\u{20000}-\u{3FFFD}]/u;
+  /[\u1100-\u115F\u2E80-\u303E\u3041-\u33FF\u3400-\u4DBF\u4E00-\u9FFF\uA000-\uA4CF\uAC00-\uD7A3\uF900-\uFAFF\uFE30-\uFE4F\uFF00-\uFF60\uFFE0-\uFFE6\u{20000}-\u{3FFFD}]/u;
 
-/** How many columns a text takes on a terminal. */
+/** How many columns a text takes on a terminal, counted for each character as the terminal shows it. */
 export function widthOf(text: string): number {
   let columns = 0;
-  for (const character of text) columns += NO_COLUMN.test(character) ? 0 : TWO_COLUMNS.test(character) ? 2 : 1;
+  for (const { segment } of GRAPHEMES.segment(text)) columns += columnsOf(segment);
   return columns;
+}
+
+/** How many columns one character as a terminal shows it takes: what it starts with says, unless it is a picture. */
+function columnsOf(grapheme: string): number {
+  if (PICTURE.test(grapheme)) return 2;
+  const first = String.fromCodePoint(grapheme.codePointAt(0) ?? 0);
+  return NO_COLUMN.test(first) ? 0 : TWO_COLUMNS.test(first) ? 2 : 1;
 }

@@ -175,8 +175,42 @@ describe('a description', () => {
     expect(firstSentence('E.g. Sentry sends them. Then more.')).toBe('E.g. Sentry sends them.');
     expect(firstSentence('Holds files, i.e. The uploads. Then more.')).toBe('Holds files, i.e. The uploads.');
     expect(firstSentence('Holds files (e.g. PDF and PNG). Then more.')).toBe('Holds files (e.g. PDF and PNG).');
-    expect(firstSentence('Calls the U.S. Postal Service. Then more.')).toBe('Calls the U.S. Postal Service.');
     expect(firstSentence('Weighs Redis vs. Valkey. Then more.')).toBe('Weighs Redis vs. Valkey.');
+  });
+
+  it('does not end a sentence at a title before a name, written with its capital', () => {
+    expect(firstSentence('Calls Dr. Smith for advice. Then pays.')).toBe('Calls Dr. Smith for advice.');
+    for (const title of ['Mr.', 'Mrs.', 'Ms.', 'Prof.', 'St.']) expect(firstSentence(`Asks ${title} Jones. Then more.`)).toBe(`Asks ${title} Jones.`);
+    expect(firstSentence('Answers in 5 ms. Then retries.')).toBe('Answers in 5 ms.');
+  });
+
+  it('ends a sentence at capital letters with dots when a capital follows, and not at small ones', () => {
+    expect(firstSentence('Available in the U.S. Only staff administer it.')).toBe('Available in the U.S.');
+    // A rule of thumb: the words cannot tell this from the end of a sentence.
+    expect(firstSentence('Calls the U.S. Postal Service. Then more.')).toBe('Calls the U.S.');
+    expect(firstSentence('Available in the U.S. only to staff. Then more.')).toBe('Available in the U.S. only to staff.');
+    expect(firstSentence('Runs at 3 a.m. Then more.')).toBe('Runs at 3 a.m. Then more.');
+  });
+
+  it('ends a sentence at a full stop before a small letter, a backtick, a quotation mark or a digit', () => {
+    expect(firstSentence('Holds the options. syncthing writes it when they change.')).toBe('Holds the options.');
+    expect(firstSentence('Takes each event over HTTP. `relay` then forwards it.')).toBe('Takes each event over HTTP.');
+    expect(firstSentence('Keeps the logs. "Old" ones go first.')).toBe('Keeps the logs.');
+    expect(firstSentence('Keeps the logs. 30 days of them.')).toBe('Keeps the logs.');
+    // Not after a short form, a title, letters with dots, "etc." or the dots of a pause.
+    expect(firstSentence('Takes events, e.g. sentry sends them. Then more.')).toBe('Takes events, e.g. sentry sends them.');
+    expect(firstSentence('Weighs redis vs. valkey. Then more.')).toBe('Weighs redis vs. valkey.');
+    expect(firstSentence('Holds approx. 30 days. Then more.')).toBe('Holds approx. 30 days.');
+    expect(firstSentence('Asks Dr. smith. Then more.')).toBe('Asks Dr. smith.');
+    expect(firstSentence('Holds files, logs, etc. and more. Then more.')).toBe('Holds files, logs, etc. and more.');
+    expect(firstSentence('Holds files, logs, etc. Then more.')).toBe('Holds files, logs, etc.');
+    expect(firstSentence('Waits... then retries. Then more.')).toBe('Waits... then retries.');
+  });
+
+  it('ends a sentence with no space after it in a script that writes none, such as Chinese or Japanese', () => {
+    expect(firstSentence('接收订单。随后发货。')).toBe('接收订单。');
+    expect(firstSentence('注文を受ける。次に発送する。')).toBe('注文を受ける。');
+    expect(firstSentence('（完了しました！）次へ。')).toBe('（完了しました！）');
   });
 
   it('does not end a sentence inside a link', () => {
@@ -232,6 +266,24 @@ describe('--full', () => {
       '        Through the proxy, which ends TLS and',
       '        passes each request on.',
     ]);
+  });
+
+  it('shows a description as it is written, with each run of spaces kept, except where a line wraps', () => {
+    write({
+      'seefore.yaml': MARKER,
+      'people/clerk.yaml': 'name: Clerk\ndescription: |-\n  Accepts the token "A  B".\n  Steps:\n    first   this,\n    then that.\n',
+    });
+    expect(section(run(['list', '--full']).out, 'People (1)')).toEqual([
+      'People (1)',
+      '  clerk: Clerk',
+      '      Accepts the token "A  B".',
+      '      Steps:',
+      '        first   this,',
+      '        then that.',
+    ]);
+    expect(section(run(['list', '--full'], 20).out, 'People (1)').slice(2, 4)).toEqual(['      Accepts the', '      token "A  B".']);
+    // The short view still puts its first sentence on one line, in single spaces.
+    expect(section(run(['list']).out, 'People (1)')[1]).toBe('  clerk: Clerk - Accepts the token "A B".');
   });
 
   it('changes nothing in the data', () => {
@@ -307,6 +359,56 @@ describe('the width', () => {
     // Counted by characters, "Packs" would fit on the first line, and the accents not on the second.
     write({ 'seefore.yaml': MARKER, 'people/a.yaml': `name: ${wide.repeat(2)}\ndescription: Packs ${accent.repeat(6)}.\n` });
     expect(section(run(['list'], 20).out, 'People (1)')).toEqual(['People (1)', `  a: ${wide.repeat(2)} -`, `      Packs ${accent.repeat(6)}.`]);
+  });
+
+  it('counts an emoji as two columns, as a terminal shows it, also one joined of several, with a skin tone, or a flag', () => {
+    expect(widthOf('🚀')).toBe(2);
+    expect(widthOf('👩‍💻')).toBe(2);
+    expect(widthOf('👍🏽')).toBe(2);
+    expect(widthOf('🇵🇱')).toBe(2);
+    expect(widthOf('❤️')).toBe(2);
+    expect(widthOf('1️⃣')).toBe(2);
+    // Without the selector that asks for a picture, a heart is text, one column wide.
+    expect(widthOf('❤')).toBe(1);
+  });
+
+  it('wraps a line of emoji at the width, counted apart from the listing', () => {
+    write({ 'seefore.yaml': MARKER, 'people/rocket.yaml': `name: Rocket\ndescription: ${Array(37).fill('🚀').join(' ')}.\n` });
+    const lines = section(run(['list']).out, 'People (1)');
+    // Each rocket takes two columns; everything else in these lines takes one.
+    const columns = (line: string): number => line.replace(/🚀/gu, '##').length;
+    expect(lines.map(columns)).toEqual([10, 96, 39]);
+  });
+});
+
+describe('the command it names', () => {
+  const BROKEN = { 'seefore.yaml': MARKER, 'people/clerk.yaml': 'name: Clerk\ncolour: blue\n', 'people/porter.yaml': 'name: Porter\n' };
+
+  it('names the directory when the listing was started with --workdir, and keeps the command on one line', () => {
+    write(Object.fromEntries(Object.entries(BROKEN).map(([path, text]) => [`my repo/architecture/${path}`, text])));
+    write({ 'elsewhere/x.txt': '' });
+    const io = (cwd: string, columns: number) => {
+      const out: string[] = [];
+      return { cwd: join(root, cwd), out: (text: string) => out.push(text), err: () => undefined, columns, printed: out };
+    };
+    const narrow = io('.', 40);
+    main(['list', '--workdir=my repo/architecture'], narrow);
+    expect(narrow.printed.join('\n').split('\n').slice(-4)).toEqual([
+      '2 records read, 1 listed. 1 error, 0',
+      '    warnings: run',
+      '    `seefore check --workdir="my repo/architecture"`',
+      '    to see them.',
+    ]);
+    // From elsewhere, by its full path, since a path from there would climb out with `..`.
+    const elsewhere = io('elsewhere', 200);
+    main(['list', '--workdir=../my repo/architecture'], elsewhere);
+    const command = `\`seefore check --workdir="${join(root, 'my repo/architecture')}"\``;
+    expect(elsewhere.printed.join('\n').split('\n').filter((line) => line.includes(command))).toHaveLength(1);
+  });
+
+  it('is the command alone when the listing was started inside the directory', () => {
+    write(BROKEN);
+    expect(run(['list']).out.split('\n').at(-1)).toBe('2 records read, 1 listed. 1 error, 0 warnings: run `seefore check` to see them.');
   });
 });
 
