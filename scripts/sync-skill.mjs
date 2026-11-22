@@ -1,6 +1,6 @@
-// Copies the conventions of stage 4 from the spec into the model skill, word for word.
+// Copies the conventions from the specs into the model skill, word for word.
 //
-// The spec, docs/modelling.md, is the source. The skill is installed apart from this
+// The specs, docs/modelling.md and docs/hard-cases.md, are the source. The skill is installed apart from this
 // repository, so it cannot point at the spec and has to carry the text. Two texts kept by hand
 // drift; this keeps them one.
 //
@@ -12,11 +12,14 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const SPEC = 'docs/modelling.md';
 const SKILL = 'plugin/skills/model/SKILL.md';
 
-/** The blocks the skill takes from the spec. Each stands between a pair of marks in both. */
-const BLOCKS = ['conventions', 'cannot-say-yet'];
+/** The blocks the skill takes, each from its spec. Each stands between a pair of marks in both. */
+const BLOCKS = [
+  { name: 'conventions', spec: 'docs/modelling.md' },
+  { name: 'hard-cases', spec: 'docs/hard-cases.md' },
+  { name: 'cannot-say-yet', spec: 'docs/modelling.md' },
+];
 
 const start = (name) => `<!-- ${name}:start -->`;
 const end = (name) => `<!-- ${name}:end -->`;
@@ -34,27 +37,27 @@ function place(file, text, name) {
 
 function main() {
   const check = process.argv.includes('--check');
-  const spec = readFileSync(join(root, SPEC), 'utf8');
   const before = readFileSync(join(root, SKILL), 'utf8');
 
   let skill = before;
-  for (const name of BLOCKS) {
-    const source = place(SPEC, spec, name);
+  for (const { name, spec } of BLOCKS) {
+    const text = readFileSync(join(root, spec), 'utf8');
+    const source = place(spec, text, name);
     const target = place(SKILL, skill, name);
-    skill = skill.slice(0, target.from) + spec.slice(source.from, source.to) + skill.slice(target.to);
+    skill = skill.slice(0, target.from) + text.slice(source.from, source.to) + skill.slice(target.to);
   }
 
   if (skill === before) {
-    console.log(`${SKILL} carries the conventions of ${SPEC} word for word.`);
+    console.log(`${SKILL} carries the conventions of the specs word for word.`);
     return 0;
   }
   if (check) {
-    console.error(`${SKILL} does not carry the conventions of ${SPEC} word for word.`);
-    console.error('The spec is the source. Change it there, then run `npm run sync:skill`.');
+    console.error(`${SKILL} does not carry the conventions of the specs word for word.`);
+    console.error('The specs are the source. Change a convention there, then run `npm run sync:skill`.');
     return 1;
   }
   writeFileSync(join(root, SKILL), skill);
-  console.log(`Copied the conventions of ${SPEC} into ${SKILL}.`);
+  console.log(`Copied the conventions of the specs into ${SKILL}.`);
   return 0;
 }
 

@@ -15,7 +15,7 @@ is a **connection**.
 
 ## The records
 
-Eight kinds, one folder each.
+Nine kinds, one folder each. The ninth, `infrastructure/`, came at stage 6a (`hard-cases.md`).
 
 | Folder | What it is | C4's word |
 | --- | --- | --- |
@@ -24,13 +24,14 @@ Eight kinds, one folder each.
 | `apps/` | Something that runs code | Container |
 | `stores/` | Something that holds data | Container |
 | `components/` | A piece inside an app | Component |
+| `infrastructure/` | A thing whose job is to pass exchanges on: a proxy, a gateway, a load balancer | none |
 | `connections/` | One thing acts on another | Relationship |
 | `owners/` | A team, a role or an organisation that answers for what a part is and can be asked | none |
 | `technologies/` | A thing with a name that a part is built with or an exchange is carried in | none |
 
 ## The fields
 
-Eight names.
+Ten names. `via` and `external` came at stage 6a.
 
 | Field | On | What it holds | Required |
 | --- | --- | --- | --- |
@@ -39,10 +40,12 @@ Eight names.
 | `in` | app, store | The id of the system it is part of | yes |
 | `in` | component | The id of the app it is inside | yes |
 | `kind` | app | `service`, `browser`, `mobile`, `desktop`, `command`, `function`, `job` | no |
-| `kind` | store | `database`, `files`, `cache`, `index` | no |
-| `technology` | app, store, component, connection | A list of ids of technologies, none twice | no |
-| `owner` | system, app, store, component | The id of an owner | no |
-| `from`, `to` | connection | The id of a person, a system, an app, a store or a component | yes |
+| `kind` | store | `database`, `files`, `cache`, `index`, `queue`, `topic` | no |
+| `external` | system | `true`: the people this model is kept for cannot change the system | no |
+| `technology` | app, store, component, infrastructure, connection | A list of ids of technologies, none twice | no |
+| `owner` | system, app, store, component, infrastructure | The id of an owner | no |
+| `from`, `to` | connection | The id of a person, a system, an app, a store, a component or a piece of infrastructure | yes |
+| `via` | connection | What the exchange passes through, in the order of travel: a list of ids of pieces of infrastructure, apps, components or systems | no |
 
 - A key that is not in this table is an error.
 - Only a name and what a thing is in are required, and on a connection only its two ends.
@@ -75,8 +78,8 @@ name: Takes the payment
 technology: [https]
 ```
 
-- The keys are written in this order, and each key starts a line: `from`, `to`, `name`, `in`,
-  `description`, `kind`, `technology`, `owner`. A record has only some of them.
+- The keys are written in this order, and each key starts a line: `from`, `to`, `via`, `name`,
+  `in`, `description`, `kind`, `external`, `technology`, `owner`. A record has only some of them.
 - A list is a set: `[go, postgresql]` and `[postgresql, go]` say the same.
 - A description too long for one line is a folded block. Each sentence starts a line, and
   nothing in the block needs quotes. The limit of 2,000 characters counts the text as it is
@@ -149,7 +152,8 @@ this repository fails when the two differ.
 2. **Ours and somebody else's.** Somebody else's software that the team calls is a system
    like any other. Usually nothing is written inside it; something may be, when the team uses
    it directly, such as another team's database that it reads. Whose a system is goes in its
-   description, and in `owner` when it is somebody the team can ask. A system with nothing in
+   description, in `external` when the team cannot change it (convention 9), and in `owner`
+   when it is somebody the team can ask. A system with nothing in
    it is drawn as one box: it may be somebody else's, or ours and not described yet. A cloud
    service the team controls is an app or a store of its own system, with the product as its
    technology; one it only calls is a system of its own. What is outside a picture is worked
@@ -182,26 +186,17 @@ this repository fails when the two differ.
 
 ## What it cannot say yet
 
-Stages 6a and 6b add the hard cases. Until then:
+Stage 6a gave three of the hard cases a field: what a connection passes through, a queue or a
+topic, and an external system (`hard-cases.md`). Stage 6b adds the others. Until then:
 
 <!-- cannot-say-yet:start -->
 | The fact | Where it goes |
 | --- | --- |
-| That somebody outside maintains a system | Its description, and its owner when it is somebody the team can ask |
-| A queue or a topic | A store with no kind, and its description |
 | Reads or writes | The verb of the connection's name: "Reads the orders" |
-| Something in between that passes an exchange on: a proxy, a gateway, a load balancer | One connection, from the one that addresses the exchange to the one that answers it. Its description says what it passes through, in the order of travel. No connection of its own for the passing on. Routing, choosing where to send, pooling, changing the protocol, rate limits, checking the caller and ending TLS are passing on |
 | A part or a connection that is not always there | Its description says when, in ordinary words, on the narrowest record it is true of, and not again on that record's connections. In the first sentence when the part or the arrow would be misread without it |
 | A call that does not wait | The connection's description |
 | The same code in several apps | A component in the app whose inside is modelled |
 | State an app keeps inside itself, and what its components leave there for one another | The app's description, and the components'. No connection between the components for it |
-
-A thing in between gets a record when it has work of its own: it answers an exchange itself,
-such as serving a file, or starts one that nobody sent through it, such as copying data to a
-replica. That work may have connections. What it only passes on is still written end to end.
-The same holds for a component. Code of the team's own that only passes on may keep its
-record, with no connection for the passing on. What is known of a thing with no record goes
-into the description of the part it stands in front of.
 <!-- cannot-say-yet:end -->
 
 ## The commands
