@@ -152,7 +152,7 @@ To settle in the stage named, with the recommendation the two proposals reached:
 | 4 | Basic modelling | built and tried; the ten changes of the trial made 2026-11-22; awaits acceptance |
 | 5 | Automatic diagrams | built 2026-11-22; the trial with the owner is still to do |
 | 6a | Hard cases in a picture | built 2026-11-22; the trial with the owner is still to do |
-| 6b | Hard cases in a record | in work |
+| 6b | Hard cases in a record | built 2026-11-22; the trial with the owner is still to do |
 | 7 | Layout stability (gate) | |
 | 8 | C4 checks | |
 | 9 | Focused views | |
