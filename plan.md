@@ -521,4 +521,20 @@ other proposals. Hosted collaboration.
 
 ## Open questions
 
-None yet.
+Stage 6b changed three answers of earlier stages. Each is in the spec of its stage. None of
+those stages was accepted when it was changed.
+
+| What changed | The earlier answer | Now | Decided |
+| --- | --- | --- | --- |
+| What `via` may name (stage 6a) | A thing that is on the way only sometimes stays in words | A thing that has `only` may be named: it is on the way whenever it is there | By the owner, 2026-11-22 |
+| Who opens a channel (stage 4, convention 1) | The description of the push says who opened it | `opens: to` says it | By the owner, 2026-11-22, with the format of stage 6b |
+| Which systems have a container view (stage 5) | A system that has an app or a store | Also one that holds a piece of infrastructure with a box of its own | In the build of stage 6b, after its review. For the owner to confirm |
+
+Open after the trial of stage 6b, for the owner:
+
+- **A hop that an exchange cannot go round.** A connection has no condition from what it passes
+  through, so such a connection says the hop's condition again, and in the trial it did so in
+  other words.
+- **One condition in several wordings.** Nothing but the listing's "Conditions" guards against
+  it. If it keeps happening, a condition needs a record.
+- **The dash for a thing that has `only`.** Built and switched off.

@@ -206,9 +206,10 @@ These conventions are the spec's, word for word. No check can hold them, so you 
      through, is not named. Where the ways differ, `via` holds what they share, in order.
      Leaving something out of `via` claims nothing.
    - A way that is taken only when a condition holds, such as a fallback, may be a connection
-     of its own: its `only` says when, and its `via` holds what is on that way. The other way
-     then says when it is taken too, so that nobody counts one exchange twice. Where the facts
-     do not tell the ways apart so cleanly, the order of trying stays in words.
+     of its own: its `only` says when, and its `via` holds what is on that way. When two ways
+     shut each other out, each says when it is taken. When one is tried first and the other
+     only if it fails, the second alone has `only`. Where the facts do not tell the ways apart
+     so cleanly, the order of trying stays in words.
    - A connection has nothing from what it passes through. When the exchange itself is made
      only where a thing on its way is there, the connection says so in its own `only`.
    - A place on the way that each install fills with a product of its own is one piece of
@@ -218,7 +219,8 @@ These conventions are the spec's, word for word. No check can hold them, so you 
    - What a piece of infrastructure passes on is never written as one connection to it and
      another from it: that is one connection, with the piece in `via`.
    - `via` names a piece of infrastructure, an app, a component or a system. Never a store.
-     Never an end of the connection, what an end is in, or what is in an end.
+     Never an end of the connection, what an end is in, or what is in an end. On a connection
+     from a thing to itself, what is on the way at both ends is named once.
    - A redirect that a browser carries, and a push down a channel that the other side
      opened, are not routes. Convention 1 says how each is written, and convention 12 how a
      push says who opened its channel.
@@ -240,7 +242,8 @@ These conventions are the spec's, word for word. No check can hold them, so you 
      is a store in that app.
    - A queue kept as rows in a database is a store of its own, of kind `queue`, with the
      database's product as its technology and the database named in its description.
-   - A queue or a topic is in the system that answers for it.
+   - A queue or a topic is in the system that answers for it, or in the app that keeps it
+     (convention 10).
 9. **An external system.** `external: true` says that the people this model is kept for cannot
    change the system: they use it as it is given.
    - It follows who makes the system, not who runs it. A product of ours that a customer runs
@@ -261,12 +264,14 @@ These conventions are the spec's, word for word. No check can hold them, so you 
       copy of the app has its own, and nothing reaches it but through the app. One writer, one
       owner or one machine does not make a store an app's: a database server with one service
       in front of it is in the system.
-    - A store that anything outside the app reaches is in the system.
+    - A store that anything outside the app reaches is in the system. A backup that copies
+      the files reaches them from outside, and so does another program that mounts them.
     - It must hold for every form the record stands for. A store that is a local file in one
       install and a shared database in another is in the system, and its description says so.
-    - Work that an app keeps for itself on disk, such as its own queue of jobs, is such a
-      store when the facts name it. A queue that another app puts into or takes from is in
-      the system.
+    - Work that an app keeps for itself in its own files, each copy its own, such as its own
+      queue of jobs, is such a store when the facts name it. A queue kept as rows in a
+      database server is in the system, and so is one that another app puts into or takes
+      from.
     - State inside an app stays in the app's description. It is a store in the app when the
       facts name it and say what the app's record cannot carry: a format, a size, how long it
       is kept.
@@ -283,8 +288,11 @@ These conventions are the spec's, word for word. No check can hold them, so you 
     - At a queue or a topic, `write` puts a message in and `read` takes one out, whatever the
       product does beneath. Claiming the oldest job is a read.
     - A write that gets an answer back is still a write, and so is one that first looks
-      whether it may. One act that takes what is there and puts something new in its place is
-      `read-write`. The name and the description together say which.
+      whether it may. A connection whose words say that it reads and that it writes is
+      `read-write`: so is one that keeps a store as its own. The name and the description
+      together say which.
+    - A watch for changes is a read. Making or changing the store itself, such as a
+      migration, is a write.
     - A use that is neither, such as signing with a key that never leaves its store, has no
       `access`. Nor has one that nobody has said: leaving it out claims nothing.
     - **The verb stays in the name.** The name is what a person reads on the arrow, and
@@ -292,8 +300,10 @@ These conventions are the spec's, word for word. No check can hold them, so you 
 12. **Who opened the channel, and what does not wait.** The arrow starts at the one that sends,
     as convention 1 says, whoever opened the channel.
     - `opens: to` says that the channel this exchange travels down was opened from the far
-      side: by `to`, or by something in `via` on its behalf. A browser opens a stream and the
-      server sends down it. An agent dials out and the service sends it work.
+      side: by `to`, or by something in `via` that stands in front of `to`. A browser opens a
+      stream and the server sends down it. An agent dials out and the service sends it work.
+    - When a thing on the way opened a channel to the sender and then dials `to` itself, `to`
+      opened nothing. `opens` is left out, and the description says who opened what.
     - It names a side and not another connection. The opening is a connection of its own only
       when it does something more, such as a login.
     - Left out, the one that sends opened the channel, or nobody has said. A webhook is not
@@ -305,15 +315,20 @@ These conventions are the spec's, word for word. No check can hold them, so you 
 13. **A condition.** `only` says when a thing is there, or is used, at all. It holds the words
     that read after "only": `only: in the hosted edition`.
     - **The test:** could a reader find the thing missing, or never used, in an install that
-      runs? An edition, a kind of install, a setting, a licence, a consent, another way
-      failing.
+      runs? An edition, a kind of install, a market, a setting, a licence, a consent, another
+      way failing.
     - **Not a condition:** when in a run an exchange happens, such as every night, on a
       refund or when a backup is restored, which the name says. A check that is made each
-      time, such as a check of rights. That a thing is planned, or on its way out. The bare
-      word "optional": say who chooses, or when.
+      time, such as a check of rights. That a thing is planned, or on its way out, or came
+      with a version: the model is of one version. The bare word "optional": say who chooses,
+      or when.
     - "In production" may be written: it says when a part is there. It is no model of an
       environment.
-    - It goes on the narrowest record it is true of as a whole.
+    - It goes on the narrowest record it is true of as a whole. When a whole system is there
+      only then, the system has it. An exchange that is made in one install only, between
+      things that every install has, has it itself. When only some of the copies a record
+      stands for are under it, the record has none, and its description says which.
+    - The words do not start with "only", and have single spaces.
     - **What a thing has from another.** A part in a thing with `only` has it too. A connection
       has those of its two ends, and of what they are in. None is said again. A connection has
       nothing from what it passes through.
@@ -422,10 +437,12 @@ batch.
   app first. It keeps its `in` when it is part of that system, and with it the owner it has
   from there. Take `in` out when it is part of no system, and then write its `owner` on it if
   it had one from its system. An app needs its `in`.
-- **Put a store into the app that keeps it**, or back into the system. Change `in`. First run
-  `seefore uses <id> --workdir=<folder>` on the store: when anything outside the app reaches
-  it, it is not the app's alone, and it stays in the system (convention 10). Say what the store
-  now goes with when the app is removed, and whose it is.
+- **Put a store into the app that keeps it**, or back into the system. Change `in`. First see
+  who reaches the store: every connection in `seefore list --json` whose `from` or `to` is the
+  store. When the other end of one is outside the app, the store is not the app's alone, and
+  it stays in the system (convention 10). The app itself, a component in it and another store
+  it keeps are inside. `seefore check` says the same afterwards, as `kept-store-reached`. Say
+  what the store now goes with when the app is removed, and whose it is.
 - **Put a piece of infrastructure into a system**, or take it out. First run
   `seefore uses <id> --workdir=<folder>` on the piece. A connection that names it in `via` and
   starts or ends at that system itself would then pass through a thing inside its own end,
@@ -474,7 +491,9 @@ When several kinds of fact are lifted, go in this order:
   quoted, the text as you would write it. Ask about a bare "optional"; never lift it as it
   stands. Use one wording for one condition. Where a sentence says the condition and
   something more, show it before and after: the words of the condition come out, and what
-  more it says stays.
+  more it says stays. Words in a connection's description that say a condition its end has
+  are said already: they come out too. So does a bare "Optional" beside a condition that now
+  says who chooses.
 - Then the routes that `only` now allows: a thing that only some installs have, named in
   `via` (convention 7).
 

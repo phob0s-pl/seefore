@@ -129,9 +129,10 @@ skill carries them word for word.
      through, is not named. Where the ways differ, `via` holds what they share, in order.
      Leaving something out of `via` claims nothing.
    - A way that is taken only when a condition holds, such as a fallback, may be a connection
-     of its own: its `only` says when, and its `via` holds what is on that way. The other way
-     then says when it is taken too, so that nobody counts one exchange twice. Where the facts
-     do not tell the ways apart so cleanly, the order of trying stays in words.
+     of its own: its `only` says when, and its `via` holds what is on that way. When two ways
+     shut each other out, each says when it is taken. When one is tried first and the other
+     only if it fails, the second alone has `only`. Where the facts do not tell the ways apart
+     so cleanly, the order of trying stays in words.
    - A connection has nothing from what it passes through. When the exchange itself is made
      only where a thing on its way is there, the connection says so in its own `only`.
    - A place on the way that each install fills with a product of its own is one piece of
@@ -141,7 +142,8 @@ skill carries them word for word.
    - What a piece of infrastructure passes on is never written as one connection to it and
      another from it: that is one connection, with the piece in `via`.
    - `via` names a piece of infrastructure, an app, a component or a system. Never a store.
-     Never an end of the connection, what an end is in, or what is in an end.
+     Never an end of the connection, what an end is in, or what is in an end. On a connection
+     from a thing to itself, what is on the way at both ends is named once.
    - A redirect that a browser carries, and a push down a channel that the other side
      opened, are not routes. Convention 1 says how each is written, and convention 12 how a
      push says who opened its channel.
@@ -163,7 +165,8 @@ skill carries them word for word.
      is a store in that app.
    - A queue kept as rows in a database is a store of its own, of kind `queue`, with the
      database's product as its technology and the database named in its description.
-   - A queue or a topic is in the system that answers for it.
+   - A queue or a topic is in the system that answers for it, or in the app that keeps it
+     (convention 10).
 9. **An external system.** `external: true` says that the people this model is kept for cannot
    change the system: they use it as it is given.
    - It follows who makes the system, not who runs it. A product of ours that a customer runs
@@ -184,12 +187,14 @@ skill carries them word for word.
       copy of the app has its own, and nothing reaches it but through the app. One writer, one
       owner or one machine does not make a store an app's: a database server with one service
       in front of it is in the system.
-    - A store that anything outside the app reaches is in the system.
+    - A store that anything outside the app reaches is in the system. A backup that copies
+      the files reaches them from outside, and so does another program that mounts them.
     - It must hold for every form the record stands for. A store that is a local file in one
       install and a shared database in another is in the system, and its description says so.
-    - Work that an app keeps for itself on disk, such as its own queue of jobs, is such a
-      store when the facts name it. A queue that another app puts into or takes from is in
-      the system.
+    - Work that an app keeps for itself in its own files, each copy its own, such as its own
+      queue of jobs, is such a store when the facts name it. A queue kept as rows in a
+      database server is in the system, and so is one that another app puts into or takes
+      from.
     - State inside an app stays in the app's description. It is a store in the app when the
       facts name it and say what the app's record cannot carry: a format, a size, how long it
       is kept.
@@ -206,8 +211,11 @@ skill carries them word for word.
     - At a queue or a topic, `write` puts a message in and `read` takes one out, whatever the
       product does beneath. Claiming the oldest job is a read.
     - A write that gets an answer back is still a write, and so is one that first looks
-      whether it may. One act that takes what is there and puts something new in its place is
-      `read-write`. The name and the description together say which.
+      whether it may. A connection whose words say that it reads and that it writes is
+      `read-write`: so is one that keeps a store as its own. The name and the description
+      together say which.
+    - A watch for changes is a read. Making or changing the store itself, such as a
+      migration, is a write.
     - A use that is neither, such as signing with a key that never leaves its store, has no
       `access`. Nor has one that nobody has said: leaving it out claims nothing.
     - **The verb stays in the name.** The name is what a person reads on the arrow, and
@@ -215,8 +223,10 @@ skill carries them word for word.
 12. **Who opened the channel, and what does not wait.** The arrow starts at the one that sends,
     as convention 1 says, whoever opened the channel.
     - `opens: to` says that the channel this exchange travels down was opened from the far
-      side: by `to`, or by something in `via` on its behalf. A browser opens a stream and the
-      server sends down it. An agent dials out and the service sends it work.
+      side: by `to`, or by something in `via` that stands in front of `to`. A browser opens a
+      stream and the server sends down it. An agent dials out and the service sends it work.
+    - When a thing on the way opened a channel to the sender and then dials `to` itself, `to`
+      opened nothing. `opens` is left out, and the description says who opened what.
     - It names a side and not another connection. The opening is a connection of its own only
       when it does something more, such as a login.
     - Left out, the one that sends opened the channel, or nobody has said. A webhook is not
@@ -228,15 +238,20 @@ skill carries them word for word.
 13. **A condition.** `only` says when a thing is there, or is used, at all. It holds the words
     that read after "only": `only: in the hosted edition`.
     - **The test:** could a reader find the thing missing, or never used, in an install that
-      runs? An edition, a kind of install, a setting, a licence, a consent, another way
-      failing.
+      runs? An edition, a kind of install, a market, a setting, a licence, a consent, another
+      way failing.
     - **Not a condition:** when in a run an exchange happens, such as every night, on a
       refund or when a backup is restored, which the name says. A check that is made each
-      time, such as a check of rights. That a thing is planned, or on its way out. The bare
-      word "optional": say who chooses, or when.
+      time, such as a check of rights. That a thing is planned, or on its way out, or came
+      with a version: the model is of one version. The bare word "optional": say who chooses,
+      or when.
     - "In production" may be written: it says when a part is there. It is no model of an
       environment.
-    - It goes on the narrowest record it is true of as a whole.
+    - It goes on the narrowest record it is true of as a whole. When a whole system is there
+      only then, the system has it. An exchange that is made in one install only, between
+      things that every install has, has it itself. When only some of the copies a record
+      stands for are under it, the record has none, and its description says which.
+    - The words do not start with "only", and have single spaces.
     - **What a thing has from another.** A part in a thing with `only` has it too. A connection
       has those of its two ends, and of what they are in. None is said again. A connection has
       nothing from what it passes through.
@@ -276,7 +291,7 @@ Stage 6b adds these errors:
 | `access` is `read`, `write` or `read-write`, and `opens` is `to` | `value-not-allowed` |
 | `access` is written only on a connection that ends at a store | `access-not-store` |
 | `opens` is written only on a connection that does not end at a store | `opens-at-store` |
-| `only` is one line of 1 to 100 characters, with no space at either end | The codes of a name's form |
+| `only` is one line of 1 to 100 characters, with no space at either end, no two spaces together and no "only" as its first word | The codes of a name's form |
 
 And two warnings, which read the model and no word:
 
@@ -318,7 +333,7 @@ no check reads who may reach whose store. That is a team's rule, for stage 25; `
   corner, on the shape every system has. A system with no mark stays the plain system.
 - **A store that an app keeps is drawn at its app**, as a component is, and has no box on the
   container view. The app's box carries a mark with the number of stores it keeps, and the
-  app's panel lists them. A connection to such a store is drawn at the app. One from the app to
+  app's panel lists them. The line under the view's title says how many stores are drawn so. A connection to such a store is drawn at the app. One from the app to
   its own store is inside the box, and the panel has it.
 - **`access` is on the store's panel:** who writes the store, who reads it, who does both, and
   whose connection does not say. Nothing is added to the arrow: its name has the verb. A read
@@ -330,8 +345,11 @@ no check reads who may reach whose store. That is a team's rule, for stage 25; `
 - **`only` is a line.** On a box it stands under the kind line: `only in the hosted edition`.
   The system a view is about has it on its boundary. On an arrow it is a line of the label:
   the words, when every connection of the arrow has its own and they are the same, and else
-  on how many it is written: `only on 2 of 5`. Only a thing's own `only` is drawn. The panel
-  gives it, and then what the thing has from others, each with the record it comes from.
+  on how many it is written: `only on 2 of 5`. A box shows its own `only`. An arrow shows that
+  of its connections, and what they have from a part that the view does not draw as a box of
+  its own, such as a component: what a box in the view says is not said again on its arrows.
+  The panel gives a thing's own, and then what it has from others, each with the record it
+  comes from.
 - **A thing on a route that has a condition stands in brackets**, whether the condition is its
   own or from what it is in: `via (Office proxy), HTTPS proxy`. So it stands in the list under
   the legend, and the panel gives each thing on a route its condition.
@@ -339,6 +357,9 @@ no check reads who may reach whose store. That is a team's rule, for stage 25; `
   dashed already. Tried on two models, the dash can be told from it at a third of full size
   and is not seen at an eighth, where the largest views open.
 - Each of these is in the legend where the view draws it, and none is told by colour alone.
+  A legend taller than a quarter of the window scrolls.
+- **A piece that is in a system is inside that system's box on its context view.** So a route
+  through it is not named on that view's arrows: the container view names it.
 - **A view is about a system.** A connection is in no picture when no view draws it, neither
   as an arrow nor inside a box. That is so between two things that are in no system, such as a
   person and a piece of infrastructure that is in none, and between two things that every
@@ -421,7 +442,8 @@ For the fields of stage 6b the lift goes the same way, in this order:
   shown. One table for each wording: the record, the sentence quoted, the text as it would be
   written. A bare "optional" is asked about and never lifted as it stands. Where a sentence
   says the condition and something more, the person sees it before and after: the words of
-  the condition come out, and what more it says stays.
+  the condition come out, and what more it says stays. Words in a connection's description
+  that say a condition its end has are said already, and come out too.
 - Then the routes that `only` now allows: a thing that only some installs have, named in `via`.
 
 ## Decisions taken at these stages
@@ -459,6 +481,7 @@ one recommendation, but as one stage where it asked for three:
 | Code that several apps share | Never a component in several apps: tried on the trial models, it states calls that do not happen. It waits for groups |
 | Groups, and one program that runs as several apps | Not at this stage. A stage of their own, before focused views |
 | An app kind `library` | No |
+| A dashed outline for a thing that has `only` | Built and switched off: the boundary is dashed already. The owner decides after seeing both |
 | The format's number | Stays 1 |
 
 ## Names these stages add
@@ -469,7 +492,9 @@ store, `queue` and `topic`. Three problem codes: `via-end`, `broker-as-store`,
 
 **Stage 6b.** Three fields, `only`, `access` and `opens`, with three values of `access` and one
 of `opens`. Four problem codes: `access-not-store`, `opens-at-store`, `kept-store-reached`,
-`only-said-again`. No folder, no kind, no command, no flag, no skill.
+`only-said-again`. Two keys in what the commands print as data: `conditions` in `seefore list
+--json`, `condition` in `seefore uses --json`. No folder, no kind, no command, no flag, no
+skill.
 
 The format now has nine folders, thirteen field names and thirteen kinds.
 
