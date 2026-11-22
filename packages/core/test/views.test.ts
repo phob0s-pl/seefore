@@ -653,11 +653,13 @@ describe('a box that connections pass through', () => {
     const files = {
       ...DESK,
       'apps/terminal.yaml': 'name: Terminal\nin: cards\n',
-      'connections/api-pays-cards.yaml': 'from: api\nto: cards\nvia: [terminal]\n',
+      'apps/ledger.yaml': 'name: Ledger\nin: cards\n',
+      // To the ledger, not to the card provider itself: `via` may not name what is in an end.
+      'connections/api-pays-cards.yaml': 'from: api\nto: ledger\nvia: [terminal]\n',
       'connections/clerk-pays-desk.yaml': 'from: clerk\nto: desk\nvia: [terminal]\n',
     };
     const context = view(files, 'desk.context');
-    // The payment ends at the card provider, which the terminal is in: what it passes through there does not show at this level.
+    // The payment ends in the card provider, which the terminal is in too: what it passes through there does not show at this level.
     expect(passingOn(context)).toEqual({ cards: ['clerk-pays-desk'], proxy: ['clerk-uses-web'] });
     expect(context.passed).toEqual([]);
   });
