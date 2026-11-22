@@ -333,8 +333,9 @@ no check reads who may reach whose store. That is a team's rule, for stage 25; `
   corner, on the shape every system has. A system with no mark stays the plain system.
 - **A store that an app keeps is drawn at its app**, as a component is, and has no box on the
   container view. The app's box carries a mark with the number of stores it keeps, and the
-  app's panel lists them. The line under the view's title says how many stores are drawn so. A connection to such a store is drawn at the app. One from the app to
-  its own store is inside the box, and the panel has it.
+  app's panel lists them. The line under the view's title says how many stores are drawn so.
+  A connection to such a store is drawn at the app. One from the app to its own store is
+  inside the box, and the panel has it.
 - **`access` is on the store's panel:** who writes the store, who reads it, who does both, and
   whose connection does not say. Nothing is added to the arrow: its name has the verb. A read
   and a write on one arrow stay two lines of its label.
