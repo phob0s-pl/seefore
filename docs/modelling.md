@@ -199,8 +199,9 @@ Stage 6 adds the hard cases. Until then:
 A thing in between gets a record when it has work of its own: it answers an exchange itself,
 such as serving a file, or starts one that nobody sent through it, such as copying data to a
 replica. That work may have connections. What it only passes on is still written end to end.
-The same holds for a component. What is known of a thing with no record goes into the
-description of the part it stands in front of.
+The same holds for a component. Code of the team's own that only passes on may keep its
+record, with no connection for the passing on. What is known of a thing with no record goes
+into the description of the part it stands in front of.
 <!-- cannot-say-yet:end -->
 
 ## The commands
