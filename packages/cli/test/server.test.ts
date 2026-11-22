@@ -123,7 +123,8 @@ function never(): Layouts {
 /** A page made for a test: its two files, and a secret beside its folder that must never be served. */
 function makePage(): Page {
   write({ 'index.html': '<!doctype html><p>the page</p>', 'app.js': 'console.log("app");', '.hidden.js': 'hidden' }, 'home/viewer');
-  write({ 'secret.txt': 'the secret' }, 'home');
+  // The worker's file only has to be there: its thread starts with the first layout, and these tests give layouts of their own.
+  write({ 'secret.txt': 'the secret', 'layout-worker.cjs': '' }, 'home');
   const page = readPage(join(root, 'home', 'viewer'));
   if (!page) throw new Error('The page was not made.');
   return page;
@@ -719,6 +720,15 @@ describe('seefore --server', () => {
     expect(await running.code).toBe(2);
     expect(running.err).toEqual([
       `seefore: The page of the viewer is missing, so there is nothing to serve. There is no \`index.html\` in \`${join(root, 'nowhere', 'viewer')}\`. Install seefore again.`,
+    ]);
+  });
+
+  it('ends with exit code 2 when the part that lays the pictures out is missing', async () => {
+    write({ 'index.html': '<!doctype html><p>the page</p>' }, 'bare/viewer');
+    const running = run(['--server', '--workdir=arch'], { home: join(root, 'bare') });
+    expect(await running.code).toBe(2);
+    expect(running.err).toEqual([
+      `seefore: The part that lays the pictures out, \`layout-worker.cjs\`, is missing from \`${join(root, 'bare')}\`. Install seefore again.`,
     ]);
   });
 

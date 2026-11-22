@@ -4,7 +4,7 @@ import { EXIT_OK, findSource, notStarted } from '../check.ts';
 import type { Rerun } from '../check.ts';
 import type { Io } from '../io.ts';
 import { HOST, addressOf, listen, startViewer } from './http.ts';
-import { startLayouts } from './layouts.ts';
+import { WORKER_FILE, hasWorker, startLayouts } from './layouts.ts';
 import { PAGE_FOLDER, readPage } from './page.ts';
 
 /** What `seefore --server` takes. */
@@ -40,6 +40,9 @@ export async function serve(options: ServeOptions, io: Io): Promise<number> {
     return notStarted(false, io, 'page-missing', `The page of the viewer is missing, so there is nothing to serve.${where} Install seefore again.`);
   }
 
+  if (!hasWorker(io.home)) {
+    return notStarted(false, io, 'layout-missing', `The part that lays the pictures out, \`${WORKER_FILE}\`, is missing from \`${io.home}\`. Install seefore again.`);
+  }
   const viewer = startViewer({ directory, layouts: startLayouts(io.home), page });
   let port: number;
   try {
