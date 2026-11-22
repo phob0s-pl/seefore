@@ -122,7 +122,7 @@ Decided:
 | Stage 6 in two | 6a: the hard cases that change a picture. 6b: the others. As one stage it held five concepts and would have taken the format from eight field names to fourteen | 2026-11-22 |
 | A thing that only passes exchanges on | A record in `infrastructure/`, named in `via` on the connections that pass through it. A connection may also start or end at one, for what it does on its own account | 2026-11-22 |
 | A mark for somebody else's system | Stored, as `external: true` on a system, and the page says "external". It follows who makes a system, not who runs it. "Outside this picture" is still worked out from a view | 2026-11-22 |
-| What the checks of stage 6a read | The model's structure only, and no words of a name or a description | 2026-11-22 |
+| What the checks of stage 6a read | The model's structure only, with no list of words. One check compares a store's name with the name of its technology | 2026-11-22 |
 
 To settle in the stage named, with the recommendation the two proposals reached:
 

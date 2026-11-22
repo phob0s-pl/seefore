@@ -43,6 +43,10 @@ description: Takes card payments.
 external: true
 ```
 
+A directory that uses any of these needs a seefore of this stage or later. An older one reports
+each as an error and leaves those records out, so its listing and its pictures are of another
+model.
+
 ## The conventions
 
 Three more, after the six of `modelling.md`. The skill carries them word for word.
@@ -53,28 +57,37 @@ Three more, after the six of `modelling.md`. The skill carries them word for wor
    `via`, in the order of travel, nearest to `from` first.
    - **Passing on** is routing, choosing where to send, pooling, changing the protocol,
      limiting, checking the caller and ending TLS.
-   - **A piece of infrastructure** is a thing whose whole job is passing on, whoever made it
-     and whoever runs it. A thing that also has work of its own, such as serving files, is an
-     app; `via` names it on what it passes on, and its own work has its own connection.
-   - **`via` holds what is always on the way.** A thing that is there only in some installs,
-     or only when another way fails, stays in the description. Leaving something out of
+   - **Ask of each exchange what the thing in between does with it.** It passes the exchange
+     on: the thing goes in `via`. The exchange is about the thing itself, such as a deploy
+     that reloads it, a check it makes of what stands behind it, or a list it fetches: the
+     connection starts or ends at the thing. It answers with something of its own, such as a
+     file it serves: that is work of its own, with a connection that ends at it.
+   - **A piece of infrastructure** is a thing whose work for the software is passing on and
+     nothing else, whoever made it and whoever runs it. A thing that also answers with
+     something of its own is an app, and `via` still names it on what it passes on. Code
+     inside an app that only passes on may stay a component of that app.
+   - **`via` holds what is on the way every time this exchange is made.** A thing that is
+     there only in some installs, or only when another way fails, stays in the description.
+     Where the ways differ, `via` holds what they share, in order. Leaving something out of
      `via` claims nothing. A second route with a reason of its own is a second connection.
-   - **A connection may start or end at a piece of infrastructure**, for what that piece does
-     on its own account: a deploy that reloads it, a check that it makes, a list that it
-     fetches. What it passes on is never written as one connection to it and another from
-     it: that is one connection, with the piece in `via`.
-   - `via` names a piece of infrastructure, an app, a component or a system. Never a store,
-     and never an end of the connection or what an end is in.
+   - What a piece of infrastructure passes on is never written as one connection to it and
+     another from it: that is one connection, with the piece in `via`.
+   - `via` names a piece of infrastructure, an app, a component or a system. Never a store.
+     Never an end of the connection, what an end is in, or what is in an end.
+   - A redirect that a browser carries, and a push down a channel that another connection
+     opened, are not routes. Convention 1 says how each is written.
 8. **Queues and topics.** A queue is a store that one reader takes each message from. A topic
    is a store whose every subscriber gets each message. The one that puts in and the one that
    takes out each act on the store, as convention 1 says, and no arrow runs from a writer to
    a reader. So a queue or a topic is never in `via`.
    - **The broker is a technology**, the `technology` of each queue and topic it carries. It
-     has no record of its own. A broker that has work of its own, such as checking logins, is
-     an app beside its topics.
-   - A queue or a topic gets a store of its own when the facts say who writes it and who
-     reads it. Those the facts do not tell apart may be one store, named for what it holds
-     and never for the broker.
+     has no record of its own. A broker that has work of its own, such as a call it makes to
+     check a login, is an app beside its topics.
+   - A queue or a topic gets a store of its own when the facts name it and say who puts in or
+     who takes out. The other side may be unknown. Those the facts do not tell apart may be
+     one store, named for what it holds and never for the broker.
+   - A queue inside one app, such as a buffer between two of its components, is not a store.
+     It stays in the app's description.
    - A queue kept as rows in a database is a store of its own, of kind `queue`, with the
      database's product as its technology and the database named in its description.
    - A queue or a topic is in the system that answers for it.
@@ -84,8 +97,12 @@ Three more, after the six of `modelling.md`. The skill carries them word for wor
      is ours, and who runs a copy is said in the description.
    - It is not "outside this picture". That is worked out from the scope of a view, and
      nothing is stored for it.
-   - It says nothing of a part inside the system. Code of ours that runs inside somebody
-     else's software is an app of our system; their software is the external system.
+   - It says nothing of a part inside the system, and it is no reason to move one. Code of
+     ours that runs inside somebody else's software stays in that system where the model has
+     it there: the system is external, and the part's description or its `owner` says that
+     the part is ours.
+   - One record that stands for ours and somebody else's alike has no mark, and its
+     description says so. Split it when a connection belongs to one only.
    - A partner the team can ask is external and may still have an `owner`.
    - A system with no mark is not thereby ours: nobody has said.
 <!-- hard-cases:end -->
@@ -102,7 +119,8 @@ Errors, each at the value that is wrong:
 | `via` is not empty and names no id twice | `value-too-small`, `value-invalid` |
 | `external` is `true`, and only a system has it | `value-not-allowed`, `key-unknown` |
 
-Warnings. Both read what the model says and no words of a name or a description:
+Warnings. Both read the model and use no list of words. The first compares two names that
+the model itself holds:
 
 | Check | Problem code |
 | --- | --- |
@@ -128,6 +146,9 @@ says what the thing is. There the skill's question is the guard.
 - **An external system** says so in its kind line, `[System: external]`, and has an outline of
   its own. A system with no mark stays `[System]`.
 - Each of these is in the legend where the view draws it, and none is told by colour alone.
+- **A view is about a system.** A connection between two things that are in no system, such as
+  a person and a piece of infrastructure, or two pieces of infrastructure, is in no picture.
+  The listing of the model says how many such connections there are, and marks each.
 
 ## The commands
 
@@ -169,7 +190,7 @@ proposes to lift each into its field, and a person answers each; no script lifts
 | The record for a thing that only passes on | `infrastructure/` (the owner) |
 | May a connection start or end at one | Yes (the owner). For what the piece does on its own account; what it passes on is written with `via` |
 | A mark for somebody else's system | Stored, as `external: true` on a system (the owner). The page says "external" too |
-| What the checks read | The model's structure only, and no words of a name (the owner) |
+| What the checks read | The model's structure only, with no list of words (the owner). One compares a store's name with the name of its technology |
 | What makes a thing infrastructure | What it does: passing on is its whole job. Who made it does not count |
 | A thing that is on the way only sometimes | Not in `via`. It stays in the description until stage 6b says how a condition is written |
 | The broker | A technology, with no record of its own |

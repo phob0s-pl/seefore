@@ -81,7 +81,8 @@ technology: [https]
 - The keys are written in this order, and each key starts a line: `from`, `to`, `via`, `name`,
   `in`, `description`, `kind`, `external`, `technology`, `owner`. A record has only some of
   them.
-- A list is a set: `[go, postgresql]` and `[postgresql, go]` say the same.
+- `technology` is a set: `[go, postgresql]` and `[postgresql, go]` say the same. `via` is not:
+  its order is the order of travel.
 - A description too long for one line is a folded block. Each sentence starts a line, and
   nothing in the block needs quotes. The limit of 2,000 characters counts the text as it is
   read, not as it is laid out.
@@ -100,9 +101,9 @@ Each of these is an error, reported at the value that is wrong.
 | Rule | Problem code |
 | --- | --- |
 | An id names one record in the whole directory, whatever the folder (stage 3) | `id-twice` |
-| `in`, `from`, `to`, `owner` and each id in `technology` name a record that exists | `reference-unknown` |
+| `in`, `from`, `to`, `owner` and each id in `technology` and in `via` name a record that exists | `reference-unknown` |
 | `in` of an app or a store names a system, and `in` of a component an app | `reference-wrong-kind` |
-| `from` and `to` name a person, a system, an app, a store or a component | `reference-wrong-kind` |
+| `from` and `to` name a person, a system, an app, a store, a component or a piece of infrastructure | `reference-wrong-kind` |
 | `owner` names an owner, and each id in `technology` a technology | `reference-wrong-kind` |
 | A connection that starts at a store ends at a store | `store-acts` |
 
@@ -239,7 +240,7 @@ all that is inside it. It answers in four lists, and counts records:
 | List | What is in it |
 | --- | --- |
 | Goes with it | What is inside the thing, and each connection with both ends in it |
-| Must go or change | Each connection with one end in the thing. For an owner or a technology, each record that names it |
+| Must go or change | Each connection with one end in the thing, and each that names it in `via`. For an owner or a technology, each record that names it |
 | Left behind | A part that has a connection now and would have none if those connections went. An owner or a technology that only those records name |
 | May speak of it | Another record whose `name` or `description` holds the thing's name, its id, or its id with spaces for hyphens |
 
