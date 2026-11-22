@@ -94,6 +94,15 @@ export function check(options: CheckOptions, io: Io): number {
  * in it. When it cannot start, it says why and gives back the exit code instead.
  */
 export function openSource(options: CheckOptions, io: Io, rerun: Rerun = CHECK): Opened | number {
+  const directory = findSource(options, io, rerun);
+  return typeof directory === 'number' ? directory : readSource(directory);
+}
+
+/**
+ * Finds the source directory from where the options say, as a full path with every link
+ * followed. When it cannot, it says why and gives back the exit code instead.
+ */
+export function findSource(options: CheckOptions, io: Io, rerun: Rerun = CHECK): string | number {
   // The path is handed to the system as it was given, without tidying it first. Tidying
   // would apply a `..` before following a link, and so look in a different place than the
   // one a file written to that path would land in.
@@ -126,8 +135,11 @@ export function openSource(options: CheckOptions, io: Io, rerun: Rerun = CHECK):
           : `There are ${below.length} below it. To ${verb} one, run seefore ${command} with one of: ${shown.map((path) => `--workdir=${path}`).join(', ')}`;
     return notStarted(options.json, io, 'no-source-directory', `${none} ${advice}`, { start, below });
   }
-  const { directory } = found;
+  return found.directory;
+}
 
+/** Reads a source directory that was found, and gathers every problem in it. */
+export function readSource(directory: string): Opened {
   const read = readSourceFiles(directory);
   const loaded = load(read.files);
   const problems = [...read.problems, ...loaded.problems];

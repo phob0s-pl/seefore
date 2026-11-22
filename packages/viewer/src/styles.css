@@ -1,0 +1,718 @@
+/*
+ * The style of the page. The colours, the font and the sizes of text are tokens that theme.ts
+ * sets, light or dark as the reader's setting asks; this sheet only reads them.
+ */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--font);
+  font-size: 14px;
+  background: var(--ground);
+  color: var(--text);
+}
+
+code {
+  font-family: ui-monospace, Menlo, Consolas, 'Liberation Mono', monospace;
+  font-size: 0.92em;
+}
+
+a {
+  color: var(--accent);
+}
+
+button {
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--ground);
+  border: 1px solid var(--quiet);
+  border-radius: 4px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+button:disabled {
+  color: var(--faded-text);
+  border-color: var(--faded-line);
+  cursor: default;
+}
+
+a:focus-visible,
+button:focus-visible,
+summary:focus-visible,
+[tabindex]:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* The three parts of the page: the sidebar, the middle, and the panel when something is chosen. */
+
+.page {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  height: 100vh;
+}
+
+.page.with-panel {
+  grid-template-columns: 240px minmax(0, 1fr) 360px;
+}
+
+.main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+
+.trouble {
+  margin: 0;
+  padding: 8px 16px;
+  background: var(--side);
+  border-bottom: 2px solid var(--error);
+}
+
+.waiting {
+  padding: 24px;
+  color: var(--quiet);
+}
+
+/* The sidebar. */
+
+.sidebar {
+  background: var(--side);
+  border-right: 1px solid var(--rule);
+  overflow: auto;
+  padding: 14px 12px;
+}
+
+.sidebar .model-name {
+  font-weight: bold;
+  font-size: 16px;
+  margin: 0 0 14px;
+  overflow-wrap: anywhere;
+}
+
+.sidebar ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.sidebar .systems > li {
+  margin-bottom: 10px;
+}
+
+.sidebar .system-name {
+  display: block;
+  font-weight: bold;
+  padding: 2px 0;
+  overflow-wrap: anywhere;
+}
+
+.sidebar .systems ul {
+  padding-left: 8px;
+}
+
+.sidebar a {
+  display: block;
+  padding: 3px 8px;
+  border-radius: 4px;
+  color: var(--text);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.sidebar a:hover {
+  text-decoration: underline;
+}
+
+.sidebar a[aria-current='page'] {
+  background: var(--ground);
+  font-weight: bold;
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.sidebar .others summary {
+  cursor: pointer;
+  font-weight: bold;
+  padding: 2px 0;
+}
+
+.sidebar .others ul {
+  padding-left: 8px;
+}
+
+.sidebar .pages {
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid var(--rule);
+}
+
+/* A view: its head, the canvas and the legend. */
+
+.diagram {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.diagram-head {
+  padding: 10px 16px 8px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.diagram-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+.view-title {
+  font-size: 18px;
+  margin: 0;
+}
+
+.view-counts,
+.small-note {
+  margin: 4px 0 0;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--quiet);
+}
+
+/* Its line is kept when it is empty, so that the canvas does not move as the note comes and goes. */
+.small-note {
+  min-height: 18px;
+  color: var(--text);
+}
+
+.buttons {
+  display: flex;
+  flex: none;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 6px;
+}
+
+.zoom-shown {
+  min-width: 4.5em;
+  text-align: center;
+  font-size: 13px;
+  color: var(--quiet);
+}
+
+.canvas {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  background: var(--ground);
+}
+
+.failed {
+  padding: 24px;
+}
+
+.failed p:first-child {
+  font-weight: bold;
+}
+
+.legend {
+  border-top: 1px solid var(--rule);
+  padding: 8px 16px;
+}
+
+.legend ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 22px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.legend li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+/* The canvas: React Flow's, with nothing of its own look left. */
+
+.react-flow {
+  --xy-background-color: var(--ground);
+  font-family: var(--font);
+}
+
+.hidden-handle.react-flow__handle {
+  opacity: 0;
+  pointer-events: none;
+  width: 1px;
+  height: 1px;
+  min-width: 0;
+  min-height: 0;
+  border: 0;
+}
+
+.react-flow__node:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 5px;
+  border-radius: 8px;
+}
+
+.react-flow__edge:focus-visible .arrow-line {
+  stroke: var(--accent);
+}
+
+.react-flow__edge:focus-visible .arrow-head {
+  fill: var(--accent);
+}
+
+/* A box. Its family gives the colour of its line; its shape tells the kind without it. */
+
+.box {
+  position: relative;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.family-people {
+  --line-colour: var(--person);
+}
+
+.family-apps {
+  --line-colour: var(--app);
+}
+
+.family-stores {
+  --line-colour: var(--store);
+}
+
+.family-systems {
+  --line-colour: var(--system);
+}
+
+.box .shape {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+}
+
+.outline {
+  fill: var(--ground);
+  stroke: var(--line-colour);
+}
+
+.outline.rim {
+  fill: none;
+}
+
+.box-text {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  padding: 12px var(--box-padding) 0;
+  text-align: center;
+}
+
+/* Under a store's lid. */
+.family-stores .box-text {
+  padding-top: 18px;
+}
+
+.text-line {
+  white-space: pre;
+  overflow: hidden;
+}
+
+.box-name {
+  font-weight: bold;
+  font-size: var(--size-name);
+  line-height: var(--height-name);
+}
+
+.box-line {
+  margin-top: 2px;
+  font-size: var(--size-line);
+  line-height: var(--height-line);
+  color: var(--quiet);
+}
+
+.box-sentence {
+  margin-top: 4px;
+  font-size: var(--size-sentence);
+  line-height: var(--height-sentence);
+}
+
+/* The mark of a box whose copies act on each other, on its top edge. */
+.mark {
+  position: absolute;
+  top: -10px;
+  right: 16px;
+  height: 20px;
+  padding: 0 7px;
+  border: 1.5px solid var(--line-colour);
+  border-radius: 10px;
+  background: var(--ground);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: bold;
+  line-height: 17px;
+  white-space: pre;
+}
+
+.box.faded {
+  --line-colour: var(--faded-line);
+  color: var(--faded-text);
+}
+
+.box.faded .box-line,
+.box.faded .mark {
+  color: var(--faded-text);
+}
+
+.box.chosen::after,
+.boundary.chosen::after {
+  content: '';
+  position: absolute;
+  inset: -7px;
+  border: 3px solid var(--accent);
+  border-radius: 12px;
+  pointer-events: none;
+}
+
+/* The boundary: a dashed line on a light tint, and its title. */
+
+.boundary {
+  position: relative;
+  border: 1.5px dashed var(--boundary);
+  border-radius: 8px;
+  background: var(--tint);
+}
+
+.boundary-title {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  font-weight: bold;
+  font-size: var(--size-boundary);
+  color: var(--text);
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.boundary.faded {
+  border-color: var(--faded-line);
+}
+
+.boundary.faded .boundary-title {
+  color: var(--faded-text);
+}
+
+/* An arrow. One for several connections has a thicker line. */
+
+.arrow-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 14;
+  pointer-events: stroke;
+  cursor: pointer;
+}
+
+.arrow-line {
+  fill: none;
+  stroke: var(--arrow);
+  stroke-width: 1.5;
+}
+
+.arrow-many .arrow-line {
+  stroke-width: 3;
+}
+
+.arrow-head {
+  fill: var(--arrow);
+}
+
+.arrow-label {
+  pointer-events: all;
+  cursor: pointer;
+}
+
+.label-ground {
+  fill: var(--ground);
+}
+
+.label-name {
+  font-size: var(--size-label);
+  fill: var(--text);
+  white-space: pre;
+}
+
+.label-technology {
+  font-size: var(--size-technology);
+  fill: var(--quiet);
+  white-space: pre;
+}
+
+.arrow.lit .arrow-line {
+  stroke: var(--text);
+}
+
+.arrow.lit .arrow-head {
+  fill: var(--text);
+}
+
+.arrow.chosen .arrow-line {
+  stroke: var(--accent);
+}
+
+.arrow.chosen .arrow-head {
+  fill: var(--accent);
+}
+
+.arrow.faded .arrow-line {
+  stroke: var(--faded-line);
+}
+
+.arrow.faded .arrow-head {
+  fill: var(--faded-line);
+}
+
+.arrow.faded .label-name,
+.arrow.faded .label-technology {
+  fill: var(--faded-text);
+}
+
+/* The legend's samples, drawn as the picture draws them. */
+
+.sample {
+  flex: none;
+}
+
+.sample-boundary {
+  fill: var(--tint);
+  stroke: var(--boundary);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 3;
+}
+
+.sample-mark rect {
+  fill: var(--ground);
+  stroke: var(--app);
+  stroke-width: 1.5;
+}
+
+.sample-mark text {
+  font-size: 11px;
+  font-weight: bold;
+  fill: var(--text);
+}
+
+/* Detail follows the zoom. What is hidden stays in the names a screen reader gets. */
+
+.diagram[data-detail='names-lines'] .box-sentence,
+.diagram[data-detail='names'] .box-sentence,
+.diagram[data-detail='names'] .box-line,
+.diagram[data-detail='names'] .arrow-label,
+.diagram[data-detail='shapes'] .box-text,
+.diagram[data-detail='shapes'] .arrow-label,
+.diagram[data-detail='shapes'] .boundary-title,
+.diagram[data-detail='shapes'] .mark {
+  visibility: hidden;
+}
+
+/* The panel of details. */
+
+.panel {
+  background: var(--side);
+  border-left: 1px solid var(--rule);
+  overflow: auto;
+  padding: 14px 16px;
+}
+
+.panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.panel h2 {
+  font-size: 18px;
+  margin: 0 0 10px;
+  overflow-wrap: anywhere;
+}
+
+.panel h3 {
+  font-size: 14px;
+  margin: 18px 0 6px;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 6px 12px;
+  margin: 0;
+}
+
+.facts dt {
+  color: var(--quiet);
+}
+
+.facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.description {
+  white-space: pre-wrap;
+}
+
+.none {
+  color: var(--quiet);
+}
+
+.connections {
+  margin: 6px 0 0;
+  padding-left: 20px;
+}
+
+.connections li {
+  margin-bottom: 10px;
+}
+
+.connections p {
+  margin: 2px 0;
+  overflow-wrap: anywhere;
+}
+
+.connection-name {
+  font-weight: bold;
+}
+
+.connection-technology,
+.connection-file {
+  color: var(--quiet);
+}
+
+/* The listing of the model, the problems, and what stands in place of the views. */
+
+.listing,
+.problems-page,
+.no-views {
+  padding: 16px 24px 32px;
+  max-width: 1000px;
+}
+
+.listing h1,
+.problems-page h1,
+.no-views h1 {
+  font-size: 22px;
+  margin: 0 0 4px;
+}
+
+.listing h2 {
+  font-size: 16px;
+  margin: 22px 0 6px;
+}
+
+.listing h3 {
+  font-size: 14px;
+  font-weight: normal;
+  color: var(--quiet);
+  margin: 12px 0 4px;
+}
+
+.listing .where,
+.listing .note {
+  color: var(--quiet);
+  margin: 4px 0;
+}
+
+.listing ul {
+  list-style: none;
+  margin: 2px 0;
+  padding-left: 20px;
+}
+
+.listing-section > ul,
+.listing .group > ul {
+  padding-left: 0;
+}
+
+.entry {
+  margin: 6px 0;
+}
+
+.record-name {
+  border: 0;
+  background: none;
+  padding: 0;
+  font-size: 14px;
+  color: var(--accent);
+  text-decoration: underline;
+  text-align: left;
+}
+
+.entry-id,
+.entry-facts {
+  color: var(--quiet);
+  font-size: 13px;
+}
+
+.entry-description {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--quiet);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.tally {
+  margin-top: 24px;
+}
+
+.problems {
+  padding-left: 22px;
+}
+
+.problem {
+  margin: 8px 0;
+  overflow-wrap: anywhere;
+}
+
+.problem .severity {
+  font-weight: bold;
+}
+
+.problem.error .severity {
+  color: var(--error);
+}
+
+.problem .code {
+  color: var(--quiet);
+  font-size: 13px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+    scroll-behavior: auto !important;
+  }
+}

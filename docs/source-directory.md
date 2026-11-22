@@ -158,8 +158,8 @@ Every problem has a code. A code keeps its meaning from one version to the next.
 | Records | `id-invalid`, `id-twice`, `record-nested`, `record-extension` |
 | Reading the disk | `not-read`, `link-not-followed`, `not-utf8`, `file-unreadable`, `folder-unreadable` |
 
-The command only reads. `seefore --server --workdir=<directory>` arrives with the viewer at
-stage 5.
+The command only reads. `seefore --server --workdir=<directory>` serves the viewer; it is
+described in `diagrams.md`.
 
 ## The skill
 

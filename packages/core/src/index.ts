@@ -1,5 +1,6 @@
 /**
- * The seefore format: reading a source directory and saying what is wrong with it.
+ * The seefore format: reading a source directory, saying what is wrong with it, and working out
+ * the listing and the views of its model.
  *
  * Nothing here touches disk or network. It takes the text of the files and returns records
  * and problems, so it runs the same in Node and in the browser.
@@ -13,6 +14,34 @@ export { MARKER_FILE, MarkerSchema, readMarker } from './marker.ts';
 export type { Marker, MarkerRead } from './marker.ts';
 export { emptyModel, ownership } from './model.ts';
 export type { Model, ModelRecord, Ownership } from './model.ts';
+export type {
+  BoxFamily,
+  Drawn,
+  Failed,
+  LegendEntry,
+  LegendKey,
+  Outline,
+  OutlineApp,
+  OutlineGroup,
+  OutlineLoose,
+  OutlineSystem,
+  Picture,
+  PictureAnswer,
+  PlacedArrow,
+  PlacedBoundary,
+  PlacedBox,
+  PlacedLabel,
+  Point,
+  Rect,
+  View,
+  ViewArrow,
+  ViewBoundary,
+  ViewBox,
+  ViewKind,
+  ViewLeft,
+  ViewerState,
+} from './picture.ts';
+export { outlineOf } from './outline.ts';
 export { compareProblems } from './problem.ts';
 export type { Position, Problem, Severity } from './problem.ts';
 export {
@@ -28,6 +57,7 @@ export {
   TechnologySchema,
 } from './records.ts';
 export type { App, Component, Connection, Owner, Person, Store, System, Technology } from './records.ts';
-export { DESCRIPTION_MAX, NAME_MAX } from './text.ts';
+export { DESCRIPTION_MAX, NAME_MAX, firstSentence } from './text.ts';
 export { isShort, readInFull, recordsWithId, removalOf, usesOf, wordsFor } from './uses.ts';
 export type { Change, Left, Mention, Removal, RemovalOptions, UsedRecord, Uses } from './uses.ts';
+export { UNNAMED_CONNECTION, viewsOf } from './views.ts';

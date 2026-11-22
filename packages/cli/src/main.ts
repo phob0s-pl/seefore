@@ -3,6 +3,7 @@ import { EXIT_OK, check, notStarted } from './check.ts';
 import type { CheckOptions } from './check.ts';
 import type { Io } from './io.ts';
 import { list } from './list.ts';
+import { FIRST_PORT, serve } from './server/command.ts';
 import { uses } from './uses.ts';
 
 /** Set when the command is built. Missing when it runs straight from source. */
@@ -18,6 +19,7 @@ Usage:
   seefore check [--workdir=<directory>] [--json]
   seefore list [--workdir=<directory>] [--full] [--json]
   seefore uses <id> [--workdir=<directory>] [--json]
+  seefore --server [--workdir=<directory>] [--port=<number>] [--no-open]
   seefore --help
   seefore --version
 
@@ -29,23 +31,32 @@ Commands:
   uses     Show what removing or renaming a record would touch: what goes with it,
            what must go or change, what would be left behind, and which records may
            speak of it in their text.
+  --server Show the model in the browser: a page on this machine that draws the
+           views of each system and lists the model and its problems. It follows
+           the files as they change, and only reads. Press Ctrl+C to stop it.
 
 Options:
   --workdir=<directory>   Where to start looking. Without it, the current directory.
   --full                  For list: show each description whole, beneath its record.
   --json                  Print the result as data.
+  --port=<number>         For --server: the port to listen on. Without it, ${FIRST_PORT},
+                          or the next free one.
+  --no-open               For --server: do not open the browser.
 
 seefore looks for seefore.yaml in the starting directory, then in each folder above it.
 The first folder that has one is the source directory.
 
 Exit code:
-  0   check found no errors, or list or uses did its work.
+  0   check found no errors, list or uses did its work, or --server was stopped.
   1   check found errors.
-  2   seefore could not start, or uses was given an id that no record has, or
-      that more than one has.`;
+  2   seefore could not start, --server could not listen on its port, or uses was
+      given an id that no record has, or that more than one has.`;
 
-/** Runs the command with the given arguments and returns its exit code. */
-export function main(argv: readonly string[], io: Io): number {
+/**
+ * Runs the command with the given arguments and returns its exit code. `--server` gives it
+ * once the server has stopped, or could not start; every other command gives it at once.
+ */
+export function main(argv: readonly string[], io: Io): number | Promise<number> {
   // Known before the options are parsed, so that a mistake in them is still answered as data.
   const json = argv.includes('--json');
   let parsed;
@@ -59,6 +70,9 @@ export function main(argv: readonly string[], io: Io): number {
         json: { type: 'boolean', default: false },
         help: { type: 'boolean', short: 'h', default: false },
         version: { type: 'boolean', default: false },
+        server: { type: 'boolean', default: false },
+        port: { type: 'string' },
+        'no-open': { type: 'boolean', default: false },
       },
     });
   } catch (cause) {
@@ -74,6 +88,19 @@ export function main(argv: readonly string[], io: Io): number {
     io.out(json ? JSON.stringify({ version: VERSION }, null, 2) : `seefore ${VERSION}`);
     return EXIT_OK;
   }
+
+  if (values.server) {
+    if (positionals.length > 0) {
+      return usage(json, io, `\`--server\` runs on its own and takes no command or name, but got \`${positionals.join(' ')}\`. Use --workdir=<directory> to say where to look.`);
+    }
+    if (values.json) return usage(json, io, '`--json` is not an option of `seefore --server`.');
+    if (values.full) return usage(json, io, '`--full` is an option of `seefore list` only.');
+    const port = values.port === undefined ? undefined : portOf(values.port);
+    if (port === null) return usage(json, io, `\`--port\` needs a whole number from 1 to 65535, as in --port=${FIRST_PORT}, but got \`${values.port}\`.`);
+    return serve({ ...(values.workdir === undefined ? {} : { workdir: values.workdir }), ...(port === undefined ? {} : { port }), open: !values['no-open'] }, io);
+  }
+  const serverOption = values.port !== undefined ? '--port' : values['no-open'] ? '--no-open' : undefined;
+  if (serverOption) return usage(json, io, `\`${serverOption}\` is an option of \`seefore --server\` only.`);
 
   const [command, ...rest] = positionals;
   if (command === undefined) {
@@ -109,11 +136,18 @@ function optionProblem(cause: unknown): string {
   const option = /'(-{1,2}[^'\s=]+)/.exec(message)?.[1];
   if (code === 'ERR_PARSE_ARGS_UNKNOWN_OPTION' && option) return `\`${option}\` is not an option of seefore.`;
   if (code === 'ERR_PARSE_ARGS_INVALID_OPTION_VALUE' && option) {
-    return option === '--workdir'
-      ? '`--workdir` needs a directory, as in --workdir=<directory>.'
-      : `\`${option}\` takes no value.`;
+    if (option === '--workdir') return '`--workdir` needs a directory, as in --workdir=<directory>.';
+    if (option === '--port') return `\`--port\` needs a number, as in --port=${FIRST_PORT}.`;
+    return `\`${option}\` takes no value.`;
   }
   return message;
+}
+
+/** The port a `--port` names: a whole number from 1 to 65535. Null for anything else. */
+function portOf(text: string): number | null {
+  if (!/^[0-9]{1,5}$/.test(text)) return null;
+  const port = Number(text);
+  return port >= 1 && port <= 65535 ? port : null;
 }
 
 function usage(json: boolean, io: Io, message: string): number {

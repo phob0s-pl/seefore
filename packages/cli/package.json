@@ -16,6 +16,11 @@
     "build": "node build.mjs"
   },
   "devDependencies": {
-    "@seefore/core": "*"
+    "@seefore/core": "*",
+    "@seefore/layout": "*",
+    "@seefore/viewer": "*"
+  },
+  "dependencies": {
+    "elkjs": "0.12.1"
   }
 }

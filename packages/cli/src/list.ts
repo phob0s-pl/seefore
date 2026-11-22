@@ -1,5 +1,21 @@
-import { ownership } from '@seefore/core';
-import type { App, Component, Connection, Model, ModelRecord, Ownership, Store, System } from '@seefore/core';
+import { firstSentence, outlineOf, ownership } from '@seefore/core';
+import type {
+  App,
+  Component,
+  Connection,
+  Model,
+  ModelRecord,
+  OutlineApp,
+  OutlineGroup,
+  OutlineLoose,
+  OutlineSystem,
+  Owner,
+  Ownership,
+  Person,
+  Store,
+  System,
+  Technology,
+} from '@seefore/core';
 import { EXIT_OK, openSource } from './check.ts';
 import type { CheckOptions } from './check.ts';
 import type { Io } from './io.ts';
@@ -70,20 +86,20 @@ interface Layout {
   full: boolean;
 }
 
-/** What the listing looks up as it writes: names, the sort of each element, and where each part sits. */
+/** What the listing looks up as it writes: each record by its id, the names, and the sort of each element. */
 interface Index {
   /** The name of each record of the model but a connection, by id. */
   names: Map<string, string>;
   /** The sort of each element, as a person reads it, by id: `person`, `system`, `app`, `store`, `component`. */
   sorts: Map<string, string>;
-  /** Each component, by id, so that the app it is in can be found. */
+  people: Map<string, ModelRecord<Person>>;
+  systems: Map<string, ModelRecord<System>>;
+  apps: Map<string, ModelRecord<App>>;
+  stores: Map<string, ModelRecord<Store>>;
   components: Map<string, ModelRecord<Component>>;
-  /** The apps in each system, by the system's id. */
-  appsIn: Map<string, ModelRecord<App>[]>;
-  /** The stores in each system, by the system's id. */
-  storesIn: Map<string, ModelRecord<Store>[]>;
-  /** The components in each app, by the app's id. */
-  componentsIn: Map<string, ModelRecord<Component>[]>;
+  connections: Map<string, ModelRecord<Connection>>;
+  owners: Map<string, ModelRecord<Owner>>;
+  technologies: Map<string, ModelRecord<Technology>>;
 }
 
 /** A heading with how many it lists, and the lines beneath it. */
@@ -97,42 +113,36 @@ interface Section {
 
 /**
  * The model as a person reads it: each family under a heading that says how many, what is in a
- * thing beneath it, and each connection under what it starts from. Lines wrap at the width.
- * `here` is where the command was run, so that the command the last line names works there.
+ * thing beneath it, and each connection under what it starts from, in the order and the groups
+ * of its outline. Lines wrap at the width. `here` is where the command was run, so that the
+ * command the last line names works there.
  */
 function listing(result: ListResult, layout: Layout, here: Here): string {
   const index = indexOf(result);
-  const places = placesOf(result, index);
-  const { withParts, others, looseApps, looseStores, looseComponents } = places;
-  const looseCount = looseApps.length + looseApps.flatMap((app) => index.componentsIn.get(app.id) ?? []).length + looseStores.length + looseComponents.length;
+  const outline = outlineOf(result);
+  const looseCount = outline.loose.reduce((sum, part) => sum + 1 + part.components.length, 0);
   // The note is needed only where a part shows no owner and has one all the same.
   const taken = [...ownership(result)].some(([id, found]) => found.from !== id);
+  const named = (records: ReadonlyMap<string, ModelRecord<{ name: string; description?: string | undefined }>>, ids: readonly string[]): string[] =>
+    ids.map((id) => lookUp(records, id)).flatMap((record) => entry('  ', record.id, record.name, [], record.description, layout));
 
   const sections: Section[] = [
-    { title: 'People', count: result.people.length, lines: result.people.flatMap((person) => entry('  ', person.id, person.name, [], person.description, layout)) },
+    { title: 'People', count: outline.people.length, lines: named(index.people, outline.people) },
     {
       title: 'Systems with parts',
-      count: withParts.length,
+      count: outline.withParts.length,
       ...(taken ? { note: 'An owner holds for what is beneath it until a part names its own.' } : {}),
-      lines: withParts.flatMap((system) => systemLines(system, index, layout)),
-    },
-    { title: withParts.length > 0 ? 'Other systems' : 'Systems', count: others.length, lines: others.flatMap((system) => systemLines(system, index, layout)) },
-    { title: 'Connections', count: result.connections.length, lines: connectionLines(result.connections, startOrder(result, places, index), index, layout) },
-    { title: 'Owners', count: result.owners.length, lines: result.owners.flatMap((owner) => entry('  ', owner.id, owner.name, [], owner.description, layout)) },
-    {
-      title: 'Technologies',
-      count: result.technologies.length,
-      lines: result.technologies.flatMap((technology) => entry('  ', technology.id, technology.name, [], technology.description, layout)),
+      lines: outline.withParts.flatMap((system) => systemLines(system, index, layout)),
     },
     {
-      title: 'Parts in a record with an error',
-      count: looseCount,
-      lines: [
-        ...looseApps.flatMap((app) => appLines(app, '  ', index, layout, `in: ${app.in}`)),
-        ...looseStores.flatMap((store) => storeLines(store, '  ', index, layout, `in: ${store.in}`)),
-        ...looseComponents.flatMap((component) => componentLines(component, '  ', index, layout, `in: ${component.in}`)),
-      ],
+      title: outline.withParts.length > 0 ? 'Other systems' : 'Systems',
+      count: outline.others.length,
+      lines: outline.others.flatMap((id) => systemLines({ id, apps: [], stores: [] }, index, layout)),
     },
+    { title: 'Connections', count: result.connections.length, lines: connectionLines(outline.connections, index, layout) },
+    { title: 'Owners', count: outline.owners.length, lines: named(index.owners, outline.owners) },
+    { title: 'Technologies', count: outline.technologies.length, lines: named(index.technologies, outline.technologies) },
+    { title: 'Parts in a record with an error', count: looseCount, lines: outline.loose.flatMap((part) => looseLines(part, index, layout)) },
   ];
 
   const lines: string[] = [];
@@ -155,93 +165,71 @@ function listing(result: ListResult, layout: Layout, here: Here): string {
   return lines.join('\n');
 }
 
-/** Where the listing shows each system, and the parts it cannot put in their place. Each list is in order of id. */
-interface Places {
-  /** The systems with an app or a store in them. */
-  withParts: ModelRecord<System>[];
-  /** The systems with nothing in them. */
-  others: ModelRecord<System>[];
-  /** The apps and stores whose `in` names a system with an error, and the components whose `in` names an app with one. */
-  looseApps: ModelRecord<App>[];
-  looseStores: ModelRecord<Store>[];
-  looseComponents: ModelRecord<Component>[];
-}
-
-/** Sorts the systems into those with parts and the others, and finds the parts whose `in` cannot be followed. */
-function placesOf(model: Model, index: Index): Places {
-  const hasParts = (system: ModelRecord<System>): boolean => index.appsIn.has(system.id) || index.storesIn.has(system.id);
-  const systems = new Set(model.systems.map((system) => system.id));
-  const apps = new Set(model.apps.map((app) => app.id));
-  return {
-    withParts: model.systems.filter(hasParts),
-    others: model.systems.filter((system) => !hasParts(system)),
-    looseApps: model.apps.filter((app) => !systems.has(app.in)),
-    looseStores: model.stores.filter((store) => !systems.has(store.in)),
-    looseComponents: model.components.filter((component) => !apps.has(component.in)),
-  };
-}
-
-/** What a connection may start from, by id, in the order the listing shows it. A component's stand under its app. */
-function startOrder(model: Model, places: Places, index: Index): string[] {
-  return [
-    ...model.people.map((person) => person.id),
-    ...places.withParts.flatMap((system) => [
-      system.id,
-      ...(index.appsIn.get(system.id) ?? []).map((app) => app.id),
-      ...(index.storesIn.get(system.id) ?? []).map((store) => store.id),
-    ]),
-    ...places.others.map((system) => system.id),
-    ...places.looseApps.map((app) => app.id),
-    ...places.looseStores.map((store) => store.id),
-  ];
-}
-
-/** Looks the model up once: names, sorts, and what is in what. Each list stays in order of id. */
+/** Looks the model up once: each record by its id, the names, and the sorts. */
 function indexOf(model: Model): Index {
-  const index: Index = { names: new Map(), sorts: new Map(), components: new Map(), appsIn: new Map(), storesIn: new Map(), componentsIn: new Map() };
+  const index: Index = {
+    names: new Map(),
+    sorts: new Map(),
+    people: byId(model.people),
+    systems: byId(model.systems),
+    apps: byId(model.apps),
+    stores: byId(model.stores),
+    components: byId(model.components),
+    connections: byId(model.connections),
+    owners: byId(model.owners),
+    technologies: byId(model.technologies),
+  };
   for (const family of [model.people, model.systems, model.apps, model.stores, model.components, model.owners, model.technologies]) {
     for (const record of family) index.names.set(record.id, record.name);
   }
-  for (const person of model.people) index.sorts.set(person.id, 'person');
-  for (const system of model.systems) index.sorts.set(system.id, 'system');
-  for (const app of model.apps) {
-    index.sorts.set(app.id, 'app');
-    add(index.appsIn, app.in, app);
-  }
-  for (const store of model.stores) {
-    index.sorts.set(store.id, 'store');
-    add(index.storesIn, store.in, store);
-  }
-  for (const component of model.components) {
-    index.sorts.set(component.id, 'component');
-    index.components.set(component.id, component);
-    add(index.componentsIn, component.in, component);
-  }
+  const sorts: [string, readonly { id: string }[]][] = [
+    ['person', model.people],
+    ['system', model.systems],
+    ['app', model.apps],
+    ['store', model.stores],
+    ['component', model.components],
+  ];
+  for (const [sort, family] of sorts) for (const record of family) index.sorts.set(record.id, sort);
   return index;
 }
 
-/** Adds a value at the end of the list kept under a key. */
-function add<T>(lists: Map<string, T[]>, key: string, value: T): void {
-  const list = lists.get(key);
-  if (list) list.push(value);
-  else lists.set(key, [value]);
+/** Records by their ids. */
+function byId<T extends { id: string }>(records: readonly T[]): Map<string, T> {
+  return new Map(records.map((record) => [record.id, record]));
+}
+
+/** The record with this id. The outline is made from the same model, so it is there. */
+function lookUp<T>(records: ReadonlyMap<string, T>, id: string): T {
+  const record = records.get(id);
+  if (record === undefined) throw new Error(`The model has no record with the id ${id}.`);
+  return record;
 }
 
 /** A system, with its apps and stores beneath it and the components of each app beneath that. */
-function systemLines(system: ModelRecord<System>, index: Index, layout: Layout): string[] {
+function systemLines(system: OutlineSystem, index: Index, layout: Layout): string[] {
+  const record = lookUp(index.systems, system.id);
   return [
-    ...entry('  ', system.id, system.name, [owner(system.owner, index)], system.description, layout),
-    ...(index.appsIn.get(system.id) ?? []).flatMap((app) => appLines(app, '    ', index, layout)),
-    ...(index.storesIn.get(system.id) ?? []).flatMap((store) => storeLines(store, '    ', index, layout)),
+    ...entry('  ', record.id, record.name, [owner(record.owner, index)], record.description, layout),
+    ...system.apps.flatMap((app) => appLines(app, '    ', index, layout)),
+    ...system.stores.flatMap((store) => storeLines(lookUp(index.stores, store), '    ', index, layout)),
   ];
 }
 
+/** A part whose `in` names a record with an error, saying so first in its brackets. */
+function looseLines(part: OutlineLoose, index: Index, layout: Layout): string[] {
+  const where = `in: ${part.in}`;
+  if (part.family === 'apps') return appLines({ id: part.id, components: part.components }, '  ', index, layout, where);
+  if (part.family === 'stores') return storeLines(lookUp(index.stores, part.id), '  ', index, layout, where);
+  return componentLines(lookUp(index.components, part.id), '  ', index, layout, where);
+}
+
 /** An app, with its components beneath it. `where` is said first in its brackets, when given. */
-function appLines(app: ModelRecord<App>, indent: string, index: Index, layout: Layout, where?: string): string[] {
+function appLines(outlined: OutlineApp, indent: string, index: Index, layout: Layout, where?: string): string[] {
+  const app = lookUp(index.apps, outlined.id);
   const facts = [where, app.kind, technologies(app.technology, index), owner(app.owner, index)];
   return [
     ...entry(indent, `app ${app.id}`, app.name, facts, app.description, layout),
-    ...(index.componentsIn.get(app.id) ?? []).flatMap((component) => componentLines(component, `${indent}  `, index, layout)),
+    ...outlined.components.flatMap((component) => componentLines(lookUp(index.components, component), `${indent}  `, index, layout)),
   ];
 }
 
@@ -258,23 +246,17 @@ function componentLines(component: ModelRecord<Component>, indent: string, index
 }
 
 /**
- * The connections, each under the person, system, app or store it starts from, in the order the
- * listing shows those, and in order of id beneath it. A component's are under its app. One that
- * starts at a record with an error comes after the rest, under that record's id.
+ * The connections, each group under the person, system, app or store it starts from, as the
+ * outline gives them. A group that starts at a record with an error is shown by its id.
  */
-function connectionLines(connections: readonly ModelRecord<Connection>[], order: readonly string[], index: Index, layout: Layout): string[] {
-  const groups = new Map<string, ModelRecord<Connection>[]>();
-  for (const connection of connections) add(groups, index.components.get(connection.from)?.in ?? connection.from, connection);
-  const shown = new Set(order);
-  const starts = [...order.filter((id) => groups.has(id)), ...[...groups.keys()].filter((id) => !shown.has(id)).sort()];
-
+function connectionLines(groups: readonly OutlineGroup[], index: Index, layout: Layout): string[] {
   const lines: string[] = [];
-  for (const start of starts) {
-    const sort = index.sorts.get(start);
-    const name = index.names.get(start);
-    const from = sort === undefined || name === undefined ? `from ${start} (a record with an error)` : `from ${name} (${sort} ${start})`;
+  for (const group of groups) {
+    const from = group.known
+      ? `from ${lookUp(index.names, group.start)} (${lookUp(index.sorts, group.start)} ${group.start})`
+      : `from ${group.start} (a record with an error)`;
     lines.push(...wrap(words(from), '  ', `  ${DEEPER}`, layout.width));
-    for (const connection of groups.get(start) ?? []) lines.push(...connectionEntry(connection, start, index, layout));
+    for (const id of group.connections) lines.push(...connectionEntry(lookUp(index.connections, id), group.start, index, layout));
   }
   return lines;
 }
@@ -331,73 +313,6 @@ function technologies(ids: readonly string[] | undefined, index: Index): string 
 /** The owner a record names, by its name, or by its id when the owner has an error in its file. */
 function owner(id: string | undefined, index: Index): string | undefined {
   return id === undefined ? undefined : `owner: ${index.names.get(id) ?? id}`;
-}
-
-/** The sentence rules of the platform, for English. */
-const SENTENCES = new Intl.Segmenter('en', { granularity: 'sentence' });
-
-/**
- * A full stop and a space before what the platform's rules do not take to start a sentence,
- * though it does here: a small letter, as of a program's name written so, a backtick, a
- * quotation mark or a digit.
- */
-const MISSED_START = /\. (?=[\p{Ll}\p{Nd}`"'\p{Pi}\u201A\u201E])/gu;
-
-/** The end of a sentence in a script that writes no space after one, as Chinese and Japanese do, with any closing marks. */
-const ENDS_WITHOUT_SPACE = /[\u3002\uFF61\uFF0E\uFF01\uFF1F][\p{Pe}\p{Pf}]*$/u;
-
-/** A title before a name, after which a sentence goes on: "Dr. Smith". Only with its capital, so that "in 5 ms." still ends one. */
-const TITLE = /(?:^|[\s(])(?:Dr|Mr|Mrs|Ms|Prof|St)\.$/u;
-
-/** A short word after which a sentence goes on, whatever follows. */
-const SHORT_WORD = /(?:^|[\s(])(?:cf|vs|approx|incl)\.$/iu;
-
-/** Letters each followed by a dot, as in "e.g." and "U.S.". */
-const LETTERS = /(?:^|[\s(])((?:\p{L}\.){2,})$/u;
-
-/** What ends a sentence only before a capital: "etc." and the dots of a pause, as in "waits... then". */
-const BEFORE_A_CAPITAL = /(?:(?:^|[\s(])etc|\.)\.$/iu;
-
-/**
- * The first sentence of a text, whole, on one line. It ends where the platform's rules end one,
- * or at a full stop and a space before a small letter, a backtick, a quotation mark or a digit,
- * but only before a space, so that a link such as `example.com/a?b=1` stays whole. It never
- * ends after a short form such as "e.g." or a title such as "Dr.". In a script that writes no
- * space between sentences, such as Chinese, it ends without one. A text with no end of a
- * sentence is given whole. This is a rule of thumb: some words, such as "U.S.", can end a
- * sentence or not.
- */
-export function firstSentence(text: string): string {
-  const line = flat(text);
-  const ends = new Set([...SENTENCES.segment(line)].map(({ index, segment }) => index + segment.length));
-  for (const match of line.matchAll(MISSED_START)) ends.add(match.index + 2);
-  for (const end of [...ends].sort((a, b) => a - b)) {
-    const first = line.slice(0, end);
-    if (endsThere(first, line.charAt(end))) return first.trimEnd();
-  }
-  return line;
-}
-
-/** True when a sentence ends with this text, given the character that follows it. */
-function endsThere(text: string, next: string): boolean {
-  if (ENDS_WITHOUT_SPACE.test(text)) return true;
-  if (!text.endsWith(' ')) return false;
-  const said = text.trimEnd();
-  return !said.endsWith('.') || !goesOn(said, next);
-}
-
-/**
- * True when a sentence goes on after this text, which ends in a full stop, given the character
- * that follows. It goes on after a title and a short word, after letters with dots when one of
- * them is small, as in "e.g.", and after "U.S.", "etc." or the dots of a pause unless a capital
- * follows.
- */
-function goesOn(said: string, next: string): boolean {
-  if (TITLE.test(said) || SHORT_WORD.test(said)) return true;
-  const capital = /\p{Lu}/u.test(next);
-  const letters = LETTERS.exec(said)?.[1];
-  if (letters !== undefined) return !capital || /\p{Ll}/u.test(letters);
-  return !capital && BEFORE_A_CAPITAL.test(said);
 }
 
 /** The lines of a text as it is written, without the spaces at their ends and without the empty ones. */

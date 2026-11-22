@@ -485,6 +485,14 @@ describe('the command line', () => {
     expect(run([])).toEqual({ code: 0, out: HELP, err: '' });
   });
 
+  it('says in its help how to show the model in the browser', () => {
+    expect(HELP).toContain('  seefore --server [--workdir=<directory>] [--port=<number>] [--no-open]\n');
+    expect(HELP).toContain('\n  --server Show the model in the browser: a page on this machine that draws the\n');
+    expect(HELP).toContain('\n  --port=<number>         For --server: the port to listen on. Without it, 4173,\n');
+    expect(HELP).toContain('\n  --no-open               For --server: do not open the browser.\n');
+    for (const line of HELP.split('\n')) expect(line.length, line).toBeLessThanOrEqual(88);
+  });
+
   it('prints its version', () => {
     expect(run(['--version'])).toEqual({ code: 0, out: 'seefore dev', err: '' });
   });
