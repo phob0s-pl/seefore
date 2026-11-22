@@ -5,7 +5,7 @@ import { Diagram, LightContext } from './diagram.tsx';
 import type { Light } from './diagram.tsx';
 import { keptSelection, viewOf } from './follow.ts';
 import type { Selection } from './follow.ts';
-import { holds, holdsBox, litBy } from './light.ts';
+import { holds, holdsBox, litBy, litByKept } from './light.ts';
 import type { Target } from './light.ts';
 import { Listing } from './listing.tsx';
 import type { Shown } from './live.ts';
@@ -36,6 +36,11 @@ export function pageTitle(shown: Shown): string {
   const view = state === null ? undefined : viewOf(state, route);
   const what = view?.title ?? (route.page === 'model' ? 'Model' : route.page === 'problems' ? 'Problems' : undefined);
   return [what, state?.name ?? undefined, 'seefore'].filter((part) => part !== undefined).join(' · ');
+}
+
+/** The connections of the model that start or end at a record. */
+function connectionsOf(state: ViewerState, id: string): Set<string> {
+  return new Set(state.model.connections.filter((connection) => connection.from === id || connection.to === id).map((connection) => connection.id));
 }
 
 /** The element of the picture, or of the list of what it passes through, that stands for a target, to give the focus back to. */
@@ -100,11 +105,11 @@ export function Page({ shown, room, initialSelection = null }: PageProps) {
     setFocused(null);
   }, [viewId]);
   const chosen = kept !== null && kept.kind !== 'record' ? kept : null;
-  // A store that an app keeps is drawn at its app: chosen in the listing or on a panel, it lights the app.
+  // A store that an app keeps is drawn at its app: chosen on a panel, it lights the app and the arrows of its own connections.
   const keeper = state !== null && kept?.kind === 'record' ? keepersOf(state.outline).get(kept.id) : undefined;
-  const keeperBox: Target | null = keeper !== undefined && view !== undefined && holdsBox(view, keeper) ? { kind: 'box', id: keeper } : null;
-  const pointer = pointed ?? focused ?? chosen ?? keeperBox;
-  const light: Light = { lit: view !== undefined && pointer !== null && holds(view, pointer) ? litBy(view, pointer) : null, chosen };
+  const keptLit = state !== null && kept !== null && keeper !== undefined && view !== undefined && holdsBox(view, keeper) ? litByKept(view, keeper, connectionsOf(state, kept.id)) : null;
+  const pointer = pointed ?? focused ?? chosen;
+  const light: Light = { lit: view !== undefined && pointer !== null && holds(view, pointer) ? litBy(view, pointer) : keptLit, chosen };
 
   let main: ReactNode;
   if (state === null) {

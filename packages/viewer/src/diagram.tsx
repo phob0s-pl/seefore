@@ -218,14 +218,29 @@ function targetOf(element: EventTarget | null): Target | null {
   return edgeId ? { kind: 'arrow', id: edgeId } : null;
 }
 
-/** How many boxes and arrows a picture has, and what of the view it does not draw. */
+/**
+ * What the line under a view's title says of the stores it draws at the apps that keep them,
+ * which have no box: `10 stores are drawn at the apps that keep them.` Nothing when there are none.
+ */
+export function keptWords(n: number): string | undefined {
+  if (n === 0) return undefined;
+  return n === 1 ? '1 store is drawn at the app that keeps it.' : `${n} stores are drawn at the apps that keep them.`;
+}
+
+/**
+ * How many boxes and arrows a picture has, how many stores it draws at their apps, and what of
+ * the view it does not draw. A large view opens below the zoom where the mark of a kept store
+ * can be read, so the line says it in words too.
+ */
 function Counts({ view, drawn }: { view: View; drawn: Drawn }) {
   const boxes = drawn.boxes.length;
   const arrows = drawn.arrows.length;
   const { outside, broken } = view.left;
+  const kept = keptWords(view.boxes.reduce((sum, box) => sum + box.kept.length, 0));
   return (
     <p className="view-counts">
       {`${boxes} ${boxes === 1 ? 'box' : 'boxes'} and ${arrows} ${arrows === 1 ? 'arrow' : 'arrows'}.`}
+      {kept !== undefined && ` ${kept}`}
       {outside.length > 0 && (
         <>
           {` ${outside.length} ${outside.length === 1 ? 'connection' : 'connections'} between two boxes outside the system ${outside.length === 1 ? 'is' : 'are'} not drawn: `}
@@ -412,8 +427,9 @@ export const DASH_WORDS = 'Dashed outline or line: there only sometimes, as its 
  */
 export function Legend({ view, children }: { view: View; children?: ReactNode }) {
   const dash = DASHED_CONDITIONS && view.legend.some((entry) => entry.key === 'only');
+  const more = useMore();
   return (
-    <section className="legend" aria-label="Legend">
+    <section className="legend" aria-label="Legend" ref={more.ref} onScroll={more.measure} {...(more.hidden ? { tabIndex: 0 } : {})}>
       <ul>
         {view.legend.map((entry) => (
           <li key={entry.key} data-key={entry.key}>
@@ -429,15 +445,48 @@ export function Legend({ view, children }: { view: View; children?: ReactNode })
         )}
       </ul>
       {children}
+      {more.hidden && (
+        <p className="legend-more" aria-hidden="true">
+          {LEGEND_MORE}
+        </p>
+      )}
     </section>
   );
+}
+
+/** What the legend says at its foot while some of it is out of sight. */
+export const LEGEND_MORE = 'More below: scroll the legend';
+
+/**
+ * Whether some of the legend is out of sight below. The style sheet holds the legend to a
+ * quarter of the window, and it scrolls inside; this is measured when it is drawn, when it
+ * changes size and as it scrolls, so that the line which says there is more goes once the
+ * reader has seen the rest. Nothing of the legend is left out.
+ */
+function useMore(): { ref: (element: HTMLElement | null) => void; measure: () => void; hidden: boolean } {
+  const [element, setElement] = useState<HTMLElement | null>(null);
+  const [hidden, setHidden] = useState(false);
+  const measure = () => {
+    if (element === null) return;
+    // A pixel of slack, since a scroll position may stop a fraction short of the end.
+    setHidden(element.scrollHeight - element.scrollTop - element.clientHeight > 1);
+  };
+  useEffect(() => {
+    if (element === null || typeof ResizeObserver === 'undefined') return;
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    for (const child of element.children) observer.observe(child);
+    return () => observer.disconnect();
+  }, [element]);
+  return { ref: setElement, measure, hidden };
 }
 
 /**
  * What the arrows of the view pass through and has no box, each with how many of the view's
  * connections pass through it: first the pieces of infrastructure that are the system's own,
- * under words that say so, then the rest. One that has an `only` of its own stands in brackets,
- * as on a route. Pointing at one, or its focus, lights those arrows; a click, or Enter, keeps
+ * under words that say so, then the rest. One that has a condition, its own or from what it is
+ * in, stands in brackets, as on a route. Pointing at one, or its focus, lights those arrows; a click, or Enter, keeps
  * them lit and opens its panel. Missing when there is nothing of the kind.
  */
 function PassesThrough({ view, chosen, onPoint, onFocusTarget, onChoose }: { view: View; chosen: Target | null } & Omit<DiagramActions, 'onClear'>) {
@@ -457,7 +506,7 @@ function PassesThrough({ view, chosen, onPoint, onFocusTarget, onChoose }: { vie
               type="button"
               data-id={each.id}
               {...(isChosen ? { className: 'chosen' } : {})}
-              aria-label={passedSaid(each.name, each.only, each.own ? system : undefined, passingWords(count))}
+              aria-label={passedSaid(each.name, each.conditions, each.own ? system : undefined, passingWords(count))}
               // A click made with the keyboard has no count of presses.
               onClick={(event) => onChoose(target, event.detail === 0)}
               onMouseEnter={() => onPoint(target)}
@@ -465,7 +514,7 @@ function PassesThrough({ view, chosen, onPoint, onFocusTarget, onChoose }: { vie
               onFocus={() => onFocusTarget(target)}
               onBlur={() => onFocusTarget(null)}
             >
-              {each.only === undefined ? each.name : `(${each.name})`} <span className="passes-count">{count}</span>
+              {each.conditions.length === 0 ? each.name : `(${each.name})`} <span className="passes-count">{count}</span>
             </button>
           </li>
         );

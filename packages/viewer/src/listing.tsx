@@ -1,7 +1,7 @@
-import type { OutlineApp, ViewerState } from '@seefore/core';
+import type { OutlineApp, OutlineCondition, OutlineSystem, ViewerState } from '@seefore/core';
 import { useMemo } from 'react';
 import type { ReactNode } from 'react';
-import { SORT, descriptionOf, endName, indexOf, insideOf, nameOf, passingCounts, passingWords, technologyNames } from './records.ts';
+import { SORT, descriptionOf, endName, indexOf, insideOf, nameOf, ownOnly, passingCounts, passingWords, routeText, technologyNames } from './records.ts';
 import type { Found, Index } from './records.ts';
 
 /**
@@ -32,16 +32,10 @@ interface Known {
   index: Index;
   /** How many connections pass through each record that some connection names in `via`, by id. */
   through: ReadonlyMap<string, number>;
-  /** The connections that no view holds. */
+  /** The connections that no view draws. */
   inNoView: ReadonlySet<string>;
-  /** The conditions each record is under, as the state gives them. */
-  conditions: ViewerState['conditions'];
-}
-
-/** The words of a record's own `only`, or nothing when it has none of its own. */
-function ownOnly(known: Known, id: string): string | undefined {
-  const [first] = known.conditions[id] ?? [];
-  return first?.from === id ? first.only : undefined;
+  /** The state, for the conditions each record is under. */
+  state: ViewerState;
 }
 
 /** What a connection is marked with before its name, as `seefore list` writes it: what it does to a store, or that the far side opened its channel. */
@@ -51,7 +45,10 @@ function markOf(found: Found): string | undefined {
   return found.record.opens === 'to' ? '[opened by the far side]' : undefined;
 }
 
-/** What a connection is marked with on its line when no view holds it. */
+/** The word a piece of infrastructure in a system has before its id, under its system, as `seefore list` writes it. */
+const PLACED_SORT = 'infrastructure';
+
+/** What a connection is marked with on its line when no view draws it. */
 export const IN_NO_PICTURE = 'in no picture';
 
 /**
@@ -119,11 +116,12 @@ function Entry({ id, known, onOpen, said, where, children }: EntryProps) {
   }
   const facts = factsOf(found, known, where);
   const description = descriptionOf(found);
-  const only = ownOnly(known, id);
+  const only = ownOnly(known.state, id);
   // A part says what sort it is, as `seefore list` does; a connection says where it goes instead.
-  // A piece of infrastructure says so where it stands under its system, and not under its own heading.
+  // A piece of infrastructure says so where it stands under its system, and not under its own
+  // heading, in the word `seefore list` writes there.
   const placed = found.family === 'infrastructure' && insideOf(found) !== undefined;
-  const sort = found.family === 'apps' || found.family === 'stores' || found.family === 'components' || placed ? `${SORT[found.family]} ` : '';
+  const sort = found.family === 'apps' || found.family === 'stores' || found.family === 'components' ? `${SORT[found.family]} ` : placed ? `${PLACED_SORT} ` : '';
   return (
     <li className="entry">
       <div className="entry-head">
@@ -161,7 +159,7 @@ export function Listing({ state, onOpen }: ListingProps) {
   const index = useMemo(() => indexOf(state.model), [state.model]);
   const through = useMemo(() => passingCounts(state.model), [state.model]);
   const inNoView = useMemo(() => new Set(state.inNoView), [state.inNoView]);
-  const known: Known = { index, through, inNoView, conditions: state.conditions };
+  const known: Known = { index, through, inNoView, state };
   const { outline, model } = state;
   const looseCount = outline.loose.reduce((sum, part) => sum + 1 + part.components.length + (part.stores?.length ?? 0), 0);
   // The note is needed only where a part shows no owner and has one all the same.
@@ -173,6 +171,11 @@ export function Listing({ state, onOpen }: ListingProps) {
   const beneath = (app: Pick<OutlineApp, 'components' | 'stores'>) => {
     const parts = [...app.components, ...(app.stores ?? [])];
     return parts.length > 0 ? <ul>{parts.map((id) => entry(id))}</ul> : undefined;
+  };
+  // A system with what is in it: its apps, its own stores and its pieces of infrastructure.
+  const system = (each: OutlineSystem) => {
+    const parts = [...each.apps.map((app) => entry(app.id, { children: beneath(app) })), ...each.stores.map((id) => entry(id)), ...(each.infrastructure ?? []).map((id) => entry(id))];
+    return entry(each.id, parts.length > 0 ? { children: <ul>{parts}</ul> } : {});
   };
 
   return (
@@ -189,22 +192,10 @@ export function Listing({ state, onOpen }: ListingProps) {
         <ul>{outline.people.map((id) => entry(id))}</ul>
       </Section>
       <Section title="Systems with parts" count={outline.withParts.length} {...(taken ? { note: 'An owner holds for what is beneath it until a part names its own.' } : {})}>
-        <ul>
-          {outline.withParts.map((system) =>
-            entry(system.id, {
-              children: (
-                <ul>
-                  {system.apps.map((app) => entry(app.id, { children: beneath(app) }))}
-                  {system.stores.map((id) => entry(id))}
-                  {(system.infrastructure ?? []).map((id) => entry(id))}
-                </ul>
-              ),
-            }),
-          )}
-        </ul>
+        <ul>{outline.withParts.map(system)}</ul>
       </Section>
       <Section title={outline.withParts.length > 0 ? 'Other systems' : 'Systems'} count={outline.others.length}>
-        <ul>{outline.others.map((id) => entry(id))}</ul>
+        <ul>{outline.others.map(system)}</ul>
       </Section>
       <Section title="Infrastructure" count={outline.infrastructure.length}>
         <ul>{outline.infrastructure.map((id) => entry(id))}</ul>
@@ -213,7 +204,7 @@ export function Listing({ state, onOpen }: ListingProps) {
         {outline.connections.map((group) => (
           <div key={group.start} className="group">
             <h3>{group.known ? `from ${nameOf(index, group.start)} (${groupSort(index, group.start)} ${group.start})` : `from ${group.start} (a record with an error)`}</h3>
-            <ul>{group.connections.map((id) => entry(id, { said: connectionSaid(index, id, group.start) }))}</ul>
+            <ul>{group.connections.map((id) => entry(id, { said: connectionSaid(state, index, id, group.start) }))}</ul>
           </div>
         ))}
       </Section>
@@ -223,11 +214,15 @@ export function Listing({ state, onOpen }: ListingProps) {
       <Section title="Technologies" count={outline.technologies.length}>
         <ul>{outline.technologies.map((id) => entry(id))}</ul>
       </Section>
-      <Section title="Conditions" count={outline.conditions.length} note="Each wording of “only”, with how many records hold it as their own, so that two wordings of one condition stand side by side.">
+      <Section
+        title="Conditions"
+        count={outline.conditions.length}
+        note="Each wording of “only”, with how many records hold it as their own, and how many more have it from them, so that two wordings of one condition stand side by side."
+      >
         <ul className="conditions-list">
           {outline.conditions.map((condition) => (
             <li key={condition.only} className="entry">
-              {`only ${condition.only}`} <span className="entry-facts">{`(${count(condition.records.length, 'record')})`}</span>
+              {`only ${condition.only}`} <span className="entry-facts">{`(${holdersWords(condition)})`}</span>
             </li>
           ))}
         </ul>
@@ -245,13 +240,28 @@ export function Listing({ state, onOpen }: ListingProps) {
 }
 
 /**
- * The line at the top of the listing that says how many connections no view holds, and why: a
- * view draws a connection only where it draws both its ends, or one end is in its system.
+ * The line at the top of the listing that says how many connections no view draws, and why: a
+ * view is about a system, and draws a connection only where an end of it is in that system and
+ * neither end is a record with an error. Two things in no system, such as a person and a piece
+ * of infrastructure in none, may both stand in a view, and the connection between them is still
+ * not drawn.
  */
 export function inNoPictureWords(n: number): string {
   const which = n === 1 ? '1 connection is' : `${n} connections are`;
   const marked = n === 1 ? 'It is' : 'Each is';
-  return `${which} in no picture, since no view draws both ${n === 1 ? 'its' : 'their'} ends. ${marked} marked “${IN_NO_PICTURE}” under Connections.`;
+  const them = n === 1 ? 'it' : 'them';
+  return `${which} in no picture: no view draws ${them}. A view is about a system, and draws a connection only where an end of it is in that system and neither end is a record with an error. ${marked} marked “${IN_NO_PICTURE}” under Connections.`;
+}
+
+/**
+ * How many records hold a wording of a condition, as `seefore list` says it: those whose own
+ * `only` it is, and how many more have it from them, as in `1 record, 6 more have it from it`.
+ */
+export function holdersWords(condition: Pick<OutlineCondition, 'records' | 'under'>): string {
+  const own = condition.records.length;
+  const under = condition.under.length;
+  if (under === 0) return count(own, 'record');
+  return `${count(own, 'record')}, ${under} more ${under === 1 ? 'has' : 'have'} it from ${own === 1 ? 'it' : 'them'}`;
 }
 
 /** The sort of what a group of connections stands under, as a person reads it. */
@@ -263,15 +273,17 @@ function groupSort(index: Index, id: string): string {
 /**
  * A connection under what it starts from: an arrow to its far end, what it passes through, in
  * order, what it does to a store or that the far side opened its channel, and its name, as in
- * `→ Desk, via HTTPS proxy: [opened by the far side] Says when a job is done`. It names its
- * start only when that is a component of the app it stands under.
+ * `→ Desk, via (Office proxy), HTTPS proxy: [opened by the far side] Says when a job is done`. A
+ * thing on the route stands in brackets when it has a condition, its own or from what it is in,
+ * as `seefore list` writes it. It names its start only when that is a component of the app it
+ * stands under.
  */
-function connectionSaid(index: Index, id: string, start: string): string {
+function connectionSaid(state: ViewerState, index: Index, id: string, start: string): string {
   const found = index.get(id);
   if (found?.family !== 'connections') return id;
   const connection = found.record;
   const from = connection.from === start ? '' : `${nameOf(index, connection.from)} `;
-  const via = connection.via === undefined || connection.via.length === 0 ? '' : `, via ${connection.via.map((hop) => endName(index, hop)).join(', ')}`;
+  const via = connection.via === undefined || connection.via.length === 0 ? '' : `, via ${routeText(state, index, connection.via)}`;
   const arrow = `${from}→ ${endName(index, connection.to)}${via}`;
   const said = [markOf(found), connection.name].filter((part) => part !== undefined).join(' ');
   return said === '' ? arrow : `${arrow}: ${said}`;

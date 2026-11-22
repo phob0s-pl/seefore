@@ -1,4 +1,4 @@
-import type { App, Component, Connection, Infrastructure, Model, ModelRecord, Outline, Owner, Person, Store, System, Technology, ViewerState } from '@seefore/core';
+import type { App, Component, Condition, Connection, Infrastructure, Model, ModelRecord, Outline, Owner, Person, Store, System, Technology, ViewerState } from '@seefore/core';
 
 /** A record of the model, with the family it is in. */
 export type Found =
@@ -45,6 +45,20 @@ export function endName(index: Index, id: string): string {
   const found = index.get(id);
   if (found?.family === 'components') return `${nameOf(index, found.record.in)} / ${found.record.name}`;
   return nameOf(index, id);
+}
+
+/**
+ * A thing on a route by its name, as `seefore list` writes it: in brackets when it has a
+ * condition, its own or one it has from what it is in, as in `(Office proxy)`.
+ */
+export function hopName(state: ViewerState, index: Index, id: string): string {
+  const name = endName(index, id);
+  return conditionsIn(state, id).length > 0 ? `(${name})` : name;
+}
+
+/** What a connection passes through, as `seefore list` writes it: `(Office proxy), HTTPS proxy`. */
+export function routeText(state: ViewerState, index: Index, via: readonly string[]): string {
+  return via.map((id) => hopName(state, index, id)).join(', ');
 }
 
 /** The words for a family, one record of it. */
@@ -124,9 +138,29 @@ export interface OwnerWords {
   from?: string;
 }
 
+/**
+ * What a dictionary of the state holds for an id, and nothing for an id it does not hold. The
+ * state comes as JSON, and so as plain objects: read as `dictionary[id]`, an id such as
+ * `constructor`, which is sound, would give what every object has.
+ */
+export function entryOf<T>(dictionary: Readonly<Record<string, T>>, id: string): T | undefined {
+  return Object.hasOwn(dictionary, id) ? dictionary[id] : undefined;
+}
+
+/** The conditions a record is under, as the state gives them: its own first. None for a record under none. */
+export function conditionsIn(state: ViewerState, id: string): readonly Condition[] {
+  return entryOf(state.conditions, id) ?? [];
+}
+
+/** The words of a record's own `only`, as the state gives them, or nothing when it has none of its own. */
+export function ownOnly(state: ViewerState, id: string): string | undefined {
+  const [first] = conditionsIn(state, id);
+  return first?.from === id ? first.only : undefined;
+}
+
 /** Who answers for a record, as the state's ownership says. Missing for one with no owner. */
 export function ownerOf(state: ViewerState, index: Index, id: string): OwnerWords | undefined {
-  const ownership = state.ownership[id];
+  const ownership = entryOf(state.ownership, id);
   if (ownership === undefined) return undefined;
   const owner = nameOf(index, ownership.owner);
   return ownership.from === id ? { owner } : { owner, from: nameOf(index, ownership.from) };

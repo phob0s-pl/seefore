@@ -3,7 +3,26 @@ import { Fragment, useEffect, useMemo, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { namesIn } from './flow.ts';
 import type { Selection } from './follow.ts';
-import { ACCESS_WORDS, OPENED_WORDS, descriptionOf, endName, indexOf, insideOf, keepersOf, keptBy, kindOf, nameOf, ownerOf, passingThrough, technologiesOf, technologyNames, usesOf } from './records.ts';
+import {
+  ACCESS_WORDS,
+  OPENED_WORDS,
+  conditionsIn,
+  descriptionOf,
+  endName,
+  hopName,
+  indexOf,
+  insideOf,
+  keepersOf,
+  keptBy,
+  kindOf,
+  nameOf,
+  ownOnly,
+  ownerOf,
+  passingThrough,
+  technologiesOf,
+  technologyNames,
+  usesOf,
+} from './records.ts';
 import type { Index } from './records.ts';
 
 /**
@@ -64,7 +83,7 @@ export function Panel({ state, view, selection, focus, onClose, onOpen }: PanelP
       ) : selection.kind === 'arrow' ? (
         <p>This arrow is no longer in the view.</p>
       ) : (
-        <RecordDetails state={state} index={index} id={selection.id} box={box} scope={view?.scope === selection.id} passing={inView} onOpen={onOpen} />
+        <RecordDetails state={state} index={index} id={selection.id} box={box} view={view} scope={view?.scope === selection.id} passing={inView} onOpen={onOpen} />
       )}
     </aside>
   );
@@ -92,6 +111,8 @@ interface RecordDetailsProps {
   index: Index;
   id: string;
   box: ViewBox | undefined;
+  /** The view shown, when the page shows one. */
+  view: View | undefined;
   scope: boolean;
   /** The connections of the view shown that pass through the record, when it was chosen in the view. */
   passing: readonly string[] | undefined;
@@ -101,10 +122,11 @@ interface RecordDetailsProps {
 /**
  * A record, whole: its name, kind, what it is in, when it is there, technologies, owner,
  * description and file; for a connection what it does to a store and who opened its channel;
- * for a store who reads and writes it; for an app the stores it keeps; the connections its box
+ * for a store who reads and writes it, and for one that an app keeps which of its connections
+ * the view holds inside that app's box; for an app the stores it keeps; the connections its box
  * holds, and those that pass through it. A connection says what it passes through.
  */
-function RecordDetails({ state, index, id, box, scope, passing, onOpen }: RecordDetailsProps) {
+function RecordDetails({ state, index, id, box, view, scope, passing, onOpen }: RecordDetailsProps) {
   const found = index.get(id);
   const through = passing ?? passingThrough(state.model, id);
   const throughHeading = passing === undefined ? `Passing through it (${through.length})` : `Passing through it in this view (${through.length})`;
@@ -132,15 +154,24 @@ function RecordDetails({ state, index, id, box, scope, passing, onOpen }: Record
   const owner = ownerOf(state, index, id);
   const description = descriptionOf(found);
   const via = found.family === 'connections' ? (found.record.via ?? []) : [];
-  const conditions = state.conditions[id] ?? [];
+  const conditions = conditionsIn(state, id);
   const own = conditions[0]?.from === id ? conditions[0] : undefined;
   const others = conditions.filter((condition) => condition.from !== id);
   const kept = found.family === 'apps' ? keptBy(state.outline, id) : [];
+  const keeper = keepersOf(state.outline).get(id);
+  // A store that an app keeps is drawn at its app: what the view holds of it inside that app's box is not drawn.
+  const keeperBox = keeper === undefined ? undefined : view?.boxes.find((each) => each.id === keeper);
+  const ownConnection = (connection: string) => {
+    const at = index.get(connection);
+    return at?.family === 'connections' && (at.record.from === id || at.record.to === id);
+  };
+  const insideKeeper = keeperBox === undefined ? [] : [...keeperBox.within, ...keeperBox.loops].filter(ownConnection).sort();
+  const onArrows = keeperBox === undefined ? 0 : (view?.arrows ?? []).flatMap((arrow) => arrow.connections).filter(ownConnection).length;
   return (
     <>
       <dl className="facts">
         <Fact term="Kind">{scope ? `${kindOf(found)}, the one this view is about` : kindOf(found)}</Fact>
-        {inside !== undefined && <Fact term={keepersOf(state.outline).has(id) ? 'Kept by' : 'In'}>{endName(index, inside)}</Fact>}
+        {inside !== undefined && <Fact term={keeper !== undefined ? 'Kept by' : 'In'}>{endName(index, inside)}</Fact>}
         {own !== undefined && <Fact term="Only">{own.only}</Fact>}
         {others.length > 0 && (
           <Fact term="Only, from others">
@@ -152,7 +183,7 @@ function RecordDetails({ state, index, id, box, scope, passing, onOpen }: Record
         )}
         {via.length > 0 && (
           <Fact term="Via">
-            <Hops ids={via} index={index} onOpen={onOpen} />
+            <Hops state={state} ids={via} index={index} onOpen={onOpen} />
           </Fact>
         )}
         {found.family === 'connections' && found.record.access !== undefined && <Fact term="Access">{ACCESS_WORDS[found.record.access]}</Fact>}
@@ -165,6 +196,13 @@ function RecordDetails({ state, index, id, box, scope, passing, onOpen }: Record
         </Fact>
       </dl>
       {found.family === 'stores' && <UsesOf state={state} store={id} index={index} onOpen={onOpen} depth={3} />}
+      {keeperBox !== undefined && (
+        <section>
+          <h3>{`Inside ${keeperBox.name}, not drawn (${insideKeeper.length})`}</h3>
+          <p className="kept-note">{insideKeeperWords(insideKeeper.length, onArrows, keeperBox.name)}</p>
+          {insideKeeper.length > 0 && <ConnectionList state={state} ids={insideKeeper} index={index} onOpen={onOpen} />}
+        </section>
+      )}
       {kept.length > 0 && (
         <section>
           <h3>{`Keeps (${kept.length})`}</h3>
@@ -192,6 +230,16 @@ function RecordDetails({ state, index, id, box, scope, passing, onOpen }: Record
   );
 }
 
+/**
+ * What the panel of a store that an app keeps says of the view shown: that the store is drawn at
+ * its app, and how many of its connections are inside the app's box, and so not drawn.
+ */
+export function insideKeeperWords(inside: number, onArrows: number, keeper: string): string {
+  const which = inside === 0 ? 'none of its connections is' : inside === 1 ? '1 of its connections is' : `${inside} of its connections are`;
+  const arrows = onArrows === 0 ? '' : ` ${onArrows} ${onArrows === 1 ? 'is' : 'are'} on the arrows that light with it.`;
+  return `${keeper} keeps it, and this view draws it at ${keeper}: ${which} inside ${keeper}, and so not drawn.${arrows}`;
+}
+
 /** The conditions a record has from others, each with the record it comes from, which opens that record. */
 function Conditions({ conditions, index, onOpen }: { conditions: readonly Condition[]; index: Index; onOpen: PanelProps['onOpen'] }) {
   return (
@@ -212,7 +260,9 @@ function Conditions({ conditions, index, onOpen }: { conditions: readonly Condit
 /**
  * Who uses a store, in four short lists, each left out when empty: who writes it, who reads it,
  * who does both, and whose connection does not say. Each entry is the one that acts and the
- * connection's name, each of which opens its record. `depth` is the level of the headings.
+ * connection's name, each of which opens its record, and the connection's own `only` in
+ * brackets when it has one: a write that is made only sometimes says so where it is listed.
+ * `depth` is the level of the headings.
  */
 function UsesOf({ state, store, index, onOpen, depth }: { state: ViewerState; store: string; index: Index; onOpen: PanelProps['onOpen']; depth: 3 | 4 }) {
   const uses = usesOf(state.model, store);
@@ -234,6 +284,7 @@ function UsesOf({ state, store, index, onOpen, depth }: { state: ViewerState; st
               {ids.map((id) => {
                 const found = index.get(id);
                 if (found?.family !== 'connections') return null;
+                const only = ownOnly(state, id);
                 return (
                   <li key={id}>
                     {/* A click made with the keyboard has no count of presses. */}
@@ -244,6 +295,7 @@ function UsesOf({ state, store, index, onOpen, depth }: { state: ViewerState; st
                     <button type="button" className="record-name" onClick={(event) => onOpen(id, event.detail === 0)}>
                       {nameOf(index, id)}
                     </button>
+                    {only !== undefined && <span className="uses-only">{` (only ${only})`}</span>}
                   </li>
                 );
               })}
@@ -261,7 +313,7 @@ function UsesOf({ state, store, index, onOpen, depth }: { state: ViewerState; st
 function KeptStore({ state, store, index, onOpen }: { state: ViewerState; store: string; index: Index; onOpen: PanelProps['onOpen'] }) {
   const found = index.get(store);
   if (found === undefined) return null;
-  const own = state.conditions[store]?.[0];
+  const own = ownOnly(state, store);
   const from = state.model.connections.filter((connection) => connection.from === store).map((connection) => connection.id);
   return (
     <li className="kept-store">
@@ -272,7 +324,7 @@ function KeptStore({ state, store, index, onOpen }: { state: ViewerState; store:
         </button>{' '}
         <span className="kept-kind">{`[${kindOf(found)}]`}</span>
       </p>
-      {own?.from === store && <p className="kept-only">{`only ${own.only}`}</p>}
+      {own !== undefined && <p className="kept-only">{`only ${own}`}</p>}
       <UsesOf state={state} store={store} index={index} onOpen={onOpen} depth={4} />
       {from.length > 0 && (
         <section>
@@ -296,20 +348,55 @@ function fileOf(state: ViewerState, id: string): string | undefined {
   })?.file;
 }
 
-/** What a connection passes through, in the order of travel, each step a link that opens its record. */
-function Hops({ ids, index, onOpen }: { ids: readonly string[]; index: Index; onOpen: PanelProps['onOpen'] }) {
+/** True when a thing on a route has a condition, its own or one from what it is in. */
+function conditional(state: ViewerState, id: string): boolean {
+  return conditionsIn(state, id).length > 0;
+}
+
+/**
+ * What a connection passes through, in the order of travel, each step a link that opens its
+ * record. With no condition on the way, on one line: `Gateway, Load balancer`. When a step has a
+ * condition, one step to a line: its name in brackets, as on the route of an arrow, and beside it
+ * each condition it has, with the record it comes from when that is not the step itself, so that
+ * a reader of a route in brackets sees why. The connection has none of these from its route.
+ */
+function Hops({ state, ids, index, onOpen }: { state: ViewerState; ids: readonly string[]; index: Index; onOpen: PanelProps['onOpen'] }) {
+  // A click made with the keyboard has no count of presses.
+  const step = (id: string) => (
+    <button type="button" className="record-name" onClick={(event) => onOpen(id, event.detail === 0)}>
+      {hopName(state, index, id)}
+    </button>
+  );
+  if (!ids.some((id) => conditional(state, id))) {
+    return (
+      <span className="hops">
+        {ids.map((id, at) => (
+          <Fragment key={`${id}-${at}`}>
+            {at > 0 && ', '}
+            {step(id)}
+          </Fragment>
+        ))}
+      </span>
+    );
+  }
   return (
-    <span className="hops">
+    <ol className="hops hops-conditions">
       {ids.map((id, at) => (
-        <Fragment key={`${id}-${at}`}>
-          {at > 0 && ', '}
-          {/* A click made with the keyboard has no count of presses. */}
-          <button type="button" className="record-name" onClick={(event) => onOpen(id, event.detail === 0)}>
-            {endName(index, id)}
-          </button>
-        </Fragment>
+        <li key={`${id}-${at}`}>
+          {step(id)}
+          {conditionsIn(state, id).map((condition) => (
+            <span key={condition.from} className="hop-only">
+              {condition.from === id ? ` only ${condition.only}` : ` only ${condition.only}, from `}
+              {condition.from !== id && (
+                <button type="button" className="record-name" onClick={(event) => onOpen(condition.from, event.detail === 0)}>
+                  {endName(index, condition.from)}
+                </button>
+              )}
+            </span>
+          ))}
+        </li>
       ))}
-    </span>
+    </ol>
   );
 }
 
@@ -331,18 +418,21 @@ function ConnectionList({ state, ids, index, onOpen }: { state: ViewerState; ids
         }
         const connection = found.record;
         const technologies = technologyNames(index, connection.technology);
-        const conditions = state.conditions[id] ?? [];
+        const conditions = conditionsIn(state, id);
         const own = conditions[0]?.from === id ? conditions[0] : undefined;
         const others = conditions.filter((condition) => condition.from !== id);
+        const via = connection.via ?? [];
+        // A route with a condition on it has a step to a line, which a paragraph cannot hold.
+        const Route = via.some((hop) => conditional(state, hop)) ? 'div' : 'p';
         return (
           <li key={id} className="connection">
             <p className="connection-name">{connection.name ?? 'Unnamed connection'}</p>
             <p className="connection-ends">{`${endName(index, connection.from)} → ${endName(index, connection.to)}`}</p>
-            {connection.via !== undefined && connection.via.length > 0 && (
-              <p className="connection-route">
+            {via.length > 0 && (
+              <Route className="connection-route">
                 {'via '}
-                <Hops ids={connection.via} index={index} onOpen={onOpen} />
-              </p>
+                <Hops state={state} ids={via} index={index} onOpen={onOpen} />
+              </Route>
             )}
             {connection.access !== undefined && <p className="connection-access">{ACCESS_WORDS[connection.access]}</p>}
             {connection.opens === 'to' && <p className="connection-opened">{OPENED_WORDS}</p>}

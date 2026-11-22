@@ -195,7 +195,7 @@ describe('the layout of a view', () => {
       ...view,
       arrows: view.arrows.map((each) =>
         each.id === 'order-api~card-provider'
-          ? { ...each, route: route(['(Office proxy)']), only: { count: 1, all: false, line: 'only sometimes: 1 of 2' }, opened: { count: 1, all: false, line: 'opened from the far side: 1 of 2' } }
+          ? { ...each, route: route(['(Office proxy)']), only: { count: 1, all: false, line: 'only on 1 of 2' }, opened: { count: 1, all: false, line: 'far side opened on 1 of 2' } }
           : each,
       ),
       boxes: view.boxes.map((each) => (each.id === 'shipping' ? { ...each, only: 'in the hosted edition' } : each)),
@@ -205,8 +205,8 @@ describe('the layout of a view', () => {
     expect(label).toMatchObject({
       lines: ['Takes the payment', 'Refunds a payment'],
       route: 'via (Office proxy)',
-      only: 'only sometimes: 1 of 2',
-      opened: 'opened from the far side: 1 of 2',
+      only: ['only on 1 of 2'],
+      opened: 'far side opened on 1 of 2',
       technology: '[HTTPS]',
     });
     expect(label?.height).toBe(2 * LABEL_LINE_HEIGHT + ROUTE_LINE_HEIGHT + 2 * CONDITION_LINE_HEIGHT + TECHNOLOGY_LINE_HEIGHT);

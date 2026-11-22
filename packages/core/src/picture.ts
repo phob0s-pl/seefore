@@ -75,7 +75,12 @@ export interface ViewBoundary {
   name: string;
   /** The system's kind line: `[System]`, or `[System: external]` for somebody else's. */
   line: string;
-  /** What is written at its top left: its name, then its kind line, as in `Shop [System]`. */
+  /** The words of the system's own `only`, whole. Missing when it has none of its own. */
+  only?: string;
+  /**
+   * What is written at its top left, whole: its name, then its kind line, then its own `only`
+   * when it has one, as in `Shop [System]` or `Shop [System] only in production`.
+   */
   title: string;
 }
 
@@ -102,7 +107,7 @@ export interface ViewArrow {
    * nothing for every one of them.
    */
   route?: ViewRoute;
-  /** When its connections are there at all, by their own `only`. Missing when none has one of its own. */
+  /** When its connections are there at all, as no box of the view says. Missing when none is under such a condition. */
   only?: ViewOnly;
   /** Whether its connections travel down a channel the far side opened. Missing when none says `opens: to`. */
   opened?: ViewOpened;
@@ -113,27 +118,46 @@ export interface ViewRoute {
   /** How many of the arrow's connections pass through something at this level: at least one. */
   count: number;
   /**
-   * When every connection of the arrow names the same in `via`, in the same order: the names of
-   * what they pass through, in the order of travel, each in brackets when it has an `only` of its
-   * own, as in `(Office proxy)`: it is on the way whenever it is there. Empty when the routes
-   * differ, or when only some connections have one.
+   * When every connection of the arrow names the same in `via`, in the same order: what they
+   * pass through, in the order of travel. Empty when the routes differ, or when only some
+   * connections have one.
    */
-  names: string[];
-  /** True when one of the names stands in brackets. */
+  hops: ViewHop[];
+  /** True when one of the hops stands in brackets. */
   bracketed: boolean;
-  /** The line its label says, whole: `via (Office proxy), HTTPS proxy`, or `via on 2 of 5` when the names are empty. */
+  /** The line its label says, whole: `via (Office proxy), HTTPS proxy`, or `via on 2 of 5` when there are no hops. */
   line: string;
 }
 
-/** When the connections of an arrow are there at all: what their own `only` says. Nothing they have from their ends. */
+/**
+ * One thing on a route: its name, and whether it stands in brackets, which it does when it has
+ * a condition, its own or one it has from what it is in: it is on the way whenever it is there.
+ * The two are apart so that a name too long for its line can be cut inside its brackets.
+ */
+export interface ViewHop {
+  /** Its name, or its id when its file has an error. */
+  name: string;
+  bracketed: boolean;
+}
+
+/**
+ * When the connections of an arrow are there at all, as no box of the view says it: each
+ * connection's own `only`, and what it has from a record the view does not draw as a box or as
+ * the boundary, such as a component inside the box at an end. A condition of a record the view
+ * draws is said on that box, and not here.
+ */
 export interface ViewOnly {
-  /** How many of the arrow's connections have an `only` of their own: at least one. */
+  /** How many of the arrow's connections have such a condition: at least one. */
   count: number;
-  /** True when every connection of the arrow has one of its own, whatever its words. */
+  /** True when every connection of the arrow has one, whatever its words. */
   all: boolean;
-  /** The words, when every connection has its own and they are the same. Missing when they differ, or when only some have one. */
+  /** The words, when every connection has exactly one such condition and they are the same. Missing when they differ, or when only some have one. */
   words?: string;
-  /** The line its label says, whole: `only ` and the words, as in `only in the hosted edition`, when there are words; else `only sometimes: 2 of 5`. */
+  /**
+   * The line its label says, whole: `only ` and the words, as in `only in the hosted edition`,
+   * when there are words; else `only on 2 of 5`: two of the five have such a condition, and it
+   * says nothing of the others.
+   */
   line: string;
 }
 
@@ -143,7 +167,10 @@ export interface ViewOpened {
   count: number;
   /** True when every connection of the arrow says it: the arrow carries a small ring before its head, and its label no line for it. */
   all: boolean;
-  /** When only some say it, the line its label says, whole: `opened from the far side: 2 of 5`. */
+  /**
+   * When only some say it, the line its label says, whole: `far side opened on 2 of 5`: two of
+   * the five say so, and the others do not say.
+   */
   line?: string;
 }
 
@@ -153,8 +180,12 @@ export interface ViewPassed {
   id: string;
   /** Its name, or its id when its file has an error. */
   name: string;
-  /** The words of its own `only`, whole: it is on the way whenever it is there. Missing when it has none of its own. */
-  only?: string;
+  /**
+   * The words of each condition it is under, whole and each once: its own `only` first, then
+   * those it has from what it is in, nearest first. It is on the way whenever it is there, and
+   * stands in brackets when it has any. Empty when it has none.
+   */
+  conditions: string[];
   /** True for a piece of infrastructure that is part of the system the view is about: the system's own. */
   own: boolean;
   /**
@@ -258,7 +289,10 @@ export interface PlacedBox extends Rect {
 /** The boundary with its place and the place of its title. */
 export interface PlacedBoundary extends Rect {
   id: string;
-  /** The title in one line. When the boundary is narrower than it, the name is cut and the kind line kept whole. */
+  /**
+   * The title in one line. When the boundary is narrower than it, the kind line is kept whole,
+   * and the name and the system's own `only` are cut to share what is left.
+   */
   title: string;
   titleAt: Rect;
 }
@@ -269,9 +303,12 @@ export interface PlacedLabel extends Rect {
   lines: string[];
   /** The route line, `via Ingress, Workhorse` or `via on 2 of 5`, when the arrow has a route: under the names, above the technology. Its room is inside the label's place. */
   route?: string;
-  /** The `only` line, `only in the hosted edition` or `only sometimes: 2 of 5`, when the arrow has one: under the route. Its room is inside the label's place. */
-  only?: string;
-  /** The line `opened from the far side: 2 of 5`, when only some connections of the arrow say so: under the `only` line. Its room is inside the label's place. */
+  /**
+   * The `only` line, `only in the hosted edition` or `only on 2 of 5`, when the arrow has one:
+   * under the route, broken into one or two lines as a name is. Its room is inside the label's place.
+   */
+  only?: string[];
+  /** The line `far side opened on 2 of 5`, when only some connections of the arrow say so: under the `only` line. Its room is inside the label's place. */
   opened?: string;
   /** The technology line, `[HTTPS]`, when the arrow has one. Its room is inside the label's place. */
   technology?: string;
@@ -317,10 +354,17 @@ export type Picture = Drawn | Failed;
 /** The listing of a model as a tree of ids, in the order `seefore list` prints it. */
 export interface Outline {
   people: string[];
-  /** The systems that have an app, a store or a piece of infrastructure in them, each with what is in it. */
+  /**
+   * The systems that have parts to show, each with what is in it: an app, a store of its own,
+   * or a piece of infrastructure that a connection starts or ends at. These are the systems
+   * that have a container view.
+   */
   withParts: OutlineSystem[];
-  /** The other systems. */
-  others: string[];
+  /**
+   * The other systems, each with the pieces of infrastructure in it, which connections only
+   * pass through, so that no view draws them as a box. Their apps and stores are always empty.
+   */
+  others: OutlineSystem[];
   /** The pieces of infrastructure in no system: things whose job is to pass exchanges on. A piece in a system is listed under it. */
   infrastructure: string[];
   /**
@@ -352,12 +396,18 @@ export interface OutlineApp {
   stores?: string[];
 }
 
-/** One wording of `only`, and the records that hold it as their own. */
+/** One wording of `only`, the records that hold it as their own, and those that have it from them. */
 export interface OutlineCondition {
   /** The words, as written: what reads after "only". */
   only: string;
   /** The ids of the records whose own `only` it is, in order of id. */
   records: string[];
+  /**
+   * The ids of the records that are not among `records` and have this wording from another
+   * record, as `conditionsOf` says: a part from what it is in, a connection from its ends. In
+   * order of id.
+   */
+  under: string[];
 }
 
 export interface OutlineGroup {
@@ -401,20 +451,24 @@ export interface ViewerState {
   /** Every problem `seefore check` reports, in its order. */
   problems: Problem[];
   model: Model;
-  /** For each part that has an owner: the owner and the record it comes from. */
+  /**
+   * For each part that has an owner: the owner and the record it comes from. Keyed by id, and
+   * so read only for what it holds itself: an id such as `constructor` is sound, and every
+   * object has one of its own.
+   */
   ownership: Record<string, Ownership>;
   /**
    * For each part and connection that is under a condition: the words of each `only`, its own
    * first, then those it has from what it is in or from its ends, each with the record it comes
-   * from. One under none is not in it.
+   * from. One under none is not in it. Keyed by id, and read as `ownership` is.
    */
   conditions: Record<string, Condition[]>;
   outline: Outline;
   /** Every view, in the order the sidebar lists them: the systems with parts first. */
   views: View[];
   /**
-   * The connections that no view holds in any way, in order of id: not on an arrow, not inside
-   * a box or between its copies, and not counted as left out. They are in no picture.
+   * The connections that no view draws, in order of id: not as an arrow, not inside a box, and
+   * not between its copies. They are in no picture.
    */
   inNoView: string[];
 }

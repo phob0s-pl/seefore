@@ -229,22 +229,19 @@ function listing(result: ListResult, layout: Layout, here: Here): string {
 
 /**
  * The systems with nothing in them that a container view would draw, each as the outline gives
- * it. The outline's own shape of them is read here alone, so that it can change in one place.
+ * it: one that holds only pieces of infrastructure that are passed through has them beneath it.
  */
-function otherSystems(outline: Outline): OutlineSystem[] {
-  return outline.others.map((id) => ({ id, apps: [], stores: [] }));
+function otherSystems(outline: Outline): readonly OutlineSystem[] {
+  return outline.others;
 }
 
 /**
  * The ids of the records that have a wording from another record and do not hold it as their
- * own, by `conditionsOf`. The two counts of a wording are worked out here alone, as the page works
- * them out, so that the command and the page agree.
+ * own. The outline works both counts of a wording out, and the page reads the same outline, so
+ * the command and the page agree.
  */
-function underOf(condition: OutlineCondition, index: Index): string[] {
-  const own = new Set(condition.records);
-  return [...index.conditions]
-    .filter(([id, conditions]) => !own.has(id) && conditions.some((had) => had.from !== id && had.only === condition.only))
-    .map(([id]) => id);
+function underOf(condition: OutlineCondition): readonly string[] {
+  return condition.under;
 }
 
 /**
@@ -253,7 +250,7 @@ function underOf(condition: OutlineCondition, index: Index): string[] {
  */
 function conditionLine(condition: OutlineCondition, index: Index): string {
   const own = condition.records.length;
-  const under = underOf(condition, index).length;
+  const under = underOf(condition).length;
   const more = under === 0 ? '' : `, ${under} more ${under === 1 ? 'has' : 'have'} it from ${own === 1 ? 'it' : 'them'}`;
   return `only ${condition.only} (${count(own, 'record')}${more})`;
 }

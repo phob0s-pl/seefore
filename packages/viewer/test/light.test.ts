@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { holds, litBy } from '../src/light.ts';
+import { holds, litBy, litByKept } from '../src/light.ts';
 import type { View, ViewBox } from '@seefore/core';
+import { ARCHIVE_STATE, archiveView } from './archive.ts';
 import { CONTAINERS, CONTEXT, HARD_CONTAINERS } from './fixture.ts';
 
 /** Which boxes and arrows a hover, the focus or a choice lights. */
@@ -91,12 +92,12 @@ const HELD: View = {
   ],
   boundary: { id: 'vellum', name: 'Vellumoak', line: '[System]', title: 'Vellumoak [System]' },
   arrows: [
-    { id: 'browser~web', from: 'browser', to: 'web', connections: ['browser-asks-web'], names: ['Asks'], technology: [], route: { count: 1, names: ['proxy'], bracketed: false, line: 'via proxy' } },
+    { id: 'browser~web', from: 'browser', to: 'web', connections: ['browser-asks-web'], names: ['Asks'], technology: [], route: { count: 1, hops: [{ name: 'proxy', bracketed: false }], bracketed: false, line: 'via proxy' } },
     { id: 'runner~proxy', from: 'runner', to: 'proxy', connections: ['runner-reloads-proxy'], names: ['Reloads'], technology: [] },
   ],
   left: { outside: [], broken: [] },
   legend: [],
-  passed: [{ id: 'balancer', name: 'Load balancer', own: false, connections: ['jobs-tell-jobs'], arrows: [] }],
+  passed: [{ id: 'balancer', name: 'Load balancer', conditions: [], own: false, connections: ['jobs-tell-jobs'], arrows: [] }],
 };
 
 describe('what passes through a connection held in a box', () => {
@@ -106,5 +107,25 @@ describe('what passes through a connection held in a box', () => {
 
   it('lights, for what has no box, the box that holds a connection passing through it', () => {
     expect(lit({ kind: 'passed', id: 'balancer' }, HELD)).toEqual({ boxes: ['jobs'], arrows: [] });
+  });
+});
+
+describe('what choosing a store that an app keeps lights', () => {
+  const view = archiveView('archive.containers');
+  /** The connections of the archive that start or end at a record. */
+  const of = (id: string) => new Set(ARCHIVE_STATE.model.connections.filter((one) => one.from === id || one.to === id).map((one) => one.id));
+  const sorted = ({ boxes, arrows }: { boxes: Set<string>; arrows: Set<string> }) => ({ boxes: [...boxes].sort(), arrows: [...arrows].sort() });
+
+  it('lights the app that keeps it and only the arrows that hold one of its connections, with their ends', () => {
+    // The indexer and staff read the drafts, drawn at Desk; Desk's own reading of them is inside its box.
+    expect(sorted(litByKept(view, 'desk', of('drafts')))).toEqual({ boxes: ['desk', 'indexer', 'staff'], arrows: ['indexer~desk', 'staff~desk'] });
+    // Desk's other arrows are not the store's: choosing Desk itself lights them.
+    expect(sorted(litBy(view, { kind: 'box', id: 'desk' })).arrows).toEqual(expect.arrayContaining(['desk~browser', 'desk~records']));
+    // A store whose every connection is inside its app lights the app alone.
+    expect(sorted(litByKept(view, 'desk', of('cache')))).toEqual({ boxes: ['desk'], arrows: [] });
+  });
+
+  it('lights nothing where the view does not draw the app', () => {
+    expect(sorted(litByKept(archiveView('archive.context'), 'desk', of('drafts')))).toEqual({ boxes: [], arrows: [] });
   });
 });

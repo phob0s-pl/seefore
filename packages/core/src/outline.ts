@@ -1,24 +1,30 @@
-import { keeperOf } from './conditions.ts';
+import { conditionsOf, keeperOf } from './conditions.ts';
 import type { Model, ModelRecord } from './model.ts';
 import type { Outline, OutlineApp, OutlineCondition, OutlineGroup, OutlineLoose, OutlineSystem } from './picture.ts';
 import type { App, Component, Connection, Infrastructure, Store, System } from './records.ts';
+import { systemsWithParts } from './views.ts';
 
 /**
  * The listing of a model as a tree of ids, in the order `seefore list` prints it: the people;
- * the systems that have an app, a store or a piece of infrastructure in them, each with its
- * apps, the components and the kept stores of each app, its own stores and its pieces of
- * infrastructure; the other systems; the pieces of infrastructure in no system; the connections
+ * the systems that have parts to show, each with its apps, the components and the kept stores
+ * of each app, its own stores and its pieces of infrastructure; the other systems, each with
+ * its pieces of infrastructure; the pieces of infrastructure in no system; the connections
  * under what they start from; the owners; the technologies; the wordings of `only`; and last the
  * parts whose `in` names a record with an error. Each list is in order of id. It says nothing of
  * how the listing is written: the command and the page each write it in their own way.
+ *
+ * A system has parts to show when it has a container view: when it has an app, a store of its
+ * own, or a piece of infrastructure that a connection starts or ends at. One whose only parts
+ * are pieces that connections pass through is among the others, with its pieces beneath it, so
+ * that the listing and the views agree on which systems have parts to show.
  */
 export function outlineOf(model: Model): Outline {
   const parts = partsOf(model);
   const systems = new Set(model.systems.map((system) => system.id));
   const apps = new Set(model.apps.map((app) => app.id));
-  const hasParts = (system: ModelRecord<System>): boolean => parts.appsIn.has(system.id) || parts.storesIn.has(system.id) || parts.piecesIn.has(system.id);
-  const withParts = model.systems.filter(hasParts);
-  const others = model.systems.filter((system) => !hasParts(system));
+  const shown = systemsWithParts(model);
+  const withParts = model.systems.filter((system) => shown.has(system.id));
+  const others = model.systems.filter((system) => !shown.has(system.id));
   const looseApps = model.apps.filter((app) => !systems.has(app.in));
   // A store is in its place when it is in a system, or kept by an app: what that app is in is the app's to say.
   const looseStores = model.stores.filter((store) => !systems.has(store.in) && keeperOf(model, store.id) === undefined);
@@ -40,6 +46,7 @@ export function outlineOf(model: Model): Outline {
     };
   };
   const tree = withParts.map(system);
+  const othersTree = others.map(system);
   const looseTree = looseApps.map((app): OutlineLoose => {
     const { components, stores } = outlined(app);
     return { id: app.id, family: 'apps', in: app.in, components, ...(stores === undefined ? {} : { stores }) };
@@ -47,10 +54,11 @@ export function outlineOf(model: Model): Outline {
 
   // What a connection may start from, in the order the listing shows it. A component's stand under its app.
   const appStarts = (app: OutlineApp): string[] => [app.id, ...(app.stores ?? [])];
+  const systemStarts = (each: OutlineSystem): string[] => [each.id, ...each.apps.flatMap(appStarts), ...each.stores, ...(each.infrastructure ?? [])];
   const starts = [
     ...model.people.map((person) => person.id),
-    ...tree.flatMap((each) => [each.id, ...each.apps.flatMap(appStarts), ...each.stores, ...(each.infrastructure ?? [])]),
-    ...others.map((each) => each.id),
+    ...tree.flatMap(systemStarts),
+    ...othersTree.flatMap(systemStarts),
     ...looseTree.flatMap(appStarts),
     ...ids(looseStores),
     ...ids(loosePieces),
@@ -59,7 +67,7 @@ export function outlineOf(model: Model): Outline {
   return {
     people: ids(model.people),
     withParts: tree,
-    others: ids(others),
+    others: othersTree,
     infrastructure: ids(unplaced),
     connections: groupsOf(model, starts, ids(unplaced)),
     owners: ids(model.owners),
@@ -110,10 +118,12 @@ function placedOf(model: Model): Placed[] {
 }
 
 /**
- * Each wording of `only` in the model, with the records whose own it is. The wordings come in
- * the order of their words with no regard to capitals, so that two that differ only there, or in
- * their last words, stand side by side; two that differ only in capitals come in the order of
- * their characters.
+ * Each wording of `only` in the model, with the records whose own it is, and the records that
+ * have it from one of those and do not say it themselves: a part from what it is in, a
+ * connection from its ends. So a reader sees how far a condition reaches, and not only where it
+ * is written. The wordings come in the order of their words with no regard to capitals, so that
+ * two that differ only there, or in their last words, stand side by side; two that differ only
+ * in capitals come in the order of their bytes.
  */
 function conditionsIn(model: Model): OutlineCondition[] {
   const records = [model.people, model.systems, model.apps, model.stores, model.components, model.infrastructure, model.connections].flat();
@@ -122,13 +132,31 @@ function conditionsIn(model: Model): OutlineCondition[] {
     if (record.only === undefined) continue;
     holders.set(record.only, [...(holders.get(record.only) ?? []), record.id]);
   }
+  const under = new Map<string, Set<string>>();
+  for (const record of records) {
+    for (const condition of conditionsOf(model, record.id)) {
+      // A record that says the words itself holds them as its own, though it may have them from above too.
+      if (condition.from === record.id || record.only === condition.only) continue;
+      under.set(condition.only, (under.get(condition.only) ?? new Set()).add(record.id));
+    }
+  }
   const byWords = (a: string, b: string): number => compare(a.toLowerCase(), b.toLowerCase()) || compare(a, b);
-  return [...holders.keys()].sort(byWords).map((only) => ({ only, records: [...(holders.get(only) ?? [])].sort(compare) }));
+  return [...holders.keys()].sort(byWords).map((only) => ({ only, records: [...(holders.get(only) ?? [])].sort(compare), under: [...(under.get(only) ?? [])].sort(compare) }));
 }
 
-/** Two texts in the order of their characters, the same on every machine. */
+/**
+ * Two texts in the order of their bytes in UTF-8, which is the order of their code points: the
+ * same on every machine, and the same as a command that sorts bytes. Comparing UTF-16 units, as
+ * `<` does, puts a character beyond the first plane before some within it.
+ */
 function compare(a: string, b: string): number {
-  return a < b ? -1 : a > b ? 1 : 0;
+  const left = [...a];
+  const right = [...b];
+  for (let at = 0; at < Math.min(left.length, right.length); at++) {
+    const difference = (left[at]?.codePointAt(0) ?? 0) - (right[at]?.codePointAt(0) ?? 0);
+    if (difference !== 0) return difference < 0 ? -1 : 1;
+  }
+  return left.length === right.length ? 0 : left.length < right.length ? -1 : 1;
 }
 
 /**

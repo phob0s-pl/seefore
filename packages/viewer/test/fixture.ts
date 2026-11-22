@@ -81,7 +81,7 @@ export const MODEL: Model = {
 export const OUTLINE: Outline = {
   people: ['customer'],
   withParts: [{ id: 'shop', apps: [{ id: 'order-api', components: ['checkout', 'order-status'] }], stores: ['orders-database'] }],
-  others: ['card-provider'],
+  others: [{ id: 'card-provider', apps: [], stores: [] }],
   infrastructure: [],
   connections: [
     { start: 'customer', known: true, connections: ['customer-pays-card-provider', 'customer-uses-shop'] },
@@ -418,7 +418,7 @@ export const HARD_MODEL: Model = {
 export const HARD_OUTLINE: Outline = {
   people: ['clerk'],
   withParts: [{ id: 'desk', apps: [{ id: 'gateway', components: [] }, { id: 'web', components: [] }], stores: ['events'] }],
-  others: ['cards'],
+  others: [{ id: 'cards', apps: [], stores: [] }],
   infrastructure: ['balancer', 'proxy'],
   connections: [
     { start: 'clerk', known: true, connections: ['clerk-uses-web'] },
@@ -468,7 +468,7 @@ export const HARD_CONTAINERS: View = {
       connections: ['clerk-uses-web'],
       names: ['Asks for pages'],
       technology: ['HTTPS'],
-      route: { count: 1, names: ['HTTPS proxy'], bracketed: false, line: 'via HTTPS proxy' },
+      route: { count: 1, hops: [{ name: 'HTTPS proxy', bracketed: false }], bracketed: false, line: 'via HTTPS proxy' },
     },
     { id: 'proxy~web', from: 'proxy', to: 'web', connections: ['proxy-checks-web'], names: ['Checks that it answers'], technology: [] },
     {
@@ -478,7 +478,7 @@ export const HARD_CONTAINERS: View = {
       connections: ['web-asks-cards', 'web-calls-cards'],
       names: ['Asks for a refund', 'Takes a payment'],
       technology: [],
-      route: { count: 1, names: [], bracketed: false, line: 'via on 1 of 2' },
+      route: { count: 1, hops: [], bracketed: false, line: 'via on 1 of 2' },
     },
     { id: 'web~events', from: 'web', to: 'events', connections: ['web-publishes-events'], names: ['Says what changed'], technology: [] },
   ],
@@ -495,7 +495,7 @@ export const HARD_CONTAINERS: View = {
     { key: 'route', text: 'Route: what the connections pass through, in order; “via on 2 of 5” when they differ' },
     { key: 'passing', text: "Passing through: how many of this view's connections pass through it" },
   ],
-  passed: [{ id: 'balancer', name: 'Load balancer', own: false, connections: ['web-calls-cards'], arrows: ['web~cards'] }],
+  passed: [{ id: 'balancer', name: 'Load balancer', conditions: [], own: false, connections: ['web-calls-cards'], arrows: ['web~cards'] }],
 };
 
 export const HARD_PICTURE: Drawn = {
@@ -572,5 +572,5 @@ export const BROKEN_HOP_STATE: ViewerState = {
   problems: [{ file: 'infrastructure/balancer.yaml', line: 2, column: 1, severity: 'error', code: 'key-unknown', message: 'A piece of infrastructure has no `colour`.' }],
   model: { ...HARD_MODEL, infrastructure: HARD_MODEL.infrastructure.filter((piece) => piece.id !== 'balancer') },
   outline: { ...HARD_OUTLINE, infrastructure: ['proxy'] },
-  views: [{ ...HARD_CONTAINERS, passed: [{ id: 'balancer', name: 'balancer', own: false, connections: ['web-calls-cards'], arrows: ['web~cards'] }] }],
+  views: [{ ...HARD_CONTAINERS, passed: [{ id: 'balancer', name: 'balancer', conditions: [], own: false, connections: ['web-calls-cards'], arrows: ['web~cards'] }] }],
 };

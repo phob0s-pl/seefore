@@ -51,7 +51,7 @@ describe('the outline', () => {
           stores: ['orders-database'],
         },
       ],
-      others: ['card-provider'],
+      others: [{ id: 'card-provider', apps: [], stores: [] }],
       infrastructure: [],
       connections: [
         { start: 'customer', known: true, connections: ['customer-shops'] },
@@ -79,7 +79,7 @@ describe('the outline', () => {
       ],
       stores: ['queue'],
     });
-    expect(outline.others).toEqual(['mailer']);
+    expect(outline.others).toEqual([{ id: 'mailer', apps: [], stores: [] }]);
   });
 
   it("puts each connection under the person, system, app or store it starts from, a component's under its app, in the order of the listing", () => {
@@ -213,10 +213,19 @@ describe('the outline of stage 6b', () => {
 
   it('puts a piece of infrastructure under the system it is in, and keeps one in no system apart', () => {
     expect(outline.infrastructure).toEqual(['proxy']);
-    // A system with a piece in it, and nothing else, has a part.
-    expect(outline.withParts.map((system) => system.id)).toEqual(['archive', 'vault']);
-    expect(outline.withParts[1]).toEqual({ id: 'vault', apps: [], stores: [], infrastructure: ['lock'] });
-    expect(outline.others).toEqual([]);
+    // A system whose only piece nothing starts or ends at has no part to show: it is among the others, with its piece.
+    expect(outline.withParts.map((system) => system.id)).toEqual(['archive']);
+    expect(outline.others).toEqual([{ id: 'vault', apps: [], stores: [], infrastructure: ['lock'] }]);
+  });
+
+  it('counts a system as one with parts when a connection starts or ends at a piece in it, as its views do', () => {
+    const ended = outlineOf(modelOf({ ...KEPT, 'connections/staff-opens-lock.yaml': 'from: staff\nto: lock\n' }));
+    expect(ended.withParts.map((system) => system.id)).toEqual(['archive', 'vault']);
+    expect(ended.withParts[1]).toEqual({ id: 'vault', apps: [], stores: [], infrastructure: ['lock'] });
+    expect(ended.others).toEqual([]);
+    // Passed through only, it is not.
+    const passed = outlineOf(modelOf({ ...KEPT, 'connections/staff-reaches-desk.yaml': 'from: staff\nto: desk\nvia: [lock]\n' }));
+    expect(passed.withParts.map((system) => system.id)).toEqual(['archive']);
   });
 
   it('puts the connections of a kept store under it, after its app, those of a piece in a system after the system’s stores, and those of a piece in no system last', () => {
@@ -229,13 +238,32 @@ describe('the outline of stage 6b', () => {
     ]);
   });
 
-  it('lists each wording of `only` with the records whose own it is, two that differ in capitals side by side', () => {
+  it('lists each wording of `only` with the records whose own it is, and those that have it from them, two that differ in capitals side by side', () => {
     expect(outline.conditions).toEqual([
-      { only: 'at night', records: ['drafts-copies-records'] },
-      { only: 'in the head office', records: ['office-proxy', 'staff'] },
-      { only: 'In the hosted edition', records: ['desk'] },
-      { only: 'in the hosted edition', records: ['indexer'] },
+      { only: 'at night', records: ['drafts-copies-records'], under: [] },
+      // The connection that passes through the office proxy has nothing from it; the one from staff has it from staff.
+      { only: 'in the head office', records: ['office-proxy', 'staff'], under: ['staff-uses-desk'] },
+      {
+        only: 'In the hosted edition',
+        records: ['desk'],
+        under: ['cache', 'desk-keeps-drafts', 'drafts', 'drafts-copies-records', 'editor', 'editor-reads-cache', 'gate-checks-desk', 'proxy-checks-desk', 'staff-uses-desk'],
+      },
+      { only: 'in the hosted edition', records: ['indexer'], under: [] },
     ]);
+  });
+
+  it('counts a record that says a wording again as one that holds it, and not among those that have it from another', () => {
+    const again = outlineOf(modelOf({ ...KEPT, 'components/editor.yaml': 'name: Editor\nin: desk\nonly: In the hosted edition\n' }));
+    const hosted = again.conditions.find((condition) => condition.only === 'In the hosted edition');
+    expect(hosted?.records).toEqual(['desk', 'editor']);
+    expect(hosted?.under).not.toContain('editor');
+    expect(hosted?.under).toContain('editor-reads-cache');
+  });
+
+  it('sorts the wordings by their bytes where capitals do not tell them apart, beyond the first plane too', () => {
+    const wide = outlineOf(modelOf({ 'apps/a.yaml': 'name: A\nin: s\nonly: "\\U0001F600 on"\n', 'apps/b.yaml': 'name: B\nin: s\nonly: "\\uFF01 on"\n', 'systems/s.yaml': 'name: S\n' }));
+    // In UTF-16 the emoji, a pair of surrogates from D800, would come before U+FF01; in UTF-8 and by code point it comes after.
+    expect(wide.conditions.map((condition) => condition.only)).toEqual(['\uFF01 on', '\u{1F600} on']);
   });
 
   it('gives a piece of infrastructure whose system has an error last, and an app there with its kept stores', () => {

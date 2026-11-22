@@ -107,9 +107,13 @@ export function arrowSaid(arrow: ViewArrow, names: ReadonlyMap<string, string>):
   return `${from} to ${to}: ${arrow.names.join('; ')}${route}${only}${opened}${technology}`;
 }
 
-/** What a screen reader says for something passed through that has no box: its name, its own `only`, whether it is the system's own, and how many pass through it. */
-export function passedSaid(name: string, only: string | undefined, own: string | undefined, passing: string): string {
-  return [name, only === undefined ? undefined : `only ${only}`, own === undefined ? undefined : `part of ${own}`].filter((part) => part !== undefined).join(', ') + `: ${passing}`;
+/**
+ * What a screen reader says for something passed through that has no box: its name, the words
+ * of each condition it is under, its own and those from what it is in, whether it is the
+ * system's own, and how many pass through it.
+ */
+export function passedSaid(name: string, conditions: readonly string[], own: string | undefined, passing: string): string {
+  return [name, ...conditions.map((only) => `only ${only}`), own === undefined ? undefined : `part of ${own}`].filter((part) => part !== undefined).join(', ') + `: ${passing}`;
 }
 
 /** The name of each box and of the boundary of a view, by id. */
@@ -136,7 +140,8 @@ export function toFlow(view: View, drawn: Drawn): { nodes: PictureNode[]; edges:
       height: boundary.height,
       data: { boundary: view.boundary, placed: boundary, titleAt: relativeTo(boundary.titleAt, boundary) },
       handles: handlesOf(boundary.width, boundary.height),
-      ariaLabel: `${boundary.title}, the boundary of the system`,
+      // The whole title, which the picture may have cut to the boundary's width.
+      ariaLabel: `${view.boundary.title}, the boundary of the system`,
       draggable: false,
       connectable: false,
       selectable: false,
@@ -246,13 +251,13 @@ export interface LabelLine {
   kind: 'name' | 'route' | 'only' | 'opened' | 'technology';
 }
 
-/** The lines of a label as given, stacked in the middle of the label's place: the names, the route, the `only` line, the line of who opened, then the technology. */
+/** The lines of a label as given, stacked in the middle of the label's place: the names, the route, the `only` line in one or two, the line of who opened, then the technology. */
 export function labelLines(label: PlacedLabel): LabelLine[] {
   const one = (text: string | undefined, kind: LabelLine['kind'], height: number) => (text === undefined ? [] : [{ text, kind, height }]);
   const given: { text: string; kind: LabelLine['kind']; height: number }[] = [
     ...label.lines.map((text) => ({ text, kind: 'name' as const, height: LINE_HEIGHT.label })),
     ...one(label.route, 'route', LINE_HEIGHT.route),
-    ...one(label.only, 'only', LINE_HEIGHT.condition),
+    ...(label.only ?? []).map((text) => ({ text, kind: 'only' as const, height: LINE_HEIGHT.condition })),
     ...one(label.opened, 'opened', LINE_HEIGHT.condition),
     ...one(label.technology, 'technology', LINE_HEIGHT.technology),
   ];

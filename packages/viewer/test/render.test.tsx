@@ -1,8 +1,11 @@
-import type { Drawn, View } from '@seefore/core';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import type { Drawn, View, ViewerState } from '@seefore/core';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { Route } from '../src/address.ts';
 import type { Selection } from '../src/follow.ts';
+import { holdersWords } from '../src/listing.tsx';
 import type { Shown } from '../src/live.ts';
 import { Page, pageTitle } from '../src/page.tsx';
 import { ARCHIVE_FILES, ARCHIVE_STATE, archivePicture, archiveView, stateOf } from './archive.ts';
@@ -568,14 +571,15 @@ describe('the listing, for what passes through and what is in no picture', () =>
   it('says at its top how many connections are in no picture, and marks each on its line', () => {
     const html = render({ page: 'model' }, null, null, { ...HARD_STATE, inNoView: ['proxy-checks-web', 'web-asks-cards'] });
     const listing = html.slice(html.indexOf('<article class="listing"'));
-    const notice = '<p class="in-no-picture" role="note">2 connections are in no picture, since no view draws both their ends. Each is marked “in no picture” under Connections.</p>';
+    const notice =
+      '<p class="in-no-picture" role="note">2 connections are in no picture: no view draws them. A view is about a system, and draws a connection only where an end of it is in that system and neither end is a record with an error. Each is marked “in no picture” under Connections.</p>';
     expect(listing).toContain(notice);
     // Under the name of the model and where it is, before every section.
     expect(listing.indexOf(notice)).toBeLessThan(listing.indexOf('<section'));
     expect(times(listing, '(in no picture)')).toBe(2);
     expect(listing).toMatch(/<code>proxy-checks-web<\/code><\/span><span class="entry-facts"> \(in no picture\)<\/span>/);
     expect(render({ page: 'model' }, null, null, { ...HARD_STATE, inNoView: ['proxy-checks-web'] })).toContain(
-      '1 connection is in no picture, since no view draws both its ends. It is marked “in no picture” under Connections.',
+      '1 connection is in no picture: no view draws it. A view is about a system, and draws a connection only where an end of it is in that system and neither end is a record with an error. It is marked “in no picture” under Connections.',
     );
     expect(render({ page: 'model' }, null, null, HARD_STATE)).not.toContain('in no picture');
   });
@@ -629,7 +633,10 @@ describe('who reads and writes a store, on its panel', () => {
   it('gives the four lists, each left out when empty, each entry the one that acts and the connection', () => {
     const panel = panelOf(archive(undefined, { kind: 'box', id: 'records' }));
     expect(panel).toMatch(/<h3>Written by \(1\)<\/h3><ul><li><button type="button" class="record-name">Desk<\/button>: <button type="button" class="record-name">Saves an edit<\/button><\/li><\/ul>/);
-    expect(panel).toMatch(/<h3>Read by \(1\)<\/h3><ul><li><button type="button" class="record-name">Indexer<\/button>: <button type="button" class="record-name">Reads the records<\/button><\/li><\/ul>/);
+    // A read made only at night says so where it is listed.
+    expect(panel).toMatch(
+      /<h3>Read by \(1\)<\/h3><ul><li><button type="button" class="record-name">Indexer<\/button>: <button type="button" class="record-name">Reads the records<\/button><span class="uses-only"> \(only at night\)<\/span><\/li><\/ul>/,
+    );
     expect(panel).not.toContain('Read and written by');
     expect(panel).not.toContain('Does not say');
   });
@@ -718,7 +725,7 @@ describe('a channel that the far side opened, in the picture and the panel', () 
     const html = render({ page: 'view', view: view.id }, archivePicture(view), null, state);
     expect(html).not.toContain('<circle class="arrow-ring"');
     expect(html).toContain('<text class="label-opened"');
-    expect(html).toContain('>opened from the far side: 1 of 2<');
+    expect(html).toContain('>far side opened on 1 of 2<');
     expect(html).toMatch(/data-key="opened-some"><svg[^]*?>opened<\/text>/);
   });
 
@@ -737,7 +744,8 @@ describe('the listing of stage 6b', () => {
     );
     expect(order.every((place) => place >= 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
-    expect(html).toContain('piece of infrastructure <code>gate</code>');
+    // In the word `seefore list` writes there, as an app is: `infrastructure gate: Gate`.
+    expect(html).toContain('>Gate</button> <span class="entry-id">infrastructure <code>gate</code></span>');
     // A piece in no system stays under the heading it had.
     expect(html).toMatch(/<h2>Infrastructure \(1\)<\/h2><ul><li class="entry"><div class="entry-head"><button type="button" class="record-name">HTTPS proxy<\/button> <span class="entry-id"><code>proxy<\/code>/);
     expect(html).not.toContain('Parts in a record with an error');
@@ -746,7 +754,7 @@ describe('the listing of stage 6b', () => {
   it('writes what a connection does to a store, and that the far side opened its channel, before its name', () => {
     expect(html).toContain('>→ Drafts: [read-write] Keeps edits that are not yet saved<');
     expect(html).toContain('>→ Records: [write] Saves an edit<');
-    expect(html).toContain('>→ Staff browser, via HTTPS proxy, Office proxy: [opened by the far side] Says when a job is done<');
+    expect(html).toContain('>→ Staff browser, via HTTPS proxy, (Office proxy): [opened by the far side] Says when a job is done<');
     expect(html).toContain('>→ Drafts: Opens a draft by hand<');
   });
 
@@ -762,5 +770,174 @@ describe('the listing of stage 6b', () => {
     expect(order.every((place) => place >= 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
     expect(conditions).toContain('>only in the head office <span class="entry-facts">(1 record)</span>');
+    // The indexer's two connections have its condition from it.
+    expect(conditions).toContain('>only in the hosted edition <span class="entry-facts">(1 record, 2 more have it from it)</span>');
+  });
+
+  it('says how many more have a wording from those that hold it, as `seefore list` does', () => {
+    expect(holdersWords({ records: ['relay'], under: [] })).toBe('1 record');
+    expect(holdersWords({ records: ['relay'], under: ['a', 'b', 'c', 'd', 'e', 'f'] })).toBe('1 record, 6 more have it from it');
+    expect(holdersWords({ records: ['relay', 'proxy'], under: ['a'] })).toBe('2 records, 1 more has it from them');
+  });
+});
+
+/**
+ * The review of stage 6b, its first test: a person whose id is `constructor`, which every object
+ * of JavaScript has a property of, and one whose id is `tostring`, in a state that has come as
+ * JSON, as the page gets it from the server.
+ */
+describe('a record whose id every object has a property of', () => {
+  const files = {
+    'seefore.yaml': 'format: 1\nname: Review\n',
+    'people/constructor.yaml': 'name: Constructor\n',
+    'people/tostring.yaml': 'name: To string\nonly: on weekdays\n',
+    'systems/shelf.yaml': 'name: Shelf\n',
+    'connections/constructor-uses-shelf.yaml': 'from: constructor\nto: shelf\nname: Uses it\n',
+  };
+  const state: ViewerState = JSON.parse(JSON.stringify(stateOf(files)));
+
+  it('is listed, with no condition and no owner it does not have', () => {
+    const whole = render({ page: 'model' }, null, null, state);
+    const html = whole.slice(whole.indexOf('<article class="listing"'));
+    expect(html).toContain('>Constructor</button> <span class="entry-id"><code>constructor</code></span>');
+    expect(html).toContain('>To string</button><span class="entry-only"> (only on weekdays)</span>');
+    expect(html).toContain('>→ Shelf: Uses it<');
+  });
+
+  it('opens its panel, and so does its connection', () => {
+    const panel = panelOf(render({ page: 'model' }, null, { kind: 'record', id: 'constructor' }, state));
+    expect(panel).toContain('<dt>Kind</dt><dd>Person</dd>');
+    expect(panel).not.toContain('<dt>Only');
+    expect(panel).not.toContain('<dt>Owner');
+    const connection = panelOf(render({ page: 'model' }, null, { kind: 'record', id: 'constructor-uses-shelf' }, state));
+    expect(connection).toContain('<dt>From and to</dt><dd>Constructor → Shelf</dd>');
+    expect(panelOf(render({ page: 'model' }, null, { kind: 'record', id: 'tostring' }, state))).toContain('<dt>Only</dt><dd>on weekdays</dd>');
+  });
+
+  it('is drawn in a view, its panel opened there too', () => {
+    const view = archiveView('shelf.context', state);
+    const html = render({ page: 'view', view: view.id }, archivePicture(view), { kind: 'box', id: 'constructor' }, state);
+    expect(html).toContain('data-id="constructor"');
+    expect(panelOf(html)).toContain('<dt>Kind</dt><dd>Person</dd>');
+  });
+});
+
+/**
+ * The archive with an edge system that is there only in production, whose gate the route of a
+ * push passes through, and a vault whose one piece, its lock, staff open.
+ */
+const EDGED: Readonly<Record<string, string>> = {
+  ...ARCHIVE_FILES,
+  'systems/edge.yaml': 'name: Edge\nonly: in production\n',
+  'infrastructure/edge-gate.yaml': 'name: Edge gate\nin: edge\n',
+  'connections/desk-tells-browser.yaml': 'from: desk\nto: browser\nvia: [proxy, edge-gate, office-proxy]\nopens: to\nname: Says when a job is done\n',
+  'systems/vault.yaml': 'name: Vault\n',
+  'infrastructure/lock.yaml': 'name: Lock\nin: vault\n',
+  'connections/staff-opens-lock.yaml': 'from: staff\nto: lock\nname: Opens it\n',
+};
+const EDGED_STATE = stateOf(EDGED);
+
+/** The page of the edged archive on a route, with something chosen when given. */
+function edged(route: Route = { page: 'view', view: 'archive.containers' }, selection: Selection | null = null): string {
+  const view = route.page === 'view' ? archiveView(route.view, EDGED_STATE) : undefined;
+  return render(route, view === undefined ? null : archivePicture(view), selection, EDGED_STATE);
+}
+
+describe('a thing on a route whose condition comes from what it is in', () => {
+  it('stands in brackets on the arrow and in the list under the legend', () => {
+    const html = edged();
+    expect(EDGED_STATE.errors).toBe(0);
+    expect(html).toContain('>via HTTPS proxy, (Edge gate), (Office proxy)<');
+    const legend = html.slice(html.indexOf('aria-label="Legend"'));
+    expect(legend).toContain(`data-id="edge-gate" aria-label="${escaped('Edge gate, only in production: 1 connection passes through it')}">(Edge gate) <span class="passes-count">1</span>`);
+  });
+
+  it('is given on the panel beside its name, with the record the condition comes from when it is not its own', () => {
+    const panel = panelOf(edged(undefined, { kind: 'arrow', id: 'desk~browser' }));
+    expect(panel).toContain(
+      '<div class="connection-route">via <ol class="hops hops-conditions"><li><button type="button" class="record-name">HTTPS proxy</button></li><li><button type="button" class="record-name">(Edge gate)</button><span class="hop-only"> only in production, from <button type="button" class="record-name">Edge</button></span></li><li><button type="button" class="record-name">(Office proxy)</button><span class="hop-only"> only in the head office</span></li></ol></div>',
+    );
+    // The connection has nothing from what it passes through.
+    expect(panel).not.toContain('class="connection-only"');
+    expect(panel).not.toContain('<ul class="conditions">');
+  });
+
+  it('stands in brackets in the listing, as `seefore list` writes it', () => {
+    expect(edged({ page: 'model' })).toContain('>→ Staff browser, via HTTPS proxy, (Edge gate), (Office proxy): [opened by the far side] Says when a job is done<');
+  });
+});
+
+describe('a system that holds only pieces of infrastructure', () => {
+  it('has a container view when a connection ends at its piece, and none when its piece is only passed through', () => {
+    expect(EDGED_STATE.views.map((view) => view.id)).toEqual(['archive.context', 'archive.containers', 'vault.context', 'vault.containers', 'edge.context']);
+  });
+
+  it('stands with the systems with parts in the sidebar and the listing alike, or with the others in both', () => {
+    const html = edged();
+    const sidebar = html.slice(0, html.indexOf('</nav>'));
+    const order = ['>Archive</span>', '>Vault</span>', '#/view/vault.containers', '<details class="others"', '#/view/edge.context'].map((piece) => sidebar.indexOf(piece));
+    expect(order.every((place) => place >= 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    const whole = edged({ page: 'model' });
+    const listing = whole.slice(whole.indexOf('<article class="listing"'));
+    const others = listing.slice(listing.indexOf('<h2>Other systems (1)</h2>'));
+    expect(listing).toContain('<h2>Systems with parts (2)</h2>');
+    expect(listing.indexOf('<code>lock</code>')).toBeLessThan(listing.indexOf('<h2>Other systems (1)</h2>'));
+    // The edge, with its gate beneath it.
+    expect(others).toMatch(/^<h2>Other systems \(1\)<\/h2><ul><li class="entry"><div class="entry-head"><button type="button" class="record-name">Edge<\/button>[^]*?<ul><li class="entry"><div class="entry-head"><button type="button" class="record-name">Edge gate<\/button> <span class="entry-id">infrastructure <code>edge-gate<\/code>/);
+    expect(listing).toContain('>only in production <span class="entry-facts">(1 record, 1 more has it from it)</span>');
+  });
+});
+
+describe('a store that an app keeps, chosen while the view is shown', () => {
+  const html = archive(undefined, { kind: 'record', id: 'drafts' });
+
+  it('lights only the arrows that hold one of its connections, and fades the app’s others', () => {
+    // The indexer's and the staff's readings of the drafts; not Desk's saves to the records, nor its push to the browser.
+    expect(times(html, 'class="arrow lit"')).toBe(2);
+    expect(times(html, 'class="arrow faded"')).toBe(4);
+    expect(html).toContain('box family-apps lit" data-look="app"');
+  });
+
+  it('says on its panel how many of its connections are inside its app, and so not drawn', () => {
+    const panel = panelOf(html);
+    expect(panel).toContain('<h3>Inside Desk, not drawn (1)</h3>');
+    expect(panel).toContain('Desk keeps it, and this view draws it at Desk: 1 of its connections is inside Desk, and so not drawn. 2 are on the arrows that light with it.');
+    expect(panel).toContain('>Keeps edits that are not yet saved</p>');
+    // Not where the app has no box.
+    expect(panelOf(archive({ page: 'view', view: 'archive.context' }, { kind: 'record', id: 'drafts' }))).not.toContain('Inside Desk');
+  });
+});
+
+describe('the line under the title of a view that draws stores at their apps', () => {
+  it('says how many', () => {
+    expect(archive()).toMatch(/<p class="view-counts">[^<]*2 stores are drawn at the apps that keep them\./);
+    const one = stateOf({ ...ARCHIVE_FILES, 'stores/cache.yaml': 'name: Cache\nin: archive\nkind: cache\n' });
+    const view = archiveView('archive.containers', one);
+    expect(render({ page: 'view', view: view.id }, archivePicture(view), null, one)).toContain('1 store is drawn at the app that keeps it.');
+    expect(render(containers, CONTAINER_PICTURE)).not.toContain('drawn at the app');
+  });
+});
+
+describe('the boundary of a system that has a condition', () => {
+  it('says it after the kind line, whole for a screen reader', () => {
+    const state = stateOf({ ...ARCHIVE_FILES, 'systems/archive.yaml': 'name: Archive\nonly: in production\n' });
+    const view = archiveView('archive.containers', state);
+    const html = render({ page: 'view', view: view.id }, archivePicture(view), null, state);
+    expect(html).toContain('>Archive [System] only in production<');
+    expect(html).toContain('aria-label="Archive [System] only in production, the boundary of the system"');
+    expect(html).toMatch(/data-key="only"><svg/);
+  });
+});
+
+describe('the legend, with every mark of the stage', () => {
+  const css = readFileSync(fileURLToPath(new URL('../src/styles.css', import.meta.url)), 'utf8');
+
+  it('is never taller than a quarter of the window, and scrolls inside, so that the picture keeps its room', () => {
+    const rule = /\n\.legend \{([^}]*)\}/.exec(css)?.[1] ?? '';
+    expect(rule).toContain('max-height: 25vh;');
+    expect(rule).toContain('overflow-y: auto;');
+    // A line at its foot says there is more while there is; it is measured in the browser.
+    expect(/\n\.legend-more \{[^}]*position: sticky;/.test(css)).toBe(true);
   });
 });

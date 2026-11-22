@@ -1,3 +1,4 @@
+import type { ViewBoundary } from '@seefore/core';
 import { describe, expect, it } from 'vitest';
 import { ELLIPSIS, widthOf } from '../src/measure.ts';
 import {
@@ -18,8 +19,9 @@ import {
   TECHNOLOGY_FONT,
   TECHNOLOGY_LINE_HEIGHT,
   TEXT_INSET,
+  TITLE_FONT,
 } from '../src/sizes.ts';
-import { boxText, labelText } from '../src/text.ts';
+import { boxText, labelText, titleText } from '../src/text.ts';
 import { arrow, box, route } from './views.ts';
 
 /** True when no line is wider than the width, allowing for the sum of fractions. */
@@ -172,6 +174,20 @@ describe('the route line of a label', () => {
     expect(fit([alone?.route ?? ''], ROUTE_FONT, LABEL_WIDTH)).toBe(true);
   });
 
+  it('cuts a name in brackets inside them, and keeps both, and how many are left', () => {
+    // The reviewer's route: a long name with a condition, then another thing.
+    const name = 'Enterprise gateway for long-lived browser streaming connections behind the regional office perimeter';
+    const label = labelText({ ...arrow('a', 'b', ['Pushes']), route: route([`(${name})`, 'Front']) });
+    expect(label?.route).toMatch(new RegExp(`^via \\(Enterprise[^)]*${ELLIPSIS}\\), \\+ 1 more$`));
+    expect(fit([label?.route ?? ''], ROUTE_FONT, LABEL_WIDTH)).toBe(true);
+    // Alone, too.
+    const alone = labelText({ ...arrow('a', 'b', ['Pushes']), route: route([`(${name})`]) });
+    expect(alone?.route).toMatch(new RegExp(`^via \\(Enterprise[^)]*${ELLIPSIS}\\)$`));
+    expect(fit([alone?.route ?? ''], ROUTE_FONT, LABEL_WIDTH)).toBe(true);
+    // Whole names in brackets that fit are given whole before the count, brackets and all.
+    expect(labelText({ ...arrow('a', 'b', ['Pays']), route: route(['(CDN)', 'Ingress', 'The load balancer of the proxies']) })?.route).toBe('via (CDN), + 2 more');
+  });
+
   it('is missing when no connection of the arrow passes through anything', () => {
     expect(labelText(arrow('a', 'b', ['Pays'], ['HTTPS']))).not.toHaveProperty('route');
   });
@@ -206,19 +222,34 @@ describe('the lines of a label that say when its connections are there, and who 
       ...arrow('a', 'b', ['Says when a job is done'], ['HTTPS']),
       route: route(['(Office proxy)']),
       only: { count: 1, all: true, words: 'in the head office', line: 'only in the head office' },
-      opened: { count: 1, all: false, line: 'opened from the far side: 1 of 2' },
+      opened: { count: 1, all: false, line: 'far side opened on 1 of 2' },
     });
-    expect(label).toMatchObject({ route: 'via (Office proxy)', only: 'only in the head office', opened: 'opened from the far side: 1 of 2', technology: '[HTTPS]' });
+    expect(label).toMatchObject({ route: 'via (Office proxy)', only: ['only in the head office'], opened: 'far side opened on 1 of 2', technology: '[HTTPS]' });
     expect(label?.height).toBe(LABEL_LINE_HEIGHT + ROUTE_LINE_HEIGHT + 2 * CONDITION_LINE_HEIGHT + TECHNOLOGY_LINE_HEIGHT);
   });
 
-  it('cut the words of a condition with an ellipsis, but never the numbers of a line that says on how many', () => {
-    const words = labelText({ ...arrow('a', 'b', ['Pays']), only: { count: 1, all: true, words: 'when the hidden S3 or Azure flags are set', line: 'only when the hidden S3 or Azure flags are set' } });
-    expect(words?.only?.endsWith(ELLIPSIS)).toBe(true);
-    expect(fit([words?.only ?? ''], CONDITION_FONT, LABEL_WIDTH)).toBe(true);
-    const counted = labelText({ ...arrow('a', 'b', ['Pays']), opened: { count: 12, all: false, line: 'opened from the far side: 12 of 15' } });
-    expect(counted?.opened).toBe('opened from the far side: 12 of 15');
-    expect(counted?.width).toBe(Math.ceil(widthOf('opened from the far side: 12 of 15', CONDITION_FONT)));
+  it('break the words of a condition onto a second line, as a name, and cut them only after it', () => {
+    // A condition of the hand-written Syncthing, which one line cut after "only when LDAP".
+    const two = labelText({ ...arrow('a', 'b', ['Checks a login']), only: { count: 1, all: true, words: 'when LDAP authentication is configured', line: 'only when LDAP authentication is configured' } });
+    expect(two?.only).toHaveLength(2);
+    expect(two?.only?.join(' ')).toBe('only when LDAP authentication is configured');
+    expect(fit(two?.only ?? [], CONDITION_FONT, LABEL_WIDTH)).toBe(true);
+    expect(two?.height).toBe(LABEL_LINE_HEIGHT + 2 * CONDITION_LINE_HEIGHT);
+    const long = labelText({
+      ...arrow('a', 'b', ['Pays']),
+      only: { count: 1, all: true, words: 'when the hidden S3 or Azure flags are set and the bucket is in the same region', line: 'only when the hidden S3 or Azure flags are set and the bucket is in the same region' },
+    });
+    expect(long?.only).toHaveLength(2);
+    expect(long?.only?.[1]?.endsWith(ELLIPSIS)).toBe(true);
+    expect(fit(long?.only ?? [], CONDITION_FONT, LABEL_WIDTH)).toBe(true);
+    // Short words keep one line.
+    expect(labelText({ ...arrow('a', 'b', ['Pays']), only: { count: 1, all: true, words: 'at night', line: 'only at night' } })?.only).toEqual(['only at night']);
+  });
+
+  it('never cut the numbers of a line that says on how many', () => {
+    const counted = labelText({ ...arrow('a', 'b', ['Pays']), opened: { count: 12, all: false, line: 'far side opened on 12 of 15' }, only: { count: 12, all: false, line: 'only on 12 of 15' } });
+    expect(counted?.opened).toBe('far side opened on 12 of 15');
+    expect(counted?.only).toEqual(['only on 12 of 15']);
   });
 
   it('have no line where every connection opened from the far side: the ring on the line says it', () => {
@@ -228,6 +259,31 @@ describe('the lines of a label that say when its connections are there, and who 
   });
 
   it('make a label for an arrow that has no other words', () => {
-    expect(labelText({ ...arrow('a', 'b', []), only: { count: 1, all: false, line: 'only sometimes: 1 of 2' } })).toMatchObject({ lines: [], only: 'only sometimes: 1 of 2' });
+    expect(labelText({ ...arrow('a', 'b', []), only: { count: 1, all: false, line: 'only on 1 of 2' } })).toMatchObject({ lines: [], only: ['only on 1 of 2'] });
+  });
+});
+
+describe('the title of a boundary', () => {
+  const boundary = (name: string, only?: string): ViewBoundary => ({ id: 'shop', name, line: '[System]', ...(only === undefined ? {} : { only }), title: `${name} [System]${only === undefined ? '' : ` only ${only}`}` });
+
+  it('says the system’s own `only` after its kind line, whole when it fits', () => {
+    expect(titleText(boundary('Shop', 'in production'), 1000)).toBe('Shop [System] only in production');
+    expect(titleText(boundary('Shop'), 1000)).toBe('Shop [System]');
+  });
+
+  it('keeps the kind line whole, and cuts the name and the `only` to share what is left', () => {
+    const width = widthOf('Shop [System] only in production', TITLE_FONT) - 20;
+    // A short name keeps whole, and the condition is cut.
+    const short = titleText(boundary('Shop', 'in production'), width);
+    expect(short.startsWith('Shop [System] only in')).toBe(true);
+    expect(short.endsWith(ELLIPSIS)).toBe(true);
+    expect(widthOf(short, TITLE_FONT)).toBeLessThanOrEqual(width + 1e-9);
+    // A long name and a long condition each keep about half.
+    const long = titleText(boundary('The shop of the whole company with every branch', 'when the shop is open in every branch at once'), 400);
+    expect(long).toContain(`${ELLIPSIS} [System] only`);
+    expect(long.endsWith(ELLIPSIS)).toBe(true);
+    expect(widthOf(long, TITLE_FONT)).toBeLessThanOrEqual(400 + 1e-9);
+    // With no condition, the name is cut as it always was.
+    expect(titleText(boundary('The shop of the whole company with every branch'), 300)).toMatch(new RegExp(`${ELLIPSIS} \\[System\\]$`));
   });
 });

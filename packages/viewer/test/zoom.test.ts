@@ -43,11 +43,12 @@ describe('what the style sheet hides at each detail', () => {
       .sort();
   }
 
-  it('hides the descriptions first, then the kind lines, the `only` lines and the words on arrows, then all text', () => {
+  it('hides the descriptions first, then the kind lines, the `only` lines and the words on arrows, then all text and every mark but that of kept stores', () => {
     expect(hidden('all')).toEqual([]);
     expect(hidden('names-lines')).toEqual(['.box-sentence']);
     expect(hidden('names')).toEqual(['.arrow-label', '.box-line', '.box-only', '.box-sentence']);
-    expect(hidden('shapes')).toEqual(['.arrow-label', '.boundary-title', '.box-text', '.mark']);
+    // A large view opens where only shapes are drawn: the mark of an app that keeps stores is all that says where they went.
+    expect(hidden('shapes')).toEqual(['.arrow-label', '.boundary-title', '.box-text', '.mark:not(.mark-kept)']);
   });
 });
 

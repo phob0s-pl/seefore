@@ -141,15 +141,25 @@ describe('the lines of a label', () => {
       height: 80,
       lines: ['One'],
       route: 'via (Office proxy)',
-      only: 'only sometimes: 1 of 2',
-      opened: 'opened from the far side: 1 of 2',
+      only: ['only on 1 of 2'],
+      opened: 'far side opened on 1 of 2',
       technology: '[HTTPS]',
     });
     const height = LINE_HEIGHT.label + LINE_HEIGHT.route + 2 * LINE_HEIGHT.condition + LINE_HEIGHT.technology;
     const top = 100 + (80 - height) / 2;
     expect(lines.map((line) => line.kind)).toEqual(['name', 'route', 'only', 'opened', 'technology']);
-    expect(lines[2]).toEqual({ text: 'only sometimes: 1 of 2', y: top + LINE_HEIGHT.label + LINE_HEIGHT.route + LINE_HEIGHT.condition / 2, kind: 'only' });
+    expect(lines[2]).toEqual({ text: 'only on 1 of 2', y: top + LINE_HEIGHT.label + LINE_HEIGHT.route + LINE_HEIGHT.condition / 2, kind: 'only' });
     expect(lines[3]?.y).toBe(top + LINE_HEIGHT.label + LINE_HEIGHT.route + LINE_HEIGHT.condition * 1.5);
+  });
+
+  it('draws the words of a condition in the two lines the picture broke them into', () => {
+    const lines = labelLines({ x: 0, y: 0, width: 140, height: 43, lines: ['Checks a login'], only: ['only when LDAP', 'authentication is configured'] });
+    expect(lines.map((line) => [line.kind, line.text])).toEqual([
+      ['name', 'Checks a login'],
+      ['only', 'only when LDAP'],
+      ['only', 'authentication is configured'],
+    ]);
+    expect((lines[2]?.y ?? 0) - (lines[1]?.y ?? 0)).toBe(LINE_HEIGHT.condition);
   });
 });
 
@@ -176,8 +186,8 @@ describe('what a screen reader is told of the marks of stage 6b', () => {
   it('says on an arrow when its connections are there, and that the far side opened their channel', () => {
     const arrow = { id: 'a~b', from: 'a', to: 'b', connections: ['one'], names: ['Tells'], technology: [], only: { count: 1, all: true, words: 'at night', line: 'only at night' }, opened: { count: 1, all: true } };
     expect(arrowSaid(arrow, new Map([['a', 'A'], ['b', 'B']]))).toBe('A to B: Tells, only at night, down a channel the far side opened');
-    const some = { ...arrow, connections: ['one', 'two'], names: ['Tells', 'Asks'], opened: { count: 1, all: false, line: 'opened from the far side: 1 of 2' } };
-    expect(arrowSaid(some, new Map())).toBe('a to b: Tells; Asks, only at night, opened from the far side: 1 of 2');
+    const some = { ...arrow, connections: ['one', 'two'], names: ['Tells', 'Asks'], opened: { count: 1, all: false, line: 'far side opened on 1 of 2' } };
+    expect(arrowSaid(some, new Map())).toBe('a to b: Tells; Asks, only at night, far side opened on 1 of 2');
   });
 });
 

@@ -91,6 +91,12 @@ export const CONDITION_FONT: Font = { size: 11, bold: false };
 /** The height of each of those lines. */
 export const CONDITION_LINE_HEIGHT = 14;
 
+/**
+ * The most lines the `only` line of a label takes. Two: in one, most conditions of a lifted
+ * model were cut at about twenty characters, which said too little to read.
+ */
+export const ONLY_LINES = 2;
+
 /** The technology line of a label, `[HTTPS, JSON]`: 11 px, in one line under the names. Measured. */
 export const TECHNOLOGY_FONT: Font = { size: 11, bold: false };
 

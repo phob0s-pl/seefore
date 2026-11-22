@@ -109,7 +109,7 @@ export function archivePicture(view: View): Drawn {
       height: 40,
       lines,
       ...(arrow.route === undefined ? {} : { route: arrow.route.line }),
-      ...(arrow.only === undefined ? {} : { only: arrow.only.line }),
+      ...(arrow.only === undefined ? {} : { only: [arrow.only.line] }),
       ...(arrow.opened?.line === undefined ? {} : { opened: arrow.opened.line }),
       ...(arrow.technology.length === 0 ? {} : { technology: `[${arrow.technology.join(', ')}]` }),
     };

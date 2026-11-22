@@ -13,6 +13,7 @@ import {
   NAME_FONT,
   NAME_LINES,
   ONLY_FONT,
+  ONLY_LINES,
   ROUTE_FONT,
   ROUTE_LINE_HEIGHT,
   SENTENCE_FONT,
@@ -44,9 +45,12 @@ export interface LabelText {
   lines: string[];
   /** The route line, `via Ingress, Workhorse` or `via on 2 of 5`, when any connection of the arrow passes through something. */
   route?: string;
-  /** The `only` line, `only in the hosted edition` or `only sometimes: 2 of 5`, when any connection of the arrow has an `only` of its own. */
-  only?: string;
-  /** The line `opened from the far side: 2 of 5`, when only some connections of the arrow say so. */
+  /**
+   * The `only` line, `only in the hosted edition` or `only on 2 of 5`, when any connection of
+   * the arrow has an `only` of its own: in one line, or two when its words need them.
+   */
+  only?: string[];
+  /** The line `far side opened on 2 of 5`, when only some connections of the arrow say so. */
   opened?: string;
   /** The technology line, `[HTTPS, JSON]`, when every connection of the arrow names the same. */
   technology?: string;
@@ -76,27 +80,28 @@ export function boxText(box: ViewBox): BoxText {
 /**
  * The label of an arrow. A single connection's name takes up to three lines. Two or three
  * names have a line each. More have two lines, and `+ n more` for the rest. Under them, the
- * route on a line of its own; under that when the connections are there, and that the far side
- * opened the channel of some, each on a line of its own; and last the technology. No line is
- * wider than the label may be, but a line that says on how many, `only sometimes: 2 of 5` or
- * `opened from the far side: 2 of 5`, which is short and whose numbers must not be cut. An
- * arrow with no text has no label.
+ * route on a line of its own; under that when the connections are there, in up to two lines,
+ * and that the far side opened the channel of some, on a line of its own; and last the
+ * technology. No line is wider than the label may be, but a line that says on how many, `only
+ * on 2 of 5` or `far side opened on 2 of 5`, which is short and whose numbers must not be cut.
+ * An arrow with no text has no label.
  */
 export function labelText(arrow: ViewArrow): LabelText | undefined {
   const lines = nameLines(arrow.names);
   const route = arrow.route === undefined ? undefined : routeLine(arrow.route, LABEL_WIDTH);
-  const only = arrow.only === undefined ? undefined : arrow.only.words === undefined ? arrow.only.line : oneLine(arrow.only.line, CONDITION_FONT, LABEL_WIDTH);
+  // The words of a condition are cut only after a second line, as a name is: cut after one, most said too little.
+  const only = arrow.only === undefined ? undefined : arrow.only.words === undefined ? [arrow.only.line] : linesOf(arrow.only.line, CONDITION_FONT, LABEL_WIDTH, ONLY_LINES);
   const opened = arrow.opened?.line;
   const technology = arrow.technology.length === 0 ? undefined : oneLine(`[${arrow.technology.join(', ')}]`, TECHNOLOGY_FONT, LABEL_WIDTH);
   if (lines.length === 0 && route === undefined && only === undefined && opened === undefined && technology === undefined) return undefined;
   const widths = [
     ...lines.map((line) => widthOf(line, LABEL_FONT)),
     route === undefined ? 0 : widthOf(route, ROUTE_FONT),
-    only === undefined ? 0 : widthOf(only, CONDITION_FONT),
+    ...(only ?? []).map((line) => widthOf(line, CONDITION_FONT)),
     opened === undefined ? 0 : widthOf(opened, CONDITION_FONT),
     technology === undefined ? 0 : widthOf(technology, TECHNOLOGY_FONT),
   ];
-  const conditions = [only, opened].filter((line) => line !== undefined).length;
+  const conditions = (only?.length ?? 0) + (opened === undefined ? 0 : 1);
   return {
     lines,
     ...(route === undefined ? {} : { route }),
@@ -116,19 +121,29 @@ export function labelText(arrow: ViewArrow): LabelText | undefined {
  * The route line of a label, no wider than `width`. When the names of what the connections pass
  * through do not all fit, it gives as many whole names as fit and then how many are left, as
  * in `via Content delivery network, + 1 more`; when not even the first fits whole, it cuts that
- * one and still says how many are left: `via Content delivery… + 1 more`. So a reader can always
- * tell how many things are on the way. `via on 2 of 5` is cut, if it must be, as any line is.
+ * one and still says how many are left: `via Content delivery… + 1 more`. A name in brackets is
+ * cut inside them, and keeps both, since they say that the thing is not always there:
+ * `via (Enterprise…), + 1 more`. So a reader can always tell how many things are on the way,
+ * and which of them have a condition. `via on 2 of 5` is cut, if it must be, as any line is.
  */
 export function routeLine(route: ViewRoute, width: number): string {
   const fits = (text: string) => widthOf(text, ROUTE_FONT) <= width;
-  if (route.names.length === 0 || fits(route.line)) return oneLine(route.line, ROUTE_FONT, width);
-  const total = route.names.length;
+  if (route.hops.length === 0 || fits(route.line)) return oneLine(route.line, ROUTE_FONT, width);
+  const said = route.hops.map((hop) => (hop.bracketed ? `(${hop.name})` : hop.name));
+  const total = said.length;
   for (let shown = total - 1; shown >= 1; shown--) {
-    const line = `via ${route.names.slice(0, shown).join(', ')}, + ${total - shown} more`;
+    const line = `via ${said.slice(0, shown).join(', ')}, + ${total - shown} more`;
     if (fits(line)) return line;
   }
+  const [first] = route.hops;
+  if (first?.bracketed === true) {
+    const more = total > 1 ? `, + ${total - 1} more` : '';
+    const room = width - widthOf(`via ()${more}`, ROUTE_FONT);
+    return `via (${oneLine(first.name, ROUTE_FONT, room)})${more}`;
+  }
+  // A name with no brackets is cut as it always was, so that a picture of a model with no condition is as it was.
   const more = total > 1 ? ` + ${total - 1} more` : '';
-  return `${oneLine(`via ${route.names[0] ?? ''}`, ROUTE_FONT, width - widthOf(more, ROUTE_FONT))}${more}`;
+  return `${oneLine(`via ${first?.name ?? ''}`, ROUTE_FONT, width - widthOf(more, ROUTE_FONT))}${more}`;
 }
 
 /** The lines of names on a label: see `labelText`. */
@@ -142,17 +157,24 @@ function nameLines(names: readonly string[]): string[] {
 }
 
 /**
- * The title of a boundary in one line no wider than the room it has: its name and its kind
- * line. When the whole does not fit, the name is cut with an ellipsis to leave room for the
- * kind line, which says whose the system is. Only a room too narrow for the kind line itself
- * cuts that.
+ * The title of a boundary in one line no wider than the room it has: its name, its kind line,
+ * and the system's own `only` when it has one. When the whole does not fit, the kind line, which
+ * says whose the system is, stays whole, and the name and the `only` share what is left: each
+ * keeps what it needs when the other leaves it room, and else half, cut with an ellipsis. Only a
+ * room too narrow for the kind line itself cuts that.
  */
 export function titleText(boundary: ViewBoundary, width: number): string {
   if (widthOf(boundary.title, TITLE_FONT) <= width) return boundary.title;
   const line = ` ${boundary.line}`;
   const room = width - widthOf(line, TITLE_FONT);
-  const name = room > widthOf(ELLIPSIS, TITLE_FONT) ? oneLine(boundary.name, TITLE_FONT, room) : '';
-  return name === '' ? oneLine(boundary.title, TITLE_FONT, width) : `${name}${line}`;
+  if (room <= widthOf(ELLIPSIS, TITLE_FONT)) return oneLine(boundary.title, TITLE_FONT, width);
+  if (boundary.only === undefined) return `${oneLine(boundary.name, TITLE_FONT, room)}${line}`;
+  const only = `only ${boundary.only}`;
+  const space = widthOf(' ', TITLE_FONT);
+  const nameRoom = Math.min(widthOf(boundary.name, TITLE_FONT), Math.max(room - space - widthOf(only, TITLE_FONT), room / 2));
+  const name = oneLine(boundary.name, TITLE_FONT, nameRoom);
+  const onlyRoom = room - widthOf(name, TITLE_FONT) - space;
+  return `${name}${line} ${oneLine(only, TITLE_FONT, onlyRoom)}`;
 }
 
 /** How wide a boundary's title is drawn. */
