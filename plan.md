@@ -117,6 +117,8 @@ Decided:
 | What a connection is | One exchange with one purpose. It keeps its id and its file when another part takes the exchange over | 2026-11-22 |
 | What sits in between, and a condition | Ordinary words in a description until stage 6, in no fixed form. Stage 6 proposes each lift to a person; no script lifts them unread | 2026-11-22 |
 | Showing a large change | For more than twenty files the skill shows the count for each folder, a line for each record and three files in full | 2026-11-22 |
+| What draws and what lays out | React Flow draws. ELK lays out, in the engine, so that a picture can be tested without a browser | 2026-11-22 |
+| The page's sidebar | The views by system, a listing of the whole model, and the problems of the check | 2026-11-22 |
 
 To settle in the stage named, with the recommendation the two proposals reached:
 
@@ -126,7 +128,7 @@ To settle in the stage named, with the recommendation the two proposals reached:
 | Several stores in one server | 6 | Open. The candidate for stage 6 cut "a store in a store"; five of the eight trial systems have the case |
 | Who opens a channel, as against who sends down it | 6 | Open. At stage 4 the description says who opens it |
 | Who makes a part, as against who runs it | 6 | Open. It bears on the stored mark above: four trial systems have a case that a yes or no would not settle |
-| Layout | 5, 7 | ELK, which runs in Node and in the browser. No stored coordinates; hints written by the skill. Proven or rejected at stage 7 |
+| Layout | 7 | ELK is in use since stage 5, with no stored coordinates. Whether it holds when the model changes, and the limit for a crowded view, are proven or rejected at stage 7. Measured at stage 5: a container view of 59 to 88 boxes cannot be read when fitted to a screen |
 
 ## Status
 
@@ -136,7 +138,7 @@ To settle in the stage named, with the recommendation the two proposals reached:
 | 2 | Trial systems | done, accepted 2026-11-21 |
 | 3 | Source directory | done, accepted 2026-11-21 |
 | 4 | Basic modelling | built and tried; the ten changes of the trial made 2026-11-22; awaits acceptance |
-| 5 | Automatic diagrams | |
+| 5 | Automatic diagrams | built 2026-11-22; the trial with the owner is still to do |
 | 6 | Hard cases | |
 | 7 | Layout stability (gate) | |
 | 8 | C4 checks | |
@@ -213,11 +215,11 @@ To settle in the stage named, with the recommendation the two proposals reached:
 
 - **Adds:** the viewer. The engine serves the model on a local address, and the viewer draws
   it with automatic layout.
-- **Ends with:** `seefore --server` opens a page with a context diagram and a container
-  diagram for each system. Each has a title naming its type and scope, a legend made from
-  what is drawn, boundaries, labelled arrows, and a panel with an element's details. The
-  page follows the files as they change. A broken file shows as an error with its place, and
-  the rest still draws.
+- **Ends with:** `seefore --server` opens a page with a context diagram for each system and a
+  container diagram for each system that has something inside. Each has a title naming its
+  type and scope, a legend made from what is drawn, boundaries, labelled arrows, and a panel
+  with an element's details. The page follows the files as they change. A broken file shows
+  as an error with its place, and the rest still draws.
 - **Trial:** open each trial system and follow real dependencies with the owner. Note where a
   picture misleads.
 - **Leaves out:** editing, dragging, stored coordinates, styling controls, search.
