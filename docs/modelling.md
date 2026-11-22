@@ -79,7 +79,8 @@ technology: [https]
 ```
 
 - The keys are written in this order, and each key starts a line: `from`, `to`, `via`, `name`,
-  `in`, `description`, `kind`, `external`, `technology`, `owner`. A record has only some of them.
+  `in`, `description`, `kind`, `external`, `technology`, `owner`. A record has only some of
+  them.
 - A list is a set: `[go, postgresql]` and `[postgresql, go]` say the same.
 - A description too long for one line is a folded block. Each sentence starts a line, and
   nothing in the block needs quotes. The limit of 2,000 characters counts the text as it is
