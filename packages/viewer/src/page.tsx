@@ -5,12 +5,13 @@ import { Diagram, LightContext } from './diagram.tsx';
 import type { Light } from './diagram.tsx';
 import { keptSelection, viewOf } from './follow.ts';
 import type { Selection } from './follow.ts';
-import { holds, litBy } from './light.ts';
+import { holds, holdsBox, litBy } from './light.ts';
 import type { Target } from './light.ts';
 import { Listing } from './listing.tsx';
 import type { Shown } from './live.ts';
 import { Panel } from './panel.tsx';
 import { ProblemList, Problems } from './problems.tsx';
+import { keepersOf } from './records.ts';
 import { Sidebar } from './sidebar.tsx';
 import { themeCss } from './theme.ts';
 import type { Room } from './zoom.ts';
@@ -99,7 +100,10 @@ export function Page({ shown, room, initialSelection = null }: PageProps) {
     setFocused(null);
   }, [viewId]);
   const chosen = kept !== null && kept.kind !== 'record' ? kept : null;
-  const pointer = pointed ?? focused ?? chosen;
+  // A store that an app keeps is drawn at its app: chosen in the listing or on a panel, it lights the app.
+  const keeper = state !== null && kept?.kind === 'record' ? keepersOf(state.outline).get(kept.id) : undefined;
+  const keeperBox: Target | null = keeper !== undefined && view !== undefined && holdsBox(view, keeper) ? { kind: 'box', id: keeper } : null;
+  const pointer = pointed ?? focused ?? chosen ?? keeperBox;
   const light: Light = { lit: view !== undefined && pointer !== null && holds(view, pointer) ? litBy(view, pointer) : null, chosen };
 
   let main: ReactNode;

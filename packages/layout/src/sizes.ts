@@ -56,6 +56,13 @@ export const SENTENCE_FONT: Font = { size: 12, bold: false };
 /** The most lines the first sentence takes. Measured: four show the whole sentence in most boxes. */
 export const SENTENCE_LINES = 4;
 
+/**
+ * The line of a box's own `only`, `only in the hosted edition`: 11 px, in one line under the
+ * kind line, set as the kind line is. It takes its room from the first sentence, which then has
+ * a line less, so that every box keeps its one size.
+ */
+export const ONLY_FONT: Font = { size: 11, bold: false };
+
 /** The names on an arrow's label: 12 px. Measured. */
 export const LABEL_FONT: Font = { size: 12, bold: false };
 
@@ -73,6 +80,16 @@ export const ROUTE_FONT: Font = { size: 11, bold: false };
 
 /** The height of the route line of a label. */
 export const ROUTE_LINE_HEIGHT = 14;
+
+/**
+ * A line of a label that says when its connections are there, `only in the hosted edition`, or
+ * that the far side opened the channel of some, `opened from the far side: 2 of 5`: 11 px, in
+ * one line each, under the route and above the technology, set as the route is.
+ */
+export const CONDITION_FONT: Font = { size: 11, bold: false };
+
+/** The height of each of those lines. */
+export const CONDITION_LINE_HEIGHT = 14;
 
 /** The technology line of a label, `[HTTPS, JSON]`: 11 px, in one line under the names. Measured. */
 export const TECHNOLOGY_FONT: Font = { size: 11, bold: false };

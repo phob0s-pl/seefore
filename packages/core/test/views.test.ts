@@ -146,6 +146,7 @@ describe('the example shop', () => {
       loops: [],
       within: [],
       passing: [],
+      kept: [],
     });
     expect(box('shipping')?.line).toBe('[App: service]');
     expect(box('orders-database')?.line).toBe('[Store: database · PostgreSQL]');
@@ -615,12 +616,12 @@ describe('a piece of infrastructure', () => {
 describe('the route of an arrow', () => {
   it('names what its connections pass through, in order, when every one names the same', () => {
     const containers = view(DESK, 'desk.containers');
-    expect(arrow(containers, 'clerk~web').route).toEqual({ count: 1, names: ['HTTPS proxy'], line: 'via HTTPS proxy' });
-    expect(arrow(containers, 'api~cards').route).toEqual({ count: 1, names: ['Load balancer', 'Edge network'], line: 'via Load balancer, Edge network' });
+    expect(arrow(containers, 'clerk~web').route).toEqual({ count: 1, names: ['HTTPS proxy'], bracketed: false, line: 'via HTTPS proxy' });
+    expect(arrow(containers, 'api~cards').route).toEqual({ count: 1, names: ['Load balancer', 'Edge network'], bracketed: false, line: 'via Load balancer, Edge network' });
   });
 
   it('says on how many of its connections they pass through something when only some have a route, or the routes differ', () => {
-    expect(arrow(view(DESK, 'desk.containers'), 'web~api').route).toEqual({ count: 2, names: [], line: 'via on 2 of 3' });
+    expect(arrow(view(DESK, 'desk.containers'), 'web~api').route).toEqual({ count: 2, names: [], bracketed: false, line: 'via on 2 of 3' });
     // The same things in another order are another route.
     const files = {
       ...DESK,
@@ -628,7 +629,7 @@ describe('the route of an arrow', () => {
       'connections/web-calls-api.yaml': 'from: web\nto: api\nvia: [router, gateway]\n',
       'connections/web-pings-api.yaml': 'from: web\nto: api\nvia: [gateway, router]\n',
     };
-    expect(arrow(view(files, 'desk.containers'), 'web~api').route).toEqual({ count: 3, names: [], line: 'via on 3 of 3' });
+    expect(arrow(view(files, 'desk.containers'), 'web~api').route).toEqual({ count: 3, names: [], bracketed: false, line: 'via on 3 of 3' });
   });
 
   it('is missing when no connection of the arrow passes through anything', () => {
@@ -680,8 +681,8 @@ describe('a box that connections pass through', () => {
 describe('what is passed through and has no box', () => {
   it('is listed by id and name, with the connections that pass through it and their arrows, in order of id', () => {
     const passed = [
-      { id: 'balancer', name: 'Load balancer', connections: ['api-pays-cards'], arrows: ['api~cards'] },
-      { id: 'edge', name: 'Edge network', connections: ['api-pays-cards'], arrows: ['api~cards'] },
+      { id: 'balancer', name: 'Load balancer', own: false, connections: ['api-pays-cards'], arrows: ['api~cards'] },
+      { id: 'edge', name: 'Edge network', own: false, connections: ['api-pays-cards'], arrows: ['api~cards'] },
     ];
     expect(view(DESK, 'desk.containers').passed).toEqual(passed);
     expect(view(DESK, 'desk.context').passed).toEqual(passed.map((one) => ({ ...one, arrows: ['desk~cards'] })));
@@ -778,9 +779,9 @@ describe('what passes through a box, though both ends are one box', () => {
   });
 
   it('lists what has no box with the connections held in a box, which have no arrow', () => {
-    expect(view(VELLUM, 'vellum.context').passed).toEqual([{ id: 'balancer', name: 'Load balancer', connections: ['browser-polls-jobs', 'web-tells-web'], arrows: [] }]);
+    expect(view(VELLUM, 'vellum.context').passed).toEqual([{ id: 'balancer', name: 'Load balancer', own: false, connections: ['browser-polls-jobs', 'web-tells-web'], arrows: [] }]);
     expect(view(VELLUM, 'vellum.containers').passed).toEqual([
-      { id: 'balancer', name: 'Load balancer', connections: ['browser-polls-jobs', 'web-tells-web'], arrows: ['browser~web'] },
+      { id: 'balancer', name: 'Load balancer', own: false, connections: ['browser-polls-jobs', 'web-tells-web'], arrows: ['browser~web'] },
     ]);
   });
 
@@ -827,9 +828,9 @@ describe('the route of an arrow at its level', () => {
 
   it('keeps the hops that are not drawn as an end, in order', () => {
     // Only the audio passes through anything at this level.
-    expect(arrow(view(HOME, 'home.containers'), 'core~voice').route).toEqual({ count: 1, names: [], line: 'via on 1 of 2' });
+    expect(arrow(view(HOME, 'home.containers'), 'core~voice').route).toEqual({ count: 1, names: [], bracketed: false, line: 'via on 1 of 2' });
     const both = { ...HOME, 'connections/assist-asks-whisper.yaml': 'from: assist\nto: whisper\nvia: [proxy, wyoming]\n' };
-    expect(arrow(view(both, 'home.context'), 'home~voice').route).toEqual({ count: 2, names: ['HTTPS proxy'], line: 'via HTTPS proxy' });
+    expect(arrow(view(both, 'home.context'), 'home~voice').route).toEqual({ count: 2, names: ['HTTPS proxy'], bracketed: false, line: 'via HTTPS proxy' });
   });
 
   it('keeps the whole route on each connection, for the panel', () => {
@@ -906,5 +907,219 @@ describe('an external system that a view is about', () => {
     expect(view(files, 'cards.containers').legend.find((entry) => entry.key === 'boundary')?.text).toBe(
       "Boundary: this system, which is external: somebody else's, used as it is given, with its apps and stores inside; an arrow at its edge is to or from the system itself",
     );
+  });
+});
+
+/**
+ * The examples of stage 6b. Desk keeps its drafts in a file beside it, and its editor keeps a
+ * cache; the indexer, another app of the archive, reads the drafts all the same, and staff open
+ * one by hand. A gate is part of the archive and staff reload it; an office proxy is part of the
+ * archive too, there only in the head office, and nothing starts or ends at it. An HTTPS proxy
+ * is in no system. Desk tells the staff browser when a job is done, down a channel the browser
+ * opened. A teller of the bank checks the gate.
+ */
+const ARCHIVE: Readonly<Record<string, string>> = {
+  'people/staff.yaml': 'name: Staff\n',
+  'systems/archive.yaml': 'name: Archive\n',
+  'systems/bank.yaml': 'name: Bank\n',
+  'apps/desk.yaml': 'name: Desk\nin: archive\n',
+  'apps/browser.yaml': 'name: Staff browser\nin: archive\nkind: browser\n',
+  'apps/indexer.yaml': 'name: Indexer\nin: archive\n',
+  'apps/teller.yaml': 'name: Teller\nin: bank\n',
+  'components/editor.yaml': 'name: Editor\nin: desk\n',
+  'stores/drafts.yaml': 'name: Drafts\nin: desk\ndescription: Edits that are not yet saved, in a file beside Desk.\nkind: files\n',
+  'stores/cache.yaml': 'name: Cache\nin: desk\nkind: cache\n',
+  'stores/records.yaml': 'name: Records\nin: archive\n',
+  'infrastructure/proxy.yaml': 'name: HTTPS proxy\n',
+  'infrastructure/office-proxy.yaml': 'name: Office proxy\nin: archive\nonly: in the head office\n',
+  'infrastructure/gate.yaml': 'name: Gate\nin: archive\n',
+  'connections/desk-keeps-drafts.yaml': 'from: desk\nto: drafts\naccess: read-write\nname: Keeps edits that are not yet saved\n',
+  'connections/editor-reads-cache.yaml': 'from: editor\nto: cache\naccess: read\nname: Reads what it cached\n',
+  'connections/indexer-reads-drafts.yaml': 'from: indexer\nto: drafts\naccess: read\nname: Reads the drafts\n',
+  'connections/staff-opens-drafts.yaml': 'from: staff\nto: drafts\nname: Opens a draft by hand\n',
+  'connections/desk-tells-browser.yaml': 'from: desk\nto: browser\nvia: [proxy, office-proxy]\nopens: to\nname: Says when a job is done\n',
+  'connections/desk-keeps-records.yaml': 'from: desk\nto: records\naccess: write\nname: Saves an edit\n',
+  'connections/staff-reloads-gate.yaml': 'from: staff\nto: gate\nname: Reloads it\n',
+  'connections/teller-checks-gate.yaml': 'from: teller\nto: gate\nname: Checks that it answers\n',
+};
+
+describe('a store that an app keeps', () => {
+  it('has no box, and the app that keeps it carries their number, in its container view only', () => {
+    const containers = view(ARCHIVE, 'archive.containers');
+    expect(boxIds(containers)).not.toContain('drafts');
+    expect(boxIds(containers)).not.toContain('cache');
+    expect(boxIds(containers)).toContain('records');
+    expect(containers.boxes.find((box) => box.id === 'desk')?.kept).toEqual(['cache', 'drafts']);
+    expect(containers.boxes.filter((box) => box.kept.length > 0).map((box) => box.id)).toEqual(['desk']);
+    expect(view(ARCHIVE, 'archive.context').boxes.every((box) => box.kept.length === 0)).toBe(true);
+  });
+
+  it('holds inside the app a connection from the app, or a component in it, to a store it keeps: no arrow, and the box lists it', () => {
+    const containers = view(ARCHIVE, 'archive.containers');
+    expect(containers.boxes.find((box) => box.id === 'desk')?.within).toEqual(['desk-keeps-drafts', 'editor-reads-cache']);
+    expect(Object.values(arrows(containers)).flat()).not.toContain('desk-keeps-drafts');
+    expect(view(ARCHIVE, 'archive.context').boxes.find((box) => box.id === 'archive')?.within).toContain('editor-reads-cache');
+  });
+
+  it('draws at the app a connection that ends at the store, as at a component', () => {
+    const containers = view(ARCHIVE, 'archive.containers');
+    expect(arrows(containers)['indexer~desk']).toEqual(['indexer-reads-drafts']);
+    expect(arrows(containers)['staff~desk']).toEqual(['staff-opens-drafts']);
+    expect(arrows(view(ARCHIVE, 'archive.context'))['staff~archive']).toEqual(['staff-opens-drafts', 'staff-reloads-gate']);
+  });
+
+  it('leaves nothing out of the views, and counts nothing as broken', () => {
+    const model = modelOf(ARCHIVE);
+    const views = viewsOf(model);
+    for (const one of views) expect(one.left.broken).toEqual([]);
+    expect(connectionsInNoView(model, views)).toEqual([]);
+  });
+
+  it('counts a connection to it as broken where the app that keeps it has an error in its file', () => {
+    const files = { ...ARCHIVE, 'apps/desk.yaml': 'name: [Desk\n', 'connections/teller-reads-drafts.yaml': 'from: teller\nto: drafts\n' };
+    expect(view(files, 'bank.containers').left.broken).toEqual(['teller-reads-drafts']);
+    expect(view(files, 'archive.containers').left.broken).toContain('indexer-reads-drafts');
+  });
+
+  it('has the mark in the legend where the view draws it', () => {
+    expect(view(ARCHIVE, 'archive.containers').legend.find((entry) => entry.key === 'kept')?.text).toBe(
+      'Kept stores: how many stores this app keeps, drawn at it; its panel lists them',
+    );
+    expect(view(ARCHIVE, 'archive.context').legend.map((entry) => entry.key)).not.toContain('kept');
+  });
+});
+
+describe('a piece of infrastructure in a system', () => {
+  it('has a box inside the boundary of its system where a connection starts or ends at it, in its own shape', () => {
+    const containers = view(ARCHIVE, 'archive.containers');
+    expect(containers.boxes.find((box) => box.id === 'gate')).toMatchObject({ family: 'infrastructure', look: 'infrastructure', inside: true });
+    expect(arrows(containers)['staff~gate']).toEqual(['staff-reloads-gate']);
+    expect(arrows(containers)['bank~gate']).toEqual(['teller-checks-gate']);
+    // One that nothing starts or ends at has no box.
+    expect(boxIds(containers)).not.toContain('office-proxy');
+  });
+
+  it('is drawn at its system in a context view, and in the view of another system, as an app is', () => {
+    expect(boxIds(view(ARCHIVE, 'archive.context'))).not.toContain('gate');
+    expect(arrows(view(ARCHIVE, 'bank.containers'))['teller~archive']).toEqual(['teller-checks-gate']);
+    expect(arrows(view(ARCHIVE, 'bank.context'))['bank~archive']).toEqual(['teller-checks-gate']);
+  });
+
+  it('brings a connection with a person into the views of its system, while one between two things in no system is in no picture', () => {
+    const files = { ...ARCHIVE, 'connections/staff-reloads-proxy.yaml': 'from: staff\nto: proxy\n' };
+    const model = modelOf(files);
+    expect(connectionsInNoView(model, viewsOf(model))).toEqual(['staff-reloads-proxy']);
+  });
+
+  it('is listed as the system’s own under the legend when it is only passed through', () => {
+    const containers = view(ARCHIVE, 'archive.containers');
+    expect(containers.passed).toEqual([
+      { id: 'office-proxy', name: 'Office proxy', only: 'in the head office', own: true, connections: ['desk-tells-browser'], arrows: ['desk~browser'] },
+      { id: 'proxy', name: 'HTTPS proxy', own: false, connections: ['desk-tells-browser'], arrows: ['desk~browser'] },
+    ]);
+    // In the view of another system it is not that system's own.
+    const files = { ...ARCHIVE, 'connections/teller-asks-desk.yaml': 'from: teller\nto: desk\nvia: [office-proxy]\n' };
+    expect(view(files, 'bank.containers').passed).toEqual([]);
+    expect(view(files, 'bank.containers').boxes.find((box) => box.id === 'archive')?.passing).toEqual([]);
+  });
+
+  it('says in the legend that the boundary holds pieces of infrastructure, where one stands inside it', () => {
+    expect(view(ARCHIVE, 'archive.containers').legend.find((entry) => entry.key === 'boundary')?.text).toBe(
+      'Boundary: this system, with its apps, stores and pieces of infrastructure inside',
+    );
+    expect(view(ARCHIVE, 'bank.containers').legend.find((entry) => entry.key === 'boundary')?.text).toBe('Boundary: this system, with its apps and stores inside');
+  });
+
+  it('counts its connections as broken when its system has an error in its file', () => {
+    const files = { ...ARCHIVE, 'systems/archive.yaml': 'name: [Archive\n' };
+    expect(view(files, 'bank.containers').left.broken).toEqual(['teller-checks-gate']);
+  });
+
+  it('stays drawn as before when it is in no system', () => {
+    const files = { ...ARCHIVE, 'connections/proxy-checks-desk.yaml': 'from: proxy\nto: desk\n' };
+    expect(view(files, 'archive.containers').boxes.find((box) => box.id === 'proxy')).toMatchObject({ inside: false });
+    expect(boxIds(view(files, 'archive.context'))).toContain('proxy');
+  });
+});
+
+describe('a condition in the picture', () => {
+  const files = {
+    ...ARCHIVE,
+    'apps/indexer.yaml': 'name: Indexer\nin: archive\nonly: in the hosted edition\n',
+    'systems/bank.yaml': 'name: Bank\nonly: when payments are on\n',
+    'connections/teller-checks-gate.yaml': 'from: teller\nto: gate\nname: Checks that it answers\nonly: at night\n',
+  };
+
+  it('puts on a box its own `only`, and nothing that it has from what it is in', () => {
+    const containers = view(files, 'archive.containers');
+    expect(containers.boxes.find((box) => box.id === 'indexer')?.only).toBe('in the hosted edition');
+    expect(containers.boxes.find((box) => box.id === 'bank')?.only).toBe('when payments are on');
+    // The teller is in the bank, which has a condition: the teller's box has none of its own.
+    expect(view(files, 'bank.containers').boxes.find((box) => box.id === 'teller')).not.toHaveProperty('only');
+    expect(view(files, 'archive.containers').legend.map((entry) => entry.key)).toContain('only');
+  });
+
+  it('says on an arrow the words, when its every connection has its own and they are the same', () => {
+    expect(arrow(view(files, 'archive.containers'), 'bank~gate').only).toEqual({ count: 1, all: true, words: 'at night', line: 'only at night' });
+  });
+
+  it('says on how many when only some have their own, or the words differ', () => {
+    const some = { ...files, 'connections/teller-pings-gate.yaml': 'from: teller\nto: gate\n' };
+    expect(arrow(view(some, 'archive.containers'), 'bank~gate').only).toEqual({ count: 1, all: false, line: 'only sometimes: 1 of 2' });
+    const differ = { ...files, 'connections/teller-pings-gate.yaml': 'from: teller\nto: gate\nonly: by day\n' };
+    expect(arrow(view(differ, 'archive.containers'), 'bank~gate').only).toEqual({ count: 2, all: true, line: 'only sometimes: 2 of 2' });
+  });
+
+  it('says nothing on the arrow of a connection whose two ends have conditions of their own and it none', () => {
+    const ends = { ...files, 'connections/indexer-asks-teller.yaml': 'from: indexer\nto: teller\nname: Asks for the balance\n' };
+    const shown = arrow(view(ends, 'archive.containers'), 'indexer~bank');
+    expect(shown.connections).toEqual(['indexer-asks-teller']);
+    expect(shown).not.toHaveProperty('only');
+  });
+
+  it('puts in brackets on a route each thing that has an `only` of its own, and says so in the legend', () => {
+    const two = {
+      ...files,
+      'infrastructure/proxy.yaml': 'name: HTTPS proxy\nonly: on the second floor\n',
+      'connections/indexer-asks-records.yaml': 'from: indexer\nto: records\nvia: [office-proxy, proxy]\n',
+    };
+    const containers = view(two, 'archive.containers');
+    expect(arrow(containers, 'indexer~records').route).toEqual({
+      count: 1,
+      names: ['(Office proxy)', '(HTTPS proxy)'],
+      bracketed: true,
+      line: 'via (Office proxy), (HTTPS proxy)',
+    });
+    expect(arrow(containers, 'desk~browser').route?.line).toBe('via (HTTPS proxy), (Office proxy)');
+    expect(containers.passed.map((each) => [each.id, each.only])).toEqual([
+      ['office-proxy', 'in the head office'],
+      ['proxy', 'on the second floor'],
+    ]);
+    expect(containers.legend.find((entry) => entry.key === 'route-only')?.text).toBe('(Name) on a route: there only in some installs, and on the way whenever it is there');
+    expect(view(SHOP, 'shop.containers').legend.map((entry) => entry.key)).not.toContain('route-only');
+  });
+});
+
+describe('a channel that the far side opened', () => {
+  it('draws a ring when every connection of the arrow says so, and a line of the label when only some do', () => {
+    const containers = view(ARCHIVE, 'archive.containers');
+    expect(arrow(containers, 'desk~browser').opened).toEqual({ count: 1, all: true });
+    expect(containers.legend.map((entry) => entry.key)).toContain('opened');
+    const some = { ...ARCHIVE, 'connections/desk-pings-browser.yaml': 'from: desk\nto: browser\nname: Pings it\n' };
+    const mixed = view(some, 'archive.containers');
+    expect(arrow(mixed, 'desk~browser').opened).toEqual({ count: 1, all: false, line: 'opened from the far side: 1 of 2' });
+    expect(mixed.legend.map((entry) => entry.key)).toEqual(expect.arrayContaining(['opened-some']));
+    expect(mixed.legend.map((entry) => entry.key)).not.toContain('opened');
+  });
+
+  it('is missing from an arrow none of whose connections says so', () => {
+    expect(arrow(view(ARCHIVE, 'archive.containers'), 'staff~gate')).not.toHaveProperty('opened');
+  });
+});
+
+describe('what a connection does to a store', () => {
+  it('adds nothing to the arrow: its name has the verb', () => {
+    const shown = arrow(view(ARCHIVE, 'archive.containers'), 'desk~records');
+    expect(shown).toEqual({ id: 'desk~records', from: 'desk', to: 'records', connections: ['desk-keeps-records'], names: ['Saves an edit'], technology: [] });
   });
 });

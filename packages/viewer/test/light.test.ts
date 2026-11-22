@@ -69,7 +69,7 @@ describe('what passes through', () => {
 
 /** A box of a made-up view, with nothing in its marks unless given. */
 function made(id: string, more: Partial<ViewBox> = {}): ViewBox {
-  return { id, family: 'apps', look: 'app', name: id, line: '[App]', scope: false, inside: true, loops: [], within: [], passing: [], ...more };
+  return { id, family: 'apps', look: 'app', name: id, line: '[App]', scope: false, inside: true, loops: [], within: [], passing: [], kept: [], ...more };
 }
 
 /**
@@ -91,12 +91,12 @@ const HELD: View = {
   ],
   boundary: { id: 'vellum', name: 'Vellumoak', line: '[System]', title: 'Vellumoak [System]' },
   arrows: [
-    { id: 'browser~web', from: 'browser', to: 'web', connections: ['browser-asks-web'], names: ['Asks'], technology: [], route: { count: 1, names: ['proxy'], line: 'via proxy' } },
+    { id: 'browser~web', from: 'browser', to: 'web', connections: ['browser-asks-web'], names: ['Asks'], technology: [], route: { count: 1, names: ['proxy'], bracketed: false, line: 'via proxy' } },
     { id: 'runner~proxy', from: 'runner', to: 'proxy', connections: ['runner-reloads-proxy'], names: ['Reloads'], technology: [] },
   ],
   left: { outside: [], broken: [] },
   legend: [],
-  passed: [{ id: 'balancer', name: 'Load balancer', connections: ['jobs-tell-jobs'], arrows: [] }],
+  passed: [{ id: 'balancer', name: 'Load balancer', own: false, connections: ['jobs-tell-jobs'], arrows: [] }],
 };
 
 describe('what passes through a connection held in a box', () => {

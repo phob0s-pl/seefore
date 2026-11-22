@@ -1,9 +1,9 @@
-import type { View, ViewArrow, ViewBox, ViewerState } from '@seefore/core';
+import type { Condition, View, ViewArrow, ViewBox, ViewerState } from '@seefore/core';
 import { Fragment, useEffect, useMemo, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { namesIn } from './flow.ts';
 import type { Selection } from './follow.ts';
-import { descriptionOf, endName, indexOf, insideOf, kindOf, nameOf, ownerOf, passingThrough, technologiesOf, technologyNames } from './records.ts';
+import { ACCESS_WORDS, OPENED_WORDS, descriptionOf, endName, indexOf, insideOf, keepersOf, keptBy, kindOf, nameOf, ownerOf, passingThrough, technologiesOf, technologyNames, usesOf } from './records.ts';
 import type { Index } from './records.ts';
 
 /**
@@ -60,7 +60,7 @@ export function Panel({ state, view, selection, focus, onClose, onOpen }: PanelP
         </button>
       </div>
       {arrow !== undefined ? (
-        <ArrowDetails arrow={arrow} index={index} onOpen={onOpen} />
+        <ArrowDetails state={state} arrow={arrow} index={index} onOpen={onOpen} />
       ) : selection.kind === 'arrow' ? (
         <p>This arrow is no longer in the view.</p>
       ) : (
@@ -77,12 +77,12 @@ function arrowTitle(arrow: ViewArrow, view: View | undefined): string {
 }
 
 /** Every connection an arrow stands for. */
-function ArrowDetails({ arrow, index, onOpen }: { arrow: ViewArrow; index: Index; onOpen: PanelProps['onOpen'] }) {
+function ArrowDetails({ state, arrow, index, onOpen }: { state: ViewerState; arrow: ViewArrow; index: Index; onOpen: PanelProps['onOpen'] }) {
   const count = arrow.connections.length;
   return (
     <>
       <p>{count === 1 ? 'This arrow stands for one connection.' : `This arrow stands for ${count} connections.`}</p>
-      <ConnectionList ids={arrow.connections} index={index} onOpen={onOpen} />
+      <ConnectionList state={state} ids={arrow.connections} index={index} onOpen={onOpen} />
     </>
   );
 }
@@ -99,8 +99,10 @@ interface RecordDetailsProps {
 }
 
 /**
- * A record, whole: its name, kind, technologies, owner, description and file, the connections
- * its box holds, and those that pass through it. A connection says what it passes through.
+ * A record, whole: its name, kind, what it is in, when it is there, technologies, owner,
+ * description and file; for a connection what it does to a store and who opened its channel;
+ * for a store who reads and writes it; for an app the stores it keeps; the connections its box
+ * holds, and those that pass through it. A connection says what it passes through.
  */
 function RecordDetails({ state, index, id, box, scope, passing, onOpen }: RecordDetailsProps) {
   const found = index.get(id);
@@ -109,7 +111,7 @@ function RecordDetails({ state, index, id, box, scope, passing, onOpen }: Record
   const throughList = through.length > 0 && (
     <section>
       <h3>{throughHeading}</h3>
-      <ConnectionList ids={through} index={index} onOpen={onOpen} />
+      <ConnectionList state={state} ids={through} index={index} onOpen={onOpen} />
     </section>
   );
   if (found === undefined) {
@@ -130,11 +132,21 @@ function RecordDetails({ state, index, id, box, scope, passing, onOpen }: Record
   const owner = ownerOf(state, index, id);
   const description = descriptionOf(found);
   const via = found.family === 'connections' ? (found.record.via ?? []) : [];
+  const conditions = state.conditions[id] ?? [];
+  const own = conditions[0]?.from === id ? conditions[0] : undefined;
+  const others = conditions.filter((condition) => condition.from !== id);
+  const kept = found.family === 'apps' ? keptBy(state.outline, id) : [];
   return (
     <>
       <dl className="facts">
         <Fact term="Kind">{scope ? `${kindOf(found)}, the one this view is about` : kindOf(found)}</Fact>
-        {inside !== undefined && <Fact term="In">{endName(index, inside)}</Fact>}
+        {inside !== undefined && <Fact term={keepersOf(state.outline).has(id) ? 'Kept by' : 'In'}>{endName(index, inside)}</Fact>}
+        {own !== undefined && <Fact term="Only">{own.only}</Fact>}
+        {others.length > 0 && (
+          <Fact term="Only, from others">
+            <Conditions conditions={others} index={index} onOpen={onOpen} />
+          </Fact>
+        )}
         {found.family === 'connections' && (
           <Fact term="From and to">{`${endName(index, found.record.from)} → ${endName(index, found.record.to)}`}</Fact>
         )}
@@ -143,6 +155,8 @@ function RecordDetails({ state, index, id, box, scope, passing, onOpen }: Record
             <Hops ids={via} index={index} onOpen={onOpen} />
           </Fact>
         )}
+        {found.family === 'connections' && found.record.access !== undefined && <Fact term="Access">{ACCESS_WORDS[found.record.access]}</Fact>}
+        {found.family === 'connections' && found.record.opens === 'to' && <Fact term="Channel">{OPENED_WORDS}</Fact>}
         {technologies.length > 0 && <Fact term={technologies.length === 1 ? 'Technology' : 'Technologies'}>{technologies.join(', ')}</Fact>}
         {owner !== undefined && <Fact term="Owner">{owner.from === undefined ? owner.owner : `${owner.owner}, taken from ${owner.from}`}</Fact>}
         <Fact term="Description">{description === undefined ? <span className="none">None yet.</span> : <span className="description">{description}</span>}</Fact>
@@ -150,20 +164,123 @@ function RecordDetails({ state, index, id, box, scope, passing, onOpen }: Record
           <code>{found.record.file}</code>
         </Fact>
       </dl>
+      {found.family === 'stores' && <UsesOf state={state} store={id} index={index} onOpen={onOpen} depth={3} />}
+      {kept.length > 0 && (
+        <section>
+          <h3>{`Keeps (${kept.length})`}</h3>
+          <ul className="kept">
+            {kept.map((store) => (
+              <KeptStore key={store} state={state} store={store} index={index} onOpen={onOpen} />
+            ))}
+          </ul>
+        </section>
+      )}
       {box !== undefined && box.loops.length > 0 && (
         <section>
           <h3>{`Between its copies (${box.loops.length})`}</h3>
-          <ConnectionList ids={box.loops} index={index} onOpen={onOpen} />
+          <ConnectionList state={state} ids={box.loops} index={index} onOpen={onOpen} />
         </section>
       )}
       {box !== undefined && box.within.length > 0 && (
         <section>
           <h3>{`Inside it, not drawn (${box.within.length})`}</h3>
-          <ConnectionList ids={box.within} index={index} onOpen={onOpen} />
+          <ConnectionList state={state} ids={box.within} index={index} onOpen={onOpen} />
         </section>
       )}
       {throughList}
     </>
+  );
+}
+
+/** The conditions a record has from others, each with the record it comes from, which opens that record. */
+function Conditions({ conditions, index, onOpen }: { conditions: readonly Condition[]; index: Index; onOpen: PanelProps['onOpen'] }) {
+  return (
+    <ul className="conditions">
+      {conditions.map((condition) => (
+        <li key={condition.from}>
+          {`only ${condition.only}, from `}
+          {/* A click made with the keyboard has no count of presses. */}
+          <button type="button" className="record-name" onClick={(event) => onOpen(condition.from, event.detail === 0)}>
+            {endName(index, condition.from)}
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/**
+ * Who uses a store, in four short lists, each left out when empty: who writes it, who reads it,
+ * who does both, and whose connection does not say. Each entry is the one that acts and the
+ * connection's name, each of which opens its record. `depth` is the level of the headings.
+ */
+function UsesOf({ state, store, index, onOpen, depth }: { state: ViewerState; store: string; index: Index; onOpen: PanelProps['onOpen']; depth: 3 | 4 }) {
+  const uses = usesOf(state.model, store);
+  const lists: [string, string[]][] = [
+    ['Written by', uses.writes],
+    ['Read by', uses.reads],
+    ['Read and written by', uses.both],
+    ['Does not say', uses.unsaid],
+  ];
+  const Heading = depth === 3 ? 'h3' : 'h4';
+  return (
+    <>
+      {lists
+        .filter(([, ids]) => ids.length > 0)
+        .map(([title, ids]) => (
+          <section key={title} className="uses">
+            <Heading>{`${title} (${ids.length})`}</Heading>
+            <ul>
+              {ids.map((id) => {
+                const found = index.get(id);
+                if (found?.family !== 'connections') return null;
+                return (
+                  <li key={id}>
+                    {/* A click made with the keyboard has no count of presses. */}
+                    <button type="button" className="record-name" onClick={(event) => onOpen(found.record.from, event.detail === 0)}>
+                      {endName(index, found.record.from)}
+                    </button>
+                    {': '}
+                    <button type="button" className="record-name" onClick={(event) => onOpen(id, event.detail === 0)}>
+                      {nameOf(index, id)}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        ))}
+    </>
+  );
+}
+
+/**
+ * A store that an app keeps, on the app's panel: its name, which opens it, its kind, its own
+ * `only`, who uses it, and the connections that start at it, which a store has only to another store.
+ */
+function KeptStore({ state, store, index, onOpen }: { state: ViewerState; store: string; index: Index; onOpen: PanelProps['onOpen'] }) {
+  const found = index.get(store);
+  if (found === undefined) return null;
+  const own = state.conditions[store]?.[0];
+  const from = state.model.connections.filter((connection) => connection.from === store).map((connection) => connection.id);
+  return (
+    <li className="kept-store">
+      <p>
+        {/* A click made with the keyboard has no count of presses. */}
+        <button type="button" className="record-name" onClick={(event) => onOpen(store, event.detail === 0)}>
+          {nameOf(index, store)}
+        </button>{' '}
+        <span className="kept-kind">{`[${kindOf(found)}]`}</span>
+      </p>
+      {own?.from === store && <p className="kept-only">{`only ${own.only}`}</p>}
+      <UsesOf state={state} store={store} index={index} onOpen={onOpen} depth={4} />
+      {from.length > 0 && (
+        <section>
+          <h4>{`From it (${from.length})`}</h4>
+          <ConnectionList state={state} ids={from} index={index} onOpen={onOpen} />
+        </section>
+      )}
+    </li>
   );
 }
 
@@ -196,8 +313,11 @@ function Hops({ ids, index, onOpen }: { ids: readonly string[]; index: Index; on
   );
 }
 
-/** Connections, each with its own two ends, its name, what it passes through, its technology, its description and its file. */
-function ConnectionList({ ids, index, onOpen }: { ids: readonly string[]; index: Index; onOpen: PanelProps['onOpen'] }) {
+/**
+ * Connections, each with its own two ends, its name, what it passes through, what it does to a
+ * store, who opened its channel, when it is there, its technology, its description and its file.
+ */
+function ConnectionList({ state, ids, index, onOpen }: { state: ViewerState; ids: readonly string[]; index: Index; onOpen: PanelProps['onOpen'] }) {
   return (
     <ol className="connections">
       {ids.map((id) => {
@@ -211,6 +331,9 @@ function ConnectionList({ ids, index, onOpen }: { ids: readonly string[]; index:
         }
         const connection = found.record;
         const technologies = technologyNames(index, connection.technology);
+        const conditions = state.conditions[id] ?? [];
+        const own = conditions[0]?.from === id ? conditions[0] : undefined;
+        const others = conditions.filter((condition) => condition.from !== id);
         return (
           <li key={id} className="connection">
             <p className="connection-name">{connection.name ?? 'Unnamed connection'}</p>
@@ -221,6 +344,10 @@ function ConnectionList({ ids, index, onOpen }: { ids: readonly string[]; index:
                 <Hops ids={connection.via} index={index} onOpen={onOpen} />
               </p>
             )}
+            {connection.access !== undefined && <p className="connection-access">{ACCESS_WORDS[connection.access]}</p>}
+            {connection.opens === 'to' && <p className="connection-opened">{OPENED_WORDS}</p>}
+            {own !== undefined && <p className="connection-only">{`only ${own.only}`}</p>}
+            {others.length > 0 && <Conditions conditions={others} index={index} onOpen={onOpen} />}
             {technologies.length > 0 && <p className="connection-technology">{`[${technologies.join(', ')}]`}</p>}
             {connection.description !== undefined && <p className="description">{connection.description}</p>}
             <p className="connection-file">

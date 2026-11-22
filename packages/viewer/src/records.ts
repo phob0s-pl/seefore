@@ -1,4 +1,4 @@
-import type { App, Component, Connection, Infrastructure, Model, ModelRecord, Owner, Person, Store, System, Technology, ViewerState } from '@seefore/core';
+import type { App, Component, Connection, Infrastructure, Model, ModelRecord, Outline, Owner, Person, Store, System, Technology, ViewerState } from '@seefore/core';
 
 /** A record of the model, with the family it is in. */
 export type Found =
@@ -100,9 +100,21 @@ export function technologiesOf(found: Found): readonly string[] | undefined {
   }
 }
 
-/** What a part is in: a system for an app or a store, an app for a component. */
+/**
+ * What a part is in: a system for an app, a system or the app that keeps it for a store, an app
+ * for a component, and a system for a piece of infrastructure that is part of one. Missing for a
+ * piece of infrastructure in no system.
+ */
 export function insideOf(found: Found): string | undefined {
-  return found.family === 'apps' || found.family === 'stores' || found.family === 'components' ? found.record.in : undefined;
+  switch (found.family) {
+    case 'apps':
+    case 'stores':
+    case 'components':
+    case 'infrastructure':
+      return found.record.in;
+    default:
+      return undefined;
+  }
 }
 
 /** Who answers for a record, and the record whose `owner` says so, both by name. */
@@ -144,4 +156,48 @@ export function passingCounts(model: Model): Map<string, number> {
   const counts = new Map<string, number>();
   for (const connection of model.connections) for (const id of connection.via ?? []) counts.set(id, (counts.get(id) ?? 0) + 1);
   return counts;
+}
+
+/** The connections that end at a store, by what each says it does to the store's data. Each list is in order of id. */
+export interface Uses {
+  writes: string[];
+  reads: string[];
+  both: string[];
+  /** Those whose `access` is left out: a use that is neither, or one nobody has said. */
+  unsaid: string[];
+}
+
+/** The connections of a model that end at a store, by what each says it does to its data. */
+export function usesOf(model: Model, store: string): Uses {
+  const uses: Uses = { writes: [], reads: [], both: [], unsaid: [] };
+  for (const connection of model.connections) {
+    if (connection.to !== store) continue;
+    const list = connection.access === 'write' ? uses.writes : connection.access === 'read' ? uses.reads : connection.access === 'read-write' ? uses.both : uses.unsaid;
+    list.push(connection.id);
+  }
+  return uses;
+}
+
+/** What a connection does to the store it ends at, in words, by its `access`. */
+export const ACCESS_WORDS: Readonly<Record<'read' | 'write' | 'read-write', string>> = {
+  read: 'Reads the data of the store.',
+  write: 'Writes to the store.',
+  'read-write': 'Reads and writes the data of the store.',
+};
+
+/** What a connection that says `opens: to` is, in words. */
+export const OPENED_WORDS = 'Sent down a channel that the far side opened.';
+
+/**
+ * The app that keeps each store that an app keeps, by the store's id, as the outline the server
+ * worked out says: the page does not work out again what a store is in.
+ */
+export function keepersOf(outline: Outline): Map<string, string> {
+  const apps = [...outline.withParts.flatMap((system) => system.apps), ...outline.loose];
+  return new Map(apps.flatMap((app) => (app.stores ?? []).map((store): [string, string] => [store, app.id])));
+}
+
+/** The stores an app keeps, in order of id, as the outline says. None for a record that keeps none. */
+export function keptBy(outline: Outline, app: string): string[] {
+  return [...keepersOf(outline)].filter(([, keeper]) => keeper === app).map(([store]) => store);
 }

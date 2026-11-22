@@ -5,6 +5,7 @@ import type { Route } from '../src/address.ts';
 import type { Selection } from '../src/follow.ts';
 import type { Shown } from '../src/live.ts';
 import { Page, pageTitle } from '../src/page.tsx';
+import { ARCHIVE_FILES, ARCHIVE_STATE, archivePicture, archiveView, stateOf } from './archive.ts';
 import {
   BROKEN_HOP_STATE,
   CONTAINERS,
@@ -577,5 +578,189 @@ describe('the listing, for what passes through and what is in no picture', () =>
       '1 connection is in no picture, since no view draws both its ends. It is marked “in no picture” under Connections.',
     );
     expect(render({ page: 'model' }, null, null, HARD_STATE)).not.toContain('in no picture');
+  });
+});
+
+/** The page of the archive of stage 6b, on a route, with something chosen when given. */
+function archive(route: Route = { page: 'view', view: 'archive.containers' }, selection: Selection | null = null): string {
+  const view = route.page === 'view' ? archiveView(route.view) : undefined;
+  return render(route, view === undefined ? null : archivePicture(view), selection, ARCHIVE_STATE);
+}
+
+/** The markup of the panel of a page. */
+function panelOf(html: string): string {
+  return html.slice(html.indexOf('aria-label="Details"'));
+}
+
+describe('a store that an app keeps, in the picture and the panel', () => {
+  const html = archive();
+
+  it('has no box, and the app carries a mark with the number of stores it keeps, a store by its shape', () => {
+    expect(html).not.toContain('data-id="drafts"');
+    expect(html).toMatch(/data-id="desk"[^]*?<div class="mark mark-kept"><svg class="store-sign"[^]*?<\/svg> 2<\/div>/);
+    expect(times(html, 'class="mark mark-kept"')).toBe(1);
+    expect(html).toContain(`aria-label="${escaped('Desk, [App: service]. It keeps 2 stores, drawn at it.')}"`);
+  });
+
+  it('is listed on the app’s panel with its kind, its `only`, who reads and writes it, and the connections inside the app', () => {
+    const panel = panelOf(archive(undefined, { kind: 'box', id: 'desk' }));
+    expect(panel).toContain('Keeps (2)');
+    expect(panel).toMatch(/class="kept-store"><p><button type="button" class="record-name">Cache<\/button> <span class="kept-kind">\[Store: cache\]<\/span><\/p><p class="kept-only">only when caching is on<\/p>/);
+    expect(panel).toMatch(/>Drafts<\/button> <span class="kept-kind">\[Store: files\]<\/span>/);
+    expect(panel).toMatch(/<h4>Read by \(1\)<\/h4><ul><li><button type="button" class="record-name">Desk \/ Editor<\/button>: <button type="button" class="record-name">Reads what it cached<\/button><\/li><\/ul>/);
+    expect(panel).toMatch(/<h4>Read and written by \(1\)<\/h4><ul><li><button type="button" class="record-name">Desk<\/button>: <button type="button" class="record-name">Keeps edits that are not yet saved<\/button>/);
+    expect(panel).toContain('<h4>Does not say (1)</h4>');
+    expect(panel).toContain('Inside it, not drawn (2)');
+  });
+
+  it('lights its app when it is chosen, in the listing or on a panel', () => {
+    const chosen = archive(undefined, { kind: 'record', id: 'drafts' });
+    expect(chosen).toContain('box family-apps lit" data-look="app"');
+    expect(chosen).toMatch(/data-id="desk"[^]*?box family-apps lit/);
+    expect(chosen).toContain('box family-people lit');
+    expect(chosen).toContain('box family-infrastructure faded');
+    expect(panelOf(chosen)).toContain('<dt>Kept by</dt><dd>Desk</dd>');
+    // A store in the system lights nothing: it has a box of its own, and was not chosen in the picture.
+    expect(archive(undefined, { kind: 'record', id: 'records' })).not.toContain(' lit');
+  });
+});
+
+describe('who reads and writes a store, on its panel', () => {
+  it('gives the four lists, each left out when empty, each entry the one that acts and the connection', () => {
+    const panel = panelOf(archive(undefined, { kind: 'box', id: 'records' }));
+    expect(panel).toMatch(/<h3>Written by \(1\)<\/h3><ul><li><button type="button" class="record-name">Desk<\/button>: <button type="button" class="record-name">Saves an edit<\/button><\/li><\/ul>/);
+    expect(panel).toMatch(/<h3>Read by \(1\)<\/h3><ul><li><button type="button" class="record-name">Indexer<\/button>: <button type="button" class="record-name">Reads the records<\/button><\/li><\/ul>/);
+    expect(panel).not.toContain('Read and written by');
+    expect(panel).not.toContain('Does not say');
+  });
+
+  it('says for each connection, in words, what it does to the store', () => {
+    const panel = panelOf(archive(undefined, { kind: 'arrow', id: 'desk~records' }));
+    expect(panel).toContain('<p class="connection-access">Writes to the store.</p>');
+    expect(panelOf(archive({ page: 'model' }, { kind: 'record', id: 'desk-keeps-drafts' }))).toContain('<dt>Access</dt><dd>Reads and writes the data of the store.</dd>');
+  });
+});
+
+describe('a piece of infrastructure in a system, in the picture and the panel', () => {
+  const html = archive();
+
+  it('stands inside the boundary in its own shape, where a connection starts or ends at it', () => {
+    expect(html).toMatch(/data-id="gate"[^]*?data-look="infrastructure"/);
+    expect(html).toContain('Boundary: this system, with its apps, stores and pieces of infrastructure inside');
+  });
+
+  it('is listed under the legend as the system’s own when it is only passed through, in brackets when it has an `only`', () => {
+    const legend = html.slice(html.indexOf('aria-label="Legend"'));
+    expect(legend).toContain('<span class="passes-group">part of Archive:</span><ul aria-label="Passes through, part of Archive">');
+    expect(legend).toContain(
+      `<button type="button" data-id="office-proxy" aria-label="${escaped('Office proxy, only in the head office, part of Archive: 1 connection passes through it')}">(Office proxy) <span class="passes-count">1</span></button>`,
+    );
+    expect(legend).toContain('<span class="passes-group">others:</span><ul aria-label="Passes through, others">');
+    expect(legend).toMatch(/data-id="proxy" aria-label="HTTPS proxy: 1 connection passes through it">HTTPS proxy </);
+  });
+
+  it('says on its panel which system it is in', () => {
+    expect(panelOf(archive(undefined, { kind: 'box', id: 'gate' }))).toContain('<dt>In</dt><dd>Archive</dd>');
+  });
+});
+
+describe('a condition, in the picture and the panel', () => {
+  const html = archive();
+
+  it('puts a box’s own `only` on a line under its kind line', () => {
+    expect(html).toMatch(/data-id="indexer"[^]*?<div class="box-line text-line">\[App\]<\/div><div class="box-only text-line">only in the hosted edition<\/div>/);
+    expect(times(html, 'class="box-only')).toBe(1);
+    expect(html).toContain(`aria-label="${escaped('Indexer, [App]. Only in the hosted edition.')}"`);
+  });
+
+  it('says on an arrow when its connections are there, under the route, and puts a thing with `only` in brackets on the route', () => {
+    expect(html).toContain('<text class="label-only"');
+    expect(html).toContain('>only at night<');
+    expect(html).toContain('>via HTTPS proxy, (Office proxy)<');
+  });
+
+  it('gives on the panel a record’s own `only`, then those it has from others, each with a link to where it comes from', () => {
+    const panel = panelOf(archive({ page: 'model' }, { kind: 'record', id: 'indexer-reads-records' }));
+    expect(panel).toContain('<dt>Only</dt><dd>at night</dd>');
+    expect(panel).toContain('<dt>Only, from others</dt><dd><ul class="conditions"><li>only in the hosted edition, from <button type="button" class="record-name">Indexer</button></li></ul></dd>');
+    // A connection whose ends have conditions and it none has only those from others.
+    const ends = panelOf(archive({ page: 'model' }, { kind: 'record', id: 'indexer-reads-drafts' }));
+    expect(ends).not.toContain('<dt>Only</dt>');
+    expect(ends).toContain('only in the hosted edition, from <button type="button" class="record-name">Indexer</button>');
+  });
+
+  it('has each new mark in the legend where the view draws it, with a sample, and none told by colour alone', () => {
+    const legend = html.slice(html.indexOf('aria-label="Legend"'));
+    for (const key of ['kept', 'opened', 'only', 'route-only']) expect(legend).toMatch(new RegExp(`data-key="${key}"><svg class="sample"`));
+    expect(legend).toMatch(/data-key="only"><svg[^]*?>only …<\/text>/);
+    expect(legend).toMatch(/data-key="route-only"><svg[^]*?>via \(…\)<\/text>/);
+    expect(legend).toMatch(/data-key="opened"><svg[^]*?<circle class="arrow-ring"/);
+    expect(legend).toMatch(/data-key="kept"><svg[^]*?class="sample-store-sign"/);
+    expect(legend).not.toContain('data-key="opened-some"');
+    // The dash is a trial, behind a constant that is off.
+    expect(html).not.toContain(' dashed');
+    expect(legend).not.toContain('data-key="dashed"');
+  });
+});
+
+describe('a channel that the far side opened, in the picture and the panel', () => {
+  it('draws a small ring on the arrow just before its head, when every connection of the arrow says so', () => {
+    const html = archive();
+    // One on the arrow from Desk to the browser, and one in the legend's sample.
+    expect(times(html, '<circle class="arrow-ring"')).toBe(2);
+    expect(html).toMatch(/<path class="arrow-line" d="[^"]*"><\/path><circle class="arrow-ring" cx="[\d.]+" cy="[\d.]+" r="4"><\/circle><polygon class="arrow-head"/);
+    expect(html).toContain(`aria-label="${escaped('Desk to Staff browser: Says when a job is done, via HTTPS proxy, (Office proxy), down a channel the far side opened')}"`);
+  });
+
+  it('says it in a line of the label when only some connections say so, and in the legend', () => {
+    const state = stateOf({ ...ARCHIVE_FILES, 'connections/desk-pings-browser.yaml': 'from: desk\nto: browser\nname: Pings it\n' });
+    const view = archiveView('archive.containers', state);
+    const html = render({ page: 'view', view: view.id }, archivePicture(view), null, state);
+    expect(html).not.toContain('<circle class="arrow-ring"');
+    expect(html).toContain('<text class="label-opened"');
+    expect(html).toContain('>opened from the far side: 1 of 2<');
+    expect(html).toMatch(/data-key="opened-some"><svg[^]*?>opened<\/text>/);
+  });
+
+  it('says it on the panel for each connection, in words', () => {
+    expect(panelOf(archive(undefined, { kind: 'arrow', id: 'desk~browser' }))).toContain('<p class="connection-opened">Sent down a channel that the far side opened.</p>');
+  });
+});
+
+describe('the listing of stage 6b', () => {
+  const whole = archive({ page: 'model' });
+  const html = whole.slice(whole.indexOf('<article class="listing"'));
+
+  it('nests a kept store under its app, after its components, and a piece of infrastructure under its system', () => {
+    const order = ['<code>desk</code>', '<code>editor</code>', '<code>cache</code>', '<code>drafts</code>', '<code>indexer</code>', '<code>records</code>', '<code>gate</code>', '<code>office-proxy</code>'].map((piece) =>
+      html.indexOf(piece),
+    );
+    expect(order.every((place) => place >= 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    expect(html).toContain('piece of infrastructure <code>gate</code>');
+    // A piece in no system stays under the heading it had.
+    expect(html).toMatch(/<h2>Infrastructure \(1\)<\/h2><ul><li class="entry"><div class="entry-head"><button type="button" class="record-name">HTTPS proxy<\/button> <span class="entry-id"><code>proxy<\/code>/);
+    expect(html).not.toContain('Parts in a record with an error');
+  });
+
+  it('writes what a connection does to a store, and that the far side opened its channel, before its name', () => {
+    expect(html).toContain('>→ Drafts: [read-write] Keeps edits that are not yet saved<');
+    expect(html).toContain('>→ Records: [write] Saves an edit<');
+    expect(html).toContain('>→ Staff browser, via HTTPS proxy, Office proxy: [opened by the far side] Says when a job is done<');
+    expect(html).toContain('>→ Drafts: Opens a draft by hand<');
+  });
+
+  it('writes the `only` of a thing after its name', () => {
+    expect(html).toContain('>Indexer</button><span class="entry-only"> (only in the hosted edition)</span>');
+    expect(html).toContain('>→ Records: [read] Reads the records</button><span class="entry-only"> (only at night)</span>');
+  });
+
+  it('has the conditions: each wording, with how many records hold it', () => {
+    expect(html).toContain('<h2>Conditions (4)</h2>');
+    const conditions = html.slice(html.indexOf('<h2>Conditions (4)</h2>'));
+    const order = ['only at night', 'only in the head office', 'only in the hosted edition', 'only when caching is on'].map((words) => conditions.indexOf(`>${words} <`));
+    expect(order.every((place) => place >= 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    expect(conditions).toContain('>only in the head office <span class="entry-facts">(1 record)</span>');
   });
 });

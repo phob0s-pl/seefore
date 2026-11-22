@@ -3,6 +3,8 @@ import { linesOf, oneLine } from './lines.ts';
 import { ELLIPSIS, widthOf } from './measure.ts';
 import {
   BOX_WIDTH,
+  CONDITION_FONT,
+  CONDITION_LINE_HEIGHT,
   KIND_FONT,
   LABEL_FONT,
   LABEL_LINE_HEIGHT,
@@ -10,6 +12,7 @@ import {
   LABEL_WIDTH,
   NAME_FONT,
   NAME_LINES,
+  ONLY_FONT,
   ROUTE_FONT,
   ROUTE_LINE_HEIGHT,
   SENTENCE_FONT,
@@ -27,7 +30,9 @@ export interface BoxText {
   name: string[];
   /** The kind line, in one line. */
   line: string;
-  /** The first sentence, in at most four lines; none when there is no sentence. */
+  /** The line of its own `only`, `only in the hosted edition`, in one line; missing when it has none. */
+  only?: string;
+  /** The first sentence, in at most four lines, or three under an `only` line; none when there is no sentence. */
   sentence: string[];
   /** How far the text stands in from the left and the right edge of the box, for the shape of its look. */
   inset: Inset;
@@ -39,6 +44,10 @@ export interface LabelText {
   lines: string[];
   /** The route line, `via Ingress, Workhorse` or `via on 2 of 5`, when any connection of the arrow passes through something. */
   route?: string;
+  /** The `only` line, `only in the hosted edition` or `only sometimes: 2 of 5`, when any connection of the arrow has an `only` of its own. */
+  only?: string;
+  /** The line `opened from the far side: 2 of 5`, when only some connections of the arrow say so. */
+  opened?: string;
   /** The technology line, `[HTTPS, JSON]`, when every connection of the arrow names the same. */
   technology?: string;
   /** The room the label takes, in whole pixels: as wide as its widest line, as high as its lines. */
@@ -48,15 +57,18 @@ export interface LabelText {
 
 /**
  * The text of a box, broken into lines that fit inside the room its shape leaves, each cut with
- * an ellipsis when it must be.
+ * an ellipsis when it must be. A box with an `only` of its own says it under the kind line, and
+ * its first sentence has a line less for it.
  */
 export function boxText(box: ViewBox): BoxText {
   const inset = TEXT_INSET[box.look];
   const width = BOX_WIDTH - inset.left - inset.right;
+  const sentenceLines = box.only === undefined ? SENTENCE_LINES : SENTENCE_LINES - 1;
   return {
     name: linesOf(box.name, NAME_FONT, width, NAME_LINES),
     line: oneLine(box.line, KIND_FONT, width),
-    sentence: box.sentence === undefined ? [] : linesOf(box.sentence, SENTENCE_FONT, width, SENTENCE_LINES),
+    ...(box.only === undefined ? {} : { only: oneLine(`only ${box.only}`, ONLY_FONT, width) }),
+    sentence: box.sentence === undefined ? [] : linesOf(box.sentence, SENTENCE_FONT, width, sentenceLines),
     inset: { ...inset },
   };
 }
@@ -64,25 +76,39 @@ export function boxText(box: ViewBox): BoxText {
 /**
  * The label of an arrow. A single connection's name takes up to three lines. Two or three
  * names have a line each. More have two lines, and `+ n more` for the rest. Under them, the
- * route on a line of its own, and under that the technology. No line is wider than the label
- * may be. An arrow with no text has no label.
+ * route on a line of its own; under that when the connections are there, and that the far side
+ * opened the channel of some, each on a line of its own; and last the technology. No line is
+ * wider than the label may be, but a line that says on how many, `only sometimes: 2 of 5` or
+ * `opened from the far side: 2 of 5`, which is short and whose numbers must not be cut. An
+ * arrow with no text has no label.
  */
 export function labelText(arrow: ViewArrow): LabelText | undefined {
   const lines = nameLines(arrow.names);
   const route = arrow.route === undefined ? undefined : routeLine(arrow.route, LABEL_WIDTH);
+  const only = arrow.only === undefined ? undefined : arrow.only.words === undefined ? arrow.only.line : oneLine(arrow.only.line, CONDITION_FONT, LABEL_WIDTH);
+  const opened = arrow.opened?.line;
   const technology = arrow.technology.length === 0 ? undefined : oneLine(`[${arrow.technology.join(', ')}]`, TECHNOLOGY_FONT, LABEL_WIDTH);
-  if (lines.length === 0 && route === undefined && technology === undefined) return undefined;
+  if (lines.length === 0 && route === undefined && only === undefined && opened === undefined && technology === undefined) return undefined;
   const widths = [
     ...lines.map((line) => widthOf(line, LABEL_FONT)),
     route === undefined ? 0 : widthOf(route, ROUTE_FONT),
+    only === undefined ? 0 : widthOf(only, CONDITION_FONT),
+    opened === undefined ? 0 : widthOf(opened, CONDITION_FONT),
     technology === undefined ? 0 : widthOf(technology, TECHNOLOGY_FONT),
   ];
+  const conditions = [only, opened].filter((line) => line !== undefined).length;
   return {
     lines,
     ...(route === undefined ? {} : { route }),
+    ...(only === undefined ? {} : { only }),
+    ...(opened === undefined ? {} : { opened }),
     ...(technology === undefined ? {} : { technology }),
     width: Math.ceil(Math.max(...widths)),
-    height: lines.length * LABEL_LINE_HEIGHT + (route === undefined ? 0 : ROUTE_LINE_HEIGHT) + (technology === undefined ? 0 : TECHNOLOGY_LINE_HEIGHT),
+    height:
+      lines.length * LABEL_LINE_HEIGHT +
+      (route === undefined ? 0 : ROUTE_LINE_HEIGHT) +
+      conditions * CONDITION_LINE_HEIGHT +
+      (technology === undefined ? 0 : TECHNOLOGY_LINE_HEIGHT),
   };
 }
 

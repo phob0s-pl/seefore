@@ -1,4 +1,5 @@
 import type { BoxFamily, BoxLook, LegendKey } from '@seefore/core';
+import { RING_GAP, RING_RADIUS } from './flow.ts';
 import { APP_RADIUS, EXTERNAL_TAB, INFRASTRUCTURE_POINT, OUTLINE, PERSON_RADIUS, QUEUE_LID, SCOPE_OUTLINE, STORE_LID, SYSTEM_GAP, SYSTEM_INNER, cylinder, hexagon, pipe, tab } from './geometry.ts';
 
 /**
@@ -72,7 +73,7 @@ const SAMPLE_FAMILY: Readonly<Record<BoxLook, BoxFamily>> = {
 };
 
 /** True when a key of the legend is a look of a box. */
-function isLook(key: LegendKey): key is BoxLook {
+function isLook(key: LegendKey | 'dashed'): key is BoxLook {
   return key in SAMPLE_FAMILY;
 }
 
@@ -83,12 +84,43 @@ export const LOOP_MARK = '↻';
 export const PASSING_MARK = '⇢';
 
 /**
+ * The sign in the mark an app carries for the stores it keeps: a small store, an upright
+ * cylinder as a store's box is, so that the mark is told by its shape and not by its colour.
+ */
+export function StoreSign({ size = 12 }: { size?: number }) {
+  const width = size * 0.8;
+  const { outline, rim } = cylinder(width, size, size / 6, 1.2);
+  return (
+    <svg className="store-sign" width={width} height={size} viewBox={`0 0 ${width} ${size}`} aria-hidden="true">
+      <path d={outline} />
+      <path d={rim} />
+    </svg>
+  );
+}
+
+/** A short line of words above the line of an arrow, as a sample of a line of its label. */
+function SampleWords({ words }: { words: string }) {
+  const { width, height } = SAMPLE;
+  const line = height - 7;
+  return (
+    <g className="sample-arrow sample-route">
+      <text x={width / 2} y={9} textAnchor="middle" dominantBaseline="central">
+        {words}
+      </text>
+      <path className="arrow-line" d={`M2,${line} L${width - 4},${line}`} />
+      <polygon className="arrow-head" points={`${width - 2},${line} ${width - 10},${line - 4} ${width - 10},${line + 4}`} />
+    </g>
+  );
+}
+
+/**
  * The sample the legend draws for a key, at the sample's size: the shape of a look of a box, an
  * external system as the view about it draws it, the boundary's dashed line, an arrow, an arrow
- * for several connections, an arrow with its route, or the mark of a box whose copies act on
- * each other or that connections pass through.
+ * for several connections, an arrow with its route, a name in brackets on a route, an arrow with
+ * the ring of a channel the far side opened, a line of words of a label, or the mark of a box
+ * whose copies act on each other, that connections pass through, or that keeps stores.
  */
-export function Sample({ name }: { name: LegendKey }) {
+export function Sample({ name }: { name: LegendKey | 'dashed' }) {
   const { width, height } = SAMPLE;
   const middle = height / 2;
   let drawn;
@@ -106,6 +138,8 @@ export function Sample({ name }: { name: LegendKey }) {
     );
   } else if (name === 'boundary') {
     drawn = <rect className="sample-boundary" x={1} y={1} width={width - 2} height={height - 2} rx={4} />;
+  } else if (name === 'dashed') {
+    drawn = <rect className="sample-dashed" x={1} y={1} width={width - 2} height={height - 2} rx={4} />;
   } else if (name === 'arrow' || name === 'arrow-many') {
     drawn = (
       <g className={`sample-arrow${name === 'arrow-many' ? ' arrow-many' : ''}`}>
@@ -114,14 +148,40 @@ export function Sample({ name }: { name: LegendKey }) {
       </g>
     );
   } else if (name === 'route') {
-    const line = height - 7;
+    drawn = <SampleWords words="via" />;
+  } else if (name === 'route-only') {
+    drawn = <SampleWords words="via (…)" />;
+  } else if (name === 'opened-some') {
+    drawn = <SampleWords words="opened" />;
+  } else if (name === 'only') {
     drawn = (
-      <g className="sample-arrow sample-route">
-        <text x={width / 2} y={9} textAnchor="middle" dominantBaseline="central">
-          via
+      <g className="sample-only">
+        <text x={width / 2} y={middle} textAnchor="middle" dominantBaseline="central">
+          only …
         </text>
-        <path className="arrow-line" d={`M2,${line} L${width - 4},${line}`} />
-        <polygon className="arrow-head" points={`${width - 2},${line} ${width - 10},${line - 4} ${width - 10},${line + 4}`} />
+      </g>
+    );
+  } else if (name === 'opened') {
+    const ring = width - 10 - RING_GAP - RING_RADIUS;
+    drawn = (
+      <g className="sample-arrow">
+        <path className="arrow-line" d={`M2,${middle} L${width - 4},${middle}`} />
+        <circle className="arrow-ring" cx={ring} cy={middle} r={RING_RADIUS} />
+        <polygon className="arrow-head" points={`${width - 2},${middle} ${width - 10},${middle - 4} ${width - 10},${middle + 4}`} />
+      </g>
+    );
+  } else if (name === 'kept') {
+    const sign = cylinder(9.6, 12, 2, 1.2);
+    drawn = (
+      <g className="sample-mark">
+        <rect x={6} y={6} width={width - 12} height={height - 12} rx={(height - 12) / 2} />
+        <g transform={`translate(${width / 2 - 10}, ${middle - 6})`}>
+          <path className="sample-store-sign" d={sign.outline} />
+          <path className="sample-store-sign" d={sign.rim} />
+        </g>
+        <text x={width / 2 + 7} y={middle} textAnchor="middle" dominantBaseline="central">
+          2
+        </text>
       </g>
     );
   } else {

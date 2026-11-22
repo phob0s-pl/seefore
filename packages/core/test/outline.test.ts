@@ -63,6 +63,7 @@ describe('the outline', () => {
       ],
       owners: ['card-provider-company', 'logistics-team', 'shop-team'],
       technologies: ['go', 'https', 'postgresql', 'react', 'sql', 'typescript'],
+      conditions: [],
       loose: [],
     });
   });
@@ -138,7 +139,7 @@ describe('the outline', () => {
   });
 
   it('is empty for an empty model', () => {
-    expect(outlineOf(modelOf({}))).toEqual({ people: [], withParts: [], others: [], infrastructure: [], connections: [], owners: [], technologies: [], loose: [] });
+    expect(outlineOf(modelOf({}))).toEqual({ people: [], withParts: [], others: [], infrastructure: [], connections: [], owners: [], technologies: [], conditions: [], loose: [] });
   });
 
   it('gives the pieces of infrastructure apart, in order of id, and the connections that start at one last, after those at a record with an error', () => {
@@ -164,5 +165,96 @@ describe('the outline', () => {
     ]);
     // A connection that only passes through a piece of infrastructure stands under what it starts from.
     expect(outline.connections[0]).toEqual({ start: 'visitor', known: true, connections: ['visitor-reaches-web', 'visitor-uses-web'] });
+  });
+});
+
+/**
+ * Stage 6b: Desk keeps its drafts and its cache, and its editor reads the cache; a gate and an
+ * office proxy are part of the archive, an HTTPS proxy is in no system, and a vault system has
+ * nothing in it but a piece of its own. Some records say when they are there.
+ */
+const KEPT: Readonly<Record<string, string>> = {
+  'people/staff.yaml': 'name: Staff\nonly: in the head office\n',
+  'systems/archive.yaml': 'name: Archive\n',
+  'systems/vault.yaml': 'name: Vault\n',
+  'apps/desk.yaml': 'name: Desk\nin: archive\nonly: In the hosted edition\n',
+  'apps/indexer.yaml': 'name: Indexer\nin: archive\nonly: in the hosted edition\n',
+  'components/editor.yaml': 'name: Editor\nin: desk\n',
+  'stores/drafts.yaml': 'name: Drafts\nin: desk\n',
+  'stores/cache.yaml': 'name: Cache\nin: desk\n',
+  'stores/records.yaml': 'name: Records\nin: archive\n',
+  'infrastructure/proxy.yaml': 'name: HTTPS proxy\n',
+  'infrastructure/office-proxy.yaml': 'name: Office proxy\nin: archive\nonly: in the head office\n',
+  'infrastructure/gate.yaml': 'name: Gate\nin: archive\n',
+  'infrastructure/lock.yaml': 'name: Lock\nin: vault\n',
+  'connections/desk-keeps-drafts.yaml': 'from: desk\nto: drafts\naccess: read-write\n',
+  'connections/editor-reads-cache.yaml': 'from: editor\nto: cache\naccess: read\n',
+  'connections/drafts-copies-records.yaml': 'from: drafts\nto: records\nonly: at night\n',
+  'connections/gate-checks-desk.yaml': 'from: gate\nto: desk\n',
+  'connections/proxy-checks-desk.yaml': 'from: proxy\nto: desk\n',
+  'connections/staff-uses-desk.yaml': 'from: staff\nto: desk\nvia: [office-proxy]\nopens: to\n',
+};
+
+describe('the outline of stage 6b', () => {
+  const outline = outlineOf(modelOf(KEPT));
+
+  it('puts a store that an app keeps under the app, after its components, and not under the system', () => {
+    expect(outline.withParts.find((system) => system.id === 'archive')).toEqual({
+      id: 'archive',
+      apps: [
+        { id: 'desk', components: ['editor'], stores: ['cache', 'drafts'] },
+        { id: 'indexer', components: [] },
+      ],
+      stores: ['records'],
+      infrastructure: ['gate', 'office-proxy'],
+    });
+    expect(outline.loose).toEqual([]);
+  });
+
+  it('puts a piece of infrastructure under the system it is in, and keeps one in no system apart', () => {
+    expect(outline.infrastructure).toEqual(['proxy']);
+    // A system with a piece in it, and nothing else, has a part.
+    expect(outline.withParts.map((system) => system.id)).toEqual(['archive', 'vault']);
+    expect(outline.withParts[1]).toEqual({ id: 'vault', apps: [], stores: [], infrastructure: ['lock'] });
+    expect(outline.others).toEqual([]);
+  });
+
+  it('puts the connections of a kept store under it, after its app, those of a piece in a system after the system’s stores, and those of a piece in no system last', () => {
+    expect(outline.connections).toEqual([
+      { start: 'staff', known: true, connections: ['staff-uses-desk'] },
+      { start: 'desk', known: true, connections: ['desk-keeps-drafts', 'editor-reads-cache'] },
+      { start: 'drafts', known: true, connections: ['drafts-copies-records'] },
+      { start: 'gate', known: true, connections: ['gate-checks-desk'] },
+      { start: 'proxy', known: true, connections: ['proxy-checks-desk'] },
+    ]);
+  });
+
+  it('lists each wording of `only` with the records whose own it is, two that differ in capitals side by side', () => {
+    expect(outline.conditions).toEqual([
+      { only: 'at night', records: ['drafts-copies-records'] },
+      { only: 'in the head office', records: ['office-proxy', 'staff'] },
+      { only: 'In the hosted edition', records: ['desk'] },
+      { only: 'in the hosted edition', records: ['indexer'] },
+    ]);
+  });
+
+  it('gives a piece of infrastructure whose system has an error last, and an app there with its kept stores', () => {
+    const broken = outlineOf(modelOf({ ...KEPT, 'systems/archive.yaml': 'name: [Archive\n' }));
+    expect(broken.loose).toEqual([
+      { id: 'desk', family: 'apps', in: 'archive', components: ['editor'], stores: ['cache', 'drafts'] },
+      { id: 'indexer', family: 'apps', in: 'archive', components: [] },
+      { id: 'records', family: 'stores', in: 'archive', components: [] },
+      { id: 'gate', family: 'infrastructure', in: 'archive', components: [] },
+      { id: 'office-proxy', family: 'infrastructure', in: 'archive', components: [] },
+    ]);
+    expect(broken.connections.map((group) => group.start)).toEqual(['staff', 'desk', 'drafts', 'gate', 'proxy']);
+  });
+
+  it('gives a store whose app has an error in its file as in a record with an error', () => {
+    const broken = outlineOf(modelOf({ ...KEPT, 'apps/desk.yaml': 'name: [Desk\n' }));
+    expect(broken.loose.filter((part) => part.family === 'stores')).toEqual([
+      { id: 'cache', family: 'stores', in: 'desk', components: [] },
+      { id: 'drafts', family: 'stores', in: 'desk', components: [] },
+    ]);
   });
 });

@@ -1,6 +1,6 @@
 import type { Drawn } from '@seefore/core';
 import { describe, expect, it } from 'vitest';
-import { HANDLE_IN, HANDLE_OUT, HEAD_LENGTH, headOf, labelLines, pathOf, relativeTo, toFlow } from '../src/flow.ts';
+import { HANDLE_IN, HANDLE_OUT, HEAD_LENGTH, RING_GAP, RING_RADIUS, arrowSaid, boxSaid, headOf, labelLines, pathOf, relativeTo, ringOf, toFlow } from '../src/flow.ts';
 import { LINE_HEIGHT } from '../src/theme.ts';
 import { CONTAINERS, CONTAINER_PICTURE, CONTEXT, CONTEXT_PICTURE, HARD_CONTAINERS, HARD_PICTURE } from './fixture.ts';
 
@@ -131,6 +131,53 @@ describe('the lines of a label', () => {
   it('draws the lines it is given and breaks none', () => {
     const long = 'A name far too long for a label of this width';
     expect(labelLines({ x: 0, y: 0, width: 40, height: 15, lines: [long] }).map((line) => line.text)).toEqual([long]);
+  });
+
+  it('puts the `only` line and the line of who opened the channel under the route, in that order, and above the technology', () => {
+    const lines = labelLines({
+      x: 0,
+      y: 100,
+      width: 160,
+      height: 80,
+      lines: ['One'],
+      route: 'via (Office proxy)',
+      only: 'only sometimes: 1 of 2',
+      opened: 'opened from the far side: 1 of 2',
+      technology: '[HTTPS]',
+    });
+    const height = LINE_HEIGHT.label + LINE_HEIGHT.route + 2 * LINE_HEIGHT.condition + LINE_HEIGHT.technology;
+    const top = 100 + (80 - height) / 2;
+    expect(lines.map((line) => line.kind)).toEqual(['name', 'route', 'only', 'opened', 'technology']);
+    expect(lines[2]).toEqual({ text: 'only sometimes: 1 of 2', y: top + LINE_HEIGHT.label + LINE_HEIGHT.route + LINE_HEIGHT.condition / 2, kind: 'only' });
+    expect(lines[3]?.y).toBe(top + LINE_HEIGHT.label + LINE_HEIGHT.route + LINE_HEIGHT.condition * 1.5);
+  });
+});
+
+describe('the ring of a channel the far side opened', () => {
+  it('stands on the line just before the head: the head, a little room and its radius back from the tip', () => {
+    expect(ringOf([[{ x: 0, y: 50 }, { x: 100, y: 50 }]])).toEqual({ x: 100 - HEAD_LENGTH - RING_GAP - RING_RADIUS, y: 50 });
+  });
+
+  it('keeps to the line round a bend when the last stretch is shorter than that', () => {
+    expect(ringOf([[{ x: 0, y: 0 }, { x: 0, y: 40 }, { x: 10, y: 40 }]])).toEqual({ x: 0, y: 40 - (HEAD_LENGTH + RING_GAP + RING_RADIUS - 10) });
+  });
+
+  it('is missing on a route too short to hold it', () => {
+    expect(ringOf([[{ x: 0, y: 0 }, { x: 10, y: 0 }]])).toBeUndefined();
+  });
+});
+
+describe('what a screen reader is told of the marks of stage 6b', () => {
+  it('says a box’s own `only` and how many stores it keeps', () => {
+    const box = { id: 'desk', family: 'apps' as const, look: 'app' as const, name: 'Desk', line: '[App]', only: 'in the hosted edition', scope: false, inside: true, loops: [], within: [], passing: [], kept: ['drafts'] };
+    expect(boxSaid(box)).toBe('Desk, [App]. Only in the hosted edition. It keeps 1 store, drawn at it.');
+  });
+
+  it('says on an arrow when its connections are there, and that the far side opened their channel', () => {
+    const arrow = { id: 'a~b', from: 'a', to: 'b', connections: ['one'], names: ['Tells'], technology: [], only: { count: 1, all: true, words: 'at night', line: 'only at night' }, opened: { count: 1, all: true } };
+    expect(arrowSaid(arrow, new Map([['a', 'A'], ['b', 'B']]))).toBe('A to B: Tells, only at night, down a channel the far side opened');
+    const some = { ...arrow, connections: ['one', 'two'], names: ['Tells', 'Asks'], opened: { count: 1, all: false, line: 'opened from the far side: 1 of 2' } };
+    expect(arrowSaid(some, new Map())).toBe('a to b: Tells; Asks, only at night, opened from the far side: 1 of 2');
   });
 });
 

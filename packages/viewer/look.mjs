@@ -7,14 +7,17 @@
 // its view is worked out by the engine from a grid of records, and its places are made by hand.
 // It serves too the views of a help desk with the hard cases of stage 6a, worked out and laid
 // out by the engine itself: routes on arrows, a queue and a topic, external systems, a piece of
-// infrastructure with a box and one without, and boxes that connections pass through. Before it
+// infrastructure with a box and one without, and boxes that connections pass through; and those
+// of stage 6b: a store the web app keeps, an office proxy that is part of the desk and there only
+// in the head office, a worker there only in the hosted edition, reads and writes of the stores,
+// and news the API sends down a channel the web app opened. Before it
 // listens it turns every picture into what the page draws, so that a view the page cannot draw
 // stops it at once. POST /revision makes a new reading, as a changed file would.
 import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { connectionsInNoView, emptyModel, load, outlineOf, ownership, viewsOf } from '../core/src/index.ts';
+import { conditionsOf, connectionsInNoView, emptyModel, load, outlineOf, ownership, viewsOf } from '../core/src/index.ts';
 import { boxText, layOut } from '../layout/src/index.ts';
 import { toFlow } from './src/flow.ts';
 import { PICTURES, STATE } from './test/fixture.ts';
@@ -87,7 +90,10 @@ function grid(columns, rows) {
  * network first, which is somebody else's and has no box. The gateway signs what leaves the
  * desk and shares its keys between its copies. Jobs wait in a queue, changes go out on a
  * topic, and the card provider and the mail service are external, reached through a load
- * balancer that nothing starts or ends at.
+ * balancer that nothing starts or ends at. Clerks in the head office come through an office
+ * proxy too, which is part of the desk. The web app keeps its drafts in a file beside it, the
+ * worker is there only in the hosted edition, and the API tells the web app of new answers down
+ * a channel the web app opened.
  */
 const DESK = {
   'seefore.yaml': 'format: 1\nname: Desk\n',
@@ -100,7 +106,9 @@ const DESK = {
   'apps/web.yaml': 'name: Web\nin: desk\ndescription: The pages of the desk.\nkind: service\ntechnology: [react]\n',
   'apps/api.yaml': 'name: API\nin: desk\ndescription: Takes and answers every call on a ticket.\nkind: service\ntechnology: [go]\n',
   'apps/gateway.yaml': 'name: Gateway\nin: desk\ndescription: Signs the calls that leave the desk.\nkind: service\n',
-  'apps/worker.yaml': 'name: Worker\nin: desk\ndescription: Does the jobs that can wait.\nkind: job\ntechnology: [go]\n',
+  'apps/worker.yaml': 'name: Worker\nin: desk\nonly: in the hosted edition\ndescription: Does the jobs that can wait.\nkind: job\ntechnology: [go]\n',
+  'stores/drafts.yaml': 'name: Drafts\nin: web\ndescription: Answers that are not yet sent, in a file beside the web app.\nkind: files\n',
+  'infrastructure/office-proxy.yaml': 'name: Office proxy\nin: desk\nonly: in the head office\ndescription: Stands before the HTTPS proxy for clerks in the head office.\n',
   'stores/tickets.yaml': 'name: Tickets\nin: desk\ndescription: Every ticket and its answers.\nkind: database\ntechnology: [postgresql]\n',
   'stores/jobs.yaml': 'name: Jobs\nin: desk\ndescription: The jobs waiting for the worker.\nkind: queue\ntechnology: [redis]\n',
   'stores/events.yaml': 'name: Ticket events\nin: desk\ndescription: What changed on a ticket.\nkind: topic\ntechnology: [kafka]\n',
@@ -116,14 +124,16 @@ const DESK = {
   'technologies/sql.yaml': 'name: SQL\n',
   'technologies/smtp.yaml': 'name: SMTP\n',
   'connections/visitor-opens-web.yaml': 'from: visitor\nto: web\nvia: [edge, proxy]\nname: Opens the help pages\ntechnology: [https]\n',
-  'connections/clerk-answers-web.yaml': 'from: clerk\nto: web\nvia: [proxy]\nname: Answers tickets\ntechnology: [https]\n',
+  'connections/clerk-answers-web.yaml': 'from: clerk\nto: web\nvia: [office-proxy, proxy]\nname: Answers tickets\ntechnology: [https]\n',
+  'connections/web-keeps-drafts.yaml': 'from: web\nto: drafts\naccess: read-write\nname: Keeps answers that are not yet sent\n',
+  'connections/api-tells-web.yaml': 'from: api\nto: web\nopens: to\nname: Tells of new answers\ntechnology: [https]\n',
   'connections/web-asks-api.yaml': 'from: web\nto: api\nvia: [gateway]\nname: Asks for tickets\ntechnology: [https]\n',
   'connections/web-sends-api.yaml': 'from: web\nto: api\nname: Sends edits\ntechnology: [https]\n',
   'connections/proxy-checks-api.yaml': 'from: proxy\nto: api\nname: Checks that it answers\n',
   'connections/gateway-shares-keys.yaml': 'from: gateway\nto: gateway\nname: Shares its keys\n',
-  'connections/api-keeps-tickets.yaml': 'from: api\nto: tickets\nname: Keeps tickets\ntechnology: [sql]\n',
-  'connections/api-queues-jobs.yaml': 'from: api\nto: jobs\nname: Queues a job\n',
-  'connections/worker-takes-jobs.yaml': 'from: worker\nto: jobs\nname: Takes the next job\n',
+  'connections/api-keeps-tickets.yaml': 'from: api\nto: tickets\naccess: read-write\nname: Keeps tickets\ntechnology: [sql]\n',
+  'connections/api-queues-jobs.yaml': 'from: api\nto: jobs\naccess: write\nname: Queues a job\n',
+  'connections/worker-takes-jobs.yaml': 'from: worker\nto: jobs\naccess: read\nname: Takes the next job\n',
   'connections/api-tells-events.yaml': 'from: api\nto: events\nname: Says what changed\ntechnology: [kafka]\n',
   'connections/worker-mails.yaml': 'from: worker\nto: mail\nvia: [balancer]\nname: Sends the answer by mail\ntechnology: [smtp]\n',
   'connections/api-pays-cards.yaml': 'from: api\nto: cards\nvia: [gateway, balancer]\nname: Takes a payment\ntechnology: [https]\n',
@@ -158,6 +168,12 @@ const state = () => ({
   views,
   model,
   ownership: { ...STATE.ownership, ...Object.fromEntries(ownership(desk.model)), ...Object.fromEntries(ownership(crowded.model)) },
+  conditions: Object.fromEntries(
+    [desk.model.people, desk.model.systems, desk.model.apps, desk.model.stores, desk.model.components, desk.model.infrastructure, desk.model.connections]
+      .flat()
+      .map((record) => [record.id, conditionsOf(desk.model, record.id)])
+      .filter(([, found]) => found.length > 0),
+  ),
   outline: outlineOf(model),
   inNoView: connectionsInNoView(model, views),
 });

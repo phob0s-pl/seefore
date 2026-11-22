@@ -1,7 +1,7 @@
-import type { ViewerState } from '@seefore/core';
+import type { OutlineApp, ViewerState } from '@seefore/core';
 import { useMemo } from 'react';
 import type { ReactNode } from 'react';
-import { SORT, descriptionOf, endName, indexOf, nameOf, passingCounts, passingWords, technologyNames } from './records.ts';
+import { SORT, descriptionOf, endName, indexOf, insideOf, nameOf, passingCounts, passingWords, technologyNames } from './records.ts';
 import type { Found, Index } from './records.ts';
 
 /**
@@ -34,6 +34,21 @@ interface Known {
   through: ReadonlyMap<string, number>;
   /** The connections that no view holds. */
   inNoView: ReadonlySet<string>;
+  /** The conditions each record is under, as the state gives them. */
+  conditions: ViewerState['conditions'];
+}
+
+/** The words of a record's own `only`, or nothing when it has none of its own. */
+function ownOnly(known: Known, id: string): string | undefined {
+  const [first] = known.conditions[id] ?? [];
+  return first?.from === id ? first.only : undefined;
+}
+
+/** What a connection is marked with before its name, as `seefore list` writes it: what it does to a store, or that the far side opened its channel. */
+function markOf(found: Found): string | undefined {
+  if (found.family !== 'connections') return undefined;
+  if (found.record.access !== undefined) return `[${found.record.access}]`;
+  return found.record.opens === 'to' ? '[opened by the far side]' : undefined;
 }
 
 /** What a connection is marked with on its line when no view holds it. */
@@ -87,7 +102,10 @@ interface EntryProps {
   children?: ReactNode;
 }
 
-/** One record: its name, which opens its panel, its sort and id, its facts, and its description, which the panel shows whole. */
+/**
+ * One record: its name, which opens its panel, then its own `only` in brackets when it has one,
+ * its sort and id, its facts, and its description, which the panel shows whole.
+ */
 function Entry({ id, known, onOpen, said, where, children }: EntryProps) {
   const { index } = known;
   const found = index.get(id);
@@ -101,15 +119,19 @@ function Entry({ id, known, onOpen, said, where, children }: EntryProps) {
   }
   const facts = factsOf(found, known, where);
   const description = descriptionOf(found);
+  const only = ownOnly(known, id);
   // A part says what sort it is, as `seefore list` does; a connection says where it goes instead.
-  const sort = found.family === 'apps' || found.family === 'stores' || found.family === 'components' ? `${SORT[found.family]} ` : '';
+  // A piece of infrastructure says so where it stands under its system, and not under its own heading.
+  const placed = found.family === 'infrastructure' && insideOf(found) !== undefined;
+  const sort = found.family === 'apps' || found.family === 'stores' || found.family === 'components' || placed ? `${SORT[found.family]} ` : '';
   return (
     <li className="entry">
       <div className="entry-head">
         {/* A click made with the keyboard has no count of presses. */}
         <button type="button" className="record-name" onClick={(event) => onOpen(id, event.detail === 0)}>
           {said ?? nameOf(index, id)}
-        </button>{' '}
+        </button>
+        {only !== undefined && <span className="entry-only">{` (only ${only})`}</span>}{' '}
         <span className="entry-id">
           {sort}
           <code>{id}</code>
@@ -139,14 +161,19 @@ export function Listing({ state, onOpen }: ListingProps) {
   const index = useMemo(() => indexOf(state.model), [state.model]);
   const through = useMemo(() => passingCounts(state.model), [state.model]);
   const inNoView = useMemo(() => new Set(state.inNoView), [state.inNoView]);
-  const known: Known = { index, through, inNoView };
+  const known: Known = { index, through, inNoView, conditions: state.conditions };
   const { outline, model } = state;
-  const looseCount = outline.loose.reduce((sum, part) => sum + 1 + part.components.length, 0);
+  const looseCount = outline.loose.reduce((sum, part) => sum + 1 + part.components.length + (part.stores?.length ?? 0), 0);
   // The note is needed only where a part shows no owner and has one all the same.
   const taken = Object.entries(state.ownership).some(([id, found]) => found.from !== id);
   const families = [model.people, model.systems, model.apps, model.stores, model.components, model.infrastructure, model.connections, model.owners, model.technologies];
   const listed = families.reduce((sum, family) => sum + family.length, 0);
   const entry = (id: string, more: { said?: string; where?: string; children?: ReactNode } = {}) => <Entry key={id} id={id} known={known} onOpen={onOpen} {...more} />;
+  // An app with its components, and then the stores it keeps.
+  const beneath = (app: Pick<OutlineApp, 'components' | 'stores'>) => {
+    const parts = [...app.components, ...(app.stores ?? [])];
+    return parts.length > 0 ? <ul>{parts.map((id) => entry(id))}</ul> : undefined;
+  };
 
   return (
     <article className="listing">
@@ -167,8 +194,9 @@ export function Listing({ state, onOpen }: ListingProps) {
             entry(system.id, {
               children: (
                 <ul>
-                  {system.apps.map((app) => entry(app.id, { children: app.components.length > 0 ? <ul>{app.components.map((id) => entry(id))}</ul> : undefined }))}
+                  {system.apps.map((app) => entry(app.id, { children: beneath(app) }))}
                   {system.stores.map((id) => entry(id))}
+                  {(system.infrastructure ?? []).map((id) => entry(id))}
                 </ul>
               ),
             }),
@@ -195,12 +223,17 @@ export function Listing({ state, onOpen }: ListingProps) {
       <Section title="Technologies" count={outline.technologies.length}>
         <ul>{outline.technologies.map((id) => entry(id))}</ul>
       </Section>
-      <Section title="Parts in a record with an error" count={looseCount}>
-        <ul>
-          {outline.loose.map((part) =>
-            entry(part.id, { where: `in: ${part.in}`, children: part.components.length > 0 ? <ul>{part.components.map((id) => entry(id))}</ul> : undefined }),
-          )}
+      <Section title="Conditions" count={outline.conditions.length} note="Each wording of “only”, with how many records hold it as their own, so that two wordings of one condition stand side by side.">
+        <ul className="conditions-list">
+          {outline.conditions.map((condition) => (
+            <li key={condition.only} className="entry">
+              {`only ${condition.only}`} <span className="entry-facts">{`(${count(condition.records.length, 'record')})`}</span>
+            </li>
+          ))}
         </ul>
+      </Section>
+      <Section title="Parts in a record with an error" count={looseCount}>
+        <ul>{outline.loose.map((part) => entry(part.id, { where: `in: ${part.in}`, children: beneath(part) }))}</ul>
       </Section>
 
       <p className="tally">
@@ -229,8 +262,9 @@ function groupSort(index: Index, id: string): string {
 
 /**
  * A connection under what it starts from: an arrow to its far end, what it passes through, in
- * order, and its name, as in `→ Desk, via HTTPS proxy: Asks for pages`. It names its start only
- * when that is a component of the app it stands under.
+ * order, what it does to a store or that the far side opened its channel, and its name, as in
+ * `→ Desk, via HTTPS proxy: [opened by the far side] Says when a job is done`. It names its
+ * start only when that is a component of the app it stands under.
  */
 function connectionSaid(index: Index, id: string, start: string): string {
   const found = index.get(id);
@@ -239,5 +273,6 @@ function connectionSaid(index: Index, id: string, start: string): string {
   const from = connection.from === start ? '' : `${nameOf(index, connection.from)} `;
   const via = connection.via === undefined || connection.via.length === 0 ? '' : `, via ${connection.via.map((hop) => endName(index, hop)).join(', ')}`;
   const arrow = `${from}→ ${endName(index, connection.to)}${via}`;
-  return connection.name === undefined ? arrow : `${arrow}: ${connection.name}`;
+  const said = [markOf(found), connection.name].filter((part) => part !== undefined).join(' ');
+  return said === '' ? arrow : `${arrow}: ${said}`;
 }

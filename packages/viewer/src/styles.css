@@ -361,6 +361,12 @@ summary:focus-visible,
   color: var(--quiet);
 }
 
+/* The line of a box's own `only`: under the kind line, in the colour of text, so that it reads as words and not as a quiet aside. Upright, as the engine measured it. */
+.box-only {
+  font-size: var(--size-only);
+  line-height: var(--height-only);
+}
+
 .box-sentence {
   margin-top: 4px;
   font-size: var(--size-sentence);
@@ -397,6 +403,22 @@ summary:focus-visible,
 .box.faded .box-line,
 .box.faded .mark {
   color: var(--faded-text);
+}
+
+/* The sign in the mark of an app that keeps stores: a small store, drawn in the line of the box. */
+.store-sign {
+  vertical-align: -1px;
+}
+
+.store-sign path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.2;
+}
+
+/* The trial of the dash, behind a constant that is off: the outline of a box that has its own `only`. */
+.box.dashed .outline {
+  stroke-dasharray: 7 4;
 }
 
 .box.chosen::after,
@@ -461,6 +483,18 @@ summary:focus-visible,
   fill: var(--arrow);
 }
 
+/* The ring before the head of an arrow whose channel the far side opened: hollow, in the line's colour. */
+.arrow-ring {
+  fill: var(--ground);
+  stroke: var(--arrow);
+  stroke-width: 1.5;
+}
+
+/* The trial of the dash, behind a constant that is off: the line of an arrow whose every connection has its own `only`. */
+.arrow.dashed .arrow-line {
+  stroke-dasharray: 7 4;
+}
+
 .arrow-label {
   pointer-events: all;
   cursor: pointer;
@@ -488,12 +522,23 @@ summary:focus-visible,
   white-space: pre;
 }
 
+.label-only,
+.label-opened {
+  font-size: var(--size-condition);
+  fill: var(--text);
+  white-space: pre;
+}
+
 .arrow.lit .arrow-line {
   stroke: var(--text);
 }
 
 .arrow.lit .arrow-head {
   fill: var(--text);
+}
+
+.arrow.lit .arrow-ring {
+  stroke: var(--text);
 }
 
 .arrow.chosen .arrow-line {
@@ -504,6 +549,10 @@ summary:focus-visible,
   fill: var(--accent);
 }
 
+.arrow.chosen .arrow-ring {
+  stroke: var(--accent);
+}
+
 .arrow.faded .arrow-line {
   stroke: var(--faded-line);
 }
@@ -512,8 +561,14 @@ summary:focus-visible,
   fill: var(--faded-line);
 }
 
+.arrow.faded .arrow-ring {
+  stroke: var(--faded-line);
+}
+
 .arrow.faded .label-name,
 .arrow.faded .label-route,
+.arrow.faded .label-only,
+.arrow.faded .label-opened,
 .arrow.faded .label-technology {
   fill: var(--faded-text);
 }
@@ -548,6 +603,24 @@ summary:focus-visible,
   fill: var(--text);
 }
 
+.sample-only text {
+  font-size: 11px;
+  fill: var(--text);
+}
+
+.sample-store-sign {
+  fill: none;
+  stroke: var(--text);
+  stroke-width: 1.2;
+}
+
+.sample-dashed {
+  fill: var(--ground);
+  stroke: var(--app);
+  stroke-width: 2;
+  stroke-dasharray: 7 4;
+}
+
 /* Under the legend: what the arrows pass through that has no box, each a button that lights its arrows. */
 
 .passes-through {
@@ -561,6 +634,10 @@ summary:focus-visible,
 
 .passes-title {
   font-weight: bold;
+}
+
+.passes-group {
+  font-style: italic;
 }
 
 .passes-through ul {
@@ -591,6 +668,7 @@ summary:focus-visible,
 .diagram[data-detail='names-lines'] .box-sentence,
 .diagram[data-detail='names'] .box-sentence,
 .diagram[data-detail='names'] .box-line,
+.diagram[data-detail='names'] .box-only,
 .diagram[data-detail='names'] .arrow-label,
 .diagram[data-detail='shapes'] .box-text,
 .diagram[data-detail='shapes'] .arrow-label,
@@ -671,6 +749,47 @@ summary:focus-visible,
 .connection-technology,
 .connection-file {
   color: var(--quiet);
+}
+
+/* The conditions a record has from others, and who uses a store: short lists, each entry a line. */
+.conditions,
+.uses ul {
+  margin: 2px 0;
+  padding-left: 18px;
+}
+
+.uses li {
+  margin: 3px 0;
+  overflow-wrap: anywhere;
+}
+
+.panel h4 {
+  font-size: 13px;
+  font-weight: normal;
+  color: var(--quiet);
+  margin: 8px 0 2px;
+}
+
+/* The stores an app keeps, on its panel: each set off by a rule at its left, not by colour. */
+.kept {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+}
+
+.kept-store {
+  margin-bottom: 14px;
+  padding-left: 10px;
+  border-left: 3px solid var(--rule);
+}
+
+.kept-store > p {
+  margin: 2px 0;
+}
+
+.kept-kind {
+  color: var(--quiet);
+  font-size: 13px;
 }
 
 /* The listing of the model, the problems, and what stands in place of the views. */

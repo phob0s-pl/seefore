@@ -345,6 +345,32 @@ describe('a reading of the source directory', () => {
     expect(readingOf(join(root, 'gone')).inNoView).toEqual([]);
   });
 
+  it('gives the conditions each record is under, its own first, so that the page need not work them out', () => {
+    write({
+      'seefore.yaml': 'format: 1\nname: Archive\n',
+      'systems/archive.yaml': 'name: Archive\nonly: in the hosted edition\n',
+      'apps/desk.yaml': 'name: Desk\nin: archive\n',
+      'stores/drafts.yaml': 'name: Drafts\nin: desk\nonly: on a laptop\n',
+      'people/staff.yaml': 'name: Staff\n',
+      'connections/staff-opens-drafts.yaml': 'from: staff\nto: drafts\nonly: by hand\n',
+    });
+    const reading = readingOf(join(root, 'arch'));
+    expect(reading.conditions).toEqual({
+      archive: [{ only: 'in the hosted edition', from: 'archive' }],
+      desk: [{ only: 'in the hosted edition', from: 'archive' }],
+      drafts: [
+        { only: 'on a laptop', from: 'drafts' },
+        { only: 'in the hosted edition', from: 'archive' },
+      ],
+      'staff-opens-drafts': [
+        { only: 'by hand', from: 'staff-opens-drafts' },
+        { only: 'on a laptop', from: 'drafts' },
+        { only: 'in the hosted edition', from: 'archive' },
+      ],
+    });
+    expect(readingOf(join(root, 'gone')).conditions).toEqual({});
+  });
+
   it('says that the directory is gone, when it is', () => {
     const reading = readingOf(join(root, 'gone'));
     expect(reading.available).toBe(false);
