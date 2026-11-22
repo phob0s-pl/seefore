@@ -24,6 +24,7 @@ describe('a source directory with only its marker', () => {
       records: [],
       unread: [],
       references: [],
+      texts: [],
       model: emptyModel(),
       problems: [],
     });

@@ -52,6 +52,27 @@ export interface Reference {
   names: string;
 }
 
+/** A record's name or description, with the place of its key. */
+export interface RecordText {
+  /** The file of the record. */
+  file: string;
+  /**
+   * Where the key is written. The text itself may be in quotes or run over several lines, so
+   * a place inside it on disk is not a place inside the text as read.
+   */
+  line: number;
+  column: number;
+  /** The id of the record. */
+  record: string;
+  /** `name` or `description`. */
+  field: string;
+  /** The text as read. */
+  text: string;
+}
+
+/** The keys whose text `RecordText` keeps. */
+const TEXT_FIELDS = ['name', 'description'];
+
 /** A source directory after reading: what could be read, and everything that is wrong. */
 export interface Loaded {
   /** What `seefore.yaml` says. Missing when the marker is absent or broken. */
@@ -65,6 +86,8 @@ export interface Loaded {
   unread: RecordFile[];
   /** Every id that a record names in a field for naming records, in order of file and place. */
   references: Reference[];
+  /** Every name and description a record holds as text, in order of file and place. */
+  texts: RecordText[];
   /** The records whose own file has no error, typed, by family. */
   model: Model;
   /** Everything that is wrong, in order of file and place. */
@@ -131,7 +154,7 @@ export function loadAs(format: Format, files: readonly SourceFile[]): Loaded {
       if (!read.problems.some((problem) => problem.code === 'format-not-readable')) {
         problems.push(warning(MARKER_FILE, START, 'format-unknown', 'The marker file does not say which format this directory is written in, so nothing else in it was read.'));
       }
-      return { ...(marker ? { marker } : {}), records, unread, references: [], model: emptyModel(), problems: problems.sort(compareProblems) };
+      return { ...(marker ? { marker } : {}), records, unread, references: [], texts: [], model: emptyModel(), problems: problems.sort(compareProblems) };
     }
   }
 
@@ -207,6 +230,7 @@ export function loadAs(format: Format, files: readonly SourceFile[]): Loaded {
   // record that could be read, whatever its shape, so that one slip does not hide another.
   const typed: ModelRecord<unknown>[] = [];
   const references: Reference[] = [];
+  const texts: RecordText[] = [];
   for (const { record, yaml, family } of readRecords) {
     const kind = family.record;
     if (!kind) continue;
@@ -214,6 +238,7 @@ export function loadAs(format: Format, files: readonly SourceFile[]): Loaded {
     problems.push(...shape.problems);
     if (shape.value !== undefined) typed.push({ id: record.id, file: record.file, ...(shape.value as object) });
     references.push(...referencesIn(record, yaml, kind.references));
+    texts.push(...textsIn(record, yaml));
   }
   references.sort(compareReferences);
 
@@ -229,6 +254,7 @@ export function loadAs(format: Format, files: readonly SourceFile[]): Loaded {
     records,
     unread,
     references,
+    texts,
     model: modelOf(typed, problems),
     problems: problems.sort(compareProblems),
   };
@@ -245,6 +271,21 @@ function referencesIn(record: SourceRecord, yaml: YamlFile, fields: readonly Ref
       if (!isScalar(item) || typeof item.value !== 'string' || !isId(item.value)) continue;
       found.push({ file: record.file, ...yaml.at(item), record: record.id, field: field.field, names: item.value });
     }
+  }
+  return found;
+}
+
+/**
+ * A record's name and description, each where it is text, with the place of its key. The
+ * records are read in order of file, and the keys in order of place, so the texts are too.
+ */
+function textsIn(record: SourceRecord, yaml: YamlFile): RecordText[] {
+  const found: RecordText[] = [];
+  for (const pair of yaml.map?.items ?? []) {
+    if (!isScalar(pair.key) || typeof pair.key.value !== 'string' || !TEXT_FIELDS.includes(pair.key.value)) continue;
+    // A value that is not text is a matter for the shape, and says nothing here.
+    if (!isScalar(pair.value) || typeof pair.value.value !== 'string') continue;
+    found.push({ file: record.file, ...yaml.at(pair.key), record: record.id, field: pair.key.value, text: pair.value.value });
   }
   return found;
 }

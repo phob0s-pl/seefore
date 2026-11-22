@@ -8,7 +8,7 @@ export { CURRENT_FORMAT, FORMAT_1, READABLE_VERSIONS, familyIn, nounOf, oneOf, r
 export type { Family, Format, RecordKind, ReferenceField } from './format.ts';
 export { ID_MAX, idProblem, isId } from './id.ts';
 export { isMarkerName, isSourcePath, load, loadAs } from './load.ts';
-export type { Loaded, RecordFile, Reference, SourceFile, SourceRecord } from './load.ts';
+export type { Loaded, RecordFile, RecordText, Reference, SourceFile, SourceRecord } from './load.ts';
 export { MARKER_FILE, MarkerSchema, readMarker } from './marker.ts';
 export type { Marker, MarkerRead } from './marker.ts';
 export { emptyModel, ownership } from './model.ts';
@@ -29,5 +29,5 @@ export {
 } from './records.ts';
 export type { App, Component, Connection, Owner, Person, Store, System, Technology } from './records.ts';
 export { DESCRIPTION_MAX, NAME_MAX } from './text.ts';
-export { usesOf } from './uses.ts';
-export type { UsedRecord, Uses } from './uses.ts';
+export { readInFull, removalOf, usesOf, wordsFor } from './uses.ts';
+export type { Change, Left, Mention, Removal, RemovalOptions, UsedRecord, Uses } from './uses.ts';

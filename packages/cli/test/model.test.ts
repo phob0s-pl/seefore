@@ -331,16 +331,28 @@ describe('seefore uses', () => {
     expect(result.out.split('\n')).toEqual([
       'app order-api: Order API (apps/order-api.yaml)',
       '',
-      '2 records are inside it:',
+      'Goes with it: 2 records inside it:',
       '  component checkout: Checkout (components/checkout.yaml)',
       '  component order-status: Order status (components/order-status.yaml)',
       '',
-      '5 places name it or anything inside it:',
-      '  connections/card-provider-confirms.yaml:2:5: `to` names `order-api`.',
-      '  connections/checkout-keeps-orders.yaml:1:7: `from` names `checkout`.',
-      '  connections/checkout-takes-payment.yaml:1:7: `from` names `checkout`.',
-      '  connections/order-status-reads-orders.yaml:1:7: `from` names `order-status`.',
-      '  connections/storefront-places-order.yaml:2:5: `to` names `checkout`.',
+      '5 connections have one end in it. Each must go or get another end:',
+      '  connections/card-provider-confirms.yaml:2:5: `to`',
+      '  connections/checkout-keeps-orders.yaml:1:7: `from` names `checkout`',
+      '  connections/checkout-takes-payment.yaml:1:7: `from` names `checkout`',
+      '  connections/order-status-reads-orders.yaml:1:7: `from` names `order-status`',
+      '  connections/storefront-places-order.yaml:2:5: `to` names `checkout`',
+      '',
+      'If they go, 1 record is left with no connection:',
+      '  system card-provider: Card provider (systems/card-provider.yaml)',
+      '',
+      '2 records are named by nothing but it and those connections:',
+      '  technology go: Go (technologies/go.yaml)',
+      '  technology https: HTTPS (technologies/https.yaml)',
+      '',
+      'If the record left with no connection goes too, 1 more record is named by nothing:',
+      '  owner card-provider-company: The card provider (owners/card-provider-company.yaml)',
+      '',
+      'No other record\'s name or description holds "order api", or the name or the id of anything inside it.',
     ]);
   });
 
@@ -349,16 +361,16 @@ describe('seefore uses', () => {
     expect(run(['uses', 'shop']).out.split('\n').slice(0, 10)).toEqual([
       'system shop: Shop (systems/shop.yaml)',
       '',
-      '6 records are inside it:',
+      'Goes with it: 6 records inside it, and 4 connections with both ends in it:',
       '  app order-api: Order API (apps/order-api.yaml)',
       '    component checkout: Checkout (components/checkout.yaml)',
       '    component order-status: Order status (components/order-status.yaml)',
       '  app shipping: Shipping (apps/shipping.yaml)',
       '  app storefront: Storefront (apps/storefront.yaml)',
       '  store orders-database: Orders database (stores/orders-database.yaml)',
-      '',
+      '  connection checkout-keeps-orders: Writes each order (connections/checkout-keeps-orders.yaml)',
     ]);
-    expect(run(['uses', 'shop']).out).toContain('12 places name it or anything inside it:');
+    expect(run(['uses', 'shop']).out).toContain('4 connections have one end in it. Each must go or get another end:');
   });
 
   it('gives paths from where it was run', () => {
@@ -366,16 +378,26 @@ describe('seefore uses', () => {
     expect(run(['uses', 'go', '--workdir=architecture']).out.split('\n')).toEqual([
       'technology go: Go (architecture/technologies/go.yaml)',
       '',
-      '1 place names it:',
-      '  architecture/apps/order-api.yaml:5:14: `technology` names `go`.',
+      '1 record names it in `technology`. It must name another in its place, or leave it out:',
+      '  architecture/apps/order-api.yaml:5:14: `technology`',
+      '',
+      'Its name and its id are too short to look for in text.',
     ]);
   });
 
   it('says so when nothing names it', () => {
     write(EXAMPLE);
-    expect(run(['uses', 'clerk-packs']).out).toBe('connection clerk-packs: Sees what to pack and marks it sent (connections/clerk-packs.yaml)\n\nNothing names it.');
+    expect(run(['uses', 'clerk-packs']).out.split('\n').slice(0, 3)).toEqual([
+      'connection clerk-packs: Sees what to pack and marks it sent (connections/clerk-packs.yaml)',
+      '',
+      'Nothing names it.',
+    ]);
     write({ 'apps/lonely.yaml': 'name: Lonely\nin: card-provider\n', 'components/part.yaml': 'name: Part\nin: lonely\n' });
-    expect(run(['uses', 'lonely']).out.split('\n').slice(-1)).toEqual(['Nothing names it or anything inside it.']);
+    expect(run(['uses', 'lonely']).out.split('\n').slice(-3)).toEqual([
+      'No connection has one end in it.',
+      '',
+      'No other record\'s name or description holds "lonely", or the name or the id of anything inside it.',
+    ]);
   });
 
   it('answers as data', () => {
@@ -396,6 +418,45 @@ describe('seefore uses', () => {
         { file: 'connections/order-status-reads-orders.yaml', line: 1, column: 7, record: 'order-status-reads-orders', field: 'from', names: 'order-status' },
         { file: 'connections/storefront-places-order.yaml', line: 2, column: 5, record: 'storefront-places-order', field: 'to', names: 'checkout' },
       ],
+      goes: [
+        { id: 'checkout', family: 'components', file: 'components/checkout.yaml', name: 'Checkout', in: 'order-api' },
+        { id: 'order-status', family: 'components', file: 'components/order-status.yaml', name: 'Order status', in: 'order-api' },
+      ],
+      changes: [
+        {
+          record: { id: 'card-provider-confirms', family: 'connections', file: 'connections/card-provider-confirms.yaml', name: 'Confirms a payment' },
+          places: [{ file: 'connections/card-provider-confirms.yaml', line: 2, column: 5, record: 'card-provider-confirms', field: 'to', names: 'order-api' }],
+        },
+        {
+          record: { id: 'checkout-keeps-orders', family: 'connections', file: 'connections/checkout-keeps-orders.yaml', name: 'Writes each order' },
+          places: [{ file: 'connections/checkout-keeps-orders.yaml', line: 1, column: 7, record: 'checkout-keeps-orders', field: 'from', names: 'checkout' }],
+        },
+        {
+          record: { id: 'checkout-takes-payment', family: 'connections', file: 'connections/checkout-takes-payment.yaml', name: 'Takes the payment' },
+          places: [{ file: 'connections/checkout-takes-payment.yaml', line: 1, column: 7, record: 'checkout-takes-payment', field: 'from', names: 'checkout' }],
+        },
+        {
+          record: { id: 'order-status-reads-orders', family: 'connections', file: 'connections/order-status-reads-orders.yaml', name: 'Reads how far an order has got' },
+          places: [{ file: 'connections/order-status-reads-orders.yaml', line: 1, column: 7, record: 'order-status-reads-orders', field: 'from', names: 'order-status' }],
+        },
+        {
+          record: { id: 'storefront-places-order', family: 'connections', file: 'connections/storefront-places-order.yaml', name: 'Places an order' },
+          places: [{ file: 'connections/storefront-places-order.yaml', line: 2, column: 5, record: 'storefront-places-order', field: 'to', names: 'checkout' }],
+        },
+      ],
+      left: [
+        { record: { id: 'card-provider', family: 'systems', file: 'systems/card-provider.yaml', name: 'Card provider' }, reason: 'no-connection', assumes: 'connections-go' },
+        { record: { id: 'go', family: 'technologies', file: 'technologies/go.yaml', name: 'Go' }, reason: 'no-user', assumes: 'connections-go' },
+        { record: { id: 'https', family: 'technologies', file: 'technologies/https.yaml', name: 'HTTPS' }, reason: 'no-user', assumes: 'connections-go' },
+        {
+          record: { id: 'card-provider-company', family: 'owners', file: 'owners/card-provider-company.yaml', name: 'The card provider' },
+          reason: 'no-user',
+          assumes: 'left-go',
+        },
+      ],
+      inherited: 0,
+      mentions: [],
+      complete: true,
       errors: 0,
       warnings: 0,
     });
@@ -431,8 +492,11 @@ describe('seefore uses', () => {
     expect(result.code).toBe(0);
     const lines = result.out.split('\n');
     expect(lines[0]).toBe('app order-api (apps/order-api.yaml)');
-    expect(lines.at(-1)).toBe('1 error, 0 warnings: run `seefore check` to see them. 1 record could not be read, so what it names is not known.');
-    expect(json<UsesResult>(['uses', 'order-api']).data).toMatchObject({ errors: 1, warnings: 0, record: { id: 'order-api', family: 'apps' } });
+    expect(lines.at(-1)).toBe(
+      '1 error, 0 warnings: run `seefore check` to see them. 1 record could not be read, so what it names is not known. ' +
+        'Since the directory has errors, other uses may exist, and nothing is named as left behind.',
+    );
+    expect(json<UsesResult>(['uses', 'order-api']).data).toMatchObject({ errors: 1, warnings: 0, record: { id: 'order-api', family: 'apps' }, complete: false, left: [] });
   });
 
   it('needs one id', () => {
