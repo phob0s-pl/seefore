@@ -2,9 +2,10 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { firstSentence } from '@seefore/core';
 import { EXAMPLE } from '../../core/test/example.ts';
 import type { Failure } from '../src/check.ts';
-import { LINE_WIDTH, firstSentence, widthOf } from '../src/list.ts';
+import { LINE_WIDTH, widthOf } from '../src/list.ts';
 import type { ListResult } from '../src/list.ts';
 import { main } from '../src/main.ts';
 

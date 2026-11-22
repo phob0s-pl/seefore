@@ -1,5 +1,6 @@
 /**
- * The seefore format: reading a source directory and saying what is wrong with it.
+ * The seefore format: reading a source directory, saying what is wrong with it, and working out
+ * the listing and the views of its model.
  *
  * Nothing here touches disk or network. It takes the text of the files and returns records
  * and problems, so it runs the same in Node and in the browser.
@@ -56,7 +57,7 @@ export {
   TechnologySchema,
 } from './records.ts';
 export type { App, Component, Connection, Owner, Person, Store, System, Technology } from './records.ts';
-export { DESCRIPTION_MAX, NAME_MAX } from './text.ts';
+export { DESCRIPTION_MAX, NAME_MAX, firstSentence } from './text.ts';
 export { isShort, readInFull, recordsWithId, removalOf, usesOf, wordsFor } from './uses.ts';
 export type { Change, Left, Mention, Removal, RemovalOptions, UsedRecord, Uses } from './uses.ts';
-export { viewsOf } from './views.ts';
+export { UNNAMED_CONNECTION, viewsOf } from './views.ts';
