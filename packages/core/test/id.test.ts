@@ -33,4 +33,14 @@ describe('an id', () => {
     expect(idProblem(id)).toContain(reason);
     expect(isId(id)).toBe(false);
   });
+
+  it('starts with the candidate in backticks, or with what the caller names it', () => {
+    expect(idProblem('GoLang')).toBe('`GoLang` is not an id: an id is written in lowercase, like `go-lang`.');
+    expect(idProblem('GoLang', 'The second id in `technology`, `GoLang`,')).toBe(
+      'The second id in `technology`, `GoLang`, is not an id: an id is written in lowercase, like `go-lang`.',
+    );
+    expect(idProblem('con', 'The first id in `technology`, `con`,')).toBe(
+      'The first id in `technology`, `con`, cannot be an id, because Windows cannot hold a file of that name.',
+    );
+  });
 });

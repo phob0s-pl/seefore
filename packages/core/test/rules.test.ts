@@ -83,7 +83,7 @@ describe('a reference that names no record', () => {
   });
 
   it('is not an error when the record it names has a broken file: the record still stands', () => {
-    expect(found(shop({ 'systems/shop.yaml': 'name: [unclosed\n' }))).toEqual(['systems/shop.yaml:2:1 error yaml-syntax']);
+    expect(found(shop({ 'systems/shop.yaml': 'name: [unclosed\n' }))).toEqual(['systems/shop.yaml:1:7 error yaml-syntax']);
     expect(found(shop({ 'systems/shop.yaml': '' }))).toEqual(['systems/shop.yaml:1:1 error yaml-empty']);
   });
 
@@ -159,7 +159,7 @@ describe('a reference that names a record of the wrong kind', () => {
   it('is an error when the record it names has a broken file of the wrong family, since its family is known', () => {
     expect(found(shop({ 'stores/broken.yaml': 'name: [\n', 'apps/thing.yaml': 'name: Thing\nin: broken\n' }))).toEqual([
       'apps/thing.yaml:2:5 error reference-wrong-kind',
-      'stores/broken.yaml:2:1 error yaml-syntax',
+      'stores/broken.yaml:1:7 error yaml-syntax',
     ]);
   });
 
@@ -177,7 +177,7 @@ describe('an id used in two folders', () => {
   it('is reported on both, also when one file is broken', () => {
     expect(found(shop({ 'apps/shop.yaml': 'name: [unclosed\n' }))).toEqual([
       'apps/shop.yaml:1:1 error id-twice',
-      'apps/shop.yaml:2:1 error yaml-syntax',
+      'apps/shop.yaml:1:7 error yaml-syntax',
       'systems/shop.yaml:1:1 error id-twice',
     ]);
   });
@@ -284,16 +284,17 @@ describe('a connection that says a level up what another says', () => {
         severity: 'warning',
         code: 'connection-repeated-above',
         message:
-          'This connection says in the same words, a level up, what `connections/checkout-pays.yaml` says. ' +
-          'A connection a level up is a summary: give it a name that says more than the ones beneath it, or remove it.',
+          'This connection says in the same words, higher up, what `connections/checkout-pays.yaml` says. ' +
+          'A connection higher up is a summary: give it a name that says more than the ones beneath it, or remove it.',
       },
     ]);
   });
 
   it('follows `in` upwards, from a component to its app and on to its system', () => {
-    expect(found(shop({ ...lower, 'connections/shop-pays.yaml': 'from: shop\nto: card-provider\nname: Takes the payment\n' }))).toEqual([
-      'connections/shop-pays.yaml:1:1 warning connection-repeated-above',
-    ]);
+    const files = shop({ ...lower, 'connections/shop-pays.yaml': 'from: shop\nto: card-provider\nname: Takes the payment\n' });
+    expect(found(files)).toEqual(['connections/shop-pays.yaml:1:1 warning connection-repeated-above']);
+    // Two levels up is not "a level up".
+    expect(messages(files)[0]).toMatch(/^This connection says in the same words, higher up, what /);
   });
 
   it('looks at both ends, and at the far end as well as the near one', () => {

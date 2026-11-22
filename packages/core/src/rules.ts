@@ -164,8 +164,8 @@ function connectionsRepeatedAbove(parents: ReadonlyMap<string, string>, connecti
           upper.file,
           START,
           'connection-repeated-above',
-          `This connection says in the same words, a level up, what ${list(files)} ${files.length === 1 ? 'says' : 'say'}. ` +
-            'A connection a level up is a summary: give it a name that says more than the ones beneath it, or remove it.',
+          `This connection says in the same words, higher up, what ${list(files)} ${files.length === 1 ? 'says' : 'say'}. ` +
+            'A connection higher up is a summary: give it a name that says more than the ones beneath it, or remove it.',
         ),
       );
     }

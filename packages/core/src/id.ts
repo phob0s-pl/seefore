@@ -16,16 +16,19 @@ const WINDOWS_DEVICE = /^(?:con|prn|aux|nul|com[0-9]|lpt[0-9])$/;
  * good id: lowercase letters and digits in groups joined by single hyphens, starting with a
  * letter, at most 80 characters, and neither a word YAML reads as something else nor a name
  * Windows keeps for a device.
+ *
+ * `subject` is how the candidate is named where a sentence starts with it: the candidate in
+ * backticks, unless the caller says more, as in "The second id in `technology`, `GoLang`,".
  */
-export function idProblem(id: string): string | undefined {
+export function idProblem(id: string, subject = quote(id)): string | undefined {
   if (id === '') return 'An id cannot be empty.';
   if (id.length > ID_MAX) return `This id has ${id.length} characters. An id has at most ${ID_MAX}.`;
-  if (RESERVED.has(id)) return `${quote(id)} cannot be an id, because YAML reads it as something other than text.`;
-  if (WINDOWS_DEVICE.test(id)) return `${quote(id)} cannot be an id, because Windows cannot hold a file of that name.`;
+  if (RESERVED.has(id)) return `${subject} cannot be an id, because YAML reads it as something other than text.`;
+  if (WINDOWS_DEVICE.test(id)) return `${subject} cannot be an id, because Windows cannot hold a file of that name.`;
   if (ID.test(id)) return undefined;
-  if (id !== id.toLowerCase()) return `${quote(id)} is not an id: an id is written in lowercase, like ${quote(suggest(id))}.`;
+  if (id !== id.toLowerCase()) return `${subject} is not an id: an id is written in lowercase, like ${quote(suggest(id))}.`;
   return (
-    `${quote(id)} is not an id. An id is lowercase letters and digits in groups joined by ` +
+    `${subject} is not an id. An id is lowercase letters and digits in groups joined by ` +
     `single hyphens, and starts with a letter, like ${quote('order-events')}.`
   );
 }

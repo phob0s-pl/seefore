@@ -38,7 +38,7 @@ export interface MarkerRead {
 
 /** Reads the text of `seefore.yaml`. */
 export function readMarker(text: string): MarkerRead {
-  const yaml = readYaml(MARKER_FILE, text, 'The marker file');
+  const yaml = readYaml(MARKER_FILE, text, 'The marker file', { notesIn: null });
 
   // The format comes first, before any rule of this format is applied. A directory in a
   // format this seefore does not know is refused whole, whatever else its marker holds.

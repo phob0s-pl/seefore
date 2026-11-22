@@ -161,12 +161,17 @@ describe('`name`', () => {
     ['a space at the start', 'name: " Shop"\n', '1:7 value-invalid `name` starts or ends with a space. Take the space off.'],
     ['a space at the end', 'name: "Shop "\n', '1:7 value-invalid `name` starts or ends with a space. Take the space off.'],
     ['a tab at the end', 'name: "Shop\\t"\n', '1:7 value-invalid `name` starts or ends with a space. Take the space off.'],
-    ['a name that is too long', `name: ${'x'.repeat(101)}\n`, '1:7 value-too-big `name` is too long: it has at most 100 characters.'],
+    ['a name that is too long', `name: ${'x'.repeat(101)}\n`, '1:7 value-too-big `name` has 101 characters. It may have at most 100.'],
     ['a number', 'name: 42\n', '1:7 value-wrong-kind `name` must be text, but this is a whole number.'],
     ['nothing', 'name:\n', '1:6 value-wrong-kind `name` must be text, but this is empty.'],
     ['a list', 'name: [Shop]\n', '1:7 value-wrong-kind `name` must be text, but this is a list.'],
   ])('refuses %s, at the value', (_what, text, problem) => {
     expect(problemsOf('systems/thing.yaml', text)).toEqual([problem]);
+  });
+
+  it('counts a character outside the first plane of Unicode once, as the limit does', () => {
+    accepted('systems/thing.yaml', `name: ${'🛒'.repeat(100)}\n`);
+    expect(problemsOf('systems/thing.yaml', `name: ${'x'.repeat(99)}🛒🛒\n`)).toEqual(['1:7 value-too-big `name` has 101 characters. It may have at most 100.']);
   });
 
   it('holds the name of a connection to the same rule', () => {
@@ -191,7 +196,7 @@ describe('`description`', () => {
   it.each([
     ['an empty description', 'description: ""\n', '2:14 value-too-small `description` is empty. Leave it out until there is something to say.'],
     ['spaces and line breaks only', 'description: " \\n "\n', '2:14 value-too-small `description` is empty. Leave it out until there is something to say.'],
-    ['one that is too long', `description: ${'x'.repeat(2001)}\n`, '2:14 value-too-big `description` is too long: it has at most 2000 characters.'],
+    ['one that is too long', `description: ${'x'.repeat(2001)}\n`, '2:14 value-too-big `description` has 2001 characters. It may have at most 2000.'],
     ['a number', 'description: 7\n', '2:14 value-wrong-kind `description` must be text, but this is a whole number.'],
     ['nothing', 'description:\n', '2:13 value-wrong-kind `description` must be text, but this is empty.'],
   ])('refuses %s, at the value', (_what, text, problem) => {
@@ -208,14 +213,25 @@ describe('`in`', () => {
     expect(problemsOf(`${folder}/thing.yaml`, 'name: Thing\n')).toEqual([`1:1 key-missing \`in\` is missing from this ${noun}.`]);
   });
 
+  const inSystem = '`in` holds the id of the system it is part of, a record in `systems/`.';
+
   it.each([
-    ['text that is not an id', 'in: Shop\n', '2:5 value-invalid `in` must be an id. `Shop` is not an id: an id is written in lowercase, like `shop`.'],
-    ['an id with a space', 'in: "the shop"\n', '2:5 value-invalid `in` must be an id. `the shop` is not an id. An id is lowercase letters and digits in groups joined by single hyphens, and starts with a letter, like `order-events`.'],
-    ['empty text', 'in: ""\n', '2:5 value-invalid `in` must be an id. An id cannot be empty.'],
+    ['text that is not an id', 'in: Shop\n', `2:5 value-invalid ${inSystem} \`Shop\` is not an id: an id is written in lowercase, like \`shop\`.`],
+    ['a name with a space, with no id made from it', 'in: "the shop"\n', `2:5 value-invalid ${inSystem} An id has no spaces: it is the name of the system's file, without \`.yaml\`.`],
+    ['empty text', 'in: ""\n', `2:5 value-invalid ${inSystem} An id cannot be empty.`],
     ['a number', 'in: 3\n', '2:5 value-wrong-kind `in` must be text, but this is a whole number.'],
     ['a list', 'in: [shop]\n', '2:5 value-wrong-kind `in` must be text, but this is a list.'],
   ])('refuses %s, at the value', (_what, text, problem) => {
     expect(problemsOf('apps/thing.yaml', `name: Thing\n${text}`)).toEqual([problem]);
+  });
+
+  it('says what `in` holds for each kind of record', () => {
+    expect(problemsOf('stores/thing.yaml', 'name: Thing\nin: The Shop\n')).toEqual([
+      `2:5 value-invalid ${inSystem} An id has no spaces: it is the name of the system's file, without \`.yaml\`.`,
+    ]);
+    expect(problemsOf('components/thing.yaml', 'name: Thing\nin: Order API\n')).toEqual([
+      "2:5 value-invalid `in` holds the id of the app it is inside, a record in `apps/`. An id has no spaces: it is the name of the app's file, without `.yaml`.",
+    ]);
   });
 });
 
@@ -237,10 +253,29 @@ describe('`kind`', () => {
   });
 
   it('refuses any other kind of store, and names the kinds there are', () => {
-    expect(problemsOf('stores/thing.yaml', 'name: Thing\nin: shop\nkind: queue\n')).toEqual([
+    expect(problemsOf('stores/thing.yaml', 'name: Thing\nin: shop\nkind: server\n')).toEqual([
       '3:7 value-not-allowed `kind` must be one of `database`, `files`, `cache` and `index`.',
     ]);
     expect(codesOf('stores/thing.yaml', 'name: Thing\nin: shop\nkind: service\n')).toEqual(['3:7 value-not-allowed']);
+    expect(codesOf('stores/thing.yaml', 'name: Thing\nin: shop\nkind: 3\n')).toEqual(['3:7 value-not-allowed']);
+  });
+
+  it.each(['queue', 'topic'])('says how to write a %s, which is a store with no kind at this stage', (kind) => {
+    expect(problemsOf('stores/thing.yaml', `name: Thing\nin: shop\nkind: ${kind}\n`)).toEqual([
+      '3:7 value-not-allowed `kind` must be one of `database`, `files`, `cache` and `index`. ' +
+        'A queue or a topic is a store with no `kind` at this stage. Say which in its description.',
+    ]);
+  });
+
+  it('says nothing of a queue to an app', () => {
+    expect(problemsOf('apps/thing.yaml', 'name: Thing\nin: shop\nkind: queue\n')).toEqual([
+      '3:7 value-not-allowed `kind` must be one of `service`, `browser`, `mobile`, `desktop`, `command`, `function` and `job`.',
+    ]);
+  });
+
+  it('gives the model a store kind as it is written', () => {
+    const loaded = load([...AROUND, { path: 'stores/orders.yaml', text: 'name: Orders\nin: shop\nkind: database\n' }]);
+    expect(loaded.model.stores).toEqual([{ id: 'orders', file: 'stores/orders.yaml', name: 'Orders', in: 'shop', kind: 'database' }]);
   });
 });
 
@@ -260,10 +295,39 @@ describe('`technology`', () => {
     ['an empty list', 'technology: []\n', '3:13 value-too-small `technology` is an empty list. Leave it out until a technology is known.'],
     ['one id that is not in a list', 'technology: go\n', '3:13 value-wrong-kind `technology` must be a list, but this is text.'],
     ['an id written twice, at the second', 'technology: [go, https, go]\n', '3:25 value-invalid `go` is in `technology` twice. Keep one.'],
-    ['an item that is not an id, at the item', 'technology: [go, Go Lang]\n', '3:18 value-invalid `technology[1]` must be an id. `Go Lang` is not an id: an id is written in lowercase, like `go-lang`.'],
-    ['an item that is not text', 'technology: [go, 3]\n', '3:18 value-wrong-kind `technology[1]` must be text, but this is a whole number.'],
+    [
+      'an item with a space, with no id made from it, at the item',
+      'technology: [go, Go Lang]\n',
+      '3:18 value-invalid The second id in `technology`, `Go Lang`, is not the id of a technology. ' +
+        'Name a technology by the id of its record in `technologies/`, and say anything more in the description.',
+    ],
+    [
+      'an item that is an id but for a slip, with the id it was meant to be',
+      'technology: [go, Redis]\n',
+      '3:18 value-invalid The second id in `technology`, `Redis`, is not an id: an id is written in lowercase, like `redis`.',
+    ],
+    ['an item that is not text', 'technology: [go, 3]\n', '3:18 value-wrong-kind The second id in `technology` must be text, but this is a whole number.'],
   ])('refuses %s', (_what, text, problem) => {
     expect(problemsOf('apps/thing.yaml', `name: Thing\nin: shop\n${text}`)).toEqual([problem]);
+  });
+
+  it('says that a phrase about how an exchange travels goes in the description of a connection', () => {
+    expect(problemsOf('connections/thing.yaml', 'from: customer\nto: shop\ntechnology: [go, by hand]\n')).toEqual([
+      '3:18 value-invalid The second id in `technology`, `by hand`, is not the id of a technology. ' +
+        'A phrase about how an exchange travels goes in the description.',
+    ]);
+  });
+
+  it('names an item by its place in words up to the tenth, and by its number after', () => {
+    const ten = ['go', 'https', 'go', 'https', 'go', 'https', 'go', 'https', 'go', 'https'];
+    const tenth = [...ten.slice(0, 9), 7];
+    expect(problemsOf('apps/thing.yaml', `name: Thing\nin: shop\ntechnology: [${tenth.join(', ')}]\n`).map((problem) => problem.split(' value-wrong-kind ')[1])).toContain(
+      'The tenth id in `technology` must be text, but this is a whole number.',
+    );
+    const eleventh = [...ten, 7];
+    expect(problemsOf('apps/thing.yaml', `name: Thing\nin: shop\ntechnology: [${eleventh.join(', ')}]\n`).map((problem) => problem.split(' value-wrong-kind ')[1])).toContain(
+      'Id 11 in `technology` must be text, but this is a whole number.',
+    );
   });
 });
 
@@ -280,9 +344,23 @@ describe('`owner`', () => {
 
   it('refuses what is not an id, at the value', () => {
     expect(problemsOf('systems/thing.yaml', 'name: Thing\nowner: Shop team\n')).toEqual([
-      '2:8 value-invalid `owner` must be an id. `Shop team` is not an id: an id is written in lowercase, like `shop-team`.',
+      '2:8 value-invalid `owner` holds the id of a record in `owners/`. ' +
+        'If who answers takes a sentence to say, leave `owner` out and put the sentence in the description.',
     ]);
     expect(codesOf('systems/thing.yaml', 'name: Thing\nowner: [shop-team]\n')).toEqual(['2:8 value-wrong-kind']);
+  });
+
+  it('never answers a sentence with an id made from its words', () => {
+    expect(problemsOf('apps/thing.yaml', 'name: Thing\nin: shop\nowner: Two teams argue\n')).toEqual([
+      '3:8 value-invalid `owner` holds the id of a record in `owners/`. ' +
+        'If who answers takes a sentence to say, leave `owner` out and put the sentence in the description.',
+    ]);
+  });
+
+  it('answers a slip in an id with the id it was meant to be', () => {
+    expect(problemsOf('systems/thing.yaml', 'name: Thing\nowner: Shop-Team\n')).toEqual([
+      '2:8 value-invalid `owner` holds the id of a record in `owners/`. `Shop-Team` is not an id: an id is written in lowercase, like `shop-team`.',
+    ]);
   });
 });
 
@@ -298,7 +376,12 @@ describe('`from` and `to`', () => {
 
   it('refuses what is not an id, at the value', () => {
     expect(problemsOf('connections/thing.yaml', 'from: Customer\nto: shop\n')).toEqual([
-      '1:7 value-invalid `from` must be an id. `Customer` is not an id: an id is written in lowercase, like `customer`.',
+      '1:7 value-invalid `from` holds the id of the one that acts: a person, a system, an app, a store or a component. ' +
+        '`Customer` is not an id: an id is written in lowercase, like `customer`.',
+    ]);
+    expect(problemsOf('connections/thing.yaml', 'from: customer\nto: The shop\n')).toEqual([
+      '2:5 value-invalid `to` holds the id of the one it acts on: a person, a system, an app, a store or a component. ' +
+        "An id has no spaces: it is the name of that record's file, without `.yaml`.",
     ]);
     expect(codesOf('connections/thing.yaml', 'from: customer\nto: 12\n')).toEqual(['2:5 value-wrong-kind']);
   });

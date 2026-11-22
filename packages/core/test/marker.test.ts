@@ -53,7 +53,7 @@ describe('the marker file', () => {
     expect(problemsOf('format: 1\nname: "   "\n')).toEqual(['2:7 value-too-small `name` is empty.']);
     expect(problemsOf('format: 1\nname: "Box\\nwick"\n')).toEqual(['2:7 value-invalid `name` must be on one line.']);
     expect(problemsOf(`format: 1\nname: ${'x'.repeat(NAME_MAX + 1)}\n`)).toEqual([
-      `2:7 value-too-big \`name\` is too long: it has at most ${NAME_MAX} characters.`,
+      `2:7 value-too-big \`name\` has ${NAME_MAX + 1} characters. It may have at most ${NAME_MAX}.`,
     ]);
   });
 
@@ -112,6 +112,25 @@ describe('the marker file', () => {
     expect(readMarker('format: 1\n').readable).toBe(true);
     expect(readMarker('format: 1\nname: !!str Test\n').readable).toBe(true);
     expect(readMarker('format: 1\nname: A\nname: B\n').readable).toBe(true);
+  });
+
+  it('refuses a comment, names the marker file, and still reads the directory', () => {
+    const read = readMarker('# The shop\nformat: 1\nname: Boxwick\n');
+    expect(read.readable).toBe(true);
+    expect(read.marker).toBeUndefined();
+    expect(read.problems.map((problem) => `${problem.line}:${problem.column} ${problem.code} ${problem.message}`)).toEqual([
+      '1:1 yaml-comment This line is a comment. The marker file holds no comments, since nothing reads them. Remove it.',
+    ]);
+    expect(problemsOf('format: 1\nname: Boxwick #2\n')).toEqual([
+      '2:15 yaml-comment YAML reads ` #2` as a comment, so the value stops before it. If this is part of the text, ' +
+        'put the whole text in double quotes. If it is a note, remove it: the marker file holds no comments.',
+    ]);
+  });
+
+  it('looks at the format before a comment: a newer format is refused whole', () => {
+    const read = readMarker('# Written by a newer seefore\nformat: 2\nname: Boxwick\n');
+    expect(read.readable).toBe(false);
+    expect(read.problems.map((problem) => problem.code)).toEqual(['format-not-readable']);
   });
 
   it('passes on what is wrong with the YAML', () => {

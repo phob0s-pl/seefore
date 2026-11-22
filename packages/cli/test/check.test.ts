@@ -343,6 +343,51 @@ describe('seefore check', () => {
     ]);
   });
 
+  it('refuses a comment, says what to do about a slip in plain words, and keeps every code', () => {
+    write({
+      'seefore.yaml': MARKER,
+      'systems/shop.yaml': 'name: Shop\n',
+      'apps/port.yaml': 'name: Exporter\nin: shop\ndescription: Listens on port #9100 for scrapes.\n',
+      'apps/modes.yaml': 'name: Modes\nin: shop\ndescription: Two modes: node\n',
+      'systems/argue.yaml': 'name: Argue\nowner: Two teams argue\n',
+      'stores/work.yaml': 'name: Work\nin: shop\nkind: queue\n',
+    });
+    const result = run(['check']);
+    expect(result.code).toBe(1);
+    expect(result.out.split('\n').slice(3)).toEqual([
+      'apps/modes.yaml:3:23: error: YAML reads this colon as the start of another key. Put the whole text in double quotes.',
+      'apps/port.yaml:3:30: error: YAML reads ` #9100 for scrapes.` as a comment, so the value stops before it. If this is part of the text, ' +
+        'put the whole text in double quotes. If it is a note, remove it: a record holds no comments.',
+      'stores/work.yaml:3:7: error: `kind` must be one of `database`, `files`, `cache` and `index`. ' +
+        'A queue or a topic is a store with no `kind` at this stage. Say which in its description.',
+      'systems/argue.yaml:2:8: error: `owner` holds the id of a record in `owners/`. ' +
+        'If who answers takes a sentence to say, leave `owner` out and put the sentence in the description.',
+      '',
+      // The two files YAML cannot read whole are not read at all.
+      '3 records read. 4 errors, 0 warnings.',
+    ]);
+    expect(json(['check']).data.problems.map((problem) => `${problem.file} ${problem.code}`)).toEqual([
+      'apps/modes.yaml yaml-syntax',
+      'apps/port.yaml yaml-comment',
+      'stores/work.yaml value-not-allowed',
+      'systems/argue.yaml value-invalid',
+    ]);
+  });
+
+  it('refuses a comment in the marker, and still reads the records', () => {
+    write({ 'seefore.yaml': '# The shop\nformat: 1\nname: Boxwick\n', 'systems/shop.yaml': 'name: Shop\n' });
+    const result = run(['check']);
+    expect(result.code).toBe(1);
+    expect(result.out.split('\n')).toEqual([
+      '(no name: the marker file could not be read)',
+      `format unknown, ${root}`,
+      '',
+      'seefore.yaml:1:1: error: This line is a comment. The marker file holds no comments, since nothing reads them. Remove it.',
+      '',
+      '1 record read. 1 error, 0 warnings.',
+    ]);
+  });
+
   it('passes a directory whose records keep every rule, with a warning about a check', () => {
     write({
       'seefore.yaml': MARKER,

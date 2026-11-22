@@ -44,6 +44,11 @@ export function quote(text: string): string {
   return '`' + text + '`';
 }
 
+/** Starts a text with a capital letter, so that it can start a sentence. A quoted name stays as it is. */
+export function capital(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
 /** Joins quoted names into "`a`", "`a` and `b`" or "`a`, `b` and `c`". */
 export function list(names: readonly string[]): string {
   const quoted = names.map(quote);
