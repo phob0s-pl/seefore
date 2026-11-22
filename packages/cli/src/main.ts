@@ -16,20 +16,22 @@ export const HELP = `seefore: design software architecture on the C4 model, kept
 
 Usage:
   seefore check [--workdir=<directory>] [--json]
-  seefore list [--workdir=<directory>] [--json]
+  seefore list [--workdir=<directory>] [--full] [--json]
   seefore uses <id> [--workdir=<directory>] [--json]
   seefore --help
   seefore --version
 
 Commands:
   check    Read the source directory and report what is wrong with it.
-  list     List the model: people, systems with what is in them, connections, owners
-           and technologies. A record with an error in its file is left out.
+  list     List the model: people, systems with what is in them, connections under
+           what they start from, owners and technologies. Each description shows its
+           first sentence. A record with an error in its file is left out.
   uses     Show what removing a record would break: the record, everything inside it,
            and every place that names either.
 
 Options:
   --workdir=<directory>   Where to start looking. Without it, the current directory.
+  --full                  For list: show each description whole, beneath its record.
   --json                  Print the result as data.
 
 seefore looks for seefore.yaml in the starting directory, then in each folder above it.
@@ -51,6 +53,7 @@ export function main(argv: readonly string[], io: Io): number {
       allowPositionals: true,
       options: {
         workdir: { type: 'string' },
+        full: { type: 'boolean', default: false },
         json: { type: 'boolean', default: false },
         help: { type: 'boolean', short: 'h', default: false },
         version: { type: 'boolean', default: false },
@@ -78,13 +81,14 @@ export function main(argv: readonly string[], io: Io): number {
   }
 
   const options: CheckOptions = { ...(values.workdir === undefined ? {} : { workdir: values.workdir }), json: values.json };
+  if (values.full && command !== 'list' && COMMANDS.includes(command)) return usage(json, io, '`--full` is an option of `seefore list` only.');
   switch (command) {
     case 'check':
     case 'list':
       if (rest.length > 0) {
         return usage(json, io, `\`seefore ${command}\` takes no names after it, but got \`${rest.join(' ')}\`. Use --workdir=<directory> to say where to look.`);
       }
-      return command === 'check' ? check(options, io) : list(options, io);
+      return command === 'check' ? check(options, io) : list({ ...options, full: values.full }, io);
     case 'uses': {
       const [id, ...more] = rest;
       if (id === undefined) return usage(json, io, '`seefore uses` needs the id of a record, as in `seefore uses order-api`.');

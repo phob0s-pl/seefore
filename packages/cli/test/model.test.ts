@@ -48,36 +48,51 @@ function json<T>(args: string[], cwd = '.') {
 
 /** The example shop, written as a person reads it. */
 const SHOP_LISTED = [
-  'People',
+  'People (2)',
   '  customer: Customer - Buys from the shop.',
   '  warehouse-clerk: Warehouse clerk - Packs the orders that are ready to ship.',
   '',
-  'Systems',
-  "  card-provider: Card provider (owner: The card provider) - Takes card payments. Another company's service.",
+  'Systems with parts (1)',
+  'An owner holds for what is beneath it until a part names its own.',
   '  shop: Shop (owner: Shop team) - Sells goods and ships them.',
-  '    app order-api: Order API (service; Go; owner: Shop team, from `shop`) - Takes orders and says how far each has got.',
-  '      component checkout: Checkout (owner: Shop team, from `shop`) - Takes a basket and a payment and makes an order of them.',
-  '      component order-status: Order status (owner: Shop team, from `shop`) - Answers how far an order has got.',
-  '    app shipping: Shipping (service; owner: Logistics team) - Tells the warehouse what to pack and records what was sent.',
-  '    app storefront: Storefront (browser; TypeScript, React; owner: Shop team, from `shop`) - Where a customer fills a basket and pays.',
-  '    store orders-database: Orders database (database; PostgreSQL; owner: Shop team, from `shop`) - Every order and how far it has got.',
+  '    app order-api: Order API (service; Go) - Takes orders and says how far each has got.',
+  '      component checkout: Checkout - Takes a basket and a payment and makes an order of them.',
+  '      component order-status: Order status - Answers how far an order has got.',
+  '    app shipping: Shipping (service; owner: Logistics team) - Tells the warehouse what to pack',
+  '        and records what was sent.',
+  '    app storefront: Storefront (browser; TypeScript, React) - Where a customer fills a basket',
+  '        and pays.',
+  '    store orders-database: Orders database (database; PostgreSQL) - Every order and how far it',
+  '        has got.',
   '',
-  'Connections',
-  '  card-provider-confirms: Card provider -> Order API: Confirms a payment (HTTPS) - Calls back when the payment is done. That this answers the call above is for...',
-  '  checkout-keeps-orders: Checkout -> Orders database: Writes each order (SQL)',
-  '  checkout-takes-payment: Checkout -> Card provider: Takes the payment (HTTPS)',
-  '  clerk-packs: Warehouse clerk -> Shipping: Sees what to pack and marks it sent',
-  '  customer-shops: Customer -> Storefront: Fills a basket and pays',
-  '  order-status-reads-orders: Order status -> Orders database: Reads how far an order has got (SQL)',
-  '  shipping-reads-orders: Shipping -> Orders database: Reads the orders that are ready to ship (SQL)',
-  "  storefront-places-order: Storefront -> Checkout: Places an order (HTTPS) - Hands the customer's basket over as an order.",
+  'Other systems (1)',
+  '  card-provider: Card provider (owner: The card provider) - Takes card payments.',
   '',
-  'Owners',
+  'Connections (8)',
+  '  from Customer (person customer)',
+  '    customer-shops: -> Storefront: Fills a basket and pays',
+  '  from Warehouse clerk (person warehouse-clerk)',
+  '    clerk-packs: -> Shipping: Sees what to pack and marks it sent',
+  '  from Order API (app order-api)',
+  '    checkout-keeps-orders: Checkout -> Orders database: Writes each order (SQL)',
+  '    checkout-takes-payment: Checkout -> Card provider: Takes the payment (HTTPS)',
+  '    order-status-reads-orders: Order status -> Orders database: Reads how far an order has got',
+  '        (SQL)',
+  '  from Shipping (app shipping)',
+  '    shipping-reads-orders: -> Orders database: Reads the orders that are ready to ship (SQL)',
+  '  from Storefront (app storefront)',
+  "    storefront-places-order: -> Order API / Checkout: Places an order (HTTPS) - Hands the",
+  "        customer's basket over as an order.",
+  '  from Card provider (system card-provider)',
+  '    card-provider-confirms: -> Order API: Confirms a payment (HTTPS) - Calls back when the',
+  '        payment is done.',
+  '',
+  'Owners (3)',
   '  card-provider-company: The card provider',
   '  logistics-team: Logistics team',
   '  shop-team: Shop team',
   '',
-  'Technologies',
+  'Technologies (6)',
   '  go: Go',
   '  https: HTTPS',
   '  postgresql: PostgreSQL',
@@ -89,7 +104,7 @@ const SHOP_LISTED = [
 ];
 
 describe('seefore list', () => {
-  it('lists the example shop in words, each record on a line and what is in a thing beneath it', () => {
+  it('lists the example shop in words, each record on a line and what is in a thing beneath it, each connection under what it starts from', () => {
     write(EXAMPLE);
     const result = run(['list']);
     expect(result.code).toBe(0);
@@ -97,7 +112,7 @@ describe('seefore list', () => {
     expect(result.out).toBe([`Shop`, `format 1, ${root}`, '', ...SHOP_LISTED].join('\n'));
   });
 
-  it('gives the model as data, one list for each family, each record as its file says with its id and file', () => {
+  it('gives the model as data, one list for each family, each record as its file says with its id and file, and who answers for each part', () => {
     write(EXAMPLE);
     const { code, data } = json<ListResult>(['list']);
     expect(code).toBe(0);
@@ -116,6 +131,7 @@ describe('seefore list', () => {
       'connections',
       'owners',
       'technologies',
+      'ownership',
     ]);
     expect(data).toMatchObject({ directory: root, name: 'Shop', format: 1, records: 27, errors: 0, warnings: 0 });
     expect(data.people).toEqual([
@@ -133,6 +149,16 @@ describe('seefore list', () => {
     });
     expect(data.connections.map((connection) => `${connection.from} ${connection.to}`)).toContain('checkout card-provider');
     expect(data.technologies).toHaveLength(6);
+    expect(data.ownership).toEqual({
+      'card-provider': { owner: 'card-provider-company', from: 'card-provider' },
+      shop: { owner: 'shop-team', from: 'shop' },
+      'order-api': { owner: 'shop-team', from: 'shop' },
+      shipping: { owner: 'logistics-team', from: 'shipping' },
+      storefront: { owner: 'shop-team', from: 'shop' },
+      'orders-database': { owner: 'shop-team', from: 'shop' },
+      checkout: { owner: 'shop-team', from: 'shop' },
+      'order-status': { owner: 'shop-team', from: 'shop' },
+    });
   });
 
   it('lists a directory that has only its marker', () => {
@@ -153,10 +179,11 @@ describe('seefore list', () => {
       connections: [],
       owners: [],
       technologies: [],
+      ownership: {},
     });
   });
 
-  it('leaves out a record with an error in its own file, and what is in it, and says how many problems there are', () => {
+  it('leaves out a record with an error in its own file, lists what is in it under a last heading, and says how many problems there are', () => {
     write({
       ...EXAMPLE,
       'systems/shop.yaml': 'name: Shop\nowner: [shop-team\n',
@@ -165,14 +192,28 @@ describe('seefore list', () => {
     const result = run(['list']);
     expect(result.code).toBe(0);
     const lines = result.out.split('\n');
-    expect(lines.slice(lines.indexOf('Systems'), lines.indexOf('Systems') + 3)).toEqual([
-      'Systems',
-      "  card-provider: Card provider (owner: The card provider) - Takes card payments. Another company's service.",
+    expect(lines.slice(lines.indexOf('Systems (1)'), lines.indexOf('Systems (1)') + 3)).toEqual([
+      'Systems (1)',
+      '  card-provider: Card provider (owner: The card provider) - Takes card payments.',
       '',
     ]);
     expect(result.out).not.toContain('database-tells');
-    // 27 records, the broken system not among them, and the new connection: 6 are in the system.
-    expect(lines.at(-1)).toBe('27 records read, 20 listed. 2 errors, 0 warnings: run `seefore check` to see them.');
+    const loose = lines.indexOf('Parts in a record with an error (6)');
+    expect(lines.slice(loose)).toEqual([
+      'Parts in a record with an error (6)',
+      '  app order-api: Order API (in: shop; service; Go) - Takes orders and says how far each has got.',
+      '    component checkout: Checkout - Takes a basket and a payment and makes an order of them.',
+      '    component order-status: Order status - Answers how far an order has got.',
+      '  app shipping: Shipping (in: shop; service; owner: Logistics team) - Tells the warehouse what',
+      '      to pack and records what was sent.',
+      '  app storefront: Storefront (in: shop; browser; TypeScript, React) - Where a customer fills a',
+      '      basket and pays.',
+      '  store orders-database: Orders database (in: shop; database; PostgreSQL) - Every order and how',
+      '      far it has got.',
+      '',
+      // 27 records: the broken system is not among them, and the new connection has an error.
+      '27 records read, 26 listed. 2 errors, 0 warnings: run `seefore check` to see them.',
+    ]);
     const { data } = json<ListResult>(['list']);
     expect(data.systems.map((system) => system.id)).toEqual(['card-provider']);
     expect(data.apps.map((app) => app.id)).toEqual(['order-api', 'shipping', 'storefront']);
@@ -190,12 +231,13 @@ describe('seefore list', () => {
     });
     const lines = run(['list']).out.split('\n');
     expect(lines.slice(3)).toEqual([
-      'People',
+      'People (1)',
       '  visitor: Visitor',
       '',
-      'Connections',
-      '  visits: Visitor -> site: Visits',
-      '  visits-again: Visitor -> site: Visits',
+      'Connections (2)',
+      '  from Visitor (person visitor)',
+      '    visits: -> site: Visits',
+      '    visits-again: -> site: Visits',
       '',
       '4 records read, 3 listed. 1 error, 2 warnings: run `seefore check` to see them.',
     ]);
@@ -216,21 +258,24 @@ describe('seefore list', () => {
       'technologies/s3.yaml': 'name: Amazon S3\n',
     });
     expect(run(['list']).out.split('\n').slice(3)).toEqual([
-      'Systems',
+      'Systems with parts (1)',
+      'An owner holds for what is beneath it until a part names its own.',
       '  site: Site',
       '    app web: Web',
       '    app worker: Worker (job; owner: Night team)',
-      '      component upload: Upload (Go, Amazon S3; owner: Night team, from `worker`)',
+      '      component upload: Upload (Go, Amazon S3)',
       '    store files: Uploads (Amazon S3)',
       '',
-      'Connections',
-      '  web-calls: Web -> Worker',
-      '  worker-writes: Upload -> Uploads (Amazon S3)',
+      'Connections (2)',
+      '  from Web (app web)',
+      '    web-calls: -> Worker',
+      '  from Worker (app worker)',
+      '    worker-writes: Upload -> Uploads (Amazon S3)',
       '',
-      'Owners',
-      '  night-team: Night team - Runs what runs at night. Asleep by day.',
+      'Owners (1)',
+      '  night-team: Night team - Runs what runs at night.',
       '',
-      'Technologies',
+      'Technologies (2)',
       '  go: Go',
       '  s3: Amazon S3',
       '',
@@ -238,12 +283,13 @@ describe('seefore list', () => {
     ]);
   });
 
-  it('cuts a long description to one line, at a word', () => {
-    const long = 'Holds every order the shop has taken since it opened, with each change made to it and who made it.';
+  it('shows the whole first sentence of a long description, wrapped at a word', () => {
+    const long = 'Holds every order the shop has taken since it opened, with each change made to it and who made it. Kept for ever.';
     write({ 'seefore.yaml': MARKER, 'people/clerk.yaml': `name: Clerk\ndescription: ${long}\n` });
-    const line = run(['list']).out.split('\n')[4];
-    expect(line).toBe('  clerk: Clerk - Holds every order the shop has taken since it opened, with each change made...');
-    expect(line?.length).toBeLessThanOrEqual('  clerk: Clerk - '.length + 80);
+    expect(run(['list']).out.split('\n').slice(4, 6)).toEqual([
+      '  clerk: Clerk - Holds every order the shop has taken since it opened, with each change made to',
+      '      it and who made it.',
+    ]);
   });
 
   it('cannot start where there is no source directory, and names itself in the hint', () => {

@@ -6,4 +6,6 @@ export interface Io {
   out(text: string): void;
   /** Prints why the command could not do its work. */
   err(text: string): void;
+  /** How many columns the terminal has, when the result is printed to one. Missing for a file or a pipe. */
+  columns?: number;
 }
