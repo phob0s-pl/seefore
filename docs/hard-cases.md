@@ -144,16 +144,19 @@ says what the thing is. There the skill's question is the guard.
 
 - **A route is a line on the arrow**, under its names: `via Ingress, Workhorse`. When the
   connections of one arrow have different routes, or only some have one, it says on how many:
-  `via on 2 of 5`. The panel gives each connection's route in order.
+  `via on 2 of 5`. A route too long for its line says how many more it holds: `via Ingress,
+  + 2 more`. A hop that is drawn as the box at either end of the arrow is left out at that
+  level. The panel gives each connection's whole route in order.
 - **A piece of infrastructure has a box only where a connection starts or ends at it.** It has
   a shape of its own and stands outside the boundary, since it is in no system. One that is
   only passed through has no box: the view lists it under the legend, with how many of the
   view's connections pass through it, and a click there lights those arrows.
-- A box that connections pass through carries a mark with their number.
+- A box that connections pass through carries a mark with their number, counting every
+  connection the view holds, also those between two parts that are drawn as one box.
 - **A queue or a topic** has a shape of its own, the same for both, and its kind line says
   which: `[Store: topic · Kafka]`.
-- **An external system** says so in its kind line, `[System: external]`, and has an outline of
-  its own. A system with no mark stays `[System]`.
+- **An external system** says so in its kind line, `[System: external]`, and has a tab at its
+  corner, on the shape every system has. A system with no mark stays the plain system.
 - Each of these is in the legend where the view draws it, and none is told by colour alone.
 - **A view is about a system.** A connection between two things that are in no system, such as
   a person and a piece of infrastructure, or two pieces of infrastructure, is in no picture.
