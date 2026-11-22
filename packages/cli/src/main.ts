@@ -26,8 +26,9 @@ Commands:
   list     List the model: people, systems with what is in them, connections under
            what they start from, owners and technologies. Each description shows its
            first sentence. A record with an error in its file is left out.
-  uses     Show what removing a record would break: the record, everything inside it,
-           and every place that names either.
+  uses     Show what removing or renaming a record would touch: what goes with it,
+           what must go or change, what would be left behind, and which records may
+           speak of it in their text.
 
 Options:
   --workdir=<directory>   Where to start looking. Without it, the current directory.

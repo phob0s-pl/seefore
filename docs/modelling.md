@@ -205,11 +205,15 @@ prints the model in words, to read before the viewer exists.
   beneath it and the components beneath each app; the other systems; the connections; the
   owners; the technologies. Each heading says how many.
 - A connection stands under the person, the system, the app or the store it starts from, and
-  a component's under its app. A component at either end is shown with its app.
-- A description shows its whole first sentence. `--full` shows all of it.
+  a component's under its app. A component at the far end is shown with its app: "Order API /
+  Checkout".
+- A description shows its whole first sentence. `--full` shows all of it, beneath the record.
 - Lines wrap at 96 columns, or at the width of the terminal when that is less.
 - An owner is shown on the record that names it. It holds for what is beneath, until a part
   names its own.
+- A part whose `in` names a record with an error is listed last, under a heading that says
+  so. A record with an error in its own file is left out, and the last line says how many
+  were read and how many are listed.
 - With `--json` it prints the model as data, with no text cut, and `ownership`: for each part
   that has an owner, the owner and the record it comes from.
 
@@ -227,9 +231,21 @@ all that is inside it. It answers in four lists, and counts records:
 | Left behind | A part that has a connection now and would have none if those connections went. An owner or a technology that only those records name |
 | May speak of it | Another record whose `name` or `description` holds the thing's name, its id, or its id with spaces for hyphens |
 
-The last two are suggestions. What is left behind may well stay, and a mention is a place to
-read, not to replace. An id that names no record ends with exit code 2, and with `error.code`
-`no-such-record` under `--json`.
+- The last two are suggestions. What is left behind may well stay, and a mention is a place
+  to read, not to replace. Each heading says what it assumes: "If they go, 1 record is left
+  with no connection".
+- For an owner it also says how many parts take it from what they are in, since their files
+  hold no `owner` to change.
+- A mention points at the key, `name` or `description`, and gives the words found. A name or
+  an id of fewer than three characters is not looked for.
+- When the directory has errors it prints what is known, says that other uses may exist, and
+  names nothing as left behind.
+- With `--json` it prints the same as data: `goes`, `changes`, `left`, `inherited`, `mentions`,
+  and `complete`, which is false when not every file could be read.
+- A path is given from where the command was run, and in full when that would start with
+  `..`. The same holds for `seefore check`.
+- An id that names no record ends with exit code 2, and with `error.code` `no-such-record`
+  under `--json`.
 
 ## The skill
 
