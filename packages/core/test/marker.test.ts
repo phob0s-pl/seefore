@@ -38,6 +38,8 @@ describe('the marker file', () => {
       '1:9 value-wrong-kind `format` must be a whole number, but this is a number that is not whole.',
     ]);
     expect(problemsOf('format: 1\nname:\n')).toEqual(['2:6 value-wrong-kind `name` must be text, but this is empty.']);
+    expect(problemsOf('format: 1\nname: [Box, wick]\n')).toEqual(['2:7 value-wrong-kind `name` must be text, but this is a list.']);
+    expect(problemsOf('format: 1\nname: { first: Box }\n')).toEqual(['2:7 value-wrong-kind `name` must be text, but this is a mapping.']);
   });
 
   it('reports a key it does not have, at the key, and lists the ones it has', () => {
@@ -51,7 +53,7 @@ describe('the marker file', () => {
     expect(problemsOf('format: 1\nname: "   "\n')).toEqual(['2:7 value-too-small `name` is empty.']);
     expect(problemsOf('format: 1\nname: "Box\\nwick"\n')).toEqual(['2:7 value-invalid `name` must be on one line.']);
     expect(problemsOf(`format: 1\nname: ${'x'.repeat(NAME_MAX + 1)}\n`)).toEqual([
-      `2:7 value-too-big \`name\` is too long: it has at most ${NAME_MAX} characters.`,
+      `2:7 value-too-big \`name\` has ${NAME_MAX + 1} characters. It may have at most ${NAME_MAX}.`,
     ]);
   });
 
@@ -106,10 +108,43 @@ describe('the marker file', () => {
     expect(readMarker('').readable).toBe(false);
   });
 
+  it('is not readable when it writes `format` twice, even once in a format it reads', () => {
+    for (const text of ['format: 1\nformat: 2\nname: Test\n', 'format: 2\nformat: 1\nname: Test\n', 'format: 1\nformat: 1\nname: Test\n']) {
+      const read = readMarker(text);
+      expect(read.readable).toBe(false);
+      expect(read.problems.map((problem) => `${problem.line}:${problem.column} ${problem.code}`)).toEqual(['2:1 yaml-key-twice']);
+    }
+  });
+
+  it('names the file it is read under in every problem', () => {
+    const read = readMarker('format: 2\nname: Future\n', 'seefore.yml');
+    expect(read.problems.map((problem) => `${problem.file}:${problem.line}:${problem.column} ${problem.code}`)).toEqual(['seefore.yml:1:1 format-not-readable']);
+    expect(readMarker('format: 1\n', 'SEEFORE.YAML').problems.map((problem) => problem.file)).toEqual(['SEEFORE.YAML']);
+  });
+
   it('is readable when the format is known, though something else is wrong', () => {
     expect(readMarker('format: 1\n').readable).toBe(true);
     expect(readMarker('format: 1\nname: !!str Test\n').readable).toBe(true);
     expect(readMarker('format: 1\nname: A\nname: B\n').readable).toBe(true);
+  });
+
+  it('refuses a comment, names the marker file, and still reads the directory', () => {
+    const read = readMarker('# The shop\nformat: 1\nname: Boxwick\n');
+    expect(read.readable).toBe(true);
+    expect(read.marker).toBeUndefined();
+    expect(read.problems.map((problem) => `${problem.line}:${problem.column} ${problem.code} ${problem.message}`)).toEqual([
+      '1:1 yaml-comment This line is a comment. The marker file holds no comments, since nothing reads them. Remove it.',
+    ]);
+    expect(problemsOf('format: 1\nname: Boxwick #2\n')).toEqual([
+      '2:15 yaml-comment YAML reads ` #2` as a comment, so the value stops before it. If this is part of the text, ' +
+        'put the whole text in double quotes. If it is a note, remove it: the marker file holds no comments.',
+    ]);
+  });
+
+  it('looks at the format before a comment: a newer format is refused whole', () => {
+    const read = readMarker('# Written by a newer seefore\nformat: 2\nname: Boxwick\n');
+    expect(read.readable).toBe(false);
+    expect(read.problems.map((problem) => problem.code)).toEqual(['format-not-readable']);
   });
 
   it('passes on what is wrong with the YAML', () => {

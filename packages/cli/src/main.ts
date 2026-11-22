@@ -1,32 +1,48 @@
 import { parseArgs } from 'node:util';
 import { EXIT_OK, check, notStarted } from './check.ts';
+import type { CheckOptions } from './check.ts';
 import type { Io } from './io.ts';
+import { list } from './list.ts';
+import { uses } from './uses.ts';
 
 /** Set when the command is built. Missing when it runs straight from source. */
 declare const SEEFORE_VERSION: string | undefined;
 
 export const VERSION: string = typeof SEEFORE_VERSION === 'string' ? SEEFORE_VERSION : 'dev';
 
-const COMMANDS = ['check'];
+const COMMANDS = ['check', 'list', 'uses'];
 
 export const HELP = `seefore: design software architecture on the C4 model, kept as files in Git.
 
 Usage:
   seefore check [--workdir=<directory>] [--json]
+  seefore list [--workdir=<directory>] [--full] [--json]
+  seefore uses <id> [--workdir=<directory>] [--json]
   seefore --help
   seefore --version
 
 Commands:
   check    Read the source directory and report what is wrong with it.
+  list     List the model: people, systems with what is in them, connections under
+           what they start from, owners and technologies. Each description shows its
+           first sentence. A record with an error in its file is left out.
+  uses     Show what removing or renaming a record would touch: what goes with it,
+           what must go or change, what would be left behind, and which records may
+           speak of it in their text.
 
 Options:
   --workdir=<directory>   Where to start looking. Without it, the current directory.
+  --full                  For list: show each description whole, beneath its record.
   --json                  Print the result as data.
 
 seefore looks for seefore.yaml in the starting directory, then in each folder above it.
 The first folder that has one is the source directory.
 
-Exit code: 0 when there are no errors, 1 when there are, 2 when seefore could not start.`;
+Exit code:
+  0   check found no errors, or list or uses did its work.
+  1   check found errors.
+  2   seefore could not start, or uses was given an id that no record has, or
+      that more than one has.`;
 
 /** Runs the command with the given arguments and returns its exit code. */
 export function main(argv: readonly string[], io: Io): number {
@@ -39,6 +55,7 @@ export function main(argv: readonly string[], io: Io): number {
       allowPositionals: true,
       options: {
         workdir: { type: 'string' },
+        full: { type: 'boolean', default: false },
         json: { type: 'boolean', default: false },
         help: { type: 'boolean', short: 'h', default: false },
         version: { type: 'boolean', default: false },
@@ -64,14 +81,25 @@ export function main(argv: readonly string[], io: Io): number {
     io.out(HELP);
     return EXIT_OK;
   }
-  if (command !== 'check') {
-    return usage(json, io, `\`${command}\` is not a seefore command. The commands are: ${COMMANDS.join(', ')}.`);
-  }
-  if (rest.length > 0) {
-    return usage(json, io, `\`seefore check\` takes no names after it, but got \`${rest.join(' ')}\`. Use --workdir=<directory> to say where to look.`);
-  }
 
-  return check({ ...(values.workdir === undefined ? {} : { workdir: values.workdir }), json: values.json }, io);
+  const options: CheckOptions = { ...(values.workdir === undefined ? {} : { workdir: values.workdir }), json: values.json };
+  if (values.full && command !== 'list' && COMMANDS.includes(command)) return usage(json, io, '`--full` is an option of `seefore list` only.');
+  switch (command) {
+    case 'check':
+    case 'list':
+      if (rest.length > 0) {
+        return usage(json, io, `\`seefore ${command}\` takes no names after it, but got \`${rest.join(' ')}\`. Use --workdir=<directory> to say where to look.`);
+      }
+      return command === 'check' ? check(options, io) : list({ ...options, full: values.full }, io);
+    case 'uses': {
+      const [id, ...more] = rest;
+      if (id === undefined) return usage(json, io, '`seefore uses` needs the id of a record, as in `seefore uses order-api`.');
+      if (more.length > 0) return usage(json, io, `\`seefore uses\` takes one id, but got \`${rest.join(' ')}\`.`);
+      return uses(id, options, io);
+    }
+    default:
+      return usage(json, io, `\`${command}\` is not a seefore command. The commands are: ${COMMANDS.join(', ')}.`);
+  }
 }
 
 /** Says in plain words what was wrong with the options, from the error Node's parser threw. */

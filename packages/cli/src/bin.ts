@@ -2,10 +2,14 @@ import { notStarted } from './check.ts';
 import type { Io } from './io.ts';
 import { main } from './main.ts';
 
+const columns = process.stdout.isTTY ? process.stdout.columns : undefined;
+
 const io: Io = {
   cwd: process.cwd(),
   out: (text) => console.log(text),
   err: (text) => console.error(text),
+  // A terminal that does not say how wide it is counts as none.
+  ...(columns !== undefined && columns > 0 ? { columns } : {}),
 };
 
 const argv = process.argv.slice(2);

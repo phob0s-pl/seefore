@@ -1,7 +1,7 @@
-import { isMap } from 'yaml';
+import { isMap, isSeq } from 'yaml';
 import type { Document, YAMLMap } from 'yaml';
 import type { z } from 'zod';
-import { error, list, quote } from './problem.ts';
+import { capital, error, list, quote } from './problem.ts';
 import type { Position, Problem } from './problem.ts';
 import { keyPosition } from './yaml.ts';
 import type { YamlFile } from './yaml.ts';
@@ -46,11 +46,16 @@ export function checkShape<T>(file: string, yaml: YamlFile, schema: z.ZodType<T>
       case 'invalid_type': {
         if (!doc.hasIn(path)) {
           const owner = path.length <= 1 ? what : label(path.slice(0, -1));
-          problems.push(error(file, parentPosition(yaml, doc, path), 'key-missing', `${label(path)} is missing from ${owner}.`));
+          problems.push(error(file, parentPosition(yaml, doc, path), 'key-missing', `${capital(label(path))} is missing from ${owner}.`));
         } else {
           const found = describe(doc.getIn(path));
           problems.push(
-            error(file, valuePosition(yaml, doc, path), 'value-wrong-kind', `${label(path)} must be ${expected(issue.expected)}, but this is ${found}.`),
+            error(
+              file,
+              valuePosition(yaml, doc, path),
+              'value-wrong-kind',
+              `${capital(label(path))} must be ${expected(issue.expected)}, but this is ${found}.`,
+            ),
           );
         }
         break;
@@ -59,23 +64,24 @@ export function checkShape<T>(file: string, yaml: YamlFile, schema: z.ZodType<T>
         const message =
           issue.origin === 'string'
             ? Number(issue.minimum) <= 1
-              ? `${label(path)} is empty.`
-              : `${label(path)} is too short: it needs at least ${issue.minimum} characters.`
-            : `${label(path)} must be at least ${issue.minimum}.`;
+              ? `${capital(label(path))} is empty.`
+              : `${capital(label(path))} is too short: it needs at least ${issue.minimum} characters.`
+            : `${capital(label(path))} must be at least ${issue.minimum}.`;
         problems.push(error(file, valuePosition(yaml, doc, path), 'value-too-small', message));
         break;
       }
       case 'too_big': {
+        const value: unknown = doc.getIn(path);
         const message =
-          issue.origin === 'string'
-            ? `${label(path)} is too long: it has at most ${issue.maximum} characters.`
-            : `${label(path)} must be at most ${issue.maximum}.`;
+          issue.origin === 'string' && typeof value === 'string'
+            ? `${capital(label(path))} has ${characters(value)} characters. It may have at most ${issue.maximum}.`
+            : `${capital(label(path))} must be at most ${issue.maximum}.`;
         problems.push(error(file, valuePosition(yaml, doc, path), 'value-too-big', message));
         break;
       }
       case 'invalid_value': {
         const allowed = issue.values.map((value) => String(value));
-        problems.push(error(file, valuePosition(yaml, doc, path), 'value-not-allowed', `${label(path)} must be one of ${list(allowed)}.`));
+        problems.push(error(file, valuePosition(yaml, doc, path), 'value-not-allowed', notAllowed(path, allowed)));
         break;
       }
       default: {
@@ -106,14 +112,40 @@ function parentPosition(yaml: YamlFile, doc: Document, path: Path): Position {
   return valuePosition(yaml, doc, path.slice(0, -1));
 }
 
-/** How a path is shown in a message: `name`, `owner.team`, `tags[2]`. */
-function label(path: Path): string {
+/** The words for the first ten places in a list. */
+const ORDINALS = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth', 'tenth'];
+
+/**
+ * How a path is shown in a message: `name`, or "the second id in `technology`" for an item of a
+ * list. Past the tenth an item is named by its number, as in "id 11 in `technology`". It starts
+ * in lowercase; `capital` makes it start a sentence.
+ */
+export function label(path: Path): string {
+  const last = path[path.length - 1];
+  if (typeof last !== 'number') return quote(dotted(path));
+  const list = quote(dotted(path.slice(0, -1)));
+  const ordinal = ORDINALS[last];
+  return ordinal === undefined ? `id ${last + 1} in ${list}` : `the ${ordinal} id in ${list}`;
+}
+
+/** A path as a program writes it: `owner.team`, `tags[2]`. */
+function dotted(path: Path): string {
   let text = '';
   for (const part of path) {
     if (typeof part === 'number') text += `[${part}]`;
     else text += (text === '' ? '' : '.') + String(part);
   }
-  return quote(text);
+  return text;
+}
+
+/** That the value at a path is not one of the few it may be, and which those are. */
+export function notAllowed(path: Path, allowed: readonly string[]): string {
+  return `${capital(label(path))} must be one of ${list(allowed)}.`;
+}
+
+/** How many characters a text has, counted as the limits on text count them: one for each code point. */
+function characters(text: string): number {
+  return [...text].length;
 }
 
 function expected(kind: string): string {
@@ -141,7 +173,8 @@ function describe(value: unknown): string {
   if (typeof value === 'string') return 'text';
   if (typeof value === 'number') return Number.isInteger(value) ? 'a whole number' : 'a number that is not whole';
   if (typeof value === 'boolean') return '`true` or `false`';
-  if (Array.isArray(value)) return 'a list';
+  // A list comes out of the document as a node of its own, not as an array.
+  if (Array.isArray(value) || isSeq(value)) return 'a list';
   return 'a mapping';
 }
 

@@ -168,11 +168,74 @@ describe('seefore check', () => {
     expect(json(['check']).data.problems).toEqual([]);
   });
 
-  it('reports a file that is not UTF-8', () => {
+  it('reports a file that is not UTF-8, and says how to mend it', () => {
     write({ 'seefore.yaml': MARKER, 'things/bad.yaml': new Uint8Array([0x6e, 0x3a, 0x20, 0xff, 0xfe]) });
     const result = json(['check']);
     expect(result.code).toBe(1);
-    expect(result.data.problems).toMatchObject([{ file: 'things/bad.yaml', line: 1, column: 1, severity: 'error', code: 'not-utf8' }]);
+    // It is in a folder seefore does not read, which is said too.
+    expect(result.data.problems).toMatchObject([
+      { file: 'things/bad.yaml', line: 1, column: 1, severity: 'warning', code: 'not-read' },
+      {
+        file: 'things/bad.yaml',
+        line: 1,
+        column: 1,
+        severity: 'error',
+        code: 'not-utf8',
+        message: 'This file is not UTF-8 text, so it could not be read. Save it as UTF-8.',
+      },
+    ]);
+  });
+
+  it('keeps a record whose file is not UTF-8 for the records that name it, and for seefore uses', () => {
+    write({
+      'seefore.yaml': MARKER,
+      'apps/search.yaml': 'name: Search\nin: catalog\n',
+      'connections/find.yaml': 'from: search\nto: catalog\n',
+      'systems/catalog.yaml': new Uint8Array([0xff, 0x0a]),
+    });
+    const result = json(['check']);
+    expect(result.code).toBe(1);
+    expect(result.data.records).toBe(2);
+    expect(result.data.problems.map((problem) => `${problem.file} ${problem.code}`)).toEqual(['systems/catalog.yaml not-utf8']);
+    const uses = run(['uses', 'catalog', '--json']);
+    expect(uses.code).toBe(0);
+    expect(JSON.parse(uses.out)).toMatchObject({ record: { id: 'catalog', family: 'systems', file: 'systems/catalog.yaml' }, complete: false });
+  });
+
+  it.skipIf(process.getuid?.() === 0)('keeps a record whose file the disk would not give, and says how to mend it', () => {
+    write({ 'seefore.yaml': MARKER, 'apps/search.yaml': 'name: Search\nin: catalog\n', 'systems/catalog.yaml': 'name: Catalog\n' });
+    chmodSync(join(root, 'systems', 'catalog.yaml'), 0o000);
+    try {
+      const result = json(['check']);
+      expect(result.code).toBe(1);
+      expect(result.data.problems).toEqual([
+        { file: 'systems/catalog.yaml', line: 1, column: 1, severity: 'error', code: 'file-unreadable', message: 'This file could not be read: EACCES. Make it readable.' },
+      ]);
+    } finally {
+      chmodSync(join(root, 'systems', 'catalog.yaml'), 0o644);
+    }
+  });
+
+  it('reads no record under a marker spelt another way in a format it cannot read', () => {
+    write({ 'seefore.yml': 'format: 2\nname: Future\n', 'systems/later.yaml': 'name: Future app\n' });
+    const result = json(['check']);
+    expect(result.code).toBe(1);
+    expect(result.data).toMatchObject({ name: 'Future', format: 2, records: 0 });
+    expect(result.data.problems.map((problem) => `${problem.file}:${problem.line}:${problem.column} ${problem.code}`)).toEqual([
+      'seefore.yml:1:1 format-not-readable',
+      'seefore.yml:1:1 marker-name',
+    ]);
+    expect(JSON.parse(run(['list', '--json']).out)).toMatchObject({ systems: [] });
+  });
+
+  it('reads no record when the marker writes `format` twice', () => {
+    write({ 'seefore.yaml': 'format: 1\nformat: 2\nname: Test\n', 'systems/future.yaml': 'name: Future thing\n' });
+    const result = json(['check']);
+    expect(result.data.records).toBe(0);
+    expect(result.data.problems.map((problem) => `${problem.file}:${problem.line}:${problem.column} ${problem.code}`)).toEqual([
+      'seefore.yaml:1:1 format-unknown',
+      'seefore.yaml:2:1 yaml-key-twice',
+    ]);
   });
 
   it('does not follow links, and says so', () => {
@@ -274,15 +337,16 @@ describe('seefore check', () => {
     ]);
   });
 
-  it('takes a marker that is a link as a marker, and says it must be a file', () => {
-    write({ 'real/seefore.yaml': MARKER, 'linked/x.txt': '', 'dangling/x.txt': '' });
+  it('takes a marker that is a link as a marker, says it must be a file, and reads nothing else', () => {
+    write({ 'real/seefore.yaml': MARKER, 'linked/systems/shop.yaml': 'name: Shop\n', 'dangling/x.txt': '' });
     symlinkSync(join(root, 'real', 'seefore.yaml'), join(root, 'linked', 'seefore.yaml'));
     symlinkSync(join(root, 'nowhere.yaml'), join(root, 'dangling', 'seefore.yaml'));
     for (const folder of ['linked', 'dangling']) {
       const result = json(['check'], folder);
       expect(result.code).toBe(1);
       expect(result.data.directory).toBe(join(root, folder));
-      expect(result.data.problems.map((problem) => `${problem.file} ${problem.code}`)).toEqual(['seefore.yaml marker-link']);
+      expect(result.data.records).toBe(0);
+      expect(result.data.problems.map((problem) => `${problem.file} ${problem.code}`)).toEqual(['seefore.yaml format-unknown', 'seefore.yaml marker-link']);
     }
   });
 
@@ -318,6 +382,93 @@ describe('seefore check', () => {
     }
   });
 
+  it('reports what is wrong with the records, each at its place, and counts the records it read', () => {
+    write({
+      'seefore.yaml': MARKER,
+      'systems/shop.yaml': 'name: Shop\n',
+      'stores/orders.yaml': 'name: Orders\nin: shop\n',
+      'apps/order-api.yaml': 'name: Order API\nin: orders\nkind: server\n',
+      'connections/orders-tell.yaml': 'from: orders\nto: shop\nname: Says what is new\n',
+    });
+    const result = run(['check']);
+    expect(result.code).toBe(1);
+    expect(result.out.split('\n').slice(3)).toEqual([
+      'apps/order-api.yaml:2:5: error: `in` names `orders`, which is a store. An app is in a system.',
+      'apps/order-api.yaml:3:7: error: `kind` must be one of `service`, `browser`, `mobile`, `desktop`, `command`, `function` and `job`.',
+      'connections/orders-tell.yaml:1:7: error: This connection goes from the store `orders` to the system `shop`, but a store acts on nothing ' +
+        'but another store. Turn it round, so that it goes from the one that reads or writes the store, and say which in its name.',
+      '',
+      '4 records read. 3 errors, 0 warnings.',
+    ]);
+    expect(json(['check']).data.problems.map((problem) => `${problem.file}:${problem.line}:${problem.column} ${problem.code}`)).toEqual([
+      'apps/order-api.yaml:2:5 reference-wrong-kind',
+      'apps/order-api.yaml:3:7 value-not-allowed',
+      'connections/orders-tell.yaml:1:7 store-acts',
+    ]);
+  });
+
+  it('refuses a comment, says what to do about a slip in plain words, and keeps every code', () => {
+    write({
+      'seefore.yaml': MARKER,
+      'systems/shop.yaml': 'name: Shop\n',
+      'apps/port.yaml': 'name: Exporter\nin: shop\ndescription: Listens on port #9100 for scrapes.\n',
+      'apps/modes.yaml': 'name: Modes\nin: shop\ndescription: Two modes: node\n',
+      'systems/argue.yaml': 'name: Argue\nowner: Two teams argue\n',
+      'stores/work.yaml': 'name: Work\nin: shop\nkind: queue\n',
+    });
+    const result = run(['check']);
+    expect(result.code).toBe(1);
+    expect(result.out.split('\n').slice(3)).toEqual([
+      'apps/modes.yaml:3:23: error: YAML reads this colon as the start of another key. Put the whole text in double quotes.',
+      'apps/port.yaml:3:30: error: YAML reads ` #9100 for scrapes.` as a comment, so the value stops before it. If this is part of the text, ' +
+        'put the whole text in double quotes. If it is a note, remove it: a record holds no comments.',
+      'stores/work.yaml:3:7: error: `kind` must be one of `database`, `files`, `cache` and `index`. ' +
+        'A queue or a topic is a store with no `kind` at this stage. Say which in its description.',
+      'systems/argue.yaml:2:8: error: `owner` holds the id of a record in `owners/`. ' +
+        'If who answers takes a sentence to say, leave `owner` out and put the sentence in the description.',
+      '',
+      // The two files YAML cannot read whole are not read at all.
+      '3 records read. 4 errors, 0 warnings.',
+    ]);
+    expect(json(['check']).data.problems.map((problem) => `${problem.file} ${problem.code}`)).toEqual([
+      'apps/modes.yaml yaml-syntax',
+      'apps/port.yaml yaml-comment',
+      'stores/work.yaml value-not-allowed',
+      'systems/argue.yaml value-invalid',
+    ]);
+  });
+
+  it('refuses a comment in the marker, and still reads the records', () => {
+    write({ 'seefore.yaml': '# The shop\nformat: 1\nname: Boxwick\n', 'systems/shop.yaml': 'name: Shop\n' });
+    const result = run(['check']);
+    expect(result.code).toBe(1);
+    expect(result.out.split('\n')).toEqual([
+      '(no name: the marker file could not be read)',
+      `format unknown, ${root}`,
+      '',
+      'seefore.yaml:1:1: error: This line is a comment. The marker file holds no comments, since nothing reads them. Remove it.',
+      '',
+      '1 record read. 1 error, 0 warnings.',
+    ]);
+  });
+
+  it('passes a directory whose records keep every rule, with a warning about a check', () => {
+    write({
+      'seefore.yaml': MARKER,
+      'people/customer.yaml': 'name: Customer\n',
+      'systems/shop.yaml': 'name: Shop\n',
+      'connections/buys.yaml': 'from: customer\nto: shop\nname: Buys\n',
+      'connections/buys-again.yaml': 'from: customer\nto: shop\nname: Buys\n',
+    });
+    const result = run(['check']);
+    expect(result.code).toBe(0);
+    expect(result.out).toContain(
+      'connections/buys.yaml:1:1: warning: This connection has the same `from`, `to` and `name` as `connections/buys-again.yaml`. ' +
+        'If these are the same exchange, keep one. If their purposes differ, give each a name that says which.',
+    );
+    expect(result.out.endsWith('4 records read. 0 errors, 2 warnings.')).toBe(true);
+  });
+
   it('refuses a directory written in a newer format', () => {
     write({ 'seefore.yaml': 'format: 2\nname: Boxwick\n' });
     const result = run(['check']);
@@ -341,7 +492,7 @@ describe('the command line', () => {
   it('refuses a command it does not have', () => {
     const result = run(['frobnicate']);
     expect(result.code).toBe(2);
-    expect(result.err).toBe('seefore: `frobnicate` is not a seefore command. The commands are: check.\nRun `seefore --help` to see how it is used.');
+    expect(result.err).toBe('seefore: `frobnicate` is not a seefore command. The commands are: check, list, uses.\nRun `seefore --help` to see how it is used.');
   });
 
   it('refuses an option it does not have, in plain words', () => {
@@ -361,7 +512,7 @@ describe('the command line', () => {
     expect(JSON.parse(run(['--json', '--version']).out)).toEqual({ version: 'dev' });
     const none = run(['--json']);
     expect(none.code).toBe(2);
-    expect((JSON.parse(none.out) as Failure).error).toEqual({ code: 'usage', message: 'No command was given. The commands are: check.' });
+    expect((JSON.parse(none.out) as Failure).error).toEqual({ code: 'usage', message: 'No command was given. The commands are: check, list, uses.' });
   });
 
   it('answers a mistake in the options as data when asked for data', () => {

@@ -90,6 +90,10 @@ export interface FilesRead {
  * Reads every YAML file under a source directory as text. Hidden files and folders are
  * skipped, and so is `node_modules`. Links are not followed. A folder or a file that cannot
  * be read is reported, and the rest is still read.
+ *
+ * A file that is there but cannot be read is still handed on, by its path and with no text,
+ * so that a record's file still stands for its record. So is a marker that is a link: it marks
+ * the folder, though what it says is not read.
  */
 export function readSourceFiles(directory: string): FilesRead {
   const files: SourceFile[] = [];
@@ -110,6 +114,7 @@ export function readSourceFiles(directory: string): FilesRead {
       if (entry.isSymbolicLink()) {
         if (prefix === '' && isMarkerName(entry.name)) {
           problems.push(problem(path, 'error', 'marker-link', 'The marker file is a link, and seefore does not follow links. Make it a file of its own.'));
+          files.push({ path });
         } else if (isMarkerName(entry.name)) {
           problems.push(problem(path, 'error', 'marker-nested', 'A source directory cannot sit inside another one. Remove this link, or move its folder out.'));
         } else {
@@ -118,15 +123,12 @@ export function readSourceFiles(directory: string): FilesRead {
       } else if (entry.isDirectory()) {
         walk(join(folder, entry.name), path + '/');
       } else if (entry.isFile() && isSourcePath(path)) {
-        try {
-          const bytes = readFileSync(join(folder, entry.name));
-          files.push({ path, text: new TextDecoder('utf-8', { fatal: true }).decode(bytes) });
-        } catch (cause) {
-          if (cause instanceof TypeError) {
-            problems.push(problem(path, 'error', 'not-utf8', 'This file is not UTF-8 text, so it could not be read.'));
-          } else {
-            problems.push(problem(path, 'error', 'file-unreadable', `This file could not be read: ${reason(cause)}.`));
-          }
+        const read = readText(join(folder, entry.name));
+        if (typeof read === 'string') {
+          files.push({ path, text: read });
+        } else {
+          files.push({ path });
+          problems.push(problem(path, 'error', read.code, read.message));
         }
       }
     }
@@ -134,6 +136,21 @@ export function readSourceFiles(directory: string): FilesRead {
 
   walk(directory, '');
   return { files, problems };
+}
+
+/** Reads a file as UTF-8 text, or says why it could not be read and what to do about it. */
+function readText(file: string): string | { code: string; message: string } {
+  let bytes: Buffer;
+  try {
+    bytes = readFileSync(file);
+  } catch (cause) {
+    return { code: 'file-unreadable', message: `This file could not be read: ${reason(cause)}. Make it readable.` };
+  }
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
+    return { code: 'not-utf8', message: 'This file is not UTF-8 text, so it could not be read. Save it as UTF-8.' };
+  }
 }
 
 /** Turns a path from the source directory into one for this machine. */

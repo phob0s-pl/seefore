@@ -31,12 +31,13 @@ There are no other keys. The marker never names a machine, a path or a remote, s
 directory can be moved or cloned anywhere.
 
 The file is named exactly `seefore.yaml`, in lowercase, and is a file, not a link. A marker
-under another spelling, such as `seefore.yml`, still marks the folder, and is reported.
+under another spelling, such as `seefore.yml`, still marks the folder, and is reported. Where
+there is no `seefore.yaml`, the misspelt one is read in its place.
 
 The format is read first, before any other rule is applied. A directory written in a format
 this seefore does not know is refused whole. When the marker cannot say which format the
-directory is in, nothing else in it is read. Either way no record is read under the wrong
-rules.
+directory is in, nothing else in it is read: when `format` is missing, is written twice, or
+the marker is a link or cannot be read. Either way no record is read under the wrong rules.
 
 A source directory cannot sit inside another one. That is reported whichever of the two the
 check starts from, and under any spelling of the inner marker's name.
@@ -57,6 +58,8 @@ check starts from, and under any spelling of the inner marker's name.
 - An id is given once and never changed. It says nothing about the record's name, its kind or
   where it sits, so all of those can change while the id, and the file's name, stay.
 - `true`, `false` and `null` are not ids, because YAML reads them as something else.
+- `seefore` is not an id, because `seefore.yaml` is the name of the marker file. This was added
+  at stage 4.
 - The names Windows keeps for devices are not ids, because no file can have one: `con`,
   `prn`, `aux`, `nul`, and `com` or `lpt` followed by one digit.
 
@@ -67,6 +70,11 @@ document in a file, with a mapping at the top, and text for every key. No direct
 that start with `%`), so a file cannot change what its own values mean. No anchors, aliases
 or tags. No key twice in one mapping. A line may end in a line feed, a carriage return, or
 both.
+
+No comments. Nothing reads a comment, so what one says is lost to every tool. And in YAML a
+`#` after a space starts one, which cuts a value short without a word: `port #9100` is read as
+`port`. A comment is an error, wherever it stands. This rule was added at stage 4, whose trial
+lost text that way.
 
 A record's file ends in `.yaml`, in lowercase.
 
@@ -98,7 +106,8 @@ seefore --version
 `seefore check` reads the directory and reports problems.
 
 - Every problem names a file, a line and a column, and says in plain words what is wrong.
-- A broken file is reported and the rest is still read.
+- A broken file is reported and the rest is still read. A record's file that cannot be read,
+  or is not UTF-8, is still a record for the others.
 - A folder or a file that cannot be read is reported the same way.
 - A YAML file that seefore does not read is reported as a warning, so a misspelt folder does
   not hide a record.
@@ -145,7 +154,7 @@ Every problem has a code. A code keeps its meaning from one version to the next.
 | --- | --- |
 | The marker | `marker-missing`, `marker-name`, `marker-link`, `marker-nested`, `format-not-readable`, `format-unknown` |
 | What a file may hold | `key-missing`, `key-unknown`, `value-wrong-kind`, `value-too-small`, `value-too-big`, `value-not-allowed`, `value-invalid` |
-| YAML | `yaml-empty`, `yaml-syntax`, `yaml-key-twice`, `yaml-many-documents`, `yaml-not-mapping`, `yaml-key-not-text`, `yaml-directive`, `yaml-anchor`, `yaml-alias`, `yaml-tag` |
+| YAML | `yaml-empty`, `yaml-syntax`, `yaml-key-twice`, `yaml-many-documents`, `yaml-not-mapping`, `yaml-key-not-text`, `yaml-directive`, `yaml-anchor`, `yaml-alias`, `yaml-tag`, `yaml-comment` |
 | Records | `id-invalid`, `id-twice`, `record-nested`, `record-extension` |
 | Reading the disk | `not-read`, `link-not-followed`, `not-utf8`, `file-unreadable`, `folder-unreadable` |
 

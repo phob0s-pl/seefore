@@ -1,0 +1,288 @@
+---
+name: model
+description: >-
+  Add to, change or remove from the architecture kept in a seefore source directory. It writes
+  the records of the model: people, systems, apps, stores, components, the connections between
+  them, owners and technologies. Use when someone wants to describe, model, draw up or change
+  a part of an architecture with seefore, to rename, move or split a part, or to remove one.
+argument-hint: "[what to add, change or remove]"
+allowed-tools: Bash(seefore *)
+---
+
+# Model an architecture
+
+This skill writes the records of an architecture in a seefore source directory. A record is
+one YAML file, `<folder>/<id>.yaml`. Its id is the name of its file and is not written inside
+it.
+
+What the person typed after the command: `$ARGUMENTS`
+
+## 1. Find the directory and read what is there
+
+Run each `seefore` command by itself, with nothing joined to it.
+
+1. Run `seefore check --json --workdir=<folder>`.
+   - If it answers with an `error`, read `error.code` and show its message. Only for
+     `no-source-directory` say that there is no source directory and that the `init` skill
+     starts one. For a wrong path or a folder that cannot be read, settle that first.
+   - If it reports errors in the records, show them and ask whether to mend them first.
+   - Its `directory` is the source directory. Every file you write goes under it.
+2. Run `seefore list --json --workdir=<folder>` and read it. It holds each record whose own
+   file has no error, whole, with no text cut. Everything you write must fit what is there
+   already.
+3. A file with an error is not in the listing, and its id is still taken. The problems of
+   `seefore check --json` name each such file. Never write over one: show how you would mend
+   it, and wait for a yes.
+
+## 2. The records
+
+Eight kinds, each in its own folder. Bold is required; write nothing else, and no key that is
+not in this table.
+
+| Folder | What it is | Keys, in the order they are written |
+| --- | --- | --- |
+| `people/` | A kind of person who uses the software, runs it or takes part. A role, not an individual | **`name`**, `description` |
+| `systems/` | Software seen as one thing, ours or somebody else's | **`name`**, `description`, `owner` |
+| `apps/` | Something that runs code | **`name`**, **`in`**, `description`, `kind`, `technology`, `owner` |
+| `stores/` | Something that holds data | **`name`**, **`in`**, `description`, `kind`, `technology`, `owner` |
+| `components/` | A piece inside an app | **`name`**, **`in`**, `description`, `technology`, `owner` |
+| `connections/` | One thing acts on another | **`from`**, **`to`**, `name`, `description`, `technology` |
+| `owners/` | A team, a role or an organisation that answers for what a part is and can be asked | **`name`**, `description` |
+| `technologies/` | A thing with a name that a part is built with or an exchange is carried in | **`name`**, `description` |
+
+- `name` is what people call it, on one line of at most 100 characters. On a connection it is
+  the few words on the arrow: it starts with a verb and reads from `from` to `to`, such as
+  "Takes the payment". Never "Uses".
+- `description` says what the thing is responsible for, in a sentence or a few, in at most
+  2,000 characters.
+- `in` is the id of what the thing is part of: a system for an app and for a store, an app
+  for a component.
+- `kind` of an app is one of `service`, `browser`, `mobile`, `desktop`, `command`,
+  `function`, `job`. `kind` of a store is one of `database`, `files`, `cache`, `index`. Leave
+  it out when none fits. `service` is a program that stays up; the source may say so in other
+  words.
+- `technology` is a list of ids of records in `technologies/`.
+- `owner` is the id of a record in `owners/`.
+- `from` and `to` are ids of a person, a system, an app, a store or a component.
+
+`apps/order-api.yaml`:
+
+```yaml
+name: Order API
+in: shop
+description: Takes orders and says how far each has got.
+kind: service
+technology: [go]
+owner: shop-team
+```
+
+`connections/checkout-takes-payment.yaml`:
+
+```yaml
+from: checkout
+to: card-provider
+name: Takes the payment
+technology: [https]
+```
+
+How a record is written:
+
+- The keys are in the order of the table, and each key starts a line. A list is in brackets
+  on one line.
+- Put text in double quotes when it holds a colon followed by a space, ends with a colon,
+  holds a space followed by `#`, starts with a character YAML gives a meaning to, or could be
+  read as a number or as `true`, `false` or `null`. Inside double quotes write `\"` for a
+  double quote and `\\` for a backslash.
+- When `description:` and its text would pass 96 columns, write a folded block: `description:
+  >-`, and the text beneath it, indented by two spaces and no more. Start each sentence on a
+  new line, and wrap a long sentence at a space, within 96 columns. Nothing in a block needs
+  quotes. A blank line starts a new paragraph.
+- Write no comments. `seefore check` refuses a file that holds one.
+
+```yaml
+description: >-
+  Takes orders and says how far each has got.
+  Only in the hosted edition: see issue #5377.
+```
+
+## 3. How to model
+
+These conventions are the spec's, word for word. No check can hold them, so you do.
+
+<!-- conventions:start -->
+1. **The arrow.** A connection goes from the one that acts to the one it acts on: the one
+   that makes the call, sends the message, or reads or writes the store. A reply is not a
+   connection. What the other end later sends in a call of its own, such as a call back, is
+   its own act and a connection from it.
+   - **A store** acts on nothing but another store. A queue, a topic and a store's feed of
+     changes are stores here: the one that puts a message in and the one that takes it out
+     both act on the store, even when the platform wakes the taker. This comes before the
+     rule for a subscription. Topics that the facts do not tell apart are one store. When
+     one store copies itself to another or hands on to it, the connection goes from the
+     store it starts at.
+   - **A subscription to a part that sends.** Write the push, from the one that sends. Say
+     who opens the channel when the arrow could be read as the sender dialling. Write the
+     opening as a connection of its own only when it has a purpose of its own, such as an
+     agent that registers. Opening it only to receive is said in the description of the
+     push.
+   - **A redirect.** When software sends a person's browser on to another place, write it
+     from the software that sends the browser on, whoever supplied the address, and say that
+     the browser carries it. A call that fetched the address is a connection of its own.
+     Write the way back only when it is stated. What the person does there, such as signing
+     in or paying, is the person's own act.
+   - **Two parts that meet only in a store or a file** do not act on each other. Each has
+     its connection to the store, and there is none between them. When the facts name the
+     store or the file and it has no record, write one.
+   - **A connection from a thing to itself** says that one copy acts on another: two
+     instances of one part, or two people of one role. Say which acts on which.
+2. **Ours and somebody else's.** Somebody else's software that the team calls is a system
+   like any other. Usually nothing is written inside it; something may be, when the team uses
+   it directly, such as another team's database that it reads. Whose a system is goes in its
+   description, and in `owner` when it is somebody the team can ask. A system with nothing in
+   it is drawn as one box: it may be somebody else's, or ours and not described yet. A cloud
+   service the team controls is an app or a store of its own system, with the product as its
+   technology; one it only calls is a system of its own. What is outside a picture is worked
+   out from the scope of the view, and nothing is stored for it.
+3. **One record or several.** Copies and variants are one record until their connections
+   differ: separate them when a stated connection belongs to one and not to the others.
+   Where the difference is one of condition, such as an edition, an environment or a
+   setting, keep one record and say the condition on the connection. How many of them run is
+   a fact for the description. One record may stand for many of a kind, with a name in the
+   plural and the number in the description. A connection stands for one exchange with one
+   purpose: write one for each purpose, and leave its `name` out when nobody said what it is
+   for. Two acts are one purpose when the facts state them as one step. They are two when
+   one can happen without the other.
+4. **The level.** A connection is written at the lowest level known at each end: the lowest
+   part that the facts name and the model has a record for, down to a component. It counts
+   for what its ends are in. One written higher up between the same two things is a
+   summary. Write it only when its sentence says more than the ones beneath it.
+5. **A technology** is a thing with a name that a part is built with or an exchange is
+   carried in: a language, a framework, a library, a product, a protocol, a query language
+   or a data format. The test: another maker would have to use it, read it or speak it. A
+   style such as REST, an algorithm, a setting of a protocol and a version of a product are
+   not: they go in the description. A protocol with a number in its name, such as HTTP/2, is
+   one. A phrase that says how an exchange travels, such as "by hand" or "a link in the
+   browser", is not one. It goes in the description of the connection.
+6. **An owner** is the team, the role or the organisation that answers for what a part is,
+   and that the team keeping the model can ask. Who runs a copy goes in the description. A
+   role that both acts and answers is two records: a person and an owner. An owner needs a
+   source, like any other fact.
+<!-- conventions:end -->
+
+### What this format cannot say yet
+
+<!-- cannot-say-yet:start -->
+| The fact | Where it goes |
+| --- | --- |
+| That somebody outside maintains a system | Its description, and its owner when it is somebody the team can ask |
+| A queue or a topic | A store with no kind, and its description |
+| Reads or writes | The verb of the connection's name: "Reads the orders" |
+| Something in between that passes an exchange on: a proxy, a gateway, a load balancer | One connection, from the one that addresses the exchange to the one that answers it. Its description says what it passes through, in the order of travel. No connection of its own for the passing on. Routing, choosing where to send, pooling, changing the protocol, rate limits, checking the caller and ending TLS are passing on |
+| A part or a connection that is not always there | Its description says when, in ordinary words, on the narrowest record it is true of, and not again on that record's connections. In the first sentence when the part or the arrow would be misread without it |
+| A call that does not wait | The connection's description |
+| The same code in several apps | A component in the app whose inside is modelled |
+| State an app keeps inside itself, and what its components leave there for one another | The app's description, and the components'. No connection between the components for it |
+
+A thing in between gets a record when it has work of its own: it answers an exchange itself,
+such as serving a file, or starts one that nobody sent through it, such as copying data to a
+replica. That work may have connections. What it only passes on is still written end to end.
+The same holds for a component. Code of the team's own that only passes on may keep its
+record, with no connection for the passing on. What is known of a thing with no record goes
+into the description of the part it stands in front of.
+<!-- cannot-say-yet:end -->
+
+### What to ask
+
+Ask the person only where the answer changes what you write:
+
+| When | Ask |
+| --- | --- |
+| A push, a webhook, a subscription, a tunnel, a redirect, a queue | What is the act, and who does it? Convention 1 then says where the arrow starts |
+| An owner that has no record yet | Who says so, and is it a team, a role or an organisation that answers for what the part is? If the truth is a sentence, such as "nobody" or "two teams argue", leave `owner` out and put the sentence in the description |
+| A part with no owner of its own, inside something that has one | Look at what it would take from above. If that would be false, say so to the person before you leave `owner` out |
+| A technology whose name could mean two things, such as a product or a practice | Which is meant? When convention 5 settles it, do not ask: make the record |
+| A connection between apps whose components are in the model | Which component, if you know? |
+
+Never fill in what nobody said. No owner, technology, kind or description from your own
+guess. A record with only its required keys is a good record. A responsibility or a part's
+description can state a connection: use the most exact end it gives, and the system when it
+gives no more.
+
+## 4. Ids
+
+- Lowercase letters and digits in groups joined by single hyphens, starting with a letter, at
+  most 80 characters: `order-events`.
+- Not an id: `true`, `false`, `null`, `seefore`, and the names Windows keeps for devices
+  (`con`, `prn`, `aux`, `nul`, and `com` or `lpt` with one digit).
+- An id is used once in the whole directory, whatever the folder.
+- An id is given once and never changed. Renaming a thing changes its `name`.
+- Give an app or a store an id that says what it is for: `session-cache`, not `redis`. Then
+  the technology can have the product's own name as its id, `redis`.
+- Give a connection an id that reads as its sentence: `checkout-takes-payment`. When nobody
+  said what it is for, name it by its two ends: `storefront-to-order-api`.
+- Before making a record, look in the listing for one that is the same thing under another
+  name. Ask when you are not sure. Use the owner and the technology records that exist.
+
+## 5. Show it, then wait
+
+Before writing, show the person what you will write, change or remove.
+
+- For up to twenty files, show each with its path and its content.
+- For more, show the count for each folder and one line for every record you will write,
+  change or remove: a connection as its sentence, any other record by its id, its name and
+  what it is in. Show three of the files in full, of the kinds that are among them. Offer any
+  other file.
+- Always show each removal, each move and each open choice, however large the change.
+
+Then wait for a yes to what you have shown. A go-ahead given before a removal, a move or an
+open choice was shown does not cover it. When the person has said yes to exactly this, do not
+ask again.
+
+Settle the ids first. Write owners and technologies, then people and systems, then apps and
+stores, then components, then connections. Run the check after each whole batch.
+
+## 6. Change, move, split and remove
+
+- **Rename.** First run `seefore uses <id> --workdir=<folder>`. Change `name`; the id and the
+  file's name stay. Then show each record that may speak of the thing, those that stay and
+  those that go with it, and offer to mend its text.
+- **Move.** Change `in`. What is inside the thing follows it. So may the owner: a part with no
+  `owner` of its own takes it from what it is in. Look in `ownership` of `seefore list --json`
+  for what the thing and the parts inside it take from above, and say whose each will be after
+  the move. Write the old owner on the thing itself when the person says it stays. The same
+  holds for a split.
+- **A connection is one exchange.** Keep its file while it is the same exchange, whichever
+  part now makes or takes it: change `from` or `to`. Its id may then name a part it no longer
+  touches, as an id may keep an old name. Write a new connection only for a new exchange. The
+  test: would a flow step that pointed at it still be true?
+- **Split.** Say which responsibility goes on under the old id, and give each new part a new
+  id. Show where each connection goes. When both parts now make an exchange, the old
+  connection stays with the part that goes on, and the other part gets a new one.
+- **Merge.** The reverse: say which id goes on, and keep each exchange that is still its own.
+- **Remove.** First run `seefore uses <id> --workdir=<folder>`. It answers in four lists: what
+  goes with the thing, what must go or change, what would be left behind, and which records
+  may speak of it. Show them. Say for each record what you will do: remove it, change it, or
+  leave it. Whether a record that is left behind goes too is the person's choice. Before a
+  record goes, move each fact it holds that is still true into a record that stays. Wait for
+  a yes, then make all of those changes together.
+
+## 7. Check it
+
+Run `seefore check --workdir=<folder>`. Mend every error it reports in a file you wrote, and
+run it again. For a warning, say what it is and ask. Do not change a file you did not mean to
+change.
+
+## 8. Say what happened
+
+Tell the person which files were written, changed and removed, in words: what was added,
+renamed, moved or removed, by name. Say what the check said. Say that nothing was committed.
+
+Do not commit and do not stage. That is the person's step.
+
+## Never
+
+- Never change an id or the name of a record's file.
+- Never write a key that is not in the table of section 2.
+- Never write a fact that nobody stated.
+- Never write a comment in a record.
+- Never write outside the source directory.

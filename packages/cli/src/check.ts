@@ -1,12 +1,36 @@
 import { dirname, isAbsolute, relative, sep } from 'node:path';
 import { MARKER_FILE, compareProblems, load } from '@seefore/core';
-import type { Problem } from '@seefore/core';
-import { findSourceDirectoriesBelow, findSourceDirectory, isDirectory, onDisk, physical, readSourceFiles, withSlashes } from './directory.ts';
+import type { Loaded, Problem } from '@seefore/core';
+import { findSourceDirectoriesBelow, findSourceDirectory, isDirectory, physical, readSourceFiles, withSlashes } from './directory.ts';
 import type { Io } from './io.ts';
+import { count, fromHere } from './words.ts';
 
+/** Where to start looking, and whether to answer as data. Every command takes these. */
 export interface CheckOptions {
   workdir?: string;
   json: boolean;
+}
+
+/** A command, so that a hint to run it from elsewhere names it. */
+export interface Rerun {
+  /** What the command does to a source directory, as in `check`. */
+  verb: string;
+  /** The command with what it takes, as it would be run again: `check`, `uses order-api`. */
+  command: string;
+}
+
+const CHECK: Rerun = { verb: 'check', command: 'check' };
+
+/** A source directory that was found and read. */
+export interface Opened {
+  /** The source directory, as a full path with every link followed. */
+  directory: string;
+  /** What the core library made of its files. */
+  loaded: Loaded;
+  /** What reading the disk found wrong and what the core library found, in order of file and place. */
+  problems: Problem[];
+  errors: number;
+  warnings: number;
 }
 
 /** What `seefore check --json` prints when it could read a source directory. */
@@ -25,10 +49,10 @@ export interface CheckResult {
   problems: Problem[];
 }
 
-/** What `seefore check --json` prints when it could not start. */
+/** What a command prints with `--json` when it could not start, or could not find the record it was asked about. */
 export interface Failure {
   error: {
-    /** `usage`, `not-a-directory`, `folder-unreadable`, `no-source-directory` or `unexpected`. */
+    /** `usage`, `not-a-directory`, `folder-unreadable`, `no-source-directory`, `no-such-record`, `id-twice` or `unexpected`. */
     code: string;
     message: string;
     /** With `no-source-directory`: the starting folder as it really is on disk. */
@@ -38,13 +62,38 @@ export interface Failure {
   };
 }
 
-/** Exit codes: nothing wrong, errors found, could not start. */
+/** Exit codes: nothing wrong, errors found, could not start or found nothing to show. */
 export const EXIT_OK = 0;
 export const EXIT_ERRORS = 1;
 export const EXIT_NOT_STARTED = 2;
 
 /** Reads the source directory and reports what is wrong with it. Returns the exit code. */
 export function check(options: CheckOptions, io: Io): number {
+  const opened = openSource(options, io);
+  if (typeof opened === 'number') return opened;
+  const { directory, loaded, problems, errors, warnings } = opened;
+
+  const result: CheckResult = {
+    directory,
+    name: loaded.marker?.name ?? null,
+    format: loaded.marker?.format ?? null,
+    records: loaded.records.length,
+    errors,
+    warnings,
+    problems,
+  };
+
+  if (options.json) io.out(JSON.stringify(result, null, 2));
+  else io.out(report(result, io.cwd));
+
+  return errors > 0 ? EXIT_ERRORS : EXIT_OK;
+}
+
+/**
+ * Finds the source directory from where the options say, reads it, and gathers every problem
+ * in it. When it cannot start, it says why and gives back the exit code instead.
+ */
+export function openSource(options: CheckOptions, io: Io, rerun: Rerun = CHECK): Opened | number {
   // The path is handed to the system as it was given, without tidying it first. Tidying
   // would apply a `..` before following a link, and so look in a different place than the
   // one a file written to that path would land in.
@@ -66,26 +115,22 @@ export function check(options: CheckOptions, io: Io): number {
   }
   if (!found) {
     const below = findSourceDirectoriesBelow(start);
-    const none = `There is no seefore.yaml in \`${start}\` or in any folder above it, so there is no source directory to check.`;
+    const { verb, command } = rerun;
+    const none = `There is no seefore.yaml in \`${start}\` or in any folder above it, so there is no source directory to ${verb}.`;
     const shown = below.map((path) => forShell(withSlashes(relative(io.cwd, path)) || '.'));
     const advice =
       below.length === 0
         ? 'To start one, use the `init` skill of the seefore plugin.'
         : below.length === 1
-          ? `There is one below it. To check it, run: seefore check --workdir=${shown[0]}`
-          : `There are ${below.length} below it. To check one, run seefore check with one of: ${shown.map((path) => `--workdir=${path}`).join(', ')}`;
+          ? `There is one below it. To ${verb} it, run: seefore ${command} --workdir=${shown[0]}`
+          : `There are ${below.length} below it. To ${verb} one, run seefore ${command} with one of: ${shown.map((path) => `--workdir=${path}`).join(', ')}`;
     return notStarted(options.json, io, 'no-source-directory', `${none} ${advice}`, { start, below });
   }
   const { directory } = found;
 
   const read = readSourceFiles(directory);
   const loaded = load(read.files);
-  const linked = read.problems.some((problem) => problem.code === 'marker-link');
-  const problems = [
-    ...read.problems,
-    // A marker that is a link is already reported as such; "there is no marker" would mislead.
-    ...loaded.problems.filter((problem) => !(linked && problem.code === 'marker-missing')),
-  ];
+  const problems = [...read.problems, ...loaded.problems];
 
   const above = dirname(directory) === directory ? undefined : findSourceDirectory(dirname(directory));
   const outer = above && 'directory' in above ? above.directory : undefined;
@@ -102,22 +147,7 @@ export function check(options: CheckOptions, io: Io): number {
 
   problems.sort(compareProblems);
   const errors = problems.filter((problem) => problem.severity === 'error').length;
-  const warnings = problems.length - errors;
-
-  const result: CheckResult = {
-    directory,
-    name: loaded.marker?.name ?? null,
-    format: loaded.marker?.format ?? null,
-    records: loaded.records.length,
-    errors,
-    warnings,
-    problems,
-  };
-
-  if (options.json) io.out(JSON.stringify(result, null, 2));
-  else io.out(report(result, io.cwd));
-
-  return errors > 0 ? EXIT_ERRORS : EXIT_OK;
+  return { directory, loaded, problems, errors, warnings: problems.length - errors };
 }
 
 /** Says why seefore could not start: as data on the output when asked, or else in words. */
@@ -143,8 +173,7 @@ function report(result: CheckResult, cwd: string): string {
   lines.push('');
 
   for (const problem of result.problems) {
-    const path = withSlashes(relative(cwd, onDisk(result.directory, problem.file))) || '.';
-    lines.push(`${path}:${problem.line}:${problem.column}: ${problem.severity}: ${problem.message}`);
+    lines.push(`${fromHere(cwd, result.directory, problem.file)}:${problem.line}:${problem.column}: ${problem.severity}: ${problem.message}`);
   }
   if (result.problems.length > 0) lines.push('');
 
@@ -157,12 +186,8 @@ function report(result: CheckResult, cwd: string): string {
   return lines.join('\n');
 }
 
-function count(n: number, noun: string): string {
-  return `${n} ${noun}${n === 1 ? '' : 's'}`;
-}
-
-/** Writes a path so that a shell takes it as one word. */
-function forShell(path: string): string {
+/** Writes a path, or any word, so that a shell takes it as one word. */
+export function forShell(path: string): string {
   if (/^[A-Za-z0-9_./-]+$/.test(path)) return path;
   return '"' + path.replace(/(["\\$`])/g, '\\$1') + '"';
 }
