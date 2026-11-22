@@ -75,7 +75,8 @@ name: Takes the payment
 technology: [https]
 ```
 
-- The keys are in the order of the table, and each key starts a line.
+- The keys are written in this order, and each key starts a line: `from`, `to`, `name`, `in`,
+  `description`, `kind`, `technology`, `owner`. A record has only some of them.
 - A list is a set: `[go, postgresql]` and `[postgresql, go]` say the same.
 - A description too long for one line is a folded block. Each sentence starts a line, and
   nothing in the block needs quotes. The limit of 2,000 characters counts the text as it is
@@ -252,10 +253,12 @@ all that is inside it. It answers in four lists, and counts records:
 The plugin gains one skill, `model`. It adds, changes, renames, moves, splits and removes
 records.
 
-- It reads `seefore list --json` first, and asks only where an answer changes what it writes.
-- It shows every file it will write, change or remove and waits for a yes. For more than
-  twenty files it shows the count for each folder, a line for each record and three files in
-  full.
+- It runs `seefore check --json` and then reads `seefore list --json`, and asks only where an
+  answer changes what it writes. A file with an error is not in the listing; its id is still
+  taken, and the skill does not write over it.
+- It shows every file it will write, change or remove and waits for a yes to what it has
+  shown. For more than twenty files it shows the count for each folder, a line for each record
+  and three files in full.
 - Before a removal and before a rename it runs `seefore uses`, and shows what would break,
   what would be left behind, and which text may go stale.
 - It keeps a connection's file while the exchange is the same, whichever part now makes or
@@ -285,8 +288,9 @@ records.
 ## What the trial changed
 
 Eight modellers wrote the first slice of the eight trial systems as files: 1,919 records, all
-of which pass the check. The note is `research/trial/stage-04.md`. The format held: no record,
-field or rule changed. Ten things around it did.
+of which pass the check. The note is `research/trial/stage-04.md`. The shape of the records
+held: no folder, field or kind changed. One rule of YAML was added, no comments, and nine more
+things around the format changed.
 
 | What did not fit | What was done |
 | --- | --- |
@@ -309,9 +313,13 @@ opens a channel as against who sends down it; who makes a part as against who ru
 ## Names this stage adds
 
 Eight folders of records: `people`, `systems`, `apps`, `stores`, `components`, `connections`,
-`owners`, `technologies`. Eight fields: `name`, `description`, `in`, `kind`, `technology`,
-`owner`, `from`, `to`. Eleven kinds: seven of an app and four of a store. Two commands,
-`seefore list` and `seefore uses`, and one flag, `--full`. One skill, `model`.
+`owners`, `technologies`. Eight fields on a record: `name`, which the marker has had since
+stage 3, and seven new ones, `description`, `in`, `kind`, `technology`, `owner`, `from`, `to`.
+Eleven kinds: seven of an app and four of a store. Two commands, `seefore list` and
+`seefore uses`, and one flag, `--full`. One skill, `model`. One problem code more in stage 3's
+list, `yaml-comment`, and six of this stage: `reference-unknown`, `reference-wrong-kind`,
+`store-acts`, `connection-twice`, `connection-repeated-above`, and `no-such-record` for a
+command that could not start.
 
 ## Leaves out
 

@@ -1,6 +1,7 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parseDocument } from 'yaml';
 import { APP_KINDS, CURRENT_FORMAT, STORE_KINDS, load } from '@seefore/core';
 import type { SourceFile } from '@seefore/core';
 import { describe, expect, it } from 'vitest';
@@ -62,6 +63,25 @@ const AROUND: SourceFile[] = [
   { path: 'technologies/https.yaml', text: 'name: HTTPS\n' },
 ];
 
+describe('every skill of the plugin', () => {
+  it('starts with front matter that is YAML and gives a name and a description', () => {
+    const folder = join(root, 'plugin/skills');
+    const skills = readdirSync(folder);
+    expect(skills).toContain('model');
+    for (const name of skills) {
+      const text = readFileSync(join(folder, name, 'SKILL.md'), 'utf8');
+      const matter = /^---\n([\s\S]*?)\n---\n/.exec(text)?.[1];
+      expect(matter, `the front matter of ${name}`).toBeDefined();
+      const doc = parseDocument(matter as string);
+      expect(doc.errors.map((fault) => fault.message), `the front matter of ${name}`).toEqual([]);
+      const said = doc.toJS() as Record<string, unknown>;
+      expect(said['name']).toBe(name);
+      expect(typeof said['description']).toBe('string');
+      expect((said['description'] as string).length).toBeGreaterThan(40);
+    }
+  });
+});
+
 describe('the model skill', () => {
   it('carries the conventions of the spec word for word', () => {
     for (const name of ['conventions', 'cannot-say-yet']) {
@@ -88,6 +108,23 @@ describe('the model skill', () => {
 });
 
 describe('the spec of stage 4', () => {
+  it('gives one order of keys, which is the order of every record', () => {
+    const line = /The keys are written in this order, and each key starts a line: ([^.]*)\./.exec(spec.replace(/\n\s*/g, ' '))?.[1];
+    expect(line).toBeDefined();
+    const order = inBackticks(line as string);
+    for (const family of CURRENT_FORMAT.families) {
+      if (!family.record) continue;
+      const keys = keysOf(family.record.schema).map(({ key }) => key);
+      expect(order.filter((key) => keys.includes(key)), family.folder).toEqual(keys);
+    }
+  });
+
+  it('says what a service is in the words the skill uses', () => {
+    const flat = (text: string): string => text.replace(/\s+/g, ' ');
+    expect(flat(spec)).toContain('`service` is a program that stays up.');
+    expect(flat(skill)).toContain('`service` is a program that stays up;');
+  });
+
   it('names the kinds the engine allows, in order', () => {
     expect(inBackticks(row(spec, '`kind`')[2] as string)).toEqual([...APP_KINDS]);
     const ofStore = spec.split('\n').find((line) => line.startsWith('| `kind` | store |')) ?? '';

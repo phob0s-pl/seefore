@@ -57,6 +57,8 @@ check starts from, and under any spelling of the inner marker's name.
 - An id is given once and never changed. It says nothing about the record's name, its kind or
   where it sits, so all of those can change while the id, and the file's name, stay.
 - `true`, `false` and `null` are not ids, because YAML reads them as something else.
+- `seefore` is not an id, because `seefore.yaml` is the name of the marker file. This was added
+  at stage 4.
 - The names Windows keeps for devices are not ids, because no file can have one: `con`,
   `prn`, `aux`, `nul`, and `com` or `lpt` followed by one digit.
 

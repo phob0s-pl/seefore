@@ -1,6 +1,10 @@
 ---
 name: model
-description: Add to, change or remove from the architecture kept in a seefore source directory. It writes the records of the model: people, systems, apps, stores, components, the connections between them, owners and technologies. Use when someone wants to describe, model, draw up or change a part of an architecture with seefore, to rename, move or split a part, or to remove one.
+description: >-
+  Add to, change or remove from the architecture kept in a seefore source directory. It writes
+  the records of the model: people, systems, apps, stores, components, the connections between
+  them, owners and technologies. Use when someone wants to describe, model, draw up or change
+  a part of an architecture with seefore, to rename, move or split a part, or to remove one.
 argument-hint: "[what to add, change or remove]"
 allowed-tools: Bash(seefore *)
 ---
@@ -22,8 +26,13 @@ Run each `seefore` command by itself, with nothing joined to it.
      `no-source-directory` say that there is no source directory and that the `init` skill
      starts one. For a wrong path or a folder that cannot be read, settle that first.
    - If it reports errors in the records, show them and ask whether to mend them first.
-2. Run `seefore list --json --workdir=<folder>` and read it. It holds every record whole, with
-   no text cut. Everything you write must fit what is there already.
+   - Its `directory` is the source directory. Every file you write goes under it.
+2. Run `seefore list --json --workdir=<folder>` and read it. It holds each record whose own
+   file has no error, whole, with no text cut. Everything you write must fit what is there
+   already.
+3. A file with an error is not in the listing, and its id is still taken. The problems of
+   `seefore check --json` name each such file. Never write over one: show how you would mend
+   it, and wait for a yes.
 
 ## 2. The records
 
@@ -41,10 +50,11 @@ not in this table.
 | `owners/` | A team, a role or an organisation that answers for what a part is and can be asked | **`name`**, `description` |
 | `technologies/` | A thing with a name that a part is built with or an exchange is carried in | **`name`**, `description` |
 
-- `name` is what people call it, on one line. On a connection it is the few words on the
-  arrow: it starts with a verb and reads from `from` to `to`, such as "Takes the payment".
-  Never "Uses".
-- `description` says what the thing is responsible for, in a sentence or a few.
+- `name` is what people call it, on one line of at most 100 characters. On a connection it is
+  the few words on the arrow: it starts with a verb and reads from `from` to `to`, such as
+  "Takes the payment". Never "Uses".
+- `description` says what the thing is responsible for, in a sentence or a few, in at most
+  2,000 characters.
 - `in` is the id of what the thing is part of: a system for an app and for a store, an app
   for a component.
 - `kind` of an app is one of `service`, `browser`, `mobile`, `desktop`, `command`,
@@ -187,13 +197,16 @@ gives no more.
 
 ## 4. Ids
 
-- Lowercase letters and digits in groups joined by single hyphens, starting with a letter:
-  `order-events`.
+- Lowercase letters and digits in groups joined by single hyphens, starting with a letter, at
+  most 80 characters: `order-events`.
+- Not an id: `true`, `false`, `null`, `seefore`, and the names Windows keeps for devices
+  (`con`, `prn`, `aux`, `nul`, and `com` or `lpt` with one digit).
 - An id is used once in the whole directory, whatever the folder.
 - An id is given once and never changed. Renaming a thing changes its `name`.
 - Give an app or a store an id that says what it is for: `session-cache`, not `redis`. Then
   the technology can have the product's own name as its id, `redis`.
-- Give a connection an id that reads as its sentence: `checkout-takes-payment`.
+- Give a connection an id that reads as its sentence: `checkout-takes-payment`. When nobody
+  said what it is for, name it by its two ends: `storefront-to-order-api`.
 - Before making a record, look in the listing for one that is the same thing under another
   name. Ask when you are not sure. Use the owner and the technology records that exist.
 
@@ -202,12 +215,15 @@ gives no more.
 Before writing, show the person what you will write, change or remove.
 
 - For up to twenty files, show each with its path and its content.
-- For more, show the count for each folder, each element on one line, each connection as its
-  sentence, and three files in full: an element, a connection, and an owner or a technology.
-  Offer any other file.
+- For more, show the count for each folder and one line for every record you will write,
+  change or remove: a connection as its sentence, any other record by its id, its name and
+  what it is in. Show three of the files in full, of the kinds that are among them. Offer any
+  other file.
 - Always show each removal, each move and each open choice, however large the change.
 
-Then wait for a yes. If the person has already said to go ahead, do not ask again.
+Then wait for a yes to what you have shown. A go-ahead given before a removal, a move or an
+open choice was shown does not cover it. When the person has said yes to exactly this, do not
+ask again.
 
 Settle the ids first. Write owners and technologies, then people and systems, then apps and
 stores, then components, then connections. Run the check after each whole batch.
@@ -217,7 +233,11 @@ stores, then components, then connections. Run the check after each whole batch.
 - **Rename.** First run `seefore uses <id> --workdir=<folder>`. Change `name`; the id and the
   file's name stay. Then show each record that may speak of the thing, and offer to mend its
   text.
-- **Move.** Change `in`. What is inside the thing follows it.
+- **Move.** Change `in`. What is inside the thing follows it. So may the owner: a part with no
+  `owner` of its own takes it from what it is in. Look in `ownership` of `seefore list --json`
+  for what the thing and the parts inside it take from above, and say whose each will be after
+  the move. Write the old owner on the thing itself when the person says it stays. The same
+  holds for a split.
 - **A connection is one exchange.** Keep its file while it is the same exchange, whichever
   part now makes or takes it: change `from` or `to`. Its id may then name a part it no longer
   touches, as an id may keep an old name. Write a new connection only for a new exchange. The
