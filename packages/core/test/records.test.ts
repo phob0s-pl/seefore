@@ -438,7 +438,7 @@ describe('`via`', () => {
   });
 
   it.each([
-    ['an empty list', 'via: []\n', '3:6 value-too-small `via` is an empty list. Leave it out when the exchange passes through nothing.'],
+    ['an empty list', 'via: []\n', '3:6 value-too-small `via` is an empty list. Leave `via` out until something that is always on the way is known.'],
     ['one id that is not in a list', 'via: proxy\n', '3:6 value-wrong-kind `via` must be a list, but this is text.'],
     ['an id written twice, at the second', 'via: [proxy, order-api, proxy]\n', '3:25 value-invalid `proxy` is in `via` twice. Keep one.'],
     [

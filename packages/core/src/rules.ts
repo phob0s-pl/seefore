@@ -1,7 +1,8 @@
 import { nounOf, oneOf, referenceField } from './format.ts';
 import type { Format } from './format.ts';
 import type { RecordFile, Reference } from './load.ts';
-import type { ModelRecord } from './model.ts';
+import { ownership } from './model.ts';
+import type { Model, ModelRecord } from './model.ts';
 import { START, error, list, quote, warning } from './problem.ts';
 import type { Position, Problem } from './problem.ts';
 import type { Connection, Store, Technology } from './records.ts';
@@ -188,17 +189,10 @@ function connectionsRepeatedAbove(parents: ReadonlyMap<string, string>, connecti
 }
 
 /**
- * The rule and the check of what a connection passes through. Each id in `via` stands between
- * the two ends, so one that names an end, what an end is in, or what is in an end is an error,
- * at that id. An app or a system that `via` names and that is the end of no connection, nor is
- * anything in it, only passes exchanges on: a warning says it is a piece of infrastructure.
+ * The rule of what a connection passes through. Each id in `via` stands between the two ends,
+ * so one that names an end, what an end is in, or what is in an end is an error, at that id.
  */
 export function viaProblems(format: Format, records: RecordsById, parents: ReadonlyMap<string, string>, references: readonly Reference[]): Problem[] {
-  return [...viaEnds(format, records, parents, references), ...passesOnOnly(format, records, parents, references)];
-}
-
-/** Each id in `via` that names an end of its connection, what an end is in, or what is in an end. */
-function viaEnds(format: Format, records: RecordsById, parents: ReadonlyMap<string, string>, references: readonly Reference[]): Problem[] {
   const allowed = referenceField(format, CONNECTIONS, 'via')?.families ?? [];
   const ends = endsOf(references);
   const problems: Problem[] = [];
@@ -216,64 +210,65 @@ function viaEnds(format: Format, records: RecordsById, parents: ReadonlyMap<stri
 /**
  * What is wrong with an id in `via` of a connection with these ends, if anything: that it is an
  * end, what an end is in, or in an end. The `from` is looked at first, so each id is reported once.
+ * Taking the id out may leave the list empty, which is an error of its own, so each way out says
+ * what to do then.
  */
 function endInVia(parents: ReadonlyMap<string, string>, id: string, ends: Ends): string | undefined {
   const named = `\`via\` names ${quote(id)}`;
-  const between = 'What a connection passes through stands between its two ends';
+  const between = 'What a connection passes through stands between its two ends.';
+  const takeOut = `Take ${quote(id)} out of \`via\`. If nothing is left in the list, take the \`via\` key out too.`;
   for (const side of ['from', 'to'] as const) {
     const end = ends[side];
     if (end === undefined) continue;
     const theEnd = `the ${quote(side)} of this connection`;
-    if (end === id) return `${named}, which is ${theEnd}. ${between}: take ${quote(id)} out of \`via\`.`;
-    if (upwards(parents, end).includes(id)) return `${named}, which ${quote(end)}, ${theEnd}, is in. ${between}: take ${quote(id)} out of \`via\`.`;
+    if (end === id) return `${named}, which is ${theEnd}. ${between} ${takeOut}`;
+    if (upwards(parents, end).includes(id)) return `${named}, which ${quote(end)}, ${theEnd}, is in. ${between} ${takeOut}`;
     if (upwards(parents, id).includes(end)) {
       const further =
         side === 'to'
           ? `if the exchange goes on past it, make the part of ${quote(end)} that it ends at the \`to\``
           : `if the exchange starts before it, make the part of ${quote(end)} that it starts at the \`from\``;
-      return `${named}, which is in ${quote(end)}, ${theEnd}. ${between}. Take ${quote(id)} out of \`via\`, or, ${further}.`;
+      return `${named}, which is in ${quote(end)}, ${theEnd}. ${between} ${takeOut} Or, ${further}.`;
     }
   }
   return undefined;
 }
 
 /**
- * An app or a system that `via` names, and that is the end of no connection, nor is anything in
- * it, does nothing but pass exchanges on: it is a piece of infrastructure written as an app or a
- * system. A component that only passes on may keep its record, so it is not looked at.
+ * The check of what only passes on. An app or a system that connections of the model name in
+ * `via`, and that is the end of none of them, nor is anything in it, may do nothing but pass
+ * exchanges on: a piece of infrastructure written as an app or a system. The warning says what
+ * it saw and asks, since only the person can say what the thing does. It counts only the
+ * connections of the model: one with an error in its file is not read right, so it neither
+ * stands for work of its own nor names a thing that only passes on. A component that only
+ * passes on may keep its record, so it is not looked at.
  */
-function passesOnOnly(format: Format, records: RecordsById, parents: ReadonlyMap<string, string>, references: readonly Reference[]): Problem[] {
-  // Every end of a connection, and everything it is in, to the top.
+export function passesOnOnlyProblems(format: Format, records: RecordsById, parents: ReadonlyMap<string, string>, model: Model): Problem[] {
+  // Every end of a connection, and everything it is in, to the top. Any one connection ends the
+  // warning, a check that it is up or a reload as much as work of its own, as the spec has it: a
+  // connection may start or end at a piece of infrastructure too, and only words could tell one
+  // that the piece makes on its own account from one for work that an app does.
   const reached = new Set<string>();
-  for (const ends of endsOf(references).values()) {
-    for (const end of [ends.from, ends.to]) {
-      if (end === undefined) continue;
-      for (const id of upwards(parents, end)) reached.add(id);
-    }
+  for (const connection of model.connections) {
+    for (const end of [connection.from, connection.to]) for (const id of upwards(parents, end)) reached.add(id);
   }
-  // The connections that name each id in `via`.
-  const through = new Map<string, Set<string>>();
-  for (const reference of references) {
-    if (reference.field !== 'via' || folderOf(reference.file) !== CONNECTIONS) continue;
-    const files = through.get(reference.names) ?? new Set<string>();
-    through.set(reference.names, files.add(reference.file));
-  }
-  const holding = new Set(parents.values());
+  // How many connections name each id in `via`. A connection of the model names an id there once.
+  const through = new Map<string, number>();
+  for (const connection of model.connections) for (const id of connection.via ?? []) through.set(id, (through.get(id) ?? 0) + 1);
 
   const problems: Problem[] = [];
-  for (const [id, files] of through) {
+  for (const [id, n] of through) {
     const family = familyOf(records, id);
     if ((family !== 'apps' && family !== 'systems') || reached.has(id)) continue;
-    const n = files.size;
-    const first = holding.has(id) ? ', and first move or remove what is in it, since a piece of infrastructure holds nothing' : '';
+    const noun = nounOf(format, family);
     problems.push(
       warning(
         (records.get(id)?.[0] as RecordFile).file,
         START,
         'passes-on-only',
-        `${n} ${n === 1 ? 'connection names' : 'connections name'} this ${nounOf(format, family)} in \`via\`, and no connection starts or ends at it ` +
-          'or at anything in it. All it does is pass exchanges on, so it is a piece of infrastructure: move its file to `infrastructure/`, ' +
-          `keeping only its \`name\`, \`description\`, \`technology\` and \`owner\`${first}. If it has work of its own, write the connection for that work.`,
+        `${n} ${n === 1 ? 'connection names' : 'connections name'} this ${noun} in \`via\`, and no connection starts or ends at it or at anything in it. ` +
+          `Does passing exchanges on account for everything this ${noun} does? If so, it is a piece of infrastructure, a record in \`infrastructure/\`, ` +
+          `which is in nothing and holds nothing.${movingOut(id, parents, model)} If it has work of its own, a connection for that work ends the warning.`,
       ),
     );
   }
@@ -281,10 +276,32 @@ function passesOnOnly(format: Format, records: RecordsById, parents: ReadonlyMap
 }
 
 /**
+ * What moving a record to `infrastructure/` would mean, by what it holds, as sentences that each
+ * start with a space, or nothing. What is in it has to go elsewhere first, and its parts then
+ * no longer take its owner. An app with no `owner` of its own no longer takes that of the system
+ * it is in, since a piece of infrastructure is in nothing. An `external` mark does not go with
+ * it, since a piece of infrastructure has none.
+ */
+function movingOut(id: string, parents: ReadonlyMap<string, string>, model: Model): string {
+  const owners = ownership(model);
+  const said: string[] = [];
+  if ([...parents.values()].includes(id)) {
+    const taking = [...owners].some(([part, found]) => part !== id && found.from === id);
+    said.push(`To move it there, what is in it has to go elsewhere first${taking ? ', and its parts then no longer take its owner' : ''}.`);
+  }
+  const from = owners.get(id)?.from;
+  if (from !== undefined && from !== id) said.push(`There it no longer takes the owner of ${quote(from)}.`);
+  if (model.systems.some((system) => system.id === id && system.external === true)) said.push('Its `external` mark does not go with it.');
+  return said.map((sentence) => ` ${sentence}`).join('');
+}
+
+/**
  * A store that holds messages on their way, or says nothing of what it holds, and has the name of
  * a technology it names, may be a message broker drawn as one store: every writer and every
- * reader ends at it, and nobody can tell what is handed to whom. The check reads the store's
- * name, kind and technologies, and no other words.
+ * reader ends at it, and nobody can tell what is handed to whom. The check compares two names
+ * of the model, the store's and its technology's, and reads no other words: it holds no list of
+ * brokers. The message says what it compared, and tells the connections that use a queue or a
+ * topic from those that manage the broker itself.
  */
 export function brokerProblems(records: RecordsById, stores: readonly ModelRecord<Store>[], technologies: readonly ModelRecord<Technology>[]): Problem[] {
   const names = new Map(technologies.filter((technology) => records.get(technology.id)?.length === 1).map((technology) => [technology.id, technology.name]));
@@ -296,16 +313,21 @@ export function brokerProblems(records: RecordsById, stores: readonly ModelRecor
       return name !== undefined && sameName(name) === sameName(store.name);
     });
     if (technology === undefined) continue;
+    const named = names.get(technology) as string;
+    // The technology's name is shown only where it is written otherwise, as in another case.
+    const its = named === store.name ? quote(technology) : `${quote(technology)}, "${named}"`;
     const kind = store.kind === undefined ? 'it has no `kind`' : `it is of kind ${quote(store.kind)}`;
+    const notBroker = store.kind === undefined ? 'name it for what it holds and give it its `kind`' : 'name it for what it holds';
     problems.push(
       warning(
         store.file,
         START,
         'broker-as-store',
-        `This store is named "${store.name}", as is ${quote(technology)}, a technology it names, and ${kind}: it may be a message broker drawn as one store. ` +
-          'A broker is a technology. Each queue or topic in it is a store of its own, of kind `queue` or `topic`, with the broker as its `technology`. ' +
-          'Write a store for each that the facts tell apart, move each connection to the one it puts into or takes from, ' +
-          'and name what is left for what it holds, not for the broker. If this store is not a broker, give it a name that says what it holds.',
+        `This store's \`name\`, "${store.name}", is the \`name\` of ${its}, a technology it names, and ${kind}: it may be a message broker drawn as one store. ` +
+          'A broker is a technology. Each queue or topic in it is a store of its own, of kind `queue` or `topic`, with the broker as its `technology`: ' +
+          'write one for each that the facts tell apart. A connection that puts a message in or takes one out then goes to the queue or topic it uses. ' +
+          'One that manages the broker itself, such as one that creates topics, stays with what is left, named for what it holds. ' +
+          `If this store is no broker, ${notBroker}.`,
       ),
     );
   }

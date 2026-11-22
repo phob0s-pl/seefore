@@ -9,7 +9,7 @@ import type { Model, ModelRecord } from './model.ts';
 import { START, compareProblems, error, list, quote, warning } from './problem.ts';
 import type { Problem } from './problem.ts';
 import type { Connection, Store, Technology } from './records.ts';
-import { brokerProblems, byId, connectionProblems, parentsOf, referenceProblems, viaProblems } from './rules.ts';
+import { brokerProblems, byId, connectionProblems, parentsOf, passesOnOnlyProblems, referenceProblems, viaProblems } from './rules.ts';
 import { checkShape } from './shape.ts';
 import { readYaml } from './yaml.ts';
 import type { YamlFile } from './yaml.ts';
@@ -272,6 +272,10 @@ export function loadAs(format: Format, files: readonly SourceFile[]): Loaded {
   problems.push(...connectionProblems(format, everyRecord, parents, references, ofFamily<Connection>(typed, 'connections')));
   problems.push(...viaProblems(format, everyRecord, parents, references));
   problems.push(...brokerProblems(everyRecord, ofFamily<Store>(typed, 'stores'), ofFamily<Technology>(typed, 'technologies')));
+  // Every error is known by now, so the model is too. The check of what only passes on reads
+  // the connections of the model alone; it adds warnings, which leave the model as it is.
+  const model = modelOf(typed, problems);
+  problems.push(...passesOnOnlyProblems(format, everyRecord, parents, model));
 
   records.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : a.file < b.file ? -1 : 1));
   unread.sort((a, b) => (a.file < b.file ? -1 : 1));
@@ -281,7 +285,7 @@ export function loadAs(format: Format, files: readonly SourceFile[]): Loaded {
     unread,
     references,
     texts,
-    model: modelOf(typed, problems),
+    model,
     problems: problems.sort(compareProblems),
   };
 }

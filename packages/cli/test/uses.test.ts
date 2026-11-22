@@ -40,6 +40,9 @@ function json(args: string[], cwd = '.') {
   return { code: result.code, data: JSON.parse(result.out) as UsesResult };
 }
 
+/** What a connection that passes through the thing must do to its route, as each heading says it. */
+const ROUTE = 'name another in its place in `via`, or leave it out, and leave out `via` too if nothing is left in it';
+
 /** A small model like Syncthing's: a pool server that relays join, which keeps a file of them. */
 const RELAYS: Readonly<Record<string, string>> = {
   'seefore.yaml': 'format: 1\nname: Relays\n',
@@ -277,12 +280,37 @@ describe('seefore uses, in words', () => {
     ]);
   });
 
-  it('shows a place that names it where it may not be named at its own field, and asks for no edit that would not mend it', () => {
+  it('shows a place that names it where it may not be named at its own field, under a line of its own, and asks for no edit that would not mend it', () => {
     write({ ...RELAYS, 'connections/run-by-maintainers.yaml': 'from: relay-server\nto: maintainers\n' });
-    expect(run(['uses', 'maintainers']).out.split('\n').slice(2, 5)).toEqual([
-      '2 records name it. Each must go or change:',
-      '  connections/run-by-maintainers.yaml:2:5: `to`',
+    expect(run(['uses', 'maintainers']).out.split('\n').slice(2, 8)).toEqual([
+      '1 record names it in `owner`. It must name another in its place, or leave it out:',
       '  systems/sync.yaml:2:8: `owner`',
+      '',
+      '1 reference names it in a field that may not hold it. It is a reference to mend, as `seefore check` reports:',
+      '  connections/run-by-maintainers.yaml:2:5: `to`',
+      '',
+    ]);
+  });
+
+  it('does not say that a connection passes through a technology that `via` names, which is a reference to mend', () => {
+    write({ ...RELAYS, 'connections/operators-run-relays.yaml': 'from: operators\nto: relay-server\nvia: [https, geoip]\nname: Run\n' }, 'repo');
+    const lines = run(['uses', 'https', '--workdir=repo']).out.split('\n');
+    expect(lines.slice(2, 9)).toEqual([
+      '2 records name it in `technology`. Each must name another in its place, or leave it out:',
+      '  repo/connections/pool-downloads-geo.yaml:4:14: `technology`',
+      '  repo/connections/relay-server-joins-pool.yaml:4:14: `technology`',
+      '',
+      '1 reference names it in a field that may not hold it. It is a reference to mend, as `seefore check --workdir=repo` reports:',
+      '  repo/connections/operators-run-relays.yaml:3:7: `via`',
+      '',
+    ]);
+    expect(lines.join('\n')).not.toContain('through it');
+    // A record of a kind that nothing may name is named only where it may not be, so "nothing names it" is not said.
+    write({ 'connections/geo-runs.yaml': 'from: pool-downloads-geo\nto: geo\n' }, 'repo');
+    expect(run(['uses', 'pool-downloads-geo', '--workdir=repo']).out.split('\n').slice(2, 5)).toEqual([
+      '1 reference names it in a field that may not hold it. It is a reference to mend, as `seefore check --workdir=repo` reports:',
+      '  repo/connections/geo-runs.yaml:1:7: `from`',
+      '',
     ]);
   });
 
@@ -323,7 +351,7 @@ describe('seefore uses, for what a connection passes through', () => {
       '1 connection has one end in it. It must go or get another end:',
       '  connections/workhorse-asks-web.yaml:1:7: `from`',
       '',
-      '1 connection passes through it. It must name another in its place in `via`, or leave it out:',
+      `1 connection passes through it. It must ${ROUTE}:`,
       '  connections/visitor-reads-pages.yaml:3:26: `via` names `router`',
       '',
       'If the connection with one end in it goes, nothing is left with no connection.',
@@ -362,7 +390,7 @@ describe('seefore uses, for what a connection passes through', () => {
       '1 connection has one end in it. It must go or get another end:',
       '  connections/operator-reloads-ingress.yaml:2:5: `to`',
       '',
-      '1 connection passes through it. It must name another in its place in `via`, or leave it out:',
+      `1 connection passes through it. It must ${ROUTE}:`,
       '  connections/visitor-reads-pages.yaml:3:17: `via`',
       '',
       'If the connection with one end in it goes, 1 record is left with no connection:',
@@ -375,10 +403,89 @@ describe('seefore uses, for what a connection passes through', () => {
     ]);
     // One that only connections pass through has nothing else to say of them.
     expect(run(['uses', 'balancer']).out.split('\n').slice(2, 5)).toEqual([
-      '1 connection passes through it. It must name another in its place in `via`, or leave it out:',
+      `1 connection passes through it. It must ${ROUTE}:`,
       '  connections/visitor-reads-pages.yaml:3:7: `via`',
       '',
     ]);
+  });
+
+  it('keeps an app that a connection which stays passes through, and what it is in, when its last connection goes', () => {
+    write(ROUTES);
+    expect(run(['uses', 'workhorse-asks-web']).out.split('\n').slice(2, 5)).toEqual(['Nothing names it.', '', 'If it goes, nothing is left with no connection.']);
+  });
+
+  it('names what only a piece of infrastructure left named by nothing names, if that goes too', () => {
+    write({
+      'seefore.yaml': 'format: 1\nname: Sole\n',
+      'systems/hub.yaml': 'name: Hub\n',
+      'systems/peer.yaml': 'name: Peer\n',
+      'apps/reader.yaml': 'name: Reader\nin: hub\n',
+      'apps/other.yaml': 'name: Other\nin: hub\n',
+      'infrastructure/unused.yaml': 'name: Unused\nowner: platform\ntechnology: [nginx]\n',
+      'connections/other-asks-reader.yaml': 'from: other\nto: reader\n',
+      'connections/reader-reads.yaml': 'from: reader\nto: peer\nvia: [unused]\n',
+      'owners/platform.yaml': 'name: Platform\n',
+      'technologies/nginx.yaml': 'name: NGINX\n',
+    });
+    expect(run(['uses', 'reader-reads']).out.split('\n').slice(4, 14)).toEqual([
+      'If it goes, 1 record is left with no connection:',
+      '  system peer: Peer (systems/peer.yaml)',
+      '',
+      '1 record is named by nothing but it:',
+      '  piece of infrastructure unused: Unused (infrastructure/unused.yaml)',
+      '',
+      'If the record left with no connection and the piece of infrastructure named by nothing go too, 2 more records are named by nothing:',
+      '  owner platform: Platform (owners/platform.yaml)',
+      '  technology nginx: NGINX (technologies/nginx.yaml)',
+      '',
+    ]);
+    // With the peer kept by another connection, only the piece of infrastructure is taken to go.
+    write({ 'connections/other-asks-peer.yaml': 'from: other\nto: peer\n' });
+    expect(run(['uses', 'reader-reads']).out).toContain('If the piece of infrastructure named by nothing goes too, 2 more records are named by nothing:');
+  });
+});
+
+describe('seefore uses, for a connection with one end in the thing that also passes through it', () => {
+  /** A system whose two apps a connection starts at and passes through, and a route through both. */
+  const BOTH: Readonly<Record<string, string>> = {
+    'seefore.yaml': 'format: 1\nname: Both\n',
+    'systems/desk.yaml': 'name: Desk\n',
+    'systems/middle.yaml': 'name: Middle\n',
+    'systems/service.yaml': 'name: Service\n',
+    'apps/mux.yaml': 'name: Mux\nin: middle\n',
+    'apps/gateway.yaml': 'name: Gateway\nin: middle\n',
+    'components/adapter.yaml': 'name: Adapter\nin: gateway\n',
+    'infrastructure/balancer.yaml': 'name: Balancer\n',
+    'connections/gateway-checks-mux.yaml': 'from: gateway\nto: mux\n',
+    'connections/dual.yaml': 'from: mux\nto: service\nvia: [adapter]\n',
+    'connections/route.yaml': 'from: desk\nto: service\nvia: [adapter, mux, balancer]\n',
+  };
+
+  it('says both edits, and the edits it says pass `seefore check`', () => {
+    write(BOTH);
+    expect(run(['uses', 'middle']).out.split('\n').slice(8, 17)).toEqual([
+      `1 connection has one end in it and passes through it too. It must go or get another end. If it gets another end, it must also ${ROUTE}:`,
+      '  connections/dual.yaml:1:7: `from` names `mux`',
+      '  connections/dual.yaml:3:7: `via` names `adapter`',
+      '',
+      `1 connection passes through it. It must ${ROUTE}:`,
+      '  connections/route.yaml:3:7: `via` names `adapter`',
+      '  connections/route.yaml:3:16: `via` names `mux`',
+      '',
+      'If the connection with one end in it goes, nothing is left with no connection.',
+    ]);
+    // Keep the exchange: remove the thing and what goes with it, give it another end, and leave out what goes from each route.
+    for (const file of ['systems/middle.yaml', 'apps/mux.yaml', 'apps/gateway.yaml', 'components/adapter.yaml', 'connections/gateway-checks-mux.yaml']) rmSync(join(root, file));
+    write({ 'connections/dual.yaml': 'from: desk\nto: service\n', 'connections/route.yaml': 'from: desk\nto: service\nvia: [balancer]\n' });
+    expect(run(['check'])).toMatchObject({ code: 0 });
+    expect(run(['check']).out.split('\n').at(-1)).toBe('5 records read. No problems.');
+  });
+
+  it('says it for each such connection when there are more than one', () => {
+    write({ ...BOTH, 'connections/twice.yaml': 'from: service\nto: mux\nvia: [adapter, balancer]\n' });
+    expect(run(['uses', 'middle']).out.split('\n')[8]).toBe(
+      `2 connections have one end in it and pass through it too. Each must go or get another end. One that gets another end must also ${ROUTE}:`,
+    );
   });
 });
 

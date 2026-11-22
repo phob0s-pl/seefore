@@ -158,7 +158,7 @@ const ViaId = z.string().refine(isId, {
 const Via = z
   .array(ViaId)
   .refine((ids) => ids.length > 0, {
-    message: '`via` is an empty list. Leave it out when the exchange passes through nothing.',
+    message: '`via` is an empty list. Leave `via` out until something that is always on the way is known.',
     params: { code: 'value-too-small' },
   })
   .superRefine((ids, context) => {

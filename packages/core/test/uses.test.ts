@@ -323,6 +323,60 @@ describe('what a connection passes through', () => {
     expect(left(review(ROUTES, 'visitor-reads-pages'))).toEqual(['visitor no-connection connections-go', 'balancer no-user connections-go']);
   });
 
+  it('leaves behind no app whose part a connection that stays passes through, when its last connection goes, nor that part', () => {
+    // Workhorse asks Web for nothing more, but the pages still pass through its router.
+    const out = ids(review(ROUTES, 'workhorse-asks-web').left.map((one) => one.record));
+    expect(out).not.toContain('workhorse');
+    expect(out).not.toContain('router');
+    expect(out).not.toContain('site');
+    expect(left(review(ROUTES, 'workhorse-asks-web'))).toEqual([]);
+  });
+
+  it('leaves behind no app and no system that a connection which stays passes through, nor what that is in', () => {
+    // Hub has a connection only through the proxy app, which the reads still pass through.
+    const files = {
+      'systems/desk.yaml': 'name: Desk\n',
+      'systems/hub.yaml': 'name: Hub\n',
+      'systems/peer.yaml': 'name: Peer\n',
+      'systems/edge.yaml': 'name: Edge\n',
+      'apps/proxy-app.yaml': 'name: Proxy app\nin: hub\n',
+      'apps/reader.yaml': 'name: Reader\nin: desk\n',
+      'connections/proxy-checks-reader.yaml': 'from: proxy-app\nto: reader\n',
+      'connections/edge-checks-reader.yaml': 'from: edge\nto: reader\n',
+      'connections/reader-reads.yaml': 'from: reader\nto: peer\nvia: [proxy-app, edge]\n',
+    };
+    expect(left(review(files, 'proxy-checks-reader'))).toEqual([]);
+    expect(left(review(files, 'edge-checks-reader'))).toEqual([]);
+  });
+
+  it('does not count a place in `via` that names the thing: it must change, so what the thing is in may be left', () => {
+    // The router, not Workhorse, asks Web; once it goes, nothing but the route that must change names Workhorse.
+    const files = Object.fromEntries(Object.entries(ROUTES).filter(([path]) => path !== 'connections/workhorse-asks-web.yaml'));
+    const removal = review({ ...files, 'connections/router-asks-web.yaml': 'from: router\nto: web\n' }, 'router');
+    expect(removal.changes.map((change) => `${change.record.id} ${change.places.map((place) => place.field)}`)).toEqual(['router-asks-web from', 'visitor-reads-pages via']);
+    expect(left(removal)).toEqual(['workhorse no-connection connections-go']);
+  });
+
+  it('names the owner and the technologies that only a piece of infrastructure left named by nothing names, as if it went too', () => {
+    const files = {
+      'systems/hub.yaml': 'name: Hub\n',
+      'systems/peer.yaml': 'name: Peer\n',
+      'apps/reader.yaml': 'name: Reader\nin: hub\n',
+      'apps/other.yaml': 'name: Other\nin: hub\n',
+      'infrastructure/unused.yaml': 'name: Unused\nowner: platform\ntechnology: [nginx]\n',
+      'connections/other-asks-reader.yaml': 'from: other\nto: reader\n',
+      'connections/reader-reads.yaml': 'from: reader\nto: peer\nvia: [unused]\n',
+      'owners/platform.yaml': 'name: Platform\n',
+      'technologies/nginx.yaml': 'name: NGINX\n',
+    };
+    expect(left(review(files, 'reader-reads'))).toEqual([
+      'peer no-connection connections-go',
+      'unused no-user connections-go',
+      'platform no-user left-go',
+      'nginx no-user left-go',
+    ]);
+  });
+
   it('works on a piece of infrastructure as on any record', () => {
     const removal = review(ROUTES, 'ingress');
     expect(removal.record).toEqual({ id: 'ingress', family: 'infrastructure', file: 'infrastructure/ingress.yaml', name: 'Ingress' });
