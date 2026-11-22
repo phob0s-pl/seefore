@@ -85,7 +85,10 @@ const VIA: ReferenceField = {
 /**
  * Format 1: nine families of records. The order is the order a listing shows them in: who
  * uses the software, the software from the outside in, how it is connected, and the two
- * families that the others name.
+ * families that the others name. What `in` may name keeps anything from coming to be in
+ * itself: an app is in a system, a store in a system or an app, a component in an app, and a
+ * piece of infrastructure in a system or in none. Nothing is in a store, a component or a piece
+ * of infrastructure.
  */
 export const FORMAT_1: Format = {
   version: 1,
@@ -107,7 +110,7 @@ export const FORMAT_1: Format = {
         noun: 'store',
         one: 'a store',
         schema: StoreSchema,
-        references: [{ field: 'in', families: ['systems'], rule: 'A store is in a system.' }, TECHNOLOGY, OWNER],
+        references: [{ field: 'in', families: ['systems', 'apps'], rule: 'A store is in a system, or in the app that keeps it.' }, TECHNOLOGY, OWNER],
       },
     },
     {
@@ -121,7 +124,12 @@ export const FORMAT_1: Format = {
     },
     {
       folder: 'infrastructure',
-      record: { noun: 'piece of infrastructure', one: 'a piece of infrastructure', schema: InfrastructureSchema, references: [TECHNOLOGY, OWNER] },
+      record: {
+        noun: 'piece of infrastructure',
+        one: 'a piece of infrastructure',
+        schema: InfrastructureSchema,
+        references: [{ field: 'in', families: ['systems'], rule: 'A piece of infrastructure is in a system, or in none.' }, TECHNOLOGY, OWNER],
+      },
     },
     {
       folder: 'connections',

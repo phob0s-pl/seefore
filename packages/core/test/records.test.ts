@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { load } from '../src/load.ts';
 import type { SourceFile } from '../src/load.ts';
+import { ConnectionSchema } from '../src/records.ts';
 
 /**
  * What one record's file may hold. Each record here is tried in a directory that has every
@@ -84,13 +85,13 @@ describe('the records of format 1', () => {
 
 describe('the keys a record may have', () => {
   it.each([
-    ['people', 'person', '`name` and `description`'],
-    ['systems', 'system', '`name`, `description`, `external` and `owner`'],
-    ['apps', 'app', '`name`, `in`, `description`, `kind`, `technology` and `owner`'],
-    ['stores', 'store', '`name`, `in`, `description`, `kind`, `technology` and `owner`'],
-    ['components', 'component', '`name`, `in`, `description`, `technology` and `owner`'],
-    ['infrastructure', 'piece of infrastructure', '`name`, `description`, `technology` and `owner`'],
-    ['connections', 'connection', '`from`, `to`, `via`, `name`, `description` and `technology`'],
+    ['people', 'person', '`name`, `only` and `description`'],
+    ['systems', 'system', '`name`, `only`, `description`, `external` and `owner`'],
+    ['apps', 'app', '`name`, `in`, `only`, `description`, `kind`, `technology` and `owner`'],
+    ['stores', 'store', '`name`, `in`, `only`, `description`, `kind`, `technology` and `owner`'],
+    ['components', 'component', '`name`, `in`, `only`, `description`, `technology` and `owner`'],
+    ['infrastructure', 'piece of infrastructure', '`name`, `in`, `only`, `description`, `technology` and `owner`'],
+    ['connections', 'connection', '`from`, `to`, `via`, `opens`, `access`, `name`, `only`, `description` and `technology`'],
     ['owners', 'owner', '`name` and `description`'],
     ['technologies', 'technology', '`name` and `description`'],
   ])('refuses a key %s do not have, at the key, and names the ones they have', (folder, noun, keys) => {
@@ -102,7 +103,7 @@ describe('the keys a record may have', () => {
 
   it('gives a person no owner', () => {
     expect(problemsOf('people/clerk.yaml', 'name: Clerk\nowner: shop-team\n')).toEqual([
-      '2:1 key-unknown `owner` is not a key of this person. Its keys are `name` and `description`.',
+      '2:1 key-unknown `owner` is not a key of this person. Its keys are `name`, `only` and `description`.',
     ]);
   });
 
@@ -121,7 +122,7 @@ describe('the keys a record may have', () => {
     expect(codesOf(`${folder}/thing.yaml`, `${least}technology: [go]\n`)).toEqual([`${least.split('\n').length}:1 key-unknown`]);
   });
 
-  it.each(['people', 'systems', 'infrastructure', 'connections', 'owners', 'technologies'])('gives no `in` to a record in %s', (folder) => {
+  it.each(['people', 'systems', 'connections', 'owners', 'technologies'])('gives no `in` to a record in %s', (folder) => {
     const least = FAMILIES.find((family) => family.folder === folder)?.least ?? '';
     expect(codesOf(`${folder}/thing.yaml`, `${least}in: shop\n`)).toEqual([`${least.split('\n').length}:1 key-unknown`]);
   });
@@ -137,6 +138,20 @@ describe('the keys a record may have', () => {
       const least = FAMILIES.find((family) => family.folder === folder)?.least ?? '';
       expect(codesOf(`${folder}/thing.yaml`, `${least}external: true\n`), folder).toEqual([`${least.split('\n').length}:1 key-unknown`]);
     }
+  });
+
+  it('keeps `access` and `opens` to connections', () => {
+    for (const folder of ['people', 'systems', 'apps', 'stores', 'components', 'infrastructure', 'owners', 'technologies']) {
+      const least = FAMILIES.find((family) => family.folder === folder)?.least ?? '';
+      const at = `${least.split('\n').length}:1 key-unknown`;
+      expect(codesOf(`${folder}/thing.yaml`, `${least}access: read\n`), folder).toEqual([at]);
+      expect(codesOf(`${folder}/thing.yaml`, `${least}opens: to\n`), folder).toEqual([at]);
+    }
+  });
+
+  it.each(['owners', 'technologies'])('gives no `only` to a record in %s', (folder) => {
+    const least = FAMILIES.find((family) => family.folder === folder)?.least ?? '';
+    expect(codesOf(`${folder}/thing.yaml`, `${least}only: in the hosted edition\n`)).toEqual([`${least.split('\n').length}:1 key-unknown`]);
   });
 });
 
@@ -240,11 +255,35 @@ describe('`in`', () => {
 
   it('says what `in` holds for each kind of record', () => {
     expect(problemsOf('stores/thing.yaml', 'name: Thing\nin: The Shop\n')).toEqual([
-      `2:5 value-invalid ${inSystem} An id has no spaces: it is the name of the system's file, without \`.yaml\`.`,
+      '2:5 value-invalid `in` holds the id of the system it is part of, a record in `systems/`, or of the app that keeps it, a record in `apps/`. ' +
+        "An id has no spaces: it is the name of that record's file, without `.yaml`.",
     ]);
     expect(problemsOf('components/thing.yaml', 'name: Thing\nin: Order API\n')).toEqual([
       "2:5 value-invalid `in` holds the id of the app it is inside, a record in `apps/`. An id has no spaces: it is the name of the app's file, without `.yaml`.",
     ]);
+    expect(problemsOf('infrastructure/thing.yaml', 'name: Thing\nin: The Shop\n')).toEqual([
+      `2:5 value-invalid ${inSystem} An id has no spaces: it is the name of the system's file, without \`.yaml\`.`,
+    ]);
+  });
+
+  it('may be left off a piece of infrastructure, or name its system, and goes to the model in the order of the format', () => {
+    accepted('infrastructure/thing.yaml', 'name: Thing\n');
+    accepted('infrastructure/thing.yaml', 'name: Thing\nin: shop\n');
+    const loaded = load([...AROUND, { path: 'infrastructure/ingress.yaml', text: 'owner: shop-team\nin: shop\nname: Ingress\n' }]);
+    const piece = loaded.model.infrastructure.find((record) => record.id === 'ingress');
+    expect(piece).toEqual({ id: 'ingress', file: 'infrastructure/ingress.yaml', name: 'Ingress', in: 'shop', owner: 'shop-team' });
+    expect(Object.keys(piece ?? {})).toEqual(['id', 'file', 'name', 'in', 'owner']);
+  });
+
+  it('may name the app that keeps a store', () => {
+    const loaded = load([...AROUND, { path: 'stores/index-database.yaml', text: 'name: Index database\nin: order-api\nkind: database\n' }]);
+    expect(loaded.problems).toEqual([]);
+    expect(loaded.model.stores).toEqual([{ id: 'index-database', file: 'stores/index-database.yaml', name: 'Index database', in: 'order-api', kind: 'database' }]);
+  });
+
+  it('refuses what is not an id on a piece of infrastructure, as on an app', () => {
+    expect(codesOf('infrastructure/thing.yaml', 'name: Thing\nin: [shop]\n')).toEqual(['2:5 value-wrong-kind']);
+    expect(codesOf('infrastructure/thing.yaml', 'name: Thing\nin: ""\n')).toEqual(['2:5 value-invalid']);
   });
 });
 
@@ -380,14 +419,15 @@ describe('`owner`', () => {
     ]);
   });
 
-  it('says that a part with `owner` left out takes the owner of what it is in, and a system or a piece of infrastructure nothing', () => {
+  it('says that a part with `owner` left out takes the owner of what it is in, a piece of infrastructure its system\'s, and a system nothing', () => {
     const takes = 'Left out, the owner is taken from what the part is in: check that this is true.';
     expect(problemsOf('stores/thing.yaml', 'name: Thing\nin: shop\nowner: Two teams argue\n')[0]).toContain(takes);
     expect(problemsOf('components/thing.yaml', 'name: Thing\nin: order-api\nowner: Two teams argue\n')[0]).toContain(takes);
     expect(problemsOf('systems/thing.yaml', 'name: Thing\nowner: Two teams argue\n')[0]).not.toContain('Left out');
     expect(problemsOf('infrastructure/thing.yaml', 'name: Thing\nowner: Two teams argue\n')).toEqual([
       '2:8 value-invalid `owner` holds the id of a record in `owners/`. ' +
-        'If who answers takes a sentence to say, leave `owner` out and put the sentence in the description.',
+        'If who answers takes a sentence to say, leave `owner` out and put the sentence in the description. ' +
+        'Left out, the owner is taken from the system the piece is in, when it is in one: check that this is true.',
     ]);
   });
 
@@ -475,5 +515,127 @@ describe('`external`', () => {
     expect(problemsOf('systems/thing.yaml', `name: Thing\n${text}`)).toEqual([
       '2:11 value-not-allowed `external` must be `true`. Leave it out for a system of yours, and for one nobody has spoken for.',
     ]);
+  });
+});
+
+describe('`only`', () => {
+  const WITH_ONLY = FAMILIES.filter((family) => family.folder !== 'owners' && family.folder !== 'technologies');
+
+  it.each(WITH_ONLY)('may be left off, or given, on a record in $folder, and goes to the model as it is written', ({ folder, least }) => {
+    accepted(`${folder}/thing.yaml`, least);
+    const loaded = load([...AROUND, { path: `${folder}/thing.yaml`, text: `${least}only: in the hosted edition\n` }]);
+    expect(loaded.problems).toEqual([]);
+    const family = (loaded.model as unknown as Record<string, { id: string; only?: string }[]>)[folder];
+    expect(family?.find((record) => record.id === 'thing')?.only).toBe('in the hosted edition');
+  });
+
+  it.each([
+    ['one character', 'x'],
+    ['a hundred characters', 'x'.repeat(100)],
+    ['a hundred characters outside the first plane of Unicode, each counted once', '🛒'.repeat(100)],
+    ['words with commas', 'when LDAP is configured, so not on GitLab.com or Dedicated'],
+  ])('takes %s', (_what, only) => {
+    accepted('connections/thing.yaml', `from: customer\nto: shop\nonly: ${only}\n`);
+  });
+
+  it.each([
+    [
+      'words that are too long, with what to do',
+      `only: ${'x'.repeat(101)}\n`,
+      '3:7 value-too-big `only` has 101 characters. It may have at most 100. Keep the words that say when, and say the rest in the description.',
+    ],
+    ['empty words', 'only: ""\n', '3:7 value-too-small `only` is empty. Leave it out when the thing is always there, and when nobody has said.'],
+    ['spaces only', 'only: "   "\n', '3:7 value-too-small `only` is empty. Leave it out when the thing is always there, and when nobody has said.'],
+    [
+      'words on two lines',
+      'only: "in the hosted\\nedition"\n',
+      '3:7 value-invalid `only` must be on one line: the few words that read after "only". Say the rest in the description.',
+    ],
+    [
+      'words that end in a line break',
+      'only: |\n  in the hosted edition\n',
+      '3:7 value-invalid `only` must be on one line: the few words that read after "only". Say the rest in the description.',
+    ],
+    ['a space at the start', 'only: " in production"\n', '3:7 value-invalid `only` starts or ends with a space. Take the space off.'],
+    ['a tab at the end', 'only: "in production\\t"\n', '3:7 value-invalid `only` starts or ends with a space. Take the space off.'],
+    ['a number', 'only: 3\n', '3:7 value-wrong-kind `only` must be text, but this is a whole number.'],
+    ['a list', 'only: [in production]\n', '3:7 value-wrong-kind `only` must be text, but this is a list.'],
+  ])('refuses %s, at the value', (_what, text, problem) => {
+    expect(problemsOf('connections/thing.yaml', `from: customer\nto: shop\n${text}`)).toEqual([problem]);
+  });
+
+  it('holds every record that may have it to the same form', () => {
+    for (const { folder, least } of WITH_ONLY) {
+      const line = least.split('\n').length;
+      expect(codesOf(`${folder}/thing.yaml`, `${least}only: ""\n`), folder).toEqual([`${line}:7 value-too-small`]);
+    }
+  });
+});
+
+describe('`access`', () => {
+  /** A connection's file, tried beside a store for it to end at. */
+  const ORDERS: SourceFile = { path: 'stores/orders.yaml', text: 'name: Orders\nin: shop\n' };
+  const tried = (text: string) => load([...AROUND, ORDERS, { path: 'connections/thing.yaml', text }]);
+
+  it.each(['read', 'write', 'read-write'])('takes %s on a connection, and gives it to the model', (access) => {
+    const loaded = tried(`from: order-api\nto: orders\naccess: ${access}\n`);
+    expect(loaded.problems).toEqual([]);
+    expect(loaded.model.connections[0]?.access).toBe(access);
+  });
+
+  it.each([
+    ['another word', 'access: readwrite\n', '3:9'],
+    ['a word in capitals', 'access: Read\n', '3:9'],
+    ['both as a list', 'access: [read, write]\n', '3:9'],
+    ['`true`', 'access: true\n', '3:9'],
+    ['nothing', 'access:\n', '3:8'],
+  ])('refuses %s, at the value, and says what is allowed and what leaving it out means', (_what, text, place) => {
+    expect(tried(`from: order-api\nto: orders\n${text}`).problems.map((problem) => `${problem.line}:${problem.column} ${problem.code} ${problem.message}`)).toEqual([
+      `${place} value-not-allowed \`access\` must be \`read\`, \`write\` or \`read-write\`: what the connection does to the data of the store it ends at. ` +
+        'Leave it out for a use that is neither, and when nobody has said.',
+    ]);
+  });
+});
+
+describe('`opens`', () => {
+  it('takes `to` on a connection, and gives it to the model', () => {
+    const loaded = load([...AROUND, { path: 'connections/thing.yaml', text: 'from: order-api\nto: customer\nvia: [proxy]\nopens: to\n' }]);
+    expect(loaded.problems).toEqual([]);
+    expect(loaded.model.connections[0]?.opens).toBe('to');
+  });
+
+  it.each([
+    ['`from`', 'opens: from\n'],
+    ['`true`', 'opens: true\n'],
+    ['the id of the far end', 'opens: shop\n'],
+  ])('refuses %s, at the value, and says what is allowed and what leaving it out means', (_what, text) => {
+    expect(problemsOf('connections/thing.yaml', `from: customer\nto: shop\n${text}`)).toEqual([
+      '3:8 value-not-allowed `opens` must be `to`: the channel this exchange travels down was opened from the far side. ' +
+        'Leave it out when the one that sends opened it, and when nobody has said.',
+    ]);
+  });
+});
+
+describe('the order of keys', () => {
+  it('reads a connection with every key into the order of the format, however its file writes them', () => {
+    // `access` and `opens` never stand on one sound connection, since one ends at a store and the
+    // other does not, so the schema is tried by itself.
+    const read = ConnectionSchema.parse({
+      technology: ['https'],
+      description: 'Down a watch stream.',
+      only: 'when the agent is on',
+      name: 'Sends changes',
+      access: 'write',
+      opens: 'to',
+      via: ['proxy'],
+      to: 'shop',
+      from: 'customer',
+    });
+    expect(Object.keys(read)).toEqual(['from', 'to', 'via', 'opens', 'access', 'name', 'only', 'description', 'technology']);
+  });
+
+  it('gives the model a store with `only` after `in` and before `description`', () => {
+    const loaded = load([...AROUND, { path: 'stores/thing.yaml', text: 'owner: shop-team\ndescription: Kept rows.\nonly: in production\nin: order-api\nname: Thing\n' }]);
+    expect(Object.keys(loaded.model.stores[0] ?? {})).toEqual(['id', 'file', 'name', 'in', 'only', 'description', 'owner']);
   });
 });

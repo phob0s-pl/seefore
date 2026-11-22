@@ -55,8 +55,10 @@ export function referenceProblems(format: Format, records: RecordsById, referenc
 
 /**
  * What each record is in, by id, wherever its `in` names one record of a kind it may be in.
- * Followed upwards, it goes from a component to its app and on to its system. Since each kind
- * may be in only a kind above it, nothing can come to be in itself.
+ * Followed upwards, it goes from a component to its app and on to its system, from a store to
+ * the app that keeps it or to its system, and from a piece of infrastructure to its system. So
+ * every check that follows it takes a kept store to its app's system. Since each kind may be in
+ * only a kind above it, nothing can come to be in itself.
  */
 export function parentsOf(format: Format, records: RecordsById, references: readonly Reference[]): Map<string, string> {
   const parents = new Map<string, string>();
@@ -277,10 +279,10 @@ export function passesOnOnlyProblems(format: Format, records: RecordsById, paren
 
 /**
  * What moving a record to `infrastructure/` would mean, by what it holds, as sentences that each
- * start with a space, or nothing. What is in it has to go elsewhere first, and its parts then
- * no longer take its owner. An app with no `owner` of its own no longer takes that of the system
- * it is in, since a piece of infrastructure is in nothing. An `external` mark does not go with
- * it, since a piece of infrastructure has none.
+ * start with a space, or nothing. What is in it has to go elsewhere first, its kept stores too,
+ * and its parts then no longer take its owner. An app with no `owner` of its own no longer takes
+ * that of the system it is in. An `external` mark does not go with it, since a piece of
+ * infrastructure has none.
  */
 function movingOut(id: string, parents: ReadonlyMap<string, string>, model: Model): string {
   const owners = ownership(model);

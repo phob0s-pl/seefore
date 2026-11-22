@@ -5,6 +5,8 @@
  * Nothing here touches disk or network. It takes the text of the files and returns records
  * and problems, so it runs the same in Node and in the browser.
  */
+export { conditionsOf, keeperOf, systemOf } from './conditions.ts';
+export type { Condition } from './conditions.ts';
 export { CURRENT_FORMAT, FORMAT_1, READABLE_VERSIONS, familyIn, nounOf, oneOf, referenceField } from './format.ts';
 export type { Family, Format, RecordKind, ReferenceField } from './format.ts';
 export { ID_MAX, idProblem, isId } from './id.ts';
@@ -48,11 +50,13 @@ export { outlineOf } from './outline.ts';
 export { compareProblems } from './problem.ts';
 export type { Position, Problem, Severity } from './problem.ts';
 export {
+  ACCESS,
   APP_KINDS,
   AppSchema,
   ComponentSchema,
   InfrastructureSchema,
   ConnectionSchema,
+  OPENS,
   OwnerSchema,
   PersonSchema,
   STORE_KINDS,
@@ -61,7 +65,7 @@ export {
   TechnologySchema,
 } from './records.ts';
 export type { App, Component, Connection, Infrastructure, Owner, Person, Store, System, Technology } from './records.ts';
-export { DESCRIPTION_MAX, NAME_MAX, firstSentence } from './text.ts';
+export { DESCRIPTION_MAX, NAME_MAX, ONLY_MAX, firstSentence } from './text.ts';
 export { isShort, readInFull, recordsWithId, removalOf, usesOf, wordsFor } from './uses.ts';
 export type { Change, Left, Mention, Removal, RemovalOptions, UsedRecord, Uses } from './uses.ts';
 export { UNNAMED_CONNECTION, connectionsInNoView, viewsOf } from './views.ts';

@@ -34,9 +34,10 @@ export interface Ownership {
 
 /**
  * Who answers for each system, app, store, component and piece of infrastructure of the model,
- * by id. One with no `owner` has that of what it is in, followed upwards; one with none above it
- * either has none, and is not in the map. A piece of infrastructure is in nothing, so it has
- * only the owner it names. A person has no owner.
+ * by id. One with no `owner` has that of what it is in, followed upwards: a store that an app
+ * keeps has the app's, which may be its system's, and a piece of infrastructure in a system has
+ * the system's, as an app has. One with none above it either has none, and is not in the map,
+ * nor is a piece of infrastructure in no system that names none. A person has no owner.
  */
 export function ownership(model: Model): Map<string, Ownership> {
   const found = new Map<string, Ownership>();
@@ -48,11 +49,12 @@ export function ownership(model: Model): Map<string, Ownership> {
     const above = inside === undefined ? undefined : found.get(inside);
     if (above) found.set(element.id, above);
   };
-  // Outside in, so that what a thing is in is settled before the thing itself.
+  // Outside in, so that what a thing is in is settled before the thing itself: an app before
+  // the store it keeps and the components inside it.
   for (const system of model.systems) take(system);
-  for (const appOrStore of [...model.apps, ...model.stores]) take(appOrStore, appOrStore.in);
+  for (const app of model.apps) take(app, app.in);
+  for (const store of model.stores) take(store, store.in);
   for (const component of model.components) take(component, component.in);
-  // A piece of infrastructure is in nothing: it has the owner it names, or none.
-  for (const piece of model.infrastructure) take(piece);
+  for (const piece of model.infrastructure) take(piece, piece.in);
   return found;
 }

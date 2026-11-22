@@ -46,7 +46,20 @@ describe('the shop as it stands', () => {
 describe('a reference that names no record', () => {
   it.each([
     ['`in` of an app', 'apps/thing.yaml', 'name: Thing\nin: shopp\n', '2:5', '`in` names `shopp`, but no record has that id. An app is in a system.'],
-    ['`in` of a store', 'stores/thing.yaml', 'name: Thing\nin: shopp\n', '2:5', '`in` names `shopp`, but no record has that id. A store is in a system.'],
+    [
+      '`in` of a store',
+      'stores/thing.yaml',
+      'name: Thing\nin: shopp\n',
+      '2:5',
+      '`in` names `shopp`, but no record has that id. A store is in a system, or in the app that keeps it.',
+    ],
+    [
+      '`in` of a piece of infrastructure',
+      'infrastructure/thing.yaml',
+      'name: Thing\nin: shopp\n',
+      '2:5',
+      '`in` names `shopp`, but no record has that id. A piece of infrastructure is in a system, or in none.',
+    ],
     ['`in` of a component', 'components/thing.yaml', 'name: Thing\nin: order-app\n', '2:5', '`in` names `order-app`, but no record has that id. A component is in an app.'],
     [
       '`from` of a connection',
@@ -162,7 +175,50 @@ describe('a reference that names a record of the wrong kind', () => {
 
   it.each([
     ['an app in an app', 'apps/thing.yaml', 'name: Thing\nin: order-api\n', '2:5', '`in` names `order-api`, which is an app. An app is in a system.'],
-    ['a store in a person', 'stores/thing.yaml', 'name: Thing\nin: customer\n', '2:5', '`in` names `customer`, which is a person. A store is in a system.'],
+    ['a store in a person', 'stores/thing.yaml', 'name: Thing\nin: customer\n', '2:5', '`in` names `customer`, which is a person. A store is in a system, or in the app that keeps it.'],
+    [
+      'a store in a component',
+      'stores/thing.yaml',
+      'name: Thing\nin: checkout\n',
+      '2:5',
+      '`in` names `checkout`, which is a component. A store is in a system, or in the app that keeps it.',
+    ],
+    [
+      'a store in another store',
+      'stores/thing.yaml',
+      'name: Thing\nin: orders-database\n',
+      '2:5',
+      '`in` names `orders-database`, which is a store. A store is in a system, or in the app that keeps it.',
+    ],
+    [
+      'a store in a piece of infrastructure',
+      'stores/thing.yaml',
+      'name: Thing\nin: proxy\n',
+      '2:5',
+      '`in` names `proxy`, which is a piece of infrastructure. A store is in a system, or in the app that keeps it.',
+    ],
+    [
+      'a piece of infrastructure in an app',
+      'infrastructure/thing.yaml',
+      'name: Thing\nin: order-api\n',
+      '2:5',
+      '`in` names `order-api`, which is an app. A piece of infrastructure is in a system, or in none.',
+    ],
+    [
+      'a piece of infrastructure in another',
+      'infrastructure/thing.yaml',
+      'name: Thing\nin: proxy\n',
+      '2:5',
+      '`in` names `proxy`, which is a piece of infrastructure. A piece of infrastructure is in a system, or in none.',
+    ],
+    ['an app in a piece of infrastructure', 'apps/thing.yaml', 'name: Thing\nin: proxy\n', '2:5', '`in` names `proxy`, which is a piece of infrastructure. An app is in a system.'],
+    [
+      'a component in a piece of infrastructure',
+      'components/thing.yaml',
+      'name: Thing\nin: proxy\n',
+      '2:5',
+      '`in` names `proxy`, which is a piece of infrastructure. A component is in an app.',
+    ],
     ['a component in a system', 'components/thing.yaml', 'name: Thing\nin: shop\n', '2:5', '`in` names `shop`, which is a system. A component is in an app.'],
     ['a component in another component', 'components/thing.yaml', 'name: Thing\nin: checkout\n', '2:5', '`in` names `checkout`, which is a component. A component is in an app.'],
     ['a component in a store', 'components/thing.yaml', 'name: Thing\nin: orders-database\n', '2:5', '`in` names `orders-database`, which is a store. A component is in an app.'],
@@ -253,6 +309,12 @@ describe('a reference that names a record of the wrong kind', () => {
     expect(messages(shop({ 'components/checkout.yaml': 'name: Checkout\nin: checkout\n' }))).toEqual([
       '`in` names `checkout`, which is a component. A component is in an app.',
     ]);
+    expect(messages(shop({ 'stores/orders-database.yaml': 'name: Orders database\nin: orders-database\n' }))).toEqual([
+      '`in` names `orders-database`, which is a store. A store is in a system, or in the app that keeps it.',
+    ]);
+    expect(messages(shop({ 'infrastructure/proxy.yaml': 'name: HTTPS proxy\nin: proxy\n' }))).toEqual([
+      '`in` names `proxy`, which is a piece of infrastructure. A piece of infrastructure is in a system, or in none.',
+    ]);
   });
 });
 
@@ -335,10 +397,87 @@ describe('a piece of infrastructure', () => {
     expect(load(files).model.connections.find((connection) => connection.id === 'thing')?.via).toEqual(['card-provider', 'proxy', 'basket']);
   });
 
-  it('has the owner it names, and none when it names none, since it is in nothing', () => {
+  it('has the owner it names, and none when it names none and is in no system', () => {
     const owners = load(shop({ 'infrastructure/proxy.yaml': 'name: HTTPS proxy\nowner: shop-team\n', 'infrastructure/gateway.yaml': 'name: Gateway\n' })).model;
     expect(ownership(owners).get('proxy')).toEqual({ owner: 'shop-team', from: 'proxy' });
     expect(ownership(owners).has('gateway')).toBe(false);
+  });
+
+  it("may be in a system, and then has the system's owner when it names none, as an app has", () => {
+    const files = shop({
+      'infrastructure/ingress.yaml': 'name: Ingress\nin: shop\n',
+      'infrastructure/relay.yaml': 'name: Relay\nin: card-provider\n',
+      'infrastructure/edge.yaml': 'name: Edge\nin: shop\nowner: edge-team\n',
+      'owners/edge-team.yaml': 'name: Edge team\n',
+    });
+    expect(load(files).problems).toEqual([]);
+    const owners = ownership(load(files).model);
+    expect(owners.get('ingress')).toEqual({ owner: 'shop-team', from: 'shop' });
+    expect(owners.has('relay')).toBe(false);
+    expect(owners.get('edge')).toEqual({ owner: 'edge-team', from: 'edge' });
+  });
+
+  it('in a system is what an end is in, for `via`: it stands beside a part of the system, not between the system and what calls it', () => {
+    const files = shop({ 'infrastructure/proxy.yaml': 'name: HTTPS proxy\nin: shop\n', 'connections/thing.yaml': 'from: customer\nto: shop\nvia: [proxy]\n' });
+    expect(found(files)).toEqual(['connections/thing.yaml:3:7 error via-end']);
+    expect(messages(files)[0]).toMatch(/^`via` names `proxy`, which is in `shop`, the `to` of this connection\./);
+    expect(found(shop({ 'infrastructure/proxy.yaml': 'name: HTTPS proxy\nin: shop\n', 'connections/thing.yaml': 'from: customer\nto: storefront\nvia: [proxy]\n' }))).toEqual([]);
+  });
+
+  it('holds nothing: no record is in one', () => {
+    expect(found(shop({ 'infrastructure/proxy.yaml': 'name: HTTPS proxy\nin: shop\n', 'stores/thing.yaml': 'name: Thing\nin: proxy\n' }))).toEqual([
+      'stores/thing.yaml:2:5 error reference-wrong-kind',
+    ]);
+  });
+});
+
+describe('a store that an app keeps', () => {
+  /** The shop, where the order API keeps an index of its own. */
+  const KEPT = { 'stores/index.yaml': 'name: Index\nin: order-api\n' };
+
+  it('is in the app, which breaks no rule', () => {
+    expect(load(shop(KEPT)).problems).toEqual([]);
+    expect(load(shop(KEPT)).model.stores.find((store) => store.id === 'index')?.in).toBe('order-api');
+  });
+
+  it('has the owner of the app, and through it of the system, when it names none', () => {
+    expect(ownership(load(shop(KEPT)).model).get('index')).toEqual({ owner: 'shop-team', from: 'shop' });
+    const owned = shop({ ...KEPT, 'apps/order-api.yaml': 'name: Order API\nin: shop\nowner: api-team\n', 'owners/api-team.yaml': 'name: API team\n' });
+    expect(ownership(load(owned).model).get('index')).toEqual({ owner: 'api-team', from: 'order-api' });
+    const own = shop({ 'stores/index.yaml': 'name: Index\nin: order-api\nowner: shop-team\n' });
+    expect(ownership(load(own).model).get('index')).toEqual({ owner: 'shop-team', from: 'index' });
+  });
+
+  it('is in its app for `via`, so a route through the app that keeps the `to` names what the end is in', () => {
+    // A connection from outside the app to what it keeps is doubtful of its own; only the errors are looked at here.
+    const errors = (files: SourceFile[]): string[] => found(files).filter((problem) => problem.includes(' error '));
+    const files = shop({ ...KEPT, 'connections/thing.yaml': 'from: storefront\nto: index\nvia: [order-api]\n' });
+    expect(errors(files)).toEqual(['connections/thing.yaml:3:7 error via-end']);
+    expect(load(files).problems.find((problem) => problem.code === 'via-end')?.message).toMatch(/^`via` names `order-api`, which `index`, the `to` of this connection, is in\./);
+    // And the system the app is in, two levels up.
+    expect(errors(shop({ ...KEPT, 'connections/thing.yaml': 'from: customer\nto: index\nvia: [shop]\n' }))).toEqual(['connections/thing.yaml:3:7 error via-end']);
+  });
+
+  it('is beneath its app for a connection higher up that says the same', () => {
+    const files = shop({
+      ...KEPT,
+      'connections/checkout-indexes.yaml': 'from: checkout\nto: index\nname: Indexes each order\n',
+      'connections/api-indexes.yaml': 'from: checkout\nto: order-api\nname: Indexes each order\n',
+    });
+    expect(found(files)).toEqual(['connections/api-indexes.yaml:1:1 warning connection-repeated-above']);
+  });
+
+  it('is work of its app, so an app that keeps a store some connection ends at does more than pass on', () => {
+    expect(
+      found(
+        shop({
+          'apps/gateway.yaml': 'name: Gateway\nin: shop\n',
+          'stores/routes.yaml': 'name: Routes\nin: gateway\n',
+          'connections/customer-buys.yaml': 'from: customer\nto: checkout\nvia: [gateway]\n',
+          'connections/routes-copy.yaml': 'from: routes\nto: routes\nname: Copies itself to each copy of the gateway\n',
+        }),
+      ),
+    ).toEqual([]);
   });
 });
 
