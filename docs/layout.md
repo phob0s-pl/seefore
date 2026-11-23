@@ -3,6 +3,10 @@
 What holds a picture still when the model changes, and what the page does with a view too
 crowded to read. This is stage 7 of `plan.md`. It builds on `diagrams.md` and `hard-cases.md`.
 
+Stage 9 took the crowded view out again: its warning, its limit and pass number 7. It also
+draws pictures that this stage did not measure, with several boundaries and with a boundary
+inside a boundary. `depth-and-scope.md` says what holds there.
+
 ## What it is
 
 Nobody can drag a box, so the layout alone decides whether a reader finds again what they
@@ -103,6 +107,11 @@ of the stage tried one on made views, with each neighbour given its side by its 
 
 ## A crowded view
 
+**Taken out at stage 9.** Nobody could act on the warning: the model was right and the
+picture was large. One box with its neighbours is now a setting of the view, and the page has
+one note, which the zoom decides (`depth-and-scope.md`). What follows is what stage 7 built,
+kept for the record.
+
 A view of **more than 40 boxes** is crowded. The boxes the page draws are counted: in a
 context view the system itself and each box around it; in a container view each box inside
 the boundary and each box outside, and not the boundary.
@@ -178,6 +187,8 @@ No mark is added, and the zooms at which detail comes and goes are those of stag
   codes. The number of problems each prints, in words and under `--json`, is that of `seefore
   check`, so a crowded view adds a warning to it. How **`seefore --server`** is called: no
   change.
+- Since stage 9 the check gives no warning for a view, and the script measures the pass
+  numbers of `depth-and-scope.md` as well, on every setting.
 - **`node scripts/steady.mjs <directory> [<directory> ...]`** tries the layout on source
   directories, for the trial of a stage. It is not part of the installed command. For each
   directory it lays out every view twice and once more in another order. Then it makes edits
@@ -217,7 +228,10 @@ that.
 | 4 | One edit, container view: pairs that keep their order both ways | 80 % over all models; 65 % in each model |
 | 5 | One edit, context view: pairs that keep their order both ways, over the edits that reach the view | 80 % over all models |
 | 6 | The slowest layout | 2 seconds |
-| 7 | A view of more than 40 boxes | Each is reported, and no other |
+| 7 | A view of more than 40 boxes | Each is reported, and no other. Taken out at stage 9, with the check |
+
+- **Since stage 9** numbers 1, 2 and 6 hold for every setting of the view, and numbers 8 to
+  23 are in `depth-and-scope.md`.
 
 - **Number 3 was set again after the stage was measured, and that is a goalpost moved.** It
   asked for 75 % in the worst edit of any kind. Over all edits 98.6 % of the pairs in one
@@ -256,9 +270,9 @@ that.
 | How the order is held | The engine's own walk, which ELK keeps in every column. ELK's model order crashes inside a boundary in the pinned version, and on the root it broke ties against the walk, so it is set nowhere |
 | What counts as a rename | Every name: of a box, a thing on a route, a connection and a technology |
 | The split column of a context view | As stage 5 built it, from 16 boxes. Splitting at every size was decided, measured worse on the small context views, and was withdrawn (the owner) |
-| A crowded view | Drawn as a map with a note, and reported. Not replaced by a list |
-| The limit | More than 40 boxes, counted on the view, so that the check needs no layout and draws no view |
-| Layout hints | None. The plan listed direction, grouping and order. Nothing measured asks for one, and a hint belongs on the view record of stage 9 |
+| A crowded view | Drawn as a map with a note, and reported. Not replaced by a list. Taken out at stage 9 |
+| The limit | More than 40 boxes, counted on the view, so that the check needs no layout and draws no view. Taken out at stage 9 |
+| Layout hints | None. The plan listed direction, grouping and order. Nothing measured asks for one. Stage 9 has no record for a view, so a hint has no home |
 | The dashed outline for `only` | Taken out |
 | Callers on the left and callees on the right in a context view | Not now. It is the first thing to try if a context view does not hold |
 
@@ -266,19 +280,19 @@ that.
 
 One problem code, `view-crowded`. One limit, 40 boxes. One script for the trial,
 `scripts/steady.mjs`. Nothing in the format, no command and no option. Taken out: the dashed
-outline.
+outline. Stage 9 took the code and the limit out again.
 
 ## Skips
 
 Of "Every stage ends the same way": part 5. For part 3 the `model` skill learns one thing:
 what to tell the person when a change takes a view over the limit, and how to tell that it
 did: by the `view-crowded` warnings of the check before the change and after, and the boxes
-each names.
+each names. Stage 9 took that out of the skill with the warning.
 
 ## Leaves out
 
 Stored coordinates, places set by hand, and a promise that nothing moves. Layout hints. A
-picture of one box with its neighbours, and splitting a view: stage 9. A mark for what
+picture of one box with its neighbours: stage 9. A mark for what
 changed since the last picture: stages 13 and 15. A limit that looks at arrows or at the size
 of the window.
 
@@ -292,7 +306,7 @@ Follows it:
 - **A fresh layout from the model on each change**, and no half-kept places. Nothing is
   stored, and a layout between the two ends measured worse than either.
 - **Draw, count and warn.** No tool refuses to draw a view. The limit is taken from real dense
-  views, and the split is left to focused views.
+  views, and the split is left to stage 9, which gives one box with its neighbours.
 - **Detail on demand**, and following one thing by its light.
 - **A limit that does not ask for a smaller model**, and a report before anything blocks.
 

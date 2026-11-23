@@ -159,8 +159,6 @@ it found, after the problems and before the last line:
 Teleport
 format 1, /home/sam/work/teleport/architecture
 
-systems/teleport.yaml:1:1: warning: The container view of Teleport has 71 boxes. A view of more than 40 cannot be read as one picture: the page draws it as a map. Until focused views exist, read it by pointing at a box.
-
 C4 checks, which count what the model lacks:
 - A description: 96 things checked, 0 without.
 - A technology: 60 apps, stores and components checked, 1 without.
@@ -169,8 +167,11 @@ C4 checks, which count what the model lacks:
 - A connection: 96 things checked, 4 with none.
 `seefore check --full` lists each.
 
-301 records read. 0 errors, 1 warning.
+301 records read. No problems.
 ```
+
+Until stage 9 this run also had one warning, for a view of more than 40 boxes. Stage 9 took
+that check out.
 
 - **A check that looked at nothing says so**: "0 connections checked, 0 without".
 - **A check that was not run says so, and why**: "- A connection: not checked: part of the
@@ -260,7 +261,7 @@ and a mark on it for one of them would say too much.
 | A vague name | The bare `Use` or `Uses` alone. One word in two forms, let in against the rule of stage 6a |
 | Connected to nothing | A note, and only when the directory was read in full |
 | What a pipeline can ask | Names, with `--require-names`. Nothing makes a run fail on the other counts. A model with an honest gap does not pass, and that is meant |
-| The warnings of stages 3 to 7 | As they were. None fails a run. `view-crowded` least of all: a model made smaller to end it would be a worse model |
+| The warnings of stages 3 to 7 | As they were. None fails a run. `view-crowded` least of all: a model made smaller to end it would be a worse model. Stage 9 took `view-crowded` out |
 | A mark on a box or an arrow | None |
 
 ## Names this stage adds

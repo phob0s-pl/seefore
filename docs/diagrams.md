@@ -19,6 +19,10 @@ Every system has a context view. A system that has an app or a store also has a 
 view, and since stage 6b so has one that holds a piece of infrastructure with a box of its
 own (`hard-cases.md`). A view is worked out from the model and is not stored.
 
+Since stage 9 these two are settings of one view, which has a depth and a scope
+(`depth-and-scope.md`): one system at System depth is its context view, and one system at
+Container depth is its container view. Each draws what it drew.
+
 | View | What it holds |
 | --- | --- |
 | Context | The system as one box, and each person and other system that has a connection with it or with anything inside it |
@@ -81,7 +85,8 @@ model changes.
 ## The page
 
 - **The sidebar** lists the systems that have parts, each with its views; then the other
-  systems, folded; then "Model"; then "Problems" with their number.
+  systems, folded; then "Model"; then "Problems" with their number. Since stage 9 two
+  controls, Depth and Scope, stand in place of the list of views (`depth-and-scope.md`).
 - **Moving.** The page opens with the picture fitted to the room it has, never larger than
   full size. "Fit diagram", "Fit selection" and the zoom are buttons. A hover, or the keyboard's
   focus, lights a box, its arrows and the boxes at their other ends, and fades the rest. A
@@ -93,7 +98,8 @@ model changes.
   boxes and arrows it has, and from which zoom names can be read. Since stage 7 whatever is
   pointed at says its words on a line under the counts at any zoom, a line of the legend
   lights what it explains, and a view of more than 40 boxes says that it is a map
-  (`layout.md`).
+  (`layout.md`). Stage 9 took the last out: no box is counted, and the one note is decided
+  by the zoom.
 - **Model** is the listing of `seefore list`, in the same order, from the same code. A click on
   a record opens the same panel. **Problems** lists what the check found, each with its file,
   line and column. Since stage 8 it also shows, under them, the five lines of the C4 checks
@@ -102,7 +108,8 @@ model changes.
   the zoom and the selection, and fits again only when the reader has not moved. Since stage
   7 a chosen box stays where it is on the screen. A selection that is gone is cleared; when
   the view itself is gone the page opens the first one.
-- The address reopens the view it names.
+- The address reopens the view it names. Since stage 9 it holds a depth and a scope, as in
+  `#/view/container~shop`.
 
 ## The command
 
@@ -121,7 +128,8 @@ seefore --server [--workdir=<directory>] [--port=<number>] [--no-open]
 - A directory that cannot be found ends with exit code 2, as for `seefore check`. So does a
   command whose own page or layout file is missing: it says to install seefore again.
 - `node scripts/shoot.mjs` takes a picture of every view of a directory in a headless browser,
-  for the trial of a stage. It is not part of the installed command.
+  for the trial of a stage. It is not part of the installed command. Since stage 9 it takes
+  pictures of settings.
 
 ## Decisions taken at this stage
 
@@ -133,8 +141,8 @@ seefore --server [--workdir=<directory>] [--port=<number>] [--no-open]
 | Arrows | One for each pair of boxes and direction |
 | Labels | Placed by ELK. Placed after the layout, a line ran through half of them |
 | The font | Arial and the fonts made to its measure, so that the engine can measure text |
-| A view too large to read | Drawn, with its counts and a note. The limit is stage 7's to set: it is more than 40 boxes (`layout.md`) |
-| The sidebar | The views by system, the model's listing, and the problems (the owner) |
+| A view too large to read | Drawn, with its counts and a note. The limit is stage 7's to set: it is more than 40 boxes (`layout.md`). Stage 9 has no limit |
+| The sidebar | The views by system, the model's listing, and the problems (the owner). Since stage 9 the two controls, the listing and the problems (the owner) |
 | ELK in the package | A dependency at a pinned version, under its licence EPL-2.0. Not copied into the command's file |
 
 ## Names this stage adds
@@ -150,10 +158,10 @@ Of "Every stage ends the same way": part 3, since nothing new can be written, an
 ## Leaves out
 
 Editing, dragging, stored positions and styling controls. Search, a link to a box and
-drill-down: stage 25. Component views, a landscape and "this box and its neighbours" as a view:
-stage 9. The limit for a crowded view, and what holds a picture still when the model changes:
-stage 7. What a connection passes through, and a mark for somebody else's system: stage 6a.
-Export of a picture.
+drill-down: stage 25. Component views, the whole model in one picture, and one box with its
+neighbours: stage 9, as settings of one view. The limit for a crowded view, and what holds a
+picture still when the model changes: stage 7. What a connection passes through, and a mark
+for somebody else's system: stage 6a. Export of a picture.
 
 ## Against the research
 

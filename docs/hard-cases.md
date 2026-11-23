@@ -366,7 +366,9 @@ no check reads who may reach whose store. That is a team's rule, for stage 24; `
   as an arrow nor inside a box. That is so between two things that are in no system, such as a
   person and a piece of infrastructure that is in none, and between two things that every
   view shows outside its system. The listing of the model says how many such connections
-  there are, and marks each.
+  there are, and marks each. Since stage 9 everything can be the scope, and then every
+  connection whose two ends can be followed is drawn: a connection is in no picture only
+  when an end of it cannot be followed (`depth-and-scope.md`).
 
 ## The commands
 
@@ -484,7 +486,7 @@ one recommendation, but as one stage where it asked for three:
 | A condition and `via` | A thing that has `only` may be named in `via`. This changes stage 6a's "a thing that is on the way only sometimes is not in `via`": then nothing could say when a thing was there |
 | What a connection has from what it passes through | Nothing |
 | Code that several apps share | Never a component in several apps: tried on the trial models, it states calls that do not happen. It waits for groups |
-| Groups, and one program that runs as several apps | Not at this stage. A stage of their own, before focused views |
+| Groups, and one program that runs as several apps | Not at this stage. A stage of their own, still to be planned |
 | An app kind `library` | No |
 | A dashed outline for a thing that has `only` | Built and switched off: the boundary is dashed already. Taken out at stage 7 (the owner) |
 | The format's number | Stays 1 |
@@ -508,10 +510,11 @@ The format now has nine folders, thirteen field names and thirteen kinds.
 - **A field for a call that does not wait:** with flows, at stage 10, which has asynchronous
   sends.
 - **Groups, code that several apps share, and one program that runs as several apps:** a stage
-  of their own, before focused views.
+  of their own, still to be planned.
 - **Which server holds which stores, and who runs a copy:** with deployment.
 - **A condition as a record,** with a form a check can read: when free words prove too loose.
-- **A route as a view of its own,** with every hop as a box: stage 9.
+- **A route as a view of its own,** with every hop as a box: left to stage 9, which did not
+  build it. It is asked again with a flow's picture, at stage 11.
 - **A check for a system nobody has spoken for:** stage 8, which also settles whether a
   connection to a store that does not say `access` is counted. **The team's rule on who may
   reach whose store:** stage 24.
