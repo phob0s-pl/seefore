@@ -81,15 +81,28 @@ function connections(count: number): string {
   return `${count} ${count === 1 ? 'connection' : 'connections'}`;
 }
 
+/** What a screen reader says of the marks a box or a boundary carries: the stores it keeps, the connections between its copies, and those that pass through it. */
+function marksSaid(box: Pick<ViewBox, 'kept' | 'loops' | 'passing'>): string[] {
+  const parts: string[] = [];
+  if (box.kept.length > 0) parts.push(`It keeps ${box.kept.length} ${box.kept.length === 1 ? 'store' : 'stores'}, drawn at it`);
+  if (box.loops.length > 0) parts.push(`${connections(box.loops.length)} between its copies`);
+  if (box.passing.length > 0) parts.push(`${connections(box.passing.length)} of this view ${box.passing.length === 1 ? 'passes' : 'pass'} through it`);
+  return parts;
+}
+
 /** What a screen reader says for a box: its whole name, kind line, own `only` and first sentence, and its marks. */
 export function boxSaid(box: ViewBox): string {
   const parts = [`${box.name}, ${box.line}`];
   if (box.only !== undefined) parts.push(`Only ${box.only}`);
   if (box.sentence !== undefined) parts.push(box.sentence);
-  if (box.kept.length > 0) parts.push(`It keeps ${box.kept.length} ${box.kept.length === 1 ? 'store' : 'stores'}, drawn at it`);
-  if (box.loops.length > 0) parts.push(`${connections(box.loops.length)} between its copies`);
-  if (box.passing.length > 0) parts.push(`${connections(box.passing.length)} of this view ${box.passing.length === 1 ? 'passes' : 'pass'} through it`);
-  return parts.map(sentence).join(' ');
+  return [...parts, ...marksSaid(box)].map(sentence).join(' ');
+}
+
+/** What a screen reader says for a boundary: its whole title, which the picture may have cut to its width, whose boundary it is, and its marks. */
+export function boundarySaid(boundary: ViewBoundary): string {
+  const head = `${boundary.title}, the boundary of the ${boundary.family === 'apps' ? 'app' : 'system'}`;
+  const marks = marksSaid(boundary);
+  return marks.length === 0 ? head : [head, ...marks].map(sentence).join(' ');
 }
 
 /**
@@ -116,32 +129,37 @@ export function passedSaid(name: string, conditions: readonly string[], own: str
   return [name, ...conditions.map((only) => `only ${only}`), own === undefined ? undefined : `part of ${own}`].filter((part) => part !== undefined).join(', ') + `: ${passing}`;
 }
 
-/** The name of each box and of the boundary of a view, by id. */
+/** The name of each box and of each boundary of a view, by id. */
 export function namesIn(view: View): Map<string, string> {
   const names = new Map(view.boxes.map((box) => [box.id, box.name]));
-  if (view.boundary) names.set(view.boundary.id, view.boundary.name);
+  for (const boundary of view.boundaries) names.set(boundary.id, boundary.name);
   return names;
 }
 
 /**
- * The nodes and edges of a picture. The boundary comes first, since React Flow wants a parent
- * before its children, and each box inside it is placed from its top left. A box or an arrow
- * that the view does not hold is left out.
+ * The nodes and edges of a picture. The boundaries come first, each after the one it stands in,
+ * since React Flow wants a parent before its children, and each box or boundary inside another
+ * is placed from that one's top left. A box, a boundary or an arrow that the view does not hold
+ * is left out.
  */
 export function toFlow(view: View, drawn: Drawn): { nodes: PictureNode[]; edges: ArrowEdge[] } {
   const nodes: PictureNode[] = [];
-  const boundary = drawn.boundary !== undefined && view.boundary !== undefined && drawn.boundary.id === view.boundary.id ? drawn.boundary : undefined;
-  if (boundary !== undefined && view.boundary !== undefined) {
+  const held = new Set(view.boundaries.map((boundary) => boundary.id));
+  const placedBoundaries = new Map(drawn.boundaries.filter((placed) => held.has(placed.id)).map((placed) => [placed.id, placed]));
+  for (const boundary of outsideIn(view.boundaries)) {
+    const placed = placedBoundaries.get(boundary.id);
+    if (placed === undefined) continue;
+    const parent = boundary.boundary === undefined ? undefined : placedBoundaries.get(boundary.boundary);
     nodes.push({
-      id: boundary.id,
+      id: placed.id,
       type: 'boundary',
-      position: { x: boundary.x, y: boundary.y },
-      width: boundary.width,
-      height: boundary.height,
-      data: { boundary: view.boundary, placed: boundary, titleAt: relativeTo(boundary.titleAt, boundary) },
-      handles: handlesOf(boundary.width, boundary.height),
-      // The whole title, which the picture may have cut to the boundary's width.
-      ariaLabel: `${view.boundary.title}, the boundary of the system`,
+      position: parent === undefined ? { x: placed.x, y: placed.y } : relativeTo(placed, parent),
+      ...(parent === undefined ? {} : { parentId: parent.id }),
+      width: placed.width,
+      height: placed.height,
+      data: { boundary, placed, titleAt: relativeTo(placed.titleAt, placed) },
+      handles: handlesOf(placed.width, placed.height),
+      ariaLabel: boundarySaid(boundary),
       draggable: false,
       connectable: false,
       selectable: false,
@@ -154,7 +172,7 @@ export function toFlow(view: View, drawn: Drawn): { nodes: PictureNode[]; edges:
   for (const placed of drawn.boxes) {
     const box = boxes.get(placed.id);
     if (box === undefined) continue;
-    const parent = box.inside ? boundary : undefined;
+    const parent = box.boundary === undefined ? undefined : placedBoundaries.get(box.boundary);
     nodes.push({
       id: placed.id,
       type: 'box',
@@ -201,6 +219,24 @@ export function toFlow(view: View, drawn: Drawn): { nodes: PictureNode[]; edges:
     });
   }
   return { nodes, edges };
+}
+
+/** Boundaries from the outside in: each after the one it stands in, else in the order given. */
+function outsideIn(boundaries: readonly ViewBoundary[]): ViewBoundary[] {
+  const ids = new Set(boundaries.map((boundary) => boundary.id));
+  const placed = new Set<string>();
+  const ordered: ViewBoundary[] = [];
+  // Each pass takes those whose parent is taken, or not among them; a view made by hand that goes round takes the rest last.
+  for (let left = [...boundaries]; left.length > 0; ) {
+    const ready = left.filter((boundary) => boundary.boundary === undefined || !ids.has(boundary.boundary) || placed.has(boundary.boundary));
+    const taken = ready.length > 0 ? ready : left;
+    for (const boundary of taken) {
+      ordered.push(boundary);
+      placed.add(boundary.id);
+    }
+    left = left.filter((boundary) => !placed.has(boundary.id));
+  }
+  return ordered;
 }
 
 /** A number for a path: as given, to two places. */

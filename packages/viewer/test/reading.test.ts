@@ -7,7 +7,7 @@ import { studioView } from './studio.ts';
 
 /** What the reading line says for what is pointed at, focused or chosen. */
 
-const studio = studioView('studio.containers');
+const studio = studioView('container~studio');
 
 describe('the reading line of a box', () => {
   it('says its name and its kind line', () => {
@@ -56,7 +56,7 @@ describe('the reading line of an arrow', () => {
   it('says when its connections are there, and who opened the channel', () => {
     expect(readingOf(studio, { kind: 'arrow', id: 'api~web' })).toBe('API → Web: Tells of changes · the far side opened the channel');
     expect(readingOf(studio, { kind: 'arrow', id: 'worker~crm' })).toBe('Worker → CRM: Asks for customers; Reads changes · only on 1 of 2 · far side opened on 1 of 2');
-    const archive = archiveView('archive.containers');
+    const archive = archiveView('container~archive');
     expect(readingOf(archive, { kind: 'arrow', id: 'indexer~records' })).toBe('Indexer → Records: Reads the records · only at night');
     expect(readingOf(archive, { kind: 'arrow', id: 'desk~browser' })).toBe('Desk → Staff browser: Says when a job is done · via HTTPS proxy, (Office proxy) · the far side opened the channel');
   });

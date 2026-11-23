@@ -1,36 +1,36 @@
-// Serves the built page with the made-up data of test/fixture.ts, to look at it in a real
-// browser: node packages/viewer/look.mjs [port]. Without a port the system picks one; the
-// address is printed. Not part of the command, and not run by `npm run check`.
+// Serves the built page with made-up data, to look at it in a real browser:
+// node packages/viewer/look.mjs [port]. Without a port the system picks one; the address is
+// printed. Not part of the command, and not run by `npm run check`.
 //
-// Besides the fixture's three views it serves a crowded one, "grid.containers", with many
-// boxes and arrows, to see that every arrow is drawn and what a picture too small to read says:
-// its view is worked out by the engine from a grid of records, and its places are made by hand.
-// It serves too the views of a help desk with the hard cases of stage 6a, worked out and laid
-// out by the engine itself: routes on arrows, a queue and a topic, external systems, a piece of
-// infrastructure with a box and one without, and boxes that connections pass through; and those
-// of stage 6b: a store the web app keeps, an office proxy that is part of the desk and there only
-// in the head office, a worker there only in the hosted edition, reads and writes of the stores,
-// and news the API sends down a channel the web app opened. Before it
-// listens it turns every picture into what the page draws, so that a view the page cannot draw
-// stops it at once. POST /revision makes a new reading, as a changed file would.
+// The model is the shop of test/fixture.ts, whose Order API has two components, with a help desk
+// and a grid beside it, and every setting of it is worked out and laid out by the engine as the
+// server does, when the page first asks for it. So the page draws several boundaries with
+// everything at Container depth; a boundary inside a boundary, with components, with the shop at
+// Component depth; and a large picture, the grid at Container depth, with many boxes and arrows,
+// to see that every arrow is drawn and what a picture too small to read says. The help desk has
+// the hard cases of stage 6a: routes on arrows, a queue and a topic, external systems, a piece
+// of infrastructure with a box and one without, and boxes that connections pass through; and
+// those of stage 6b: a store the web app keeps, an office proxy that is part of the desk and
+// there only in the head office, a worker there only in the hosted edition, reads and writes of
+// the stores, and news the API sends down a channel the web app opened. Each picture is turned
+// into what the page draws before it is sent, so that one the page cannot draw says so here.
+// POST /revision makes a new reading, as a changed file would.
 import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { conditionsOf, connectionsInNoView, emptyModel, load, outlineOf, ownership, viewsOf } from '../core/src/index.ts';
-import { boxText, layOut } from '../layout/src/index.ts';
+import { conditionsOf, connectionsInNoView, emptyModel, load, outlineOf, ownership, settingOf, viewsFor } from '../core/src/index.ts';
+import { layOut } from '../layout/src/index.ts';
 import { toFlow } from './src/flow.ts';
-import { PICTURES, STATE } from './test/fixture.ts';
+import { STATE } from './test/fixture.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const built = join(here, '..', 'cli', 'dist', 'viewer');
 const port = Number(process.argv[2] ?? 0);
 
 /**
- * A container view of a grid of apps and stores, each joined by an arrow to the next across and
- * down, worked out by the engine from records, and its picture with places made by hand, each
- * box's text broken as the layout breaks it. A store acts on nothing, so an arrow beside a store
- * runs from the app to it. Gives the model too, to be listed with the rest.
+ * A grid of apps and stores in one system, each joined by a connection to the next across and
+ * down. A store acts on nothing, so a connection beside a store runs from the app to it.
  */
 function grid(columns, rows) {
   const box = (c, r) => `box-${String(c).padStart(2, '0')}-${String(r).padStart(2, '0')}`;
@@ -41,47 +41,15 @@ function grid(columns, rows) {
     const name = verb === 'calls' ? 'Calls\ntechnology: [https]' : 'Feeds';
     files[`connections/${box(...from)}-${verb}-${box(...to)}.yaml`] = `from: ${box(...from)}\nto: ${box(...to)}\nname: ${name}\n`;
   };
-  const left = 64;
-  const top = 104;
-  const across = 420;
-  const down = 240;
-  const places = new Map();
   for (let c = 0; c < columns; c++) {
     for (let r = 0; r < rows; r++) {
       const app = isApp(c, r);
       files[`${app ? 'apps' : 'stores'}/${box(c, r)}.yaml`] = `name: Part ${c}.${r}\nin: grid\ndescription: Does the work of part ${c} ${r}.\n${app ? 'kind: service\ntechnology: [go]' : 'kind: database'}\n`;
-      places.set(box(c, r), { x: left + c * across, y: top + r * down });
       if (c + 1 < columns) join([c, r], [c + 1, r], 'calls');
       if (r + 1 < rows) join([c, r], [c, r + 1], 'feeds');
     }
   }
-  const { model } = load(Object.entries(files).map(([path, text]) => ({ path, text })));
-  const view = viewsOf(model).find((each) => each.id === 'grid.containers');
-  const right = left + (columns - 1) * across + 240 + 24;
-  const bottom = top + (rows - 1) * down + 150 + 24;
-  /** The line between two boxes side by side, or one above the other, from the edge of one to the facing edge of the other. */
-  const sectionOf = (from, to) => {
-    if (from.y === to.y) {
-      const [start, end] = from.x < to.x ? [from.x + 240, to.x] : [from.x, to.x + 240];
-      return [{ x: start, y: from.y + 75 }, { x: end, y: from.y + 75 }];
-    }
-    const [start, end] = from.y < to.y ? [from.y + 150, to.y] : [from.y, to.y + 150];
-    return [{ x: from.x + 120, y: start }, { x: from.x + 120, y: end }];
-  };
-  const drawn = {
-    view: view.id,
-    width: right + 40,
-    height: bottom + 40,
-    boundary: { id: 'grid', x: 40, y: 40, width: right - 40, height: bottom - 40, title: 'Grid [System]', titleAt: { x: 64, y: 52, width: 120, height: 20 } },
-    boxes: view.boxes.map((each) => ({ id: each.id, ...places.get(each.id), width: 240, height: 150, ...boxText(each) })),
-    arrows: view.arrows.map((arrow) => {
-      const [from, to] = [places.get(arrow.from), places.get(arrow.to)];
-      const section = sectionOf(from, to);
-      const label = from.y === to.y ? { label: { x: Math.min(section[0].x, section[1].x) + 50, y: from.y + 75 - 16, width: 80, height: 32, lines: ['Calls'], technology: '[HTTPS]' } } : {};
-      return { id: arrow.id, from: arrow.from, to: arrow.to, sections: [section], ...label };
-    }),
-  };
-  return { view, drawn, model };
+  return load(Object.entries(files).map(([path, text]) => ({ path, text }))).model;
 }
 
 /**
@@ -139,11 +107,8 @@ const DESK = {
   'connections/api-pays-cards.yaml': 'from: api\nto: cards\nvia: [gateway, balancer]\nname: Takes a payment\ntechnology: [https]\n',
 };
 
-const desk = load(Object.entries(DESK).map(([path, text]) => ({ path, text })));
-const deskViews = viewsOf(desk.model);
-const deskPictures = Object.fromEntries(await Promise.all(deskViews.map(async (view) => [view.id, await layOut(view)])));
-
-const crowded = grid(9, 8);
+const desk = load(Object.entries(DESK).map(([path, text]) => ({ path, text }))).model;
+const large = grid(9, 8);
 let revision = 1;
 /** How many records a model holds. */
 const size = (one) => Object.values(one).reduce((sum, family) => sum + family.length, 0);
@@ -155,37 +120,45 @@ const merged = (...models) =>
       return [family, [...byId.values()].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))];
     }),
   );
-const model = merged(STATE.model, desk.model, crowded.model);
-const views = [...STATE.views, ...deskViews, crowded.view];
+const model = merged(STATE.model, desk, large);
+const views = viewsFor(model);
+const records = [model.people, model.systems, model.apps, model.stores, model.components, model.infrastructure, model.connections].flat();
 /**
- * The state of the latest reading: the fixture's, with the crowded view and the help desk's.
- * Its tally is the merged model's, and the records with an error that the fixture counts.
+ * The state of the latest reading: the fixture's, with the help desk and the grid. Its tally is
+ * the merged model's, and the records with an error that the fixture counts.
  */
 const state = () => ({
   ...STATE,
   revision: `r${revision}`,
   records: size(model) + STATE.records - size(STATE.model),
-  views,
   model,
-  ownership: { ...STATE.ownership, ...Object.fromEntries(ownership(desk.model)), ...Object.fromEntries(ownership(crowded.model)) },
-  conditions: Object.fromEntries(
-    [desk.model.people, desk.model.systems, desk.model.apps, desk.model.stores, desk.model.components, desk.model.infrastructure, desk.model.connections]
-      .flat()
-      .map((record) => [record.id, conditionsOf(desk.model, record.id)])
-      .filter(([, found]) => found.length > 0),
-  ),
+  ownership: { ...STATE.ownership, ...Object.fromEntries(ownership(desk)), ...Object.fromEntries(ownership(large)) },
+  conditions: Object.fromEntries(records.map((record) => [record.id, conditionsOf(model, record.id)]).filter(([, found]) => found.length > 0)),
   outline: outlineOf(model),
-  inNoView: connectionsInNoView(model, views),
+  scopes: [...views.scopes],
+  inNoView: connectionsInNoView(model),
 });
-const pictures = { ...PICTURES, ...deskPictures, [crowded.view.id]: crowded.drawn };
-// Every picture as the page draws it: a view the page cannot draw stops the preview here.
-for (const view of views) {
-  const picture = pictures[view.id];
-  if (picture !== undefined && !('failed' in picture)) toFlow(view, picture);
-}
+/** The picture of each setting asked for, laid out once with the views above it, as the server does. */
+const pictures = new Map();
+const pictureOf = (setting) => {
+  const view = views.viewOf(setting);
+  if (view === undefined) return undefined;
+  if (!pictures.has(view.id)) {
+    const above = views.above(setting).map((each) => views.viewOf(each));
+    pictures.set(
+      view.id,
+      layOut(view, above).then((picture) => {
+        // A picture the page cannot draw says so here.
+        if (!('failed' in picture)) toFlow(view, picture);
+        return picture;
+      }),
+    );
+  }
+  return pictures.get(view.id).then((picture) => ({ view, picture }));
+};
 const listeners = new Set();
 
-const server = createServer((request, response) => {
+const server = createServer(async (request, response) => {
   const url = new URL(request.url ?? '/', 'http://localhost');
   const send = (status, type, body) => {
     response.writeHead(status, { 'content-type': type });
@@ -209,11 +182,12 @@ const server = createServer((request, response) => {
   }
   const asked = /^\/api\/pictures\/([^/]+)\/([^/]+)$/.exec(url.pathname);
   if (asked) {
-    const [, at, view] = asked.map(decodeURIComponent);
+    const [, at, key] = asked.map(decodeURIComponent);
     if (at !== `r${revision}`) return send(409, 'application/json', '{}');
-    const picture = pictures[view];
-    if (picture === undefined) return send(404, 'application/json', '{}');
-    return send(200, 'application/json', JSON.stringify({ revision: at, picture }));
+    const setting = settingOf(key);
+    const found = setting === undefined ? undefined : await pictureOf(setting);
+    if (found === undefined) return send(404, 'application/json', '{}');
+    return send(200, 'application/json', JSON.stringify({ revision: at, ...found }));
   }
   return send(404, 'text/plain', 'Not here.\n');
 });

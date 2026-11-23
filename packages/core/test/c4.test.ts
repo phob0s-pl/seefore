@@ -431,7 +431,7 @@ describe('a directory that was not read in full', () => {
   });
 
   it('is told so by the reader of the disk only to turn it off: a warning of another kind leaves it read in full, and none hides an error the core found', () => {
-    const other: Problem = { file: 'apps/api.yaml', line: 1, column: 1, severity: 'warning', code: 'view-crowded', message: 'Crowded.' };
+    const other: Problem = { file: 'apps/api.yaml', line: 1, column: 1, severity: 'warning', code: 'passes-on-only', message: 'Passes on only.' };
     expect(c4(SOUND, [other]).complete).toBe(true);
     notRunAlone(c4({ ...SOUND, 'apps/broken.yaml': 'name: [Broken\n' }, []), 2);
   });

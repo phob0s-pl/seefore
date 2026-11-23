@@ -1,7 +1,8 @@
 // Tries the command as a person who installs it gets it. It builds and packs the package,
 // installs it under a prefix of its own in a temporary folder, and from another folder runs the
 // installed command: --version, check on a small source directory it makes, and --server
-// --no-open on a free port, asking for the page, the state and a picture before stopping it.
+// --no-open on a free port, asking for the page, the state and the picture of two settings
+// before stopping it.
 //
 // It needs the network, since installing fetches elkjs, so `npm run check` does not run it.
 //
@@ -103,18 +104,20 @@ async function tryPacked(folder) {
 
     const stateAnswer = await fetch(new URL('api/state', address));
     const state = await stateAnswer.json();
-    expect(stateAnswer.status === 200 && state.name === 'Packed trial', `GET /api/state answers ${stateAnswer.status}: ${state.name}, ${state.records} records, ${state.errors} errors, ${state.views.length} views, revision ${state.revision}`);
+    expect(
+      stateAnswer.status === 200 && state.name === 'Packed trial' && !('views' in state),
+      `GET /api/state answers ${stateAnswer.status}: ${state.name}, ${state.records} records, ${state.errors} errors, ${state.scopes.length} boxes that can be the scope, revision ${state.revision}`,
+    );
 
-    const shown = state.views[0]?.id;
-    if (shown) {
-      const pictureAnswer = await fetch(new URL(`api/pictures/${state.revision}/${shown}`, address));
-      const { picture } = await pictureAnswer.json();
-      const what = 'failed' in picture ? `failed (${picture.failed.reason}): ${picture.failed.message}` : `${picture.width} x ${picture.height}, ${picture.boxes.length} boxes, ${picture.arrows.length} arrows`;
-      expect(pictureAnswer.status === 200, `GET /api/pictures/${state.revision}/${shown} answers ${pictureAnswer.status}: ${what}`);
-    } else {
-      const none = await fetch(new URL(`api/pictures/${state.revision}/shop.context`, address));
-      console.log(`  the state has no views yet, so there is no picture to ask for: GET /api/pictures/${state.revision}/shop.context answers ${none.status}`);
+    // A setting is asked for as the page's address names it: everything at System depth, and the shop at Container depth.
+    for (const setting of ['system', 'container~shop']) {
+      const pictureAnswer = await fetch(new URL(`api/pictures/${state.revision}/${setting}`, address));
+      const { view, picture } = await pictureAnswer.json();
+      const what = 'failed' in picture ? `failed (${picture.failed.reason}): ${picture.failed.message}` : `${view.title}, ${picture.width} x ${picture.height}, ${picture.boxes.length} boxes, ${picture.boundaries.length} boundaries, ${picture.arrows.length} arrows`;
+      expect(pictureAnswer.status === 200 && view.id === setting && !('failed' in picture), `GET /api/pictures/${state.revision}/${setting} answers ${pictureAnswer.status}: ${what}`);
     }
+    const unknown = await fetch(new URL(`api/pictures/${state.revision}/shop.containers`, address));
+    expect(unknown.status === 404, `GET /api/pictures/${state.revision}/shop.containers, an address of stage 5, answers ${unknown.status}`);
   } finally {
     server.kill('SIGTERM');
   }

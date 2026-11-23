@@ -3,15 +3,16 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readSource } from '../src/check.ts';
+import { Pictures } from '../src/server/pictures.ts';
 import { readingOf } from '../src/server/source.ts';
 
 /**
- * The views of a model are the costly part of a reading. Here the core library's `viewsOf` is
- * counted wherever it is called from, the core library itself too, so this file stands apart:
- * no other test sees the count.
+ * The views of a model are the costly part of a reading. Here the core library's `viewsOf` and
+ * `viewsFor` are counted wherever they are called from, the core library itself too, so this
+ * file stands apart: no other test sees the count.
  */
 
-const made = vi.hoisted(() => ({ views: 0 }));
+const made = vi.hoisted(() => ({ views: 0, looked: 0 }));
 
 vi.mock('../../core/src/views.ts', async (importOriginal) => {
   const original = await importOriginal<typeof import('../../core/src/views.ts')>();
@@ -21,6 +22,10 @@ vi.mock('../../core/src/views.ts', async (importOriginal) => {
       made.views += 1;
       return original.viewsOf(...args);
     },
+    viewsFor: (...args: Parameters<typeof original.viewsFor>) => {
+      made.looked += 1;
+      return original.viewsFor(...args);
+    },
   };
 });
 
@@ -29,6 +34,7 @@ let root: string;
 beforeEach(() => {
   root = realpathSync(mkdtempSync(join(tmpdir(), 'seefore-test-')));
   made.views = 0;
+  made.looked = 0;
 });
 
 afterEach(() => {
@@ -47,26 +53,31 @@ function shop(apps: number, more: Record<string, string> = {}): string {
 }
 
 describe('the views of a reading', () => {
-  it('are not made by the check, which counts the boxes of a crowded view all the same', () => {
+  it('are not made by the check, which counts no box of any view', () => {
     const opened = readSource(shop(41));
-    expect(opened.problems.map((problem) => problem.code)).toEqual(['view-crowded']);
-    expect(made.views).toBe(0);
+    expect(opened.problems).toEqual([]);
+    expect([made.views, made.looked]).toEqual([0, 0]);
   });
 
-  it('are made once for each reading of the server', () => {
+  it('are not made by a reading of the server, which looks the model up once for what can be the scope', () => {
     const reading = readingOf(shop(41));
-    expect(reading.views.map((view) => [view.id, view.boxes.length])).toEqual([
-      ['shop.context', 1],
-      ['shop.containers', 41],
-    ]);
-    expect(reading.problems.map((problem) => problem.code)).toEqual(['view-crowded']);
-    expect(made.views).toBe(1);
+    expect(reading.scopes).toHaveLength(42);
+    expect(reading.problems).toEqual([]);
+    expect([made.views, made.looked]).toEqual([0, 1]);
+  });
+
+  it('are made by the pictures as the page asks for them, from the model looked up once more for each reading', async () => {
+    const reading = readingOf(shop(41));
+    const pictures = new Pictures({ run: async (view) => ({ view: view.id, width: 0, height: 0, boxes: [], boundaries: [], arrows: [] }), close: () => {} });
+    pictures.update('r1', reading.model);
+    for (const key of ['system', 'container', 'system~shop', 'container~shop', 'component~app-7']) expect('answer' in (await pictures.ask('r1', key)), key).toBe(true);
+    expect([made.views, made.looked]).toEqual([0, 2]);
   });
 
   it('are none, and not made, when the marker cannot be read', () => {
     const reading = readingOf(shop(41, { 'seefore.yaml': 'format: [1\n' }));
     expect(reading.available).toBe(false);
-    expect(reading.views).toEqual([]);
-    expect(made.views).toBe(0);
+    expect(reading.scopes).toEqual([]);
+    expect([made.views, made.looked]).toEqual([0, 0]);
   });
 });

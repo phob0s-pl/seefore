@@ -1,27 +1,26 @@
-import type { Drawn, Point, Rect } from '@seefore/core';
+import type { Drawn, Point, Rect, View } from '@seefore/core';
 
 /**
  * What is wrong with the geometry of a picture, as plain sentences: one for each box over a
- * box, label over a box, a line or a label, line through a box, title crossed, stretch that is
- * not at right angles, and arrow that does not start and end at its two ends. An empty list
- * means none. The tests and the trial on real models both use it.
+ * box, label over a box, a line or a label, line through a box, box across a boundary, title
+ * crossed, stretch that is not at right angles, and arrow that does not start and end at its two
+ * ends. An empty list means none. The tests and the trial on real models both use it.
  */
 export function troubles(drawn: Drawn): string[] {
   const found: string[] = [];
   const boxes = drawn.boxes;
   const shapes = new Map<string, Rect>(boxes.map((box) => [box.id, box]));
-  if (drawn.boundary !== undefined) shapes.set(drawn.boundary.id, drawn.boundary);
+  for (const boundary of drawn.boundaries) shapes.set(boundary.id, boundary);
 
   for (const [at, box] of boxes.entries()) {
     for (const other of boxes.slice(at + 1)) if (overlap(box, other)) found.push(`box ${box.id} lies over box ${other.id}`);
   }
-  const boundary = drawn.boundary;
-  if (boundary !== undefined) {
+  for (const boundary of drawn.boundaries) {
     for (const box of boxes) {
       const inside = within(box, boundary);
-      if (!inside && overlap(box, boundary)) found.push(`box ${box.id} lies across the boundary`);
+      if (!inside && overlap(box, boundary)) found.push(`box ${box.id} lies across the boundary of ${boundary.id}`);
     }
-    for (const box of boxes) if (overlap(box, boundary.titleAt)) found.push(`box ${box.id} lies over the boundary's title`);
+    for (const box of boxes) if (overlap(box, boundary.titleAt)) found.push(`box ${box.id} lies over the title of ${boundary.id}`);
   }
 
   const labelled = drawn.arrows.filter((arrow) => arrow.label !== undefined);
@@ -34,7 +33,7 @@ export function troubles(drawn: Drawn): string[] {
       if (other.id === arrow.id) continue;
       if (runs(other.sections).some(([a, b]) => crosses(a, b, label))) found.push(`the line of ${other.id} runs through the label of ${arrow.id}`);
     }
-    if (boundary !== undefined && overlap(label, boundary.titleAt)) found.push(`the label of ${arrow.id} lies over the boundary's title`);
+    for (const boundary of drawn.boundaries) if (overlap(label, boundary.titleAt)) found.push(`the label of ${arrow.id} lies over the title of ${boundary.id}`);
   }
 
   for (const arrow of drawn.arrows) {
@@ -42,7 +41,7 @@ export function troubles(drawn: Drawn): string[] {
     for (const [a, b] of stretches) {
       if (a.x !== b.x && a.y !== b.y) found.push(`the line of ${arrow.id} is not at right angles from (${a.x}, ${a.y}) to (${b.x}, ${b.y})`);
       for (const box of boxes) if (crosses(a, b, box)) found.push(`the line of ${arrow.id} runs through box ${box.id}`);
-      if (boundary !== undefined && crosses(a, b, boundary.titleAt)) found.push(`the line of ${arrow.id} runs through the boundary's title`);
+      for (const boundary of drawn.boundaries) if (crosses(a, b, boundary.titleAt)) found.push(`the line of ${arrow.id} runs through the title of ${boundary.id}`);
     }
     const start = arrow.sections[0]?.[0];
     const end = arrow.sections.at(-1)?.at(-1);
@@ -55,6 +54,40 @@ export function troubles(drawn: Drawn): string[] {
     }
   }
   return found;
+}
+
+/**
+ * What is wrong with how the boxes and boundaries of a picture stand in one another, as plain
+ * sentences: a box or a boundary that stands outside the boundary it is in, one that stands
+ * inside a boundary it is not in, and two boundaries of which neither holds the other and that
+ * lie across each other. An empty list means none.
+ */
+export function nesting(view: View, drawn: Drawn): string[] {
+  const found: string[] = [];
+  const parents = new Map<string, string | undefined>([...view.boxes, ...view.boundaries].map((each) => [each.id, each.boundary]));
+  const boundaries = new Map(drawn.boundaries.map((boundary) => [boundary.id, boundary]));
+  // What a thing is in, and what that is in, as far as the view says.
+  const above = (id: string): string[] => {
+    const chain: string[] = [];
+    for (let at = parents.get(id); at !== undefined && !chain.includes(at); at = parents.get(at)) chain.push(at);
+    return chain;
+  };
+  for (const shape of [...drawn.boxes, ...drawn.boundaries]) {
+    const holders = above(shape.id);
+    for (const boundary of drawn.boundaries) {
+      if (boundary.id === shape.id) continue;
+      const holds = holders.includes(boundary.id);
+      if (holds && !within(shape, boundary)) found.push(`${shape.id} stands outside the boundary of ${boundary.id}, which it is in`);
+      else if (!holds && within(shape, boundary) && !above(boundary.id).includes(shape.id)) found.push(`${shape.id} stands inside the boundary of ${boundary.id}, which it is not in`);
+    }
+  }
+  for (const [at, boundary] of drawn.boundaries.entries()) {
+    for (const other of drawn.boundaries.slice(at + 1)) {
+      if (overlap(boundary, other) && !within(boundary, other) && !within(other, boundary)) found.push(`the boundary of ${boundary.id} lies across the boundary of ${other.id}`);
+    }
+  }
+  for (const id of parents.values()) if (id !== undefined && !boundaries.has(id)) found.push(`the picture has no boundary of ${id}`);
+  return [...new Set(found)];
 }
 
 /** How near two places must be to count as one, in pixels. */

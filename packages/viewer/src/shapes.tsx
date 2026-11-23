@@ -1,13 +1,31 @@
 import type { BoxFamily, BoxLook, LegendKey } from '@seefore/core';
 import { RING_GAP, RING_RADIUS } from './flow.ts';
-import { APP_RADIUS, EXTERNAL_TAB, INFRASTRUCTURE_POINT, OUTLINE, PERSON_RADIUS, QUEUE_LID, SCOPE_OUTLINE, STORE_LID, SYSTEM_GAP, SYSTEM_INNER, cylinder, hexagon, pipe, tab } from './geometry.ts';
+import {
+  APP_RADIUS,
+  COMPONENT_SIGN,
+  EXTERNAL_TAB,
+  INFRASTRUCTURE_POINT,
+  OUTLINE,
+  PERSON_RADIUS,
+  QUEUE_LID,
+  SCOPE_OUTLINE,
+  STORE_LID,
+  SYSTEM_GAP,
+  SYSTEM_INNER,
+  componentSign,
+  cylinder,
+  hexagon,
+  pipe,
+  tab,
+} from './geometry.ts';
 
 /**
  * The shape of each look of a box, so that each is told apart with no colour at all: a person
  * very round, a system with a double line, an external system as a system with a solid tab in
  * its top left corner, an app with small round corners, a store an upright cylinder, a queue or
- * a topic a cylinder on its side, a piece of infrastructure pointed at both ends. Colour comes
- * from the style sheet, by family.
+ * a topic a cylinder on its side, a component with square corners and a component's sign in its
+ * top right corner, a piece of infrastructure pointed at both ends. Colour comes from the style
+ * sheet, by family.
  */
 
 /** A rectangle whose line has its middle this far in from the edge of the box. */
@@ -15,37 +33,44 @@ function inset(width: number, height: number, at: number) {
   return { x: at, y: at, width: Math.max(width - 2 * at, 0), height: Math.max(height - 2 * at, 0) };
 }
 
-/** The outline of a box of a look, at a size. `scope` draws the thicker line of the system a view is about. */
+/** The outline of a box of a look, at a size. `scope` draws the thicker line of the chosen box, whatever its look. */
 export function Shape({ look, scope, width, height }: { look: BoxLook; scope: boolean; width: number; height: number }) {
+  const line = scope ? SCOPE_OUTLINE : OUTLINE;
   switch (look) {
     case 'person':
-      return <rect className="outline" {...inset(width, height, OUTLINE / 2)} rx={Math.min(PERSON_RADIUS, height / 3)} strokeWidth={OUTLINE} />;
+      return <rect className="outline" {...inset(width, height, line / 2)} rx={Math.min(PERSON_RADIUS, height / 3)} strokeWidth={line} />;
     case 'app':
-      return <rect className="outline" {...inset(width, height, OUTLINE / 2)} rx={APP_RADIUS} strokeWidth={OUTLINE} />;
+      return <rect className="outline" {...inset(width, height, line / 2)} rx={APP_RADIUS} strokeWidth={line} />;
     case 'store': {
-      const { outline, rim } = cylinder(width, height, STORE_LID, OUTLINE);
+      const { outline, rim } = cylinder(width, height, STORE_LID, line);
       return (
         <>
-          <path className="outline" d={outline} strokeWidth={OUTLINE} />
-          <path className="outline rim" d={rim} strokeWidth={OUTLINE} />
+          <path className="outline" d={outline} strokeWidth={line} />
+          <path className="outline rim" d={rim} strokeWidth={line} />
         </>
       );
     }
     case 'queue-or-topic': {
-      const { outline, rim } = pipe(width, height, QUEUE_LID, OUTLINE);
+      const { outline, rim } = pipe(width, height, QUEUE_LID, line);
       return (
         <>
-          <path className="outline" d={outline} strokeWidth={OUTLINE} />
-          <path className="outline rim" d={rim} strokeWidth={OUTLINE} />
+          <path className="outline" d={outline} strokeWidth={line} />
+          <path className="outline rim" d={rim} strokeWidth={line} />
         </>
       );
     }
+    case 'component':
+      return (
+        <>
+          <rect className="outline" {...inset(width, height, line / 2)} strokeWidth={line} />
+          <path className="outline rim" d={componentSign(width, COMPONENT_SIGN.size, COMPONENT_SIGN.inset)} strokeWidth={SYSTEM_INNER} />
+        </>
+      );
     case 'infrastructure':
-      return <polygon className="outline" points={hexagon(width, height, INFRASTRUCTURE_POINT, OUTLINE)} strokeWidth={OUTLINE} strokeLinejoin="round" />;
+      return <polygon className="outline" points={hexagon(width, height, INFRASTRUCTURE_POINT, line)} strokeWidth={line} strokeLinejoin="round" />;
     case 'system':
     case 'system-scope':
-    case 'system-external': {
-      const line = scope ? SCOPE_OUTLINE : OUTLINE;
+    case 'system-external':
       return (
         <>
           <rect className="outline" {...inset(width, height, line / 2)} strokeWidth={line} />
@@ -53,7 +78,6 @@ export function Shape({ look, scope, width, height }: { look: BoxLook; scope: bo
           {look === 'system-external' && <path className="tab" d={tab(EXTERNAL_TAB)} />}
         </>
       );
-    }
   }
 }
 
@@ -69,6 +93,7 @@ const SAMPLE_FAMILY: Readonly<Record<BoxLook, BoxFamily>> = {
   app: 'apps',
   store: 'stores',
   'queue-or-topic': 'stores',
+  component: 'components',
   infrastructure: 'infrastructure',
 };
 
@@ -115,12 +140,14 @@ function SampleWords({ words }: { words: string }) {
 
 /**
  * The sample the legend draws for a key, at the sample's size: the shape of a look of a box, an
- * external system as the view about it draws it, the boundary's dashed line, an arrow, an arrow
- * for several connections, an arrow with its route, a name in brackets on a route, an arrow with
- * the ring of a channel the far side opened, a line of words of a label, or the mark of a box
- * whose copies act on each other, that connections pass through, or that keeps stores.
+ * external system as the view about it draws it, the thicker line of a chosen box that is no
+ * system in the shape the picture draws it, `chosen`, the dashed line of a boundary, a system's
+ * or an app's, an arrow, an arrow for several connections, an arrow with its route, a name in
+ * brackets on a route, an arrow with the ring of a channel the far side opened, a line of words
+ * of a label, or the mark of a box whose copies act on each other, that connections pass
+ * through, or that keeps stores.
  */
-export function Sample({ name }: { name: LegendKey }) {
+export function Sample({ name, chosen }: { name: LegendKey; chosen?: BoxLook | 'open' }) {
   const { width, height } = SAMPLE;
   const middle = height / 2;
   let drawn;
@@ -136,8 +163,25 @@ export function Sample({ name }: { name: LegendKey }) {
         <SampleShape look="system-external" scope />
       </g>
     );
-  } else if (name === 'boundary') {
-    drawn = <rect className="sample-boundary" x={1} y={1} width={width - 2} height={height - 2} rx={4} />;
+  } else if (name === 'scope' && chosen !== undefined && chosen !== 'open') {
+    // The chosen box's own shape, with the thicker line.
+    drawn = (
+      <g className={`sample-box family-${SAMPLE_FAMILY[chosen]}`}>
+        <SampleShape look={chosen} scope />
+      </g>
+    );
+  } else if (name === 'scope' && chosen === 'open') {
+    // A chosen app drawn open: its boundary, with the thicker line.
+    drawn = <rect className="sample-boundary sample-boundary-app sample-scope" x={1.5} y={1.5} width={width - 3} height={height - 3} rx={4} />;
+  } else if (name === 'scope') {
+    drawn = (
+      <g className="sample-box family-apps">
+        <rect className="outline" x={SCOPE_OUTLINE / 2} y={SCOPE_OUTLINE / 2} width={width - SCOPE_OUTLINE} height={height - SCOPE_OUTLINE} rx={4} strokeWidth={SCOPE_OUTLINE - 1} />
+      </g>
+    );
+  } else if (name === 'boundary' || name === 'boundary-app') {
+    // An app's boundary has the dashed line in the colour of an app, as the picture draws it.
+    drawn = <rect className={`sample-boundary${name === 'boundary-app' ? ' sample-boundary-app' : ''}`} x={1} y={1} width={width - 2} height={height - 2} rx={4} />;
   } else if (name === 'arrow' || name === 'arrow-many') {
     drawn = (
       <g className={`sample-arrow${name === 'arrow-many' ? ' arrow-many' : ''}`}>
@@ -208,31 +252,41 @@ const SAMPLE_TAB = 16;
  */
 function SampleShape({ look, scope = false }: { look: BoxLook; scope?: boolean }) {
   const { width, height } = SAMPLE;
+  // The chosen box's thicker line, a little thinner than in the picture, as a sample is small.
+  const line = scope ? SCOPE_OUTLINE - 1 : OUTLINE;
+  const at = line / 2;
   switch (look) {
     case 'person':
-      return <rect className="outline" x={1} y={1} width={width - 2} height={height - 2} rx={11} strokeWidth={OUTLINE} />;
+      return <rect className="outline" x={at} y={at} width={width - line} height={height - line} rx={11} strokeWidth={line} />;
     case 'app':
-      return <rect className="outline" x={1} y={1} width={width - 2} height={height - 2} rx={4} strokeWidth={OUTLINE} />;
+      return <rect className="outline" x={at} y={at} width={width - line} height={height - line} rx={4} strokeWidth={line} />;
     case 'store': {
-      const { outline, rim } = cylinder(width, height, 4, OUTLINE);
+      const { outline, rim } = cylinder(width, height, 4, line);
       return (
         <>
-          <path className="outline" d={outline} strokeWidth={OUTLINE} />
-          <path className="outline rim" d={rim} strokeWidth={OUTLINE} />
+          <path className="outline" d={outline} strokeWidth={line} />
+          <path className="outline rim" d={rim} strokeWidth={line} />
         </>
       );
     }
     case 'queue-or-topic': {
-      const { outline, rim } = pipe(width, height, 5, OUTLINE);
+      const { outline, rim } = pipe(width, height, 5, line);
       return (
         <>
-          <path className="outline" d={outline} strokeWidth={OUTLINE} />
-          <path className="outline rim" d={rim} strokeWidth={OUTLINE} />
+          <path className="outline" d={outline} strokeWidth={line} />
+          <path className="outline rim" d={rim} strokeWidth={line} />
         </>
       );
     }
+    case 'component':
+      return (
+        <>
+          <rect className="outline" x={at} y={at} width={width - line} height={height - line} strokeWidth={line} />
+          <path className="outline rim" d={componentSign(width, 10, 4)} strokeWidth={1} />
+        </>
+      );
     case 'infrastructure':
-      return <polygon className="outline" points={hexagon(width, height, 8, OUTLINE)} strokeWidth={OUTLINE} strokeLinejoin="round" />;
+      return <polygon className="outline" points={hexagon(width, height, 8, line)} strokeWidth={line} strokeLinejoin="round" />;
     case 'system':
     case 'system-scope':
     case 'system-external': {

@@ -16,7 +16,6 @@ import {
   brokerProblems,
   byId,
   connectionProblems,
-  crowdedProblems,
   keptStoreProblems,
   onlySaidAgainProblems,
   parentsOf,
@@ -322,10 +321,6 @@ export function loadAs(format: Format, files: readonly SourceFile[], options: Lo
   problems.push(...passesOnOnlyProblems(format, everyRecord, parents, model));
   problems.push(...keptStoreProblems(format, everyRecord, parents, references, model));
   problems.push(...onlySaidAgainProblems(format, everyRecord, model, placeOf));
-  // The page draws the views of this model, so the check of a crowded view counts what it draws.
-  // It counts the boxes and makes no view: those are made once, by whoever draws them. Its two
-  // warnings on one system stand at one place, and the sort below keeps their order.
-  problems.push(...crowdedProblems(model));
   // The C4 checks read the model too, and run last: whether the directory was read in full
   // takes every problem found before, and theirs are warnings, which leave that as it is.
   const complete = readInFull(problems) && readInFull(options.problems ?? []);

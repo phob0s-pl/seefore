@@ -1,9 +1,10 @@
 import type { Failed, View, ViewerState } from '@seefore/core';
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Diagram, LightContext } from './diagram.tsx';
+import type { Route } from './address.ts';
+import { Diagram, GoneLine, LAYING, LayingLine, LightContext, NOTHING_TO_DRAW } from './diagram.tsx';
 import type { Light, Reading } from './diagram.tsx';
-import { keptSelection, viewOf } from './follow.ts';
+import { keptSelection, settingFor } from './follow.ts';
 import type { Selection } from './follow.ts';
 import { holdsBox, litBy, litByKept, speakingOf } from './light.ts';
 import type { Act, Pointed } from './light.ts';
@@ -18,9 +19,9 @@ import { themeCss } from './theme.ts';
 import type { Room } from './zoom.ts';
 
 /**
- * The page: the sidebar, what the address names in the middle, and the panel when something is
- * chosen. It draws what it is shown and keeps only what the reader does: what is pointed at,
- * focused and chosen.
+ * The page: the sidebar with its two controls, what the address names in the middle, and the
+ * panel when something is chosen. It draws what it is shown and keeps only what the reader does:
+ * what is pointed at, focused and chosen.
  */
 
 export interface PageProps {
@@ -29,13 +30,19 @@ export interface PageProps {
   room?: Room;
   /** What is chosen when the page opens. */
   initialSelection?: Selection | null;
+  /** Opens what the reader chose with a control or a button: a setting, in one step. */
+  onGo?(route: Route): void;
+}
+
+/** The view drawn, when the page shows a view. */
+function viewShown(shown: Shown): View | undefined {
+  return shown.route.page === 'view' ? shown.shot?.view : undefined;
 }
 
 /** The title of the browser's tab: what is shown, the model's name, and the tool's. */
 export function pageTitle(shown: Shown): string {
   const { state, route } = shown;
-  const view = state === null ? undefined : viewOf(state, route);
-  const what = view?.title ?? (route.page === 'model' ? 'Model' : route.page === 'problems' ? 'Problems' : undefined);
+  const what = viewShown(shown)?.title ?? (route.page === 'model' ? 'Model' : route.page === 'problems' ? 'Problems' : undefined);
   return [what, state?.name ?? undefined, 'seefore'].filter((part) => part !== undefined).join(' · ');
 }
 
@@ -55,8 +62,11 @@ function elementOf(target: Selection): HTMLElement | null {
   return document.querySelector<HTMLElement>(`.react-flow__${kind}[data-id="${CSS.escape(target.id)}"]`);
 }
 
-export function Page({ shown, room, initialSelection = null }: PageProps) {
-  const { state, route, picture, trouble } = shown;
+/** Nothing to do, for a page drawn where nothing can be chosen. */
+function stay(): void {}
+
+export function Page({ shown, room, initialSelection = null, onGo = stay }: PageProps) {
+  const { state, route, shot, laying, gone, setting, trouble } = shown;
   const [selection, setSelection] = useState<Selection | null>(initialSelection);
   // What the reader last pointed at, moved the focus to and tapped, each with when.
   const [pointed, setPointed] = useState<Act | null>(null);
@@ -102,8 +112,9 @@ export function Page({ shown, room, initialSelection = null }: PageProps) {
     };
   }, []);
 
-  // A selection whose record, box or arrow is gone from a new state is cleared.
-  const kept = state === null ? null : keptSelection(state, route, selection);
+  const view = viewShown(shown);
+  // A selection whose record, box or arrow is gone from a new state or a new picture is cleared.
+  const kept = state === null ? null : keptSelection(state, view, selection);
   useEffect(() => {
     if (kept !== selection) setSelection(kept);
   }, [kept, selection]);
@@ -139,9 +150,13 @@ export function Page({ shown, room, initialSelection = null }: PageProps) {
     setSelection(null);
     setFocusPanel(false);
   };
+  /** Makes a box the scope, from its panel: at the present depth, or at its own when that is deeper. */
+  const scopeTo = (id: string) => {
+    const next = state === null ? undefined : settingFor(state, id, setting.depth);
+    if (next !== undefined) onGo({ page: 'view', setting: next });
+  };
 
-  const view = state === null ? undefined : viewOf(state, route);
-  // In another view nothing is pointed at, focused or tapped yet.
+  // In another picture nothing is pointed at, focused or tapped yet.
   const viewId = view?.id;
   useEffect(() => {
     setPointed(null);
@@ -168,22 +183,29 @@ export function Page({ shown, room, initialSelection = null }: PageProps) {
     main = <Listing state={state} onOpen={(id, byKeyboard) => choose({ kind: 'record', id }, byKeyboard)} />;
   } else if (route.page === 'problems') {
     main = <Problems problems={state.problems} c4={state.c4} />;
-  } else if (view === undefined) {
-    main = <NoViews state={state} />;
-  } else if (picture === null || picture.view !== view.id) {
-    main = <Waiting view={view} />;
-  } else if ('failed' in picture) {
-    main = <FailedView view={view} picture={picture} />;
+  } else if (route.page === 'start') {
+    main = <NoModel state={state} />;
+  } else if (shot === null || view === undefined) {
+    main = (
+      <p className="waiting" role="status">
+        {LAYING}
+      </p>
+    );
+  } else if ('failed' in shot.picture) {
+    main = <FailedView view={view} picture={shot.picture} laying={laying} gone={gone} />;
+  } else if (view.boxes.length === 0 && view.boundaries.length === 0) {
+    main = <EmptyView view={view} laying={laying} gone={gone} />;
   } else {
     main = (
       <LightContext.Provider value={light}>
         <Diagram
-          key={view.id}
           view={view}
-          drawn={picture}
+          drawn={shot.picture}
           chosen={chosen}
           speaking={speaking?.target ?? null}
           reading={reading}
+          laying={laying}
+          gone={gone}
           {...(room === undefined ? {} : { room })}
           onPoint={point}
           onFocusTarget={focus}
@@ -198,7 +220,7 @@ export function Page({ shown, room, initialSelection = null }: PageProps) {
   return (
     <div className={`page${kept !== null ? ' with-panel' : ''}`}>
       <style>{themeCss()}</style>
-      <Sidebar state={state} route={route} />
+      <Sidebar state={state} route={route} setting={setting} onGo={onGo} />
       <main className="main">
         {trouble !== null && (
           <p className="trouble" role="status">
@@ -208,32 +230,31 @@ export function Page({ shown, room, initialSelection = null }: PageProps) {
         {main}
       </main>
       {kept !== null && state !== null && (
-        <Panel state={state} view={view} selection={kept} focus={focusPanel} onClose={clear} onOpen={(id, byKeyboard) => choose({ kind: 'record', id }, byKeyboard)} />
+        <Panel
+          state={state}
+          view={view}
+          selection={kept}
+          focus={focusPanel}
+          present={setting.scope}
+          onClose={clear}
+          onOpen={(id, byKeyboard) => choose({ kind: 'record', id }, byKeyboard)}
+          onScope={scopeTo}
+        />
       )}
     </div>
   );
 }
 
-/** The head of a view with no picture to draw: its title, over what stands in the picture's place. */
-function ViewHead({ view }: { view: View }) {
+/** The head of a view with no picture to draw: its title, the line for a box gone, over what stands in the picture's place, and whether another is laid out. */
+function ViewHead({ view, laying, gone }: { view: View; laying: boolean; gone: boolean }) {
   return (
     <header className="diagram-head">
       <div className="diagram-top">
         <h1 className="view-title">{view.title}</h1>
       </div>
+      <GoneLine gone={gone} />
+      <LayingLine laying={laying} />
     </header>
-  );
-}
-
-/** A view whose picture is being laid out. */
-function Waiting({ view }: { view: View }) {
-  return (
-    <div className="diagram">
-      <ViewHead view={view} />
-      <p className="waiting" role="status">
-        Laying out the view…
-      </p>
-    </div>
   );
 }
 
@@ -241,10 +262,10 @@ function Waiting({ view }: { view: View }) {
  * A view whose layout failed: its message in place of the picture. The layout's message says
  * that the other views still draw, so the page does not say it again.
  */
-function FailedView({ view, picture }: { view: View; picture: Failed }) {
+function FailedView({ view, picture, laying, gone }: { view: View; picture: Failed; laying: boolean; gone: boolean }) {
   return (
     <div className="diagram">
-      <ViewHead view={view} />
+      <ViewHead view={view} laying={laying} gone={gone} />
       <div className="failed" role="alert">
         <p>{picture.failed.message}</p>
       </div>
@@ -252,9 +273,19 @@ function FailedView({ view, picture }: { view: View; picture: Failed }) {
   );
 }
 
-/** What stands in place of the views when there are none: why, and what the page waits for. */
-function NoViews({ state }: { state: ViewerState }) {
-  if (!state.available && state.problems.length > 0) {
+/** A view with nothing in it, as everything is in a model with no person and no system. */
+function EmptyView({ view, laying, gone }: { view: View; laying: boolean; gone: boolean }) {
+  return (
+    <div className="diagram">
+      <ViewHead view={view} laying={laying} gone={gone} />
+      <p className="nothing">{NOTHING_TO_DRAW}</p>
+    </div>
+  );
+}
+
+/** What stands in place of the picture when there is no model: why, and what the page waits for. */
+function NoModel({ state }: { state: ViewerState }) {
+  if (state.problems.length > 0 && state.problems[0]?.code !== 'directory-gone') {
     return (
       <article className="no-views">
         <h1>No views</h1>
@@ -263,18 +294,10 @@ function NoViews({ state }: { state: ViewerState }) {
       </article>
     );
   }
-  if (!state.available) {
-    return (
-      <article className="no-views">
-        <h1>The directory is gone</h1>
-        <p>{`${state.directory} is not there any more. The page waits for it to come back, and draws it again then.`}</p>
-      </article>
-    );
-  }
   return (
     <article className="no-views">
-      <h1>No views</h1>
-      <p>The model has no system yet, so there is nothing to draw. A view is drawn for every system.</p>
+      <h1>The directory is gone</h1>
+      <p>{`${state.directory} is not there any more. The page waits for it to come back, and draws it again then.`}</p>
     </article>
   );
 }

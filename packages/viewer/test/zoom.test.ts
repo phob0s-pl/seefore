@@ -1,7 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { CROWDED_FROM } from '@seefore/core';
-import type { Drawn } from '@seefore/core';
+import type { Drawn, View } from '@seefore/core';
 import { describe, expect, it } from 'vitest';
 import { litBy } from '../src/light.ts';
 import type { Target } from '../src/light.ts';
@@ -12,22 +11,26 @@ import {
   REACH_LEAST,
   REACH_MOST,
   boundsOf,
-  crowdedNote,
+  changeOf,
   detailAt,
   fitViewport,
+  holdOf,
+  keptAtDepth,
   litBounds,
   litScale,
   minZoomFor,
-  noteFor,
   percent,
   reachAt,
   smallNote,
   viewportAfter,
+  viewportOnChange,
   whole,
 } from '../src/zoom.ts';
-import type { Viewport } from '../src/zoom.ts';
-import { CONTAINERS, CONTAINER_PICTURE } from './fixture.ts';
+import type { PictureChange, Room, Viewport } from '../src/zoom.ts';
+import { archiveView, stateOf } from './archive.ts';
+import { CARD_CONTEXT, COMPONENTS, COMPONENT_PICTURE, CONTAINERS, CONTAINER_PICTURE, CONTEXT, CONTEXT_PICTURE, STATE } from './fixture.ts';
 import { grid } from './grid.ts';
+import { placedPicture } from './placed.ts';
 
 /** What the zoom hides, how a picture is fitted, and when it says it is too small to read. */
 
@@ -134,72 +137,45 @@ describe('the bounds of what is lit', () => {
   });
 });
 
-describe('the note for a picture too small to read', () => {
-  it('says how many boxes and arrows it has, and from which zoom names can be read', () => {
-    expect(smallNote(CONTAINER_PICTURE, 0.2)).toBe(
-      'Too small to read at 20 %: 4 boxes and 3 arrows. Names can be read from 60 %. Zoom in, or point at a box to follow it.',
+describe('the one note under the counts', () => {
+  const everything = { scope: null };
+  const one = { scope: 'order-api' };
+
+  it('says, as the spec words it, that the picture is too small to read at the zoom it is shown at, and how to read it', () => {
+    expect(smallNote(everything, 0.07)).toBe(
+      "Too small to read at 7 %. Names can be read from 60 %. Zoom in, or point at a box or an arrow, or move the keyboard's focus to it, to read it here. To see one box with its neighbours, choose it as the scope.",
     );
+    expect(smallNote(one, 0.18)).toBe("Too small to read at 18 %. Names can be read from 60 %. Zoom in, or point at a box or an arrow, or move the keyboard's focus to it, to read it here.");
   });
 
-  it('is not there once names can be read', () => {
-    expect(smallNote(CONTAINER_PICTURE, 0.6)).toBeUndefined();
-    expect(smallNote(CONTAINER_PICTURE, 1)).toBeUndefined();
+  it('says how to see one box with its neighbours only with everything as the scope', () => {
+    expect(smallNote(everything, 0.3)).toContain('choose it as the scope');
+    for (const scope of ['shop', 'order-api', 'checkout', 'customer']) expect(smallNote({ scope }, 0.3), scope).not.toContain('scope');
   });
 
-  it('counts one box and one arrow in the singular', () => {
-    const one = { ...CONTAINER_PICTURE, boxes: CONTAINER_PICTURE.boxes.slice(0, 1), arrows: CONTAINER_PICTURE.arrows.slice(0, 1) };
-    expect(smallNote(one, 0.1)).toContain('1 box and 1 arrow.');
+  it('does not say the numbers of boxes and arrows, which stand on the line above it', () => {
+    for (const view of [everything, one]) expect(smallNote(view, 0.07)).not.toMatch(/\d+ (box|boxes|arrow|arrows)\b/);
+    expect(smallNote(everything, 0.07)).not.toContain(':');
+  });
+
+  it('is there under the zoom from which names can be read, and not from it', () => {
+    expect(smallNote(CONTAINERS, 0.5999)).toMatch(/^Too small to read at 60 %\. /);
+    expect(smallNote(CONTAINERS, 0.6)).toBeUndefined();
+    expect(smallNote(CONTAINERS, 1)).toBeUndefined();
+  });
+
+  it('is decided by the zoom alone, and counts no box to decide it', () => {
+    // Stage 7 had a note of its own for a view of more than 40 boxes, at any zoom.
+    const { view, drawn } = grid(41);
+    expect(smallNote(view, 0.75)).toBeUndefined();
+    expect(smallNote(view, 0.2)).toBe(smallNote(grid(40).view, 0.2));
+    const large = fitViewport(whole(drawn), { width: 1920, height: 1080 }).zoom;
+    expect(large).toBeGreaterThanOrEqual(0.6);
+    expect(smallNote(view, large)).toBeUndefined();
   });
 
   it('writes a zoom as a share', () => {
     expect(percent(0.134)).toBe('13 %');
-  });
-});
-
-describe('the note of a crowded view', () => {
-  const how = "Point at a box or an arrow, or move the keyboard's focus to it, to read it here. A click, a tap or Enter keeps it lit.";
-  const map = `A crowded view: more than ${CROWDED_FROM} boxes. It opens as a map, with no words. ${how}`;
-
-  it('is there for a view of one box more than the limit, at any zoom', () => {
-    const { view, drawn } = grid(CROWDED_FROM + 1);
-    expect(view.boxes).toHaveLength(CROWDED_FROM + 1);
-    expect(crowdedNote(view, 0.1)).toBe(map);
-    expect(noteFor(view, drawn, 1, 0.1)).toBe(map);
-  });
-
-  it('says what the view shows at the zoom it opens at, which may draw names, and how to read it by pointer, keyboard and finger', () => {
-    const { view } = grid(CROWDED_FROM + 1);
-    const opens = (zoom: number) => crowdedNote(view, zoom)?.split('. ').slice(1, -2).join('. ');
-    expect(opens(0.39)).toBe('It opens as a map, with no words');
-    expect(opens(0.5147)).toBe('It opens with the names of its boxes and no other words');
-    expect(opens(0.6)).toBe('It opens with names and kind lines, and no descriptions');
-    expect(opens(0.75)).toBe('It opens with all its words');
-    expect(crowdedNote(view, 0.5147)?.endsWith(how)).toBe(true);
-  });
-
-  it('takes the zoom a view of 42 boxes opens at in its room: in a large window it opens where names are drawn', () => {
-    const { view, drawn } = grid(42);
-    const large = fitViewport(whole(drawn), { width: 1920, height: 1080 }).zoom;
-    expect(detailAt(large)).not.toBe('shapes');
-    expect(noteFor(view, drawn, large, large)).not.toContain('with no words');
-    const small = fitViewport(whole(drawn), { width: 800, height: 500 }).zoom;
-    expect(detailAt(small)).toBe('shapes');
-    expect(noteFor(view, drawn, small, small)).toContain('It opens as a map, with no words.');
-  });
-
-  it('is not there for a view at the limit, which keeps the note that it is too small', () => {
-    const { view, drawn } = grid(CROWDED_FROM);
-    expect(view.boxes).toHaveLength(CROWDED_FROM);
-    expect(crowdedNote(view, 0.2)).toBeUndefined();
-    expect(noteFor(view, drawn, 0.2, 0.2)).toBe(smallNote(drawn, 0.2));
-    expect(noteFor(view, drawn, 0.2, 0.2)).toContain('Too small to read at 20 %');
-    expect(noteFor(view, drawn, 1, 1)).toBeUndefined();
-  });
-
-  it('stands in place of the note that a crowded view is too small, and does not join it', () => {
-    const { view, drawn } = grid(CROWDED_FROM + 1);
-    expect(noteFor(view, drawn, 0.1, 0.1)).toBe(map);
-    expect(noteFor(view, drawn, 0.1, 0.1)).not.toContain('Too small');
   });
 });
 
@@ -240,7 +216,7 @@ describe('where the picture stands when a new one comes', () => {
   });
   /** Where the top left of a box, or of the boundary, stands on the screen at a viewport. */
   const onScreen = (drawn: Drawn, id: string, at: Viewport) => {
-    const place = drawn.boxes.find((box) => box.id === id) ?? drawn.boundary;
+    const place = drawn.boxes.find((box) => box.id === id) ?? drawn.boundaries.find((boundary) => boundary.id === id);
     return { x: (place?.x ?? 0) * at.zoom + at.x, y: (place?.y ?? 0) * at.zoom + at.y };
   };
 
@@ -258,9 +234,9 @@ describe('where the picture stands when a new one comes', () => {
   });
 
   it('holds the boundary when it is what is chosen', () => {
-    const boundary = CONTAINER_PICTURE.boundary;
+    const [boundary] = CONTAINER_PICTURE.boundaries;
     if (boundary === undefined) throw new Error('The container picture has a boundary.');
-    const after: Drawn = { ...CONTAINER_PICTURE, boundary: { ...boundary, x: 500, y: 90 } };
+    const after: Drawn = { ...CONTAINER_PICTURE, boundaries: [{ ...boundary, x: 500, y: 90 }] };
     const next = viewportAfter(CONTAINER_PICTURE, after, { kind: 'box', id: 'shop' }, viewport, false, room);
     expect(onScreen(after, 'shop', next ?? viewport)).toEqual(onScreen(CONTAINER_PICTURE, 'shop', viewport));
   });
@@ -351,5 +327,214 @@ describe('where the picture stands when a new one comes and the words above the 
     }
     // With the canvas where it stood, it does not move at all.
     expect(viewportAfter(CONTAINER_PICTURE, CONTAINER_PICTURE, null, viewport, true, room, { canvasBefore, canvasAfter: canvasBefore })).toBeUndefined();
+  });
+});
+
+/**
+ * A change of depth, by arithmetic. A picture the reader has not moved stood fitted to its room,
+ * and is fitted anew when a box opens or closes. On a picture the reader has moved or zoomed,
+ * one box keeps its top left at the same point of the screen, at the same zoom, opening and
+ * closing: pass number 21. Where a box stands on the screen is worked out here as React Flow
+ * puts it, from the viewport and the place of the canvas; the browser measures the same, and
+ * `scripts/shoot.mjs --by-depth` measures it there.
+ */
+describe('a change of depth', () => {
+  const room: Room = { width: 1200, height: 800 };
+  /** The top left of a box, or of a boundary, on the screen: in a canvas at a place, shown at a viewport. */
+  const onScreen = (drawn: Drawn, id: string, at: Viewport, canvas = { x: 0, y: 0 }) => {
+    const place = drawn.boxes.find((box) => box.id === id) ?? drawn.boundaries.find((boundary) => boundary.id === id);
+    if (place === undefined) throw new Error(`The picture draws no ${id}.`);
+    return { x: canvas.x + at.x + place.x * at.zoom, y: canvas.y + at.y + place.y * at.zoom };
+  };
+  /** A change from one picture to another, the one before shown at a viewport, which the reader has not moved unless said. */
+  const change = (before: [View, Drawn], after: [View, Drawn], viewport: Viewport, more: Partial<PictureChange> = {}): PictureChange => ({
+    before: { view: before[0], drawn: before[1] },
+    after: { view: after[0], drawn: after[1] },
+    chosen: null,
+    gone: false,
+    viewport,
+    moved: false,
+    room,
+    ...more,
+  });
+  /** A picture the reader has moved or zoomed. */
+  const MOVED = { moved: true };
+  const containers: [View, Drawn] = [CONTAINERS, CONTAINER_PICTURE];
+  const components: [View, Drawn] = [COMPONENTS, COMPONENT_PICTURE];
+  const viewports: Viewport[] = [
+    { x: 0, y: 0, zoom: 1 },
+    { x: -320, y: 75.5, zoom: 0.43 },
+    { x: 640.25, y: -12, zoom: 0.071 },
+    { x: 12, y: 30, zoom: 1.7 },
+  ];
+
+  it('is told from a new reading and from a change of scope', () => {
+    expect(changeOf(CONTAINERS, COMPONENTS)).toBe('depth');
+    expect(changeOf(CONTAINERS, CONTAINERS)).toBe('reading');
+    expect(changeOf(CONTEXT, CARD_CONTEXT)).toBe('scope');
+  });
+
+  it('fits anew a picture the reader has not moved when a box opens, and the page then counts it as not moved', () => {
+    for (const viewport of viewports) {
+      expect(viewportOnChange(change(containers, components, viewport), room)).toEqual({ viewport: fitViewport(whole(COMPONENT_PICTURE), room), fitted: true });
+      // Also when the words above the canvas grow by a line: it is fitted to the room as it is now.
+      const now = { width: room.width, height: room.height - 18 };
+      expect(viewportOnChange(change(containers, components, viewport), now, { canvasBefore: { x: 240, y: 112 }, canvasAfter: { x: 240, y: 130 } })).toEqual({
+        viewport: fitViewport(whole(COMPONENT_PICTURE), now),
+        fitted: true,
+      });
+    }
+  });
+
+  it('fits anew a picture the reader has not moved when a box closes', () => {
+    for (const viewport of viewports) {
+      expect(viewportOnChange(change(components, containers, viewport), room)).toEqual({ viewport: fitViewport(whole(CONTAINER_PICTURE), room), fitted: true });
+    }
+  });
+
+  it('keeps the box that opens with its top left at the same point of the screen, at the same zoom, on a picture the reader has moved', () => {
+    for (const viewport of viewports) {
+      const { viewport: next, fitted, kept } = viewportOnChange(change(containers, components, viewport, MOVED), room);
+      expect(kept).toBe('order-api');
+      expect(fitted).toBe(false);
+      expect(next?.zoom).toBe(viewport.zoom);
+      const [was, is] = [onScreen(CONTAINER_PICTURE, 'order-api', viewport), onScreen(COMPONENT_PICTURE, 'order-api', next ?? viewport)];
+      // Within a pixel, as pass number 21 asks: by arithmetic, to the last digits.
+      expect(Math.abs(is.x - was.x)).toBeLessThan(1e-6);
+      expect(Math.abs(is.y - was.y)).toBeLessThan(1e-6);
+    }
+  });
+
+  it('keeps the boundary that closes, its top left where the box now stands, on a picture the reader has moved', () => {
+    for (const viewport of viewports) {
+      const { viewport: next, fitted, kept } = viewportOnChange(change(components, containers, viewport, MOVED), room);
+      expect(kept).toBe('order-api');
+      expect(fitted).toBe(false);
+      expect(next?.zoom).toBe(viewport.zoom);
+      const [was, is] = [onScreen(COMPONENT_PICTURE, 'order-api', viewport), onScreen(CONTAINER_PICTURE, 'order-api', next ?? viewport)];
+      expect(Math.abs(is.x - was.x)).toBeLessThan(1e-6);
+      expect(Math.abs(is.y - was.y)).toBeLessThan(1e-6);
+    }
+  });
+
+  it('keeps it there with a line above the canvas that grows by a line as the depth changes, and shrinks again', () => {
+    const canvasBefore = { x: 240, y: 112 };
+    const canvasAfter = { x: 240, y: 130 };
+    for (const viewport of viewports) {
+      const opening = viewportOnChange(change(containers, components, viewport, MOVED), room, { canvasBefore, canvasAfter });
+      const was = onScreen(CONTAINER_PICTURE, 'order-api', viewport, canvasBefore);
+      const is = onScreen(COMPONENT_PICTURE, 'order-api', opening.viewport ?? viewport, canvasAfter);
+      expect(Math.abs(is.x - was.x)).toBeLessThan(1e-6);
+      expect(Math.abs(is.y - was.y)).toBeLessThan(1e-6);
+      // Closing again, the line gone.
+      const shown = opening.viewport ?? viewport;
+      const closing = viewportOnChange(change(components, containers, shown, MOVED), room, { canvasBefore: canvasAfter, canvasAfter: canvasBefore });
+      const back = onScreen(CONTAINER_PICTURE, 'order-api', closing.viewport ?? shown, canvasBefore);
+      expect(Math.abs(back.x - was.x)).toBeLessThan(1e-6);
+      expect(Math.abs(back.y - was.y)).toBeLessThan(1e-6);
+      expect(closing.viewport?.zoom).toBe(viewport.zoom);
+    }
+  });
+
+  it('keeps it where the page measured its element to stand, when it did', () => {
+    const viewport = viewports[1] as Viewport;
+    const box = { x: 512.5, y: 300.25 };
+    const { viewport: next } = viewportOnChange(change(containers, components, viewport, MOVED), room, { canvasBefore: { x: 240, y: 112 }, canvasAfter: { x: 240, y: 112 }, box });
+    expect(onScreen(COMPONENT_PICTURE, 'order-api', next ?? viewport, { x: 240, y: 112 })).toEqual(box);
+  });
+
+  it('keeps the chosen box when it opens or closes, before any nearer the middle', () => {
+    const app = (depth: 'container' | 'component'): [View, Drawn] => {
+      const view = archiveView(`${depth}~order-api`, STATE);
+      return [view, placedPicture(view)];
+    };
+    const [closed, open] = [app('container'), app('component')];
+    expect(open[0].boundaries.map((boundary) => boundary.id)).toEqual(['order-api']);
+    // The middle of the canvas over a neighbour far from the app: the app is kept all the same.
+    const card = closed[1].boxes.find((box) => box.id === 'card-provider');
+    const viewport: Viewport = { x: room.width / 2 - ((card?.x ?? 0) + 120), y: room.height / 2 - ((card?.y ?? 0) + 75), zoom: 1 };
+    expect(holdOf(change(closed, open, viewport, MOVED))).toEqual({ change: 'depth', box: 'order-api' });
+    expect(holdOf(change(open, closed, viewport, MOVED))).toEqual({ change: 'depth', box: 'order-api' });
+    expect(viewportOnChange(change(closed, open, viewport, MOVED), room).kept).toBe('order-api');
+  });
+
+  it('else keeps the one nearest the middle of the canvas, and of two as near, the first by id', () => {
+    const state = stateOf({
+      'seefore.yaml': 'format: 1\nname: Pair\n',
+      'systems/east.yaml': 'name: East\n',
+      'systems/west.yaml': 'name: West\n',
+      'apps/east-app.yaml': 'name: East app\nin: east\n',
+      'apps/west-app.yaml': 'name: West app\nin: west\n',
+    });
+    const [system, container] = ['system', 'container'].map((key): [View, Drawn] => {
+      const view = archiveView(key, state);
+      return [view, placedPicture(view)];
+    }) as [[View, Drawn], [View, Drawn]];
+    const middle = (id: string) => {
+      const place = system[1].boxes.find((box) => box.id === id);
+      return { x: (place?.x ?? 0) + 120, y: (place?.y ?? 0) + 75 };
+    };
+    // The canvas's middle over the middle of a box, or half way between the two.
+    const over = (point: { x: number; y: number }): Viewport => ({ x: room.width / 2 - point.x, y: room.height / 2 - point.y, zoom: 1 });
+    const [east, west] = [middle('east'), middle('west')];
+    expect(keptAtDepth(system[0], system[1], container[0], over(west), room)).toBe('west');
+    expect(keptAtDepth(system[0], system[1], container[0], over(east), room)).toBe('east');
+    expect(keptAtDepth(system[0], system[1], container[0], over({ x: (east.x + west.x) / 2, y: east.y }), room)).toBe('east');
+    // Closing, from where each boundary stands.
+    const boundary = container[1].boundaries.find((each) => each.id === 'west');
+    const westOpen = { x: (boundary?.x ?? 0) + (boundary?.width ?? 0) / 2, y: (boundary?.y ?? 0) + (boundary?.height ?? 0) / 2 };
+    expect(keptAtDepth(container[0], container[1], system[0], over(westOpen), room)).toBe('west');
+  });
+
+  it('that opens nothing gives the same picture, and the page does not move, whether the reader has moved it or not', () => {
+    const person = (depth: 'system' | 'container' | 'component'): [View, Drawn] => {
+      const view = archiveView(`${depth}~customer`, STATE);
+      return [view, placedPicture(view)];
+    };
+    const [system, container] = [person('system'), person('container')];
+    expect(container[1].boxes).toEqual(system[1].boxes);
+    for (const viewport of viewports) {
+      for (const moved of [false, true]) {
+        expect(viewportOnChange(change(system, container, viewport, { moved }), room)).toEqual({ viewport: undefined, fitted: false });
+        // When the words above the canvas change, the picture stays where it stood on the screen.
+        const shifted = viewportOnChange(change(system, container, viewport, { moved }), room, { canvasBefore: { x: 240, y: 112 }, canvasAfter: { x: 240, y: 130 } });
+        expect(shifted).toEqual({ viewport: { x: viewport.x, y: viewport.y - 18, zoom: viewport.zoom }, fitted: false });
+      }
+    }
+  });
+
+  it('is said of the zoom it is shown at by the note: the zoom kept on a picture the reader has moved, the new fit on one fitted anew', () => {
+    const viewport = viewports[2] as Viewport;
+    const { viewport: kept } = viewportOnChange(change(containers, components, viewport, MOVED), room);
+    expect(smallNote(COMPONENTS, kept?.zoom ?? 1)).toMatch(new RegExp(`^Too small to read at ${percent(viewport.zoom)}\\. `));
+    const { viewport: fitted } = viewportOnChange(change(containers, components, viewport), room);
+    expect(fitted?.zoom).toBe(fitViewport(whole(COMPONENT_PICTURE), room).zoom);
+    expect(smallNote(COMPONENTS, fitted?.zoom ?? 1)).toBeUndefined();
+  });
+});
+
+describe('a change of scope', () => {
+  const room: Room = { width: 1200, height: 800 };
+  const viewport: Viewport = { x: -100, y: 40, zoom: 0.4 };
+  const change = (more: Partial<PictureChange> = {}): PictureChange => ({
+    before: { view: CONTEXT, drawn: CONTEXT_PICTURE },
+    after: { view: CARD_CONTEXT, drawn: CONTEXT_PICTURE },
+    chosen: null,
+    gone: false,
+    viewport,
+    moved: true,
+    room,
+    ...more,
+  });
+
+  it('fits the new picture to its room, though the reader had moved the one before or chose a box in both', () => {
+    expect(viewportOnChange(change(), room)).toEqual({ viewport: fitViewport(whole(CONTEXT_PICTURE), room), fitted: true });
+    expect(viewportOnChange(change({ chosen: { kind: 'box', id: 'customer' } }), room).fitted).toBe(true);
+  });
+
+  it('holds the chosen box in place, as a new reading does, when the box in scope is gone from the files', () => {
+    const gone = change({ gone: true, chosen: { kind: 'box', id: 'customer' } });
+    expect(holdOf(gone)).toEqual({ change: 'scope', box: 'customer' });
+    expect(viewportOnChange(gone, room)).toEqual({ viewport, fitted: false });
   });
 });

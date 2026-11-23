@@ -1,11 +1,11 @@
-import { CROWDED_FROM } from '@seefore/core';
 import type { Drawn, Rect, View } from '@seefore/core';
 import type { Lit, Target } from './light.ts';
 
 /**
  * What the zoom decides: how much text a picture shows, how it is fitted to the room it has,
- * where it stands when a new picture of it comes, and the note under the counts: that it is too
- * small to read, or that the view is crowded. The numbers are those of
+ * where it stands when a new picture comes in its place, of a new reading, another depth or
+ * another scope, and the note under the counts, that it is too small to read at the zoom it is
+ * shown at. Nothing counts boxes to decide a note. The numbers are those of
  * `research/diagrams/recommendations.md`, section 4: names stay at 9 pixels or more.
  */
 
@@ -124,10 +124,9 @@ export function boundsOf(rects: readonly Rect[]): Rect | undefined {
   return { x: left, y: top, width: right - left, height: bottom - top };
 }
 
-/** The rectangle that holds what is lit: its boxes, the boundary when lit, and every point and label of its arrows. */
+/** The rectangle that holds what is lit: its boxes, each boundary that is lit, and every point and label of its arrows. */
 export function litBounds(drawn: Drawn, lit: Lit): Rect | undefined {
-  const rects: Rect[] = drawn.boxes.filter((box) => lit.boxes.has(box.id));
-  if (drawn.boundary !== undefined && lit.boxes.has(drawn.boundary.id)) rects.push(drawn.boundary);
+  const rects: Rect[] = [...drawn.boxes, ...drawn.boundaries].filter((box) => lit.boxes.has(box.id));
   for (const arrow of drawn.arrows) {
     if (!lit.arrows.has(arrow.id)) continue;
     for (const point of arrow.sections.flat()) rects.push({ x: point.x, y: point.y, width: 0, height: 0 });
@@ -141,53 +140,23 @@ export function percent(zoom: number): string {
   return `${Math.round(zoom * 100)} %`;
 }
 
-/** How many of a thing, in words: `1 box`, `3 boxes`. */
-function count(n: number, one: string, many: string): string {
-  return `${n} ${n === 1 ? one : many}`;
-}
-
 /**
- * The note for a picture too small to read at the zoom it is shown at: how many boxes and
- * arrows it has, and from which zoom names can be read. Missing when names can be read.
+ * The one note under the counts of a picture of a view: that it is too small to read at `zoom`,
+ * the zoom it is shown at, which is under the zoom from which names can be read. It says from
+ * which zoom names can be read and how to read a box or an arrow here; and, with everything as
+ * the scope, how to see one box with its neighbours. The numbers of boxes and arrows stand on
+ * the line above it, and are not said again. It is never said of a zoom the picture would have
+ * opened at, and nothing but the zoom decides it. Missing when names can be read.
  */
-export function smallNote(drawn: Drawn, zoom: number): string | undefined {
+export function smallNote(view: Pick<View, 'scope'>, zoom: number): string | undefined {
   if (zoom >= READABLE_FROM) return undefined;
-  const boxes = count(drawn.boxes.length, 'box', 'boxes');
-  const arrows = count(drawn.arrows.length, 'arrow', 'arrows');
-  return `Too small to read at ${percent(zoom)}: ${boxes} and ${arrows}. Names can be read from ${percent(READABLE_FROM)}. Zoom in, or point at a box to follow it.`;
+  const note = `Too small to read at ${percent(zoom)}. Names can be read from ${percent(READABLE_FROM)}. Zoom in, or point at a box or an arrow, or move the keyboard's focus to it, to read it here.`;
+  return view.scope === null ? `${note} To see one box with its neighbours, choose it as the scope.` : note;
 }
 
-/** What a picture shows at the zoom it opens at, in the words of the crowded note. */
-const OPENS: Readonly<Record<Detail, string>> = {
-  shapes: 'It opens as a map, with no words.',
-  names: 'It opens with the names of its boxes and no other words.',
-  'names-lines': 'It opens with names and kind lines, and no descriptions.',
-  all: 'It opens with all its words.',
-};
-
-/**
- * The note for a crowded view, one of more boxes than `CROWDED_FROM`, at any zoom: what it shows
- * at `opened`, the zoom it opens at, which fits it to its room, and how to read it. Missing for
- * a view under the limit.
- */
-export function crowdedNote(view: View, opened: number): string | undefined {
-  if (view.boxes.length <= CROWDED_FROM) return undefined;
-  return `A crowded view: more than ${CROWDED_FROM} boxes. ${OPENS[detailAt(opened)]} Point at a box or an arrow, or move the keyboard's focus to it, to read it here. A click, a tap or Enter keeps it lit.`;
-}
-
-/**
- * The note under the counts of a view: for a crowded view the crowded note, which says how to
- * read it and so stands in place of the note that it is too small; for a view under the limit,
- * the note that it is too small to read at this zoom, when it is. `opened` is the zoom the view
- * opens at in its room.
- */
-export function noteFor(view: View, drawn: Drawn, zoom: number, opened: number): string | undefined {
-  return crowdedNote(view, opened) ?? smallNote(drawn, zoom);
-}
-
-/** The place of a box, or of the boundary, in a picture. Missing when the picture does not draw it. */
+/** The place of a box, or of a boundary, in a picture. Missing when the picture does not draw it. */
 function placeOf(drawn: Drawn, id: string): Rect | undefined {
-  return drawn.boxes.find((box) => box.id === id) ?? (drawn.boundary?.id === id ? drawn.boundary : undefined);
+  return drawn.boxes.find((box) => box.id === id) ?? drawn.boundaries.find((boundary) => boundary.id === id);
 }
 
 /** A point on the screen, in the client pixels of the browser's window. */
@@ -211,7 +180,7 @@ export interface OnScreen {
 
 /**
  * Where the canvas looks when a new picture of the same view comes, the one before shown at
- * `viewport`. A chosen box, or the boundary, that both pictures draw keeps its top left where it
+ * `viewport`. A chosen box, or a boundary, that both pictures draw keeps its top left where it
  * stood on the screen, at the same zoom, so that a reader who watches the page while the files
  * change keeps the place: that wins over fitting again. Else a picture the reader has not moved
  * is fitted again to the room. Else it stays where it is on the screen, though the canvas moved.
@@ -235,4 +204,122 @@ export function viewportAfter(before: Drawn, after: Drawn, chosen: Target | null
   if (!moved && room !== null) return fitViewport(whole(after), room);
   if (shift.x === 0 && shift.y === 0) return undefined;
   return { x: viewport.x + shift.x, y: viewport.y + shift.y, zoom };
+}
+
+/**
+ * How the picture drawn and the next differ: `reading`, the same setting of a new reading of the
+ * files; `depth`, the same scope at another depth; `scope`, another scope.
+ */
+export type Change = 'reading' | 'depth' | 'scope';
+
+/** How two views of the page differ. */
+export function changeOf(before: View, after: View): Change {
+  if (before.id === after.id) return 'reading';
+  return before.scope === after.scope ? 'depth' : 'scope';
+}
+
+/** Order of two ids, character by character, as the core orders them. */
+function byText(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+/**
+ * The box a change of depth keeps in place on a picture the reader has moved: one that opens or
+ * closes, a box in one picture and a boundary in the other. The chosen box, when it opens or
+ * closes. Else the one nearest the middle of the canvas, from its own middle in the picture
+ * before, as that was shown at `viewport` in `room`; and of two as near, the first by id.
+ * Nothing when nothing opens or closes: the picture is then the same, and the page does not move.
+ */
+export function keptAtDepth(before: View, drawn: Drawn, after: View, viewport: Viewport, room: Room): string | undefined {
+  const boxes = new Set(before.boxes.map((box) => box.id));
+  const boundaries = new Set(before.boundaries.map((boundary) => boundary.id));
+  const opening = after.boundaries.filter((boundary) => boxes.has(boundary.id)).map((boundary) => boundary.id);
+  const closing = after.boxes.filter((box) => boundaries.has(box.id)).map((box) => box.id);
+  const changing = [...opening, ...closing].sort(byText);
+  if (after.scope !== null && changing.includes(after.scope)) return after.scope;
+  const middle = { x: (room.width / 2 - viewport.x) / viewport.zoom, y: (room.height / 2 - viewport.y) / viewport.zoom };
+  let kept: string | undefined;
+  let nearest = Number.POSITIVE_INFINITY;
+  for (const id of changing) {
+    const place = placeOf(drawn, id);
+    if (place === undefined) continue;
+    const distance = Math.hypot(place.x + place.width / 2 - middle.x, place.y + place.height / 2 - middle.y);
+    if (distance < nearest) {
+      kept = id;
+      nearest = distance;
+    }
+  }
+  return kept;
+}
+
+/** A picture with its view, as the page draws it. */
+export interface Pictured {
+  view: View;
+  drawn: Drawn;
+}
+
+/** What the page knows when a new picture comes in place of the one drawn. */
+export interface PictureChange {
+  before: Pictured;
+  after: Pictured;
+  /** What the panel shows, when it is in the picture before. */
+  chosen: Target | null;
+  /** True when the box in scope is gone from the files, and everything is drawn in its place. */
+  gone: boolean;
+  /** Where the canvas looked at the picture before. */
+  viewport: Viewport;
+  /** Whether the reader has moved the picture since it was last fitted. */
+  moved: boolean;
+  /** The room the picture before was shown in, whose middle a change of depth measures from. */
+  room: Room | null;
+}
+
+/**
+ * The box a new picture holds where it stood on the screen, and why. For a new reading of the
+ * same setting, as for the box in scope gone from the files, that is the chosen box, as stage 7
+ * has it. For a change of depth, the box that opens or closes, as `keptAtDepth` says: it is held
+ * when the reader has moved the picture, and else tells a change that opens something, which
+ * fits the picture anew, from one that opens nothing. For a change of scope by the reader, none:
+ * the new picture is fitted to its room.
+ */
+export function holdOf(change: PictureChange): { change: Change; box?: string } {
+  const kind = changeOf(change.before.view, change.after.view);
+  if (kind === 'depth') {
+    const box = change.room === null ? undefined : keptAtDepth(change.before.view, change.before.drawn, change.after.view, change.viewport, change.room);
+    return box === undefined ? { change: kind } : { change: kind, box };
+  }
+  if (kind === 'scope' && !change.gone) return { change: kind };
+  return change.chosen?.kind === 'box' ? { change: kind, box: change.chosen.id } : { change: kind };
+}
+
+/**
+ * Where the canvas looks when a new picture comes in place of the one drawn, `room` now being
+ * the room it is drawn in, and `screen` where the page measured things to stand. A change of
+ * depth that opens or closes a box fits the new picture to its room when the reader has not
+ * moved the one before, which stood fitted; on a picture the reader has moved or zoomed it keeps
+ * the box `holdOf` names with its top left at the same point of the screen, at the same zoom. A
+ * change of depth that opens nothing gives the same picture, which stays where it stood on the
+ * screen. A change of scope by the reader fits the new picture to its room. A new reading, or the
+ * box in scope gone, does as stage 7 does: see `viewportAfter`. Missing when the viewport stays
+ * as it is. `fitted` says whether the new picture is fitted to its room, so that the page knows
+ * the reader has not moved it; `kept`, the box a change of depth kept in place.
+ */
+export function viewportOnChange(change: PictureChange, room: Room | null, screen?: OnScreen): { viewport: Viewport | undefined; fitted: boolean; kept?: string } {
+  const hold = holdOf(change);
+  const { before, after, viewport, moved } = change;
+  if (hold.change === 'scope' && !change.gone) {
+    return room === null ? { viewport: undefined, fitted: false } : { viewport: fitViewport(whole(after.drawn), room), fitted: true };
+  }
+  const target: Target | null = hold.box === undefined ? null : { kind: 'box', id: hold.box };
+  if (hold.change === 'depth') {
+    // A box opens or closes: a picture that stood fitted is fitted anew, for at the old zoom
+    // most of a larger one would be off the screen.
+    if (hold.box !== undefined && !moved && room !== null) return { viewport: fitViewport(whole(after.drawn), room), fitted: true };
+    const next = viewportAfter(before.drawn, after.drawn, target, viewport, true, room, screen);
+    return { viewport: next, fitted: false, ...(hold.box === undefined ? {} : { kept: hold.box }) };
+  }
+  const next = viewportAfter(before.drawn, after.drawn, target, viewport, moved, room, screen);
+  // A picture with no box to hold, which the reader has not moved, is fitted again.
+  const held = target !== null && placeOf(before.drawn, target.id) !== undefined && placeOf(after.drawn, target.id) !== undefined;
+  return { viewport: next, fitted: !held && !moved && room !== null };
 }

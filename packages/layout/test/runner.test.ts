@@ -14,7 +14,7 @@ const TROUBLE = new URL('./workers/trouble.ts', import.meta.url);
 /** A limit for the tests that is short, and still long enough to start a thread and lay out a small view. */
 const SHORT = 1500;
 
-/** A view of one box with the id `<name>.context`. */
+/** A view of one box with the id `system~<name>`. */
 function named(name: string) {
   return contextView(name, [box(name, 'systems', { scope: true })], []);
 }
@@ -59,10 +59,10 @@ describe('the runner', () => {
     const started = performance.now();
     const [stopped, next] = await Promise.all([asked.layOut(named('hangs')), asked.layOut(named('after'))]);
     expect(stopped).toEqual({
-      view: 'hangs.context',
+      view: 'system~hangs',
       failed: { reason: 'time', message: 'This view took more than 1.5 seconds to lay out, so it was stopped and is not drawn. The other views still draw.' },
     });
-    expect(next).toMatchObject({ view: 'after.context', boxes: [{ id: 'after' }] });
+    expect(next).toMatchObject({ view: 'system~after', boxes: [{ id: 'after' }] });
     expect(performance.now() - started).toBeLessThan(2 * SHORT + 1000);
   });
 
@@ -70,31 +70,31 @@ describe('the runner', () => {
     const asked = runner(TROUBLE, SHORT);
     const [broken, next] = await Promise.all([asked.layOut(named('throws')), asked.layOut(named('after'))]);
     expect(broken).toEqual({
-      view: 'throws.context',
+      view: 'system~throws',
       failed: { reason: 'crash', message: 'This view could not be laid out, so it is not drawn. The other views still draw. The layout engine said: “The thread broke on purpose”.' },
     });
-    expect(next).toMatchObject({ view: 'after.context', boxes: [{ id: 'after' }] });
+    expect(next).toMatchObject({ view: 'system~after', boxes: [{ id: 'after' }] });
   });
 
   it('reports a thread that ends, and lays out the next in a new thread', async () => {
     const asked = runner(TROUBLE, SHORT);
     const [ended, next] = await Promise.all([asked.layOut(named('exits')), asked.layOut(named('after'))]);
     expect(ended).toEqual({
-      view: 'exits.context',
+      view: 'system~exits',
       failed: { reason: 'crash', message: 'The layout of this view stopped before it finished, so it is not drawn. The other views still draw.' },
     });
-    expect(next).toMatchObject({ view: 'after.context' });
+    expect(next).toMatchObject({ view: 'system~after' });
   });
 
   it('reports a layout that throws in the thread', async () => {
     const view = contextView('a', [box('a', 'systems', { scope: true })], [{ id: 'a~nowhere', from: 'a', to: 'nowhere', connections: ['c'], names: ['Uses'], technology: [] }]);
     const picture = await runner(WORKER).layOut(view);
-    expect(picture).toMatchObject({ view: 'a.context', failed: { reason: 'crash' } });
+    expect(picture).toMatchObject({ view: 'system~a', failed: { reason: 'crash' } });
   });
 
   it('gives a failure, and never throws, when the worker thread cannot start', async () => {
     const picture = await runner(new URL('./workers/missing.ts', import.meta.url), SHORT).layOut(named('a'));
-    expect(picture).toMatchObject({ view: 'a.context', failed: { reason: 'crash', message: expect.stringContaining('This view could not be laid out') } });
+    expect(picture).toMatchObject({ view: 'system~a', failed: { reason: 'crash', message: expect.stringContaining('This view could not be laid out') } });
   });
 
   it('gives a failure for a view still waiting when it is closed, and for one asked after', async () => {
@@ -103,10 +103,10 @@ describe('the runner', () => {
     await asked.close();
     const closed = 'The layout was closed before this view was laid out, so it is not drawn.';
     expect(await Promise.all(waiting)).toEqual([
-      { view: 'hangs.context', failed: { reason: 'crash', message: closed } },
-      { view: 'after.context', failed: { reason: 'crash', message: closed } },
+      { view: 'system~hangs', failed: { reason: 'crash', message: closed } },
+      { view: 'system~after', failed: { reason: 'crash', message: closed } },
     ]);
-    expect(await asked.layOut(named('late'))).toEqual({ view: 'late.context', failed: { reason: 'crash', message: closed } });
+    expect(await asked.layOut(named('late'))).toEqual({ view: 'system~late', failed: { reason: 'crash', message: closed } });
   });
 
   it('gives a view of 300 boxes back inside the limit, drawn or as a failure', async () => {

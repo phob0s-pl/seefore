@@ -25,8 +25,11 @@ const LIGHTS: Readonly<Record<LegendKey, string>> = {
   app: 'every app',
   store: 'every store that is not a queue or a topic',
   'queue-or-topic': 'every queue and topic',
+  component: 'every component',
   infrastructure: 'every piece of infrastructure that has a box',
+  scope: 'the chosen box',
   boundary: 'the boundary',
+  'boundary-app': 'the boundary of each app',
   arrow: 'every arrow',
   'arrow-many': 'every arrow for several connections',
   route: 'every arrow with a route',
@@ -49,10 +52,10 @@ function listed(parts: readonly string[]): string {
   return parts.length <= 1 ? (parts[0] ?? '') : `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
 }
 
-/** A box, or the boundary: its name, its kind line and its own `only`, as `Relay [App: service · Rust]`. */
+/** A box, or a boundary: its name, its kind line and its own `only`, as `Relay [App: service · Rust]`. */
 function boxWords(view: View, id: string): string {
   const box = view.boxes.find((each) => each.id === id);
-  if (box === undefined) return view.boundary?.id === id ? view.boundary.title : '';
+  if (box === undefined) return view.boundaries.find((each) => each.id === id)?.title ?? '';
   return [box.name, box.line, ...(box.only === undefined ? [] : [`only ${box.only}`])].join(' ');
 }
 
@@ -85,13 +88,18 @@ function passedWords(view: View, id: string): string {
 
 /** A line of the legend: what it lights, and how much of the picture and of the list under the legend that is. */
 export function legendWords(view: View, key: LegendKey): string {
-  if (key === 'boundary') return `Lights the boundary of ${view.boundary?.name ?? 'the system'}`;
+  if (key === 'boundary' || key === 'boundary-app') {
+    const family = key === 'boundary' ? 'systems' : 'apps';
+    const [only, ...more] = view.boundaries.filter((boundary) => boundary.family === family);
+    if (only !== undefined && more.length === 0) return `Lights the boundary of ${only.name}`;
+    return `Lights the boundary of each ${family === 'systems' ? 'system' : 'app'}: ${count(more.length + (only === undefined ? 0 : 1), 'boundary', 'boundaries')}`;
+  }
   const lit = litByLegend(view, key);
-  const boundary = view.boundary !== undefined && lit.boxes.has(view.boundary.id);
-  const boxes = lit.boxes.size - (boundary ? 1 : 0);
+  const held = view.boundaries.filter((boundary) => lit.boxes.has(boundary.id)).length;
+  const boxes = lit.boxes.size - held;
   const parts = [
     ...(boxes > 0 ? [count(boxes, 'box', 'boxes')] : []),
-    ...(boundary ? ['the boundary'] : []),
+    ...(held === 1 ? ['the boundary'] : held > 1 ? [count(held, 'boundary', 'boundaries')] : []),
     ...(lit.arrows.size > 0 ? [count(lit.arrows.size, 'arrow', 'arrows')] : []),
     ...(lit.passed.size > 0 ? [count(lit.passed.size, 'thing in the list', 'things in the list')] : []),
   ];

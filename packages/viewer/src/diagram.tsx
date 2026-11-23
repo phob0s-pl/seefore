@@ -1,4 +1,5 @@
-import type { Drawn, PlacedLabel, Point, View, ViewPassed } from '@seefore/core';
+import { leftOutWords } from '@seefore/core';
+import type { Drawn, PlacedLabel, Point, View, ViewBox, ViewPassed } from '@seefore/core';
 import { Handle, Position, ReactFlow, ReactFlowProvider, useReactFlow, useReactFlowStoreApi, useViewportStore } from '@xyflow/react';
 import type { AriaLabelConfig, EdgeProps, EdgeTypes, NodeProps, NodeTypes } from '@xyflow/react';
 import { Component, createContext, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -11,13 +12,24 @@ import { passingWords } from './records.ts';
 import type { Lit, Pointed, Target } from './light.ts';
 import { LOOP_MARK, PASSING_MARK, Sample, Shape, StoreSign } from './shapes.tsx';
 import { TEXT_SLACK } from './theme.ts';
-import { MAX_ZOOM, MOVE_MS, detailAt, fitViewport, litBounds, litScale, minZoomFor, noteFor, percent, reachAt, viewportAfter, whole } from './zoom.ts';
-import type { ClientPoint, Room, Viewport } from './zoom.ts';
+import { MAX_ZOOM, MOVE_MS, detailAt, fitViewport, holdOf, litBounds, litScale, minZoomFor, percent, reachAt, smallNote, viewportOnChange, whole } from './zoom.ts';
+import type { ClientPoint, PictureChange, Pictured, Room } from './zoom.ts';
 
 /**
  * The picture of a view on React Flow's canvas, with its title, its counts, the buttons that
- * move it and its legend. Every place, route and line of text is the picture's own.
+ * move it and its legend. Every place, route and line of text is the picture's own. One canvas
+ * draws one picture after another: a change of depth keeps a box where it stood on the screen,
+ * a change of scope fits the new picture, and a new reading of the files holds what is chosen.
  */
+
+/** What the page says while the picture of the setting chosen is laid out, and the one before stays. */
+export const LAYING = 'Laying out the view…';
+
+/** What the page says when the box in scope is gone from the files, and everything is shown in its place. */
+export const GONE = 'That box is gone. This is everything.';
+
+/** What the page says of a view with nothing in it. */
+export const NOTHING_TO_DRAW = 'No boxes to draw.';
 
 /** What is lit and what is chosen, for every box and arrow to read as it draws. */
 export interface Light {
@@ -50,6 +62,26 @@ function Handles() {
   );
 }
 
+/** The marks on the top edge of a box or a boundary: for what passes through it, for its copies and for the stores it keeps. Nothing when it carries none. */
+function Marks({ of }: { of: Pick<ViewBox, 'loops' | 'passing' | 'kept'> }) {
+  const loops = of.loops.length;
+  const passing = of.passing.length;
+  const kept = of.kept.length;
+  if (passing === 0 && loops === 0 && kept === 0) return null;
+  return (
+    <div className="marks" aria-hidden="true">
+      {passing > 0 && <div className="mark mark-passing">{`${PASSING_MARK} ${passing}`}</div>}
+      {loops > 0 && <div className="mark">{`${LOOP_MARK} ${loops}`}</div>}
+      {kept > 0 && (
+        <div className="mark mark-kept">
+          <StoreSign />
+          {` ${kept}`}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /**
  * A box: its shape, the lines of its text as the picture gives them, each on one line and
  * clipped at the edge, and on its top edge the marks for what passes through it, for its copies
@@ -58,9 +90,6 @@ function Handles() {
 function BoxView({ id, data }: NodeProps<BoxNode>) {
   const light = useContext(LightContext);
   const { box, placed } = data;
-  const loops = box.loops.length;
-  const passing = box.passing.length;
-  const kept = box.kept.length;
   return (
     <div className={`box family-${box.family}${box.scope ? ' scope' : ''} ${standing(light, 'box', id)}`} data-look={box.look} style={{ width: placed.width, height: placed.height }}>
       <Handles />
@@ -87,32 +116,23 @@ function BoxView({ id, data }: NodeProps<BoxNode>) {
           </div>
         )}
       </div>
-      {(passing > 0 || loops > 0 || kept > 0) && (
-        <div className="marks" aria-hidden="true">
-          {passing > 0 && <div className="mark mark-passing">{`${PASSING_MARK} ${passing}`}</div>}
-          {loops > 0 && <div className="mark">{`${LOOP_MARK} ${loops}`}</div>}
-          {kept > 0 && (
-            <div className="mark mark-kept">
-              <StoreSign />
-              {` ${kept}`}
-            </div>
-          )}
-        </div>
-      )}
+      <Marks of={box} />
     </div>
   );
 }
 
 /**
- * The boundary of a container view: a dashed line, a light tint, and its title at the place
- * given. A strip along its line takes the pointer, as wide on the screen at any zoom, so that it
- * can be pointed at and clicked where its title is not drawn; the room inside it moves the canvas.
+ * The boundary of an open box, a system's or an app's: a dashed line, a light tint, its title at
+ * the place given, and on its top edge the marks a closed box would carry. The chosen box has the
+ * thicker line here too. A strip along its line takes the pointer, as wide on the screen at any
+ * zoom, so that it can be pointed at and clicked where its title is not drawn; the room inside it
+ * moves the canvas.
  */
 function BoundaryView({ id, data }: NodeProps<BoundaryNode>) {
   const light = useContext(LightContext);
-  const { placed, titleAt } = data;
+  const { boundary, placed, titleAt } = data;
   return (
-    <div className={`boundary ${standing(light, 'box', id)}`} style={{ width: placed.width, height: placed.height }}>
+    <div className={`boundary family-${boundary.family}${boundary.scope ? ' scope' : ''} ${standing(light, 'box', id)}`} style={{ width: placed.width, height: placed.height }}>
       <Handles />
       <svg className="boundary-edge" width={placed.width} height={placed.height} aria-hidden="true">
         <rect x={0.75} y={0.75} width={Math.max(placed.width - 1.5, 0)} height={Math.max(placed.height - 1.5, 0)} rx={8} />
@@ -120,6 +140,7 @@ function BoundaryView({ id, data }: NodeProps<BoundaryNode>) {
       <div className="boundary-title text-line" style={{ left: titleAt.x, top: titleAt.y, width: placed.titleAt.width, height: placed.titleAt.height }} aria-hidden="true">
         {placed.title}
       </div>
+      <Marks of={boundary} />
     </div>
   );
 }
@@ -234,18 +255,43 @@ export interface DiagramProps extends DiagramActions {
   speaking: Pointed | null;
   /** What the reading line says. */
   reading: Reading;
+  /** True while the picture of another setting is laid out, and this one stays. */
+  laying: boolean;
+  /** True when the box in scope is gone from the files, and this picture of everything stands in its place. */
+  gone: boolean;
   /** The room to draw in, when it is known before the page is laid out, as on the server. */
   room?: Room;
 }
 
-/** The picture of a view with all around it. A view of its own starts with a canvas of its own. */
+/**
+ * The picture of a view with all around it. The canvas stays as one picture comes after
+ * another, so that the page can keep a box where it stood on the screen.
+ */
 export function Diagram(props: DiagramProps) {
   const flow = useMemo(() => toFlow(props.view, props.drawn), [props.view, props.drawn]);
   const size = props.room === undefined ? {} : { initialWidth: props.room.width, initialHeight: props.room.height };
   return (
-    <ReactFlowProvider key={props.view.id} initialNodes={flow.nodes} initialEdges={flow.edges} {...size}>
+    <ReactFlowProvider initialNodes={flow.nodes} initialEdges={flow.edges} {...size}>
       <Inside {...props} nodes={flow.nodes} edges={flow.edges} />
     </ReactFlowProvider>
+  );
+}
+
+/** The line that says the box in scope is gone, under the title. It is there when empty too, with no height, so that a screen reader hears it come. */
+export function GoneLine({ gone }: { gone: boolean }) {
+  return (
+    <p className="gone" role="status">
+      {gone ? GONE : ''}
+    </p>
+  );
+}
+
+/** The line over the top of the canvas that says a picture is laid out, while the one before stays. It is there when empty too, so that a screen reader hears it come. */
+export function LayingLine({ laying }: { laying: boolean }) {
+  return (
+    <p className="laying" role="status">
+      {laying ? LAYING : ''}
+    </p>
   );
 }
 
@@ -279,22 +325,24 @@ export function keptWords(n: number): string | undefined {
 }
 
 /**
- * How many boxes and arrows a picture has, how many stores it draws at their apps, and what of
- * the view it does not draw. A large view opens below the zoom where the mark of a kept store
- * can be read, so the line says it in words too.
+ * How many boxes and arrows a picture has, how many stores it draws at their apps, at a box or
+ * at a boundary, and what of the view it does not draw. A large view opens below the zoom where
+ * the mark of a kept store can be read, so the line says it in words too.
  */
 function Counts({ view, drawn }: { view: View; drawn: Drawn }) {
   const boxes = drawn.boxes.length;
   const arrows = drawn.arrows.length;
-  const { outside, broken } = view.left;
-  const kept = keptWords(view.boxes.reduce((sum, box) => sum + box.kept.length, 0));
+  const { broken } = view.left;
+  const kept = keptWords([...view.boxes, ...view.boundaries].reduce((sum, box) => sum + box.kept.length, 0));
+  // What the core says of the connections between two neighbours, as the title names the scope.
+  const outside = leftOutWords(view);
   return (
     <p className="view-counts">
       {`${boxes} ${boxes === 1 ? 'box' : 'boxes'} and ${arrows} ${arrows === 1 ? 'arrow' : 'arrows'}.`}
       {kept !== undefined && ` ${kept}`}
-      {outside.length > 0 && (
+      {outside !== undefined && (
         <>
-          {` ${outside.length} ${outside.length === 1 ? 'connection' : 'connections'} between two boxes outside the system ${outside.length === 1 ? 'is' : 'are'} not drawn: `}
+          {` ${outside} `}
           <a href="#/model">see the model</a>.
         </>
       )}
@@ -309,17 +357,15 @@ function Counts({ view, drawn }: { view: View; drawn: Drawn }) {
 }
 
 /**
- * The note under the counts: that a view is crowded, or that its picture is too small to read at
- * the zoom it is shown at. A crowded view says what it shows at the zoom it opens at, the fit of
- * its room. Its line is there when empty too, so that the canvas does not move when the note
- * comes and goes, and so that a screen reader hears it come.
+ * The note under the counts: that the picture is too small to read at the zoom it is shown at,
+ * and never at one it would have opened at. Its line is there when empty too, so that the canvas
+ * does not move when the note comes and goes, and so that a screen reader hears it come.
  */
-function Note({ view, drawn, room }: { view: View; drawn: Drawn; room: Room | null }) {
+function Note({ view }: { view: View }) {
   const zoom = useViewportStore((state) => state.transform[2]);
-  const opened = room === null ? zoom : fitViewport(whole(drawn), room).zoom;
   return (
     <p className="small-note" role="status">
-      {noteFor(view, drawn, zoom, opened) ?? ''}
+      {smallNote(view, zoom) ?? ''}
     </p>
   );
 }
@@ -341,34 +387,40 @@ function ReadingLine({ words, whole: unfold }: Reading) {
   );
 }
 
-/** Where the canvas and the chosen box stood on the screen, and the viewport, just before a new picture of the view was put in. */
+/**
+ * What the page knew just before a new picture was put in place of the one drawn: what changed,
+ * with the viewport and the room, where the canvas stood on the screen, and where the box to
+ * hold stood, when one is held and was drawn.
+ */
 interface Before {
-  drawn: Drawn;
+  change: PictureChange;
   canvas: ClientPoint;
   box?: ClientPoint;
-  viewport: Viewport;
 }
 
 interface HoldPlaceProps {
-  drawn: Drawn;
-  /** Measures the page as it stands. */
-  measure(): Omit<Before, 'drawn'>;
+  /** The picture drawn, with its view. */
+  shown: Pictured;
+  /** Measures the page as it stands, the picture before it being drawn. */
+  measure(before: Pictured): Before;
   /** Moves the picture, given what stood where before. */
   place(before: Before): void;
 }
 
 /**
- * Holds the place of the chosen box when a new picture of the view comes. React calls
- * `getSnapshotBeforeUpdate` once the new picture is worked out and before the page is changed,
- * which no hook can: there it measures where the canvas and the chosen box stand on the screen.
- * `componentDidUpdate` comes once the page is changed, the title and counts above the canvas
- * with it, and before the browser paints: there the canvas is measured again, for those words
- * may have grown or shrunk by a line, and the picture is moved once. A move made there is drawn
- * with the new picture, in the same frame.
+ * Holds a box in place when a new picture comes: the chosen box at a new reading of the files,
+ * the box that opens or closes at a change of depth of a picture the reader has moved; or fits
+ * the new picture, of another scope, or of another depth when the one before stood fitted.
+ * React calls `getSnapshotBeforeUpdate` once the new picture is worked out and before the page
+ * is changed, which no hook can: there it measures where the canvas and the box to hold stand
+ * on the screen. `componentDidUpdate` comes once the page is changed, the title and counts
+ * above the canvas with it, and before the browser paints: there the canvas is measured again,
+ * for those words may have grown or shrunk by a line, and the picture is moved once. A move
+ * made there is drawn with the new picture, in the same frame.
  */
 class HoldPlace extends Component<HoldPlaceProps> {
   override getSnapshotBeforeUpdate(previous: Readonly<HoldPlaceProps>): Before | null {
-    return previous.drawn === this.props.drawn ? null : { drawn: previous.drawn, ...this.props.measure() };
+    return previous.shown.drawn === this.props.shown.drawn ? null : this.props.measure(previous.shown);
   }
 
   override componentDidUpdate(_previous: Readonly<HoldPlaceProps>, _state: unknown, before: Before | null): void {
@@ -413,7 +465,7 @@ function ZoomShown() {
 }
 
 /** The canvas and all around it, inside React Flow's store. */
-function Inside({ view, drawn, room: given, chosen, speaking, reading, onPoint, onFocusTarget, onTap, onChoose, onClear, nodes, edges }: DiagramProps & { nodes: PictureNode[]; edges: ArrowEdge[] }) {
+function Inside({ view, drawn, room: given, chosen, speaking, reading, laying, gone, onPoint, onFocusTarget, onTap, onChoose, onClear, nodes, edges }: DiagramProps & { nodes: PictureNode[]; edges: ArrowEdge[] }) {
   const canvas = useRef<HTMLDivElement>(null);
   const diagram = useRef<HTMLDivElement>(null);
   const [room, setRoom] = useState<Room | null>(given ?? null);
@@ -452,23 +504,36 @@ function Inside({ view, drawn, room: given, chosen, speaking, reading, onPoint, 
     return () => observer.disconnect();
   }, []);
 
-  // A new picture of the same view: moved once, so that a chosen box keeps its place on the
-  // screen, else fitted again when the reader has not moved it, else kept where it stood on the
-  // screen. See `HoldPlace`, which measures the page before and after the new picture is put in.
-  const measure = (): Omit<Before, 'drawn'> => {
+  // The room as it is now, which the words above the canvas may have made a line shorter.
+  const roomNow = (): Room | null => {
+    const rect = canvas.current?.getBoundingClientRect();
+    return rect !== undefined && rect.width > 0 && rect.height > 0 ? { width: rect.width, height: rect.height } : room;
+  };
+  // A new picture in place of the one drawn: of a new reading, a chosen box keeps its place on
+  // the screen, else the picture is fitted again when the reader has not moved it, else kept
+  // where it stood on the screen; at another depth that opens or closes a box, it is fitted again
+  // when the reader has not moved it, else that box keeps its place; of another scope, it is
+  // fitted. See `HoldPlace`, which measures the page before and after the new picture is put in,
+  // and `viewportOnChange`.
+  const measure = (before: Pictured): Before => {
     const element = canvas.current;
-    const box = chosen?.kind === 'box' ? element?.querySelector(`.react-flow__node[data-id="${CSS.escape(chosen.id)}"]`) : null;
-    return { canvas: element === null ? { x: 0, y: 0 } : topLeft(element), ...(box === null || box === undefined ? {} : { box: topLeft(box) }), viewport: flow.getViewport() };
+    const change: PictureChange = { before, after: { view, drawn }, chosen, gone, viewport: flow.getViewport(), moved: moved.current, room: roomNow() };
+    const { box: held } = holdOf(change);
+    const box = held === undefined ? null : element?.querySelector(`.react-flow__node[data-id="${CSS.escape(held)}"]`);
+    return { change, canvas: element === null ? { x: 0, y: 0 } : topLeft(element), ...(box === null || box === undefined ? {} : { box: topLeft(box) }) };
   };
   const place = (before: Before) => {
     const element = canvas.current;
-    const rect = element?.getBoundingClientRect();
-    // The room as it is now, which the words above it may have made a line shorter.
-    const now = rect !== undefined && rect.width > 0 && rect.height > 0 ? { width: rect.width, height: rect.height } : room;
     const canvasAfter = element === null ? before.canvas : topLeft(element);
     // The move is made here, for the new picture: the canvas is not to be moved for it again once measured.
     stood.current = canvasAfter;
-    const next = viewportAfter(before.drawn, drawn, chosen, before.viewport, moved.current, now, { canvasBefore: before.canvas, canvasAfter, ...(before.box === undefined ? {} : { box: before.box }) });
+    const { viewport: next, fitted, kept } = viewportOnChange(before.change, roomNow(), { canvasBefore: before.canvas, canvasAfter, ...(before.box === undefined ? {} : { box: before.box }) });
+    // A fitted picture is not one the reader moved; one that kept a box in place is no longer fitted.
+    if (fitted) moved.current = false;
+    else if (kept !== undefined) moved.current = true;
+    // Which box a change of depth kept, for whoever measures the page.
+    if (kept === undefined) diagram.current?.removeAttribute('data-kept');
+    else diagram.current?.setAttribute('data-kept', kept);
     if (next === undefined) return;
     // React Flow takes new nodes and edges in an effect of its own, which may come after the
     // browser paints: they are given to it here, with the move, so that the new picture is never
@@ -529,34 +594,38 @@ function Inside({ view, drawn, room: given, chosen, speaking, reading, onPoint, 
   };
   const onFocus = (event: FocusEvent) => onFocusTarget(targetOf(event.target), shownFocus(event.target));
 
+  const shown = useMemo(() => ({ view, drawn }), [view, drawn]);
+
   return (
     <div className="diagram" data-detail={detail} ref={diagram}>
       <ZoomProperty element={diagram} />
-      <HoldPlace drawn={drawn} measure={measure} place={place} />
+      <HoldPlace shown={shown} measure={measure} place={place} />
       <header className="diagram-head">
         <div className="diagram-top">
           <h1 className="view-title">{view.title}</h1>
           <div className="buttons" role="toolbar" aria-label="Move the picture">
-          <button type="button" onClick={fitAll}>
-            Fit diagram
-          </button>
-          <button type="button" onClick={fitChosen} disabled={chosen === null}>
-            Fit selection
-          </button>
-          <button type="button" onClick={zoomOut}>
-            Zoom out
-          </button>
-          <ZoomShown />
-          <button type="button" onClick={zoomIn}>
-            Zoom in
-          </button>
+            <button type="button" onClick={fitAll}>
+              Fit diagram
+            </button>
+            <button type="button" onClick={fitChosen} disabled={chosen === null}>
+              Fit selection
+            </button>
+            <button type="button" onClick={zoomOut}>
+              Zoom out
+            </button>
+            <ZoomShown />
+            <button type="button" onClick={zoomIn}>
+              Zoom in
+            </button>
           </div>
         </div>
+        <GoneLine gone={gone} />
         <Counts view={view} drawn={drawn} />
-        <Note view={view} drawn={drawn} room={room} />
+        <Note view={view} />
         <ReadingLine {...reading} />
       </header>
       <div className="canvas" ref={canvas}>
+        <LayingLine laying={laying} />
         {room !== null && (
           <ReactFlow
             nodes={nodes}
@@ -632,6 +701,8 @@ export function Legend({
   const ids = useId();
   // What each line lights, worked out once for a view and not as the pointer moves.
   const lights = useMemo(() => new Map(view.legend.map((entry) => [entry.key, legendWords(view, entry.key)])), [view]);
+  // The chosen box's shape, closed, or that it is open, for the sample of its line.
+  const chosen = view.boxes.find((box) => box.scope)?.look ?? (view.boundaries.some((boundary) => boundary.scope) ? 'open' : undefined);
   return (
     <section className="legend" aria-label="Legend" ref={more.ref} onScroll={more.measure} {...(more.hidden ? { tabIndex: 0 } : {})}>
       <ul>
@@ -659,7 +730,7 @@ export function Legend({
               onFocus={(event) => onFocusTarget(line, shownFocus(event.currentTarget))}
               onBlur={() => onFocusTarget(null, false)}
             >
-              <Sample name={entry.key} />
+              <Sample name={entry.key} {...(chosen === undefined ? {} : { chosen })} />
               <span>{entry.text}</span>
               <span id={described} hidden>
                 {lights.get(entry.key)}
@@ -718,7 +789,7 @@ function useMore(): { ref: (element: HTMLElement | null) => void; measure: () =>
 function PassesThrough({ view, chosen, onPoint, onFocusTarget, onChoose }: { view: View; chosen: Target | null } & Omit<DiagramActions, 'onClear' | 'onTap'>) {
   const light = useContext(LightContext);
   if (view.passed.length === 0) return null;
-  const system = view.boundary?.name ?? view.boxes.find((box) => box.scope)?.name ?? view.scope;
+  const system = view.boundaries.find((boundary) => boundary.scope)?.name ?? view.boxes.find((box) => box.scope)?.name ?? view.scope ?? '';
   const own = view.passed.filter((each) => each.own);
   const others = view.passed.filter((each) => !each.own);
   const list = (passed: readonly ViewPassed[], label: string) => (

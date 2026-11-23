@@ -37,31 +37,32 @@ function placeOf(picture: Drawn, id: string) {
 
 /** The view with its boxes and arrows in the opposite order, and the boxes inside first. */
 function reordered(view: View): View {
-  return { ...view, boxes: [...view.boxes].reverse().sort((a, b) => Number(b.inside) - Number(a.inside)), arrows: [...view.arrows].reverse() };
+  return { ...view, boxes: [...view.boxes].reverse().sort((a, b) => Number(b.boundary !== undefined) - Number(a.boundary !== undefined)), boundaries: [...view.boundaries].reverse(), arrows: [...view.arrows].reverse() };
 }
 
 describe('the layout of a view', () => {
   it('draws a view of one box', async () => {
     const picture = await drawn(contextView('alone', [box('alone', 'systems', { scope: true })], []));
     expect(picture).toEqual({
-      view: 'alone.context',
+      view: 'system~alone',
       width: BOX_WIDTH + 24,
       height: BOX_HEIGHT + 24,
       boxes: [{ id: 'alone', x: 12, y: 12, width: BOX_WIDTH, height: BOX_HEIGHT, name: ['Alone'], line: '[System]', sentence: [], inset: { left: BOX_PADDING, right: BOX_PADDING } }],
+      boundaries: [],
       arrows: [],
     });
   });
 
   it('gives every box one size, its text in lines, and every arrow a route and a label', async () => {
     const picture = await drawn(shopContext());
-    expect(picture.view).toBe('shop.context');
+    expect(picture.view).toBe('system~shop');
     expect(picture.boxes.map((each) => each.id)).toEqual(['card-provider', 'customer', 'shop', 'warehouse-clerk']);
     for (const placed of picture.boxes) expect([placed.width, placed.height]).toEqual([BOX_WIDTH, BOX_HEIGHT]);
     expect(placeOf(picture, 'card-provider')).toMatchObject({ name: ['Card provider'], line: '[System]', sentence: ['Takes card payments.'] });
     const pays = picture.arrows.find((each) => each.id === 'shop~card-provider');
     expect(pays).toMatchObject({ from: 'shop', to: 'card-provider', label: { lines: ['Takes the payment'], technology: '[HTTPS]' } });
     expect(pays?.sections.flat().length).toBeGreaterThanOrEqual(2);
-    expect(picture.boundary).toBeUndefined();
+    expect(picture.boundaries).toEqual([]);
     expect(picture.width).toBeGreaterThan(0);
   });
 
@@ -91,7 +92,7 @@ describe('the layout of a view', () => {
 
   it('draws the boundary around the boxes inside it, and the others outside it', async () => {
     const picture = await drawn(shopContainers());
-    const boundary = picture.boundary;
+    const [boundary] = picture.boundaries;
     if (boundary === undefined) throw new Error('No boundary.');
     for (const id of ['storefront', 'order-api', 'shipping', 'orders-database']) expect(within(placeOf(picture, id), boundary)).toBe(true);
     for (const id of ['customer', 'warehouse-clerk', 'card-provider', 'auditor']) expect(within(placeOf(picture, id), boundary)).toBe(false);
@@ -100,7 +101,7 @@ describe('the layout of a view', () => {
 
   it('runs an arrow to the boundary and one from it', async () => {
     const picture = await drawn(shopContainers());
-    const boundary = picture.boundary;
+    const [boundary] = picture.boundaries;
     if (boundary === undefined) throw new Error('No boundary.');
     const into = picture.arrows.find((each) => each.id === 'auditor~shop');
     const out = picture.arrows.find((each) => each.id === 'shop~card-provider');
@@ -118,7 +119,7 @@ describe('the layout of a view', () => {
 
   it('puts the title of the boundary in its top padding, at its left', async () => {
     const picture = await drawn(shopContainers());
-    const boundary = picture.boundary;
+    const [boundary] = picture.boundaries;
     expect(boundary?.title).toBe('shop [System]');
     expect(boundary?.titleAt).toEqual({
       x: (boundary?.x ?? 0) + BOUNDARY_PADDING.left,
@@ -132,7 +133,7 @@ describe('the layout of a view', () => {
     const name = 'The system that keeps every record of every customer';
     for (const line of ['[System]', '[System: external]']) {
       const picture = await drawn(containerView('long', [inside('one', 'apps')], [], name, line));
-      const boundary = picture.boundary;
+      const [boundary] = picture.boundaries;
       const cut = boundary?.title.slice(0, -` ${line}`.length) ?? '';
       expect(boundary?.title.endsWith(`${ELLIPSIS} ${line}`)).toBe(true);
       expect(name.startsWith(cut.slice(0, -1))).toBe(true);
@@ -142,7 +143,7 @@ describe('the layout of a view', () => {
 
   it('draws a boundary with nothing inside it at the size of one box, with its title', async () => {
     const picture = await drawn(containerView('empty', [box('someone', 'people')], [arrow('someone', 'empty')]));
-    expect(picture.boundary).toMatchObject({ width: BOX_WIDTH + 48, height: BOX_HEIGHT + 68, title: 'empty [System]' });
+    expect(picture.boundaries[0]).toMatchObject({ width: BOX_WIDTH + 48, height: BOX_HEIGHT + 68, title: 'empty [System]' });
     expect(troubles(picture)).toEqual([]);
   });
 
@@ -180,14 +181,14 @@ describe('the layout of a view', () => {
     const view = containerView('shop', [inside('order-api', 'apps'), box('proxy', 'infrastructure', { line: '[Infrastructure · nginx]' })], [arrow('proxy', 'order-api', ['Checks that it answers'])]);
     const picture = await drawn(view);
     expect(placeOf(picture, 'proxy')).toMatchObject({ width: BOX_WIDTH, height: BOX_HEIGHT, line: '[Infrastructure · nginx]' });
-    expect(within(placeOf(picture, 'proxy'), picture.boundary ?? { x: 0, y: 0, width: 0, height: 0 })).toBe(false);
+    expect(within(placeOf(picture, 'proxy'), picture.boundaries[0] ?? { x: 0, y: 0, width: 0, height: 0 })).toBe(false);
     expect(troubles(picture)).toEqual([]);
   });
 
   it('gives a piece of infrastructure that is part of the system its box inside the boundary', async () => {
-    const view = containerView('shop', [inside('order-api', 'apps'), box('gate', 'infrastructure', { inside: true })], [arrow('gate', 'order-api', ['Checks that it answers'])]);
+    const view = containerView('shop', [inside('order-api', 'apps'), box('gate', 'infrastructure', { boundary: 'shop' })], [arrow('gate', 'order-api', ['Checks that it answers'])]);
     const picture = await drawn(view);
-    expect(within(placeOf(picture, 'gate'), picture.boundary ?? { x: 0, y: 0, width: 0, height: 0 })).toBe(true);
+    expect(within(placeOf(picture, 'gate'), picture.boundaries[0] ?? { x: 0, y: 0, width: 0, height: 0 })).toBe(true);
     expect(troubles(picture)).toEqual([]);
   });
 
@@ -220,7 +221,7 @@ describe('the layout of a view', () => {
   it('says so in words a reader can use when the layout throws', async () => {
     const picture = await layOut(contextView('a', [box('a', 'systems', { scope: true })], [arrow('a', 'nowhere')]));
     expect(picture).toEqual({
-      view: 'a.context',
+      view: 'system~a',
       failed: { reason: 'crash', message: 'This view could not be laid out, so it is not drawn. The other views still draw. The layout engine said: “Referenced shape does not exist: nowhere”.' },
     });
   });

@@ -537,32 +537,36 @@ describe('the problems that list and uses count', () => {
     return files;
   };
 
-  // The warning of a crowded view is a problem of the check as any other, so the two commands
-  // that say how many problems the check finds count it too. The limit is written out.
-  it('are those of seefore check, a crowded view among them, in words and as data', () => {
-    write(shop(40, 0), 'at-40');
+  // A warning is a problem of the check as any other, so the two commands that say how many
+  // problems the check finds count it too. A view of any size adds none: the check for a
+  // crowded view went at stage 9.
+  it('are those of seefore check, in words and as data, and a large view adds none', () => {
     write(shop(41, 0), 'at-41');
     write(shop(40, 40), 'both');
+    // The same exchange written twice is a warning on each of the two files.
+    const twice = { 'connections/app-1-asks-app-2.yaml': 'from: app-1\nto: app-2\nname: Asks\n', 'connections/app-1-asks-again.yaml': 'from: app-1\nto: app-2\nname: Asks\n' };
+    write({ ...shop(41, 0), ...twice }, 'twice');
     const lastLine = (args: string[], folder: string) => run([...args, `--workdir=${folder}`]).out.split('\n').at(-1);
     const counts = (args: string[], folder: string) => {
       const { code, data } = json<{ errors: number; warnings: number }>([...args, `--workdir=${folder}`]);
       return { code, errors: data.errors, warnings: data.warnings };
     };
 
-    expect(lastLine(['list'], 'at-40')).toBe('41 records read. No problems.');
-    expect(run(['uses', 'app-1', '--workdir=at-40']).out).not.toContain('warning');
-    expect(counts(['uses', 'app-1'], 'at-40')).toEqual({ code: 0, errors: 0, warnings: 0 });
-
-    for (const [folder, records, warnings] of [['at-41', 42, '1 warning'], ['both', 121, '2 warnings']] as const) {
-      const said = `0 errors, ${warnings}: run \`seefore check --workdir=${folder}\` to see them.`;
-      expect(lastLine(['check'], folder)).toBe(`${records} records read. 0 errors, ${warnings}.`);
-      expect(lastLine(['list'], folder)).toBe(`${records} records read. ${said}`);
-      expect(lastLine(['uses', 'app-1'], folder)).toBe(said);
-      const checked = counts(['check'], folder);
-      expect(checked).toEqual({ code: 0, errors: 0, warnings: folder === 'both' ? 2 : 1 });
-      expect(counts(['list'], folder)).toEqual(checked);
-      expect(counts(['uses', 'app-1'], folder)).toEqual(checked);
+    for (const [folder, records] of [['at-41', 42], ['both', 121]] as const) {
+      expect(lastLine(['check'], folder)).toBe(`${records} records read. No problems.`);
+      expect(lastLine(['list'], folder)).toBe(`${records} records read. No problems.`);
+      expect(run(['uses', 'app-1', `--workdir=${folder}`]).out).not.toContain('warning');
+      for (const command of [['check'], ['list'], ['uses', 'app-1']]) expect(counts(command, folder)).toEqual({ code: 0, errors: 0, warnings: 0 });
     }
+
+    const said = '0 errors, 2 warnings: run `seefore check --workdir=twice` to see them.';
+    expect(lastLine(['check'], 'twice')).toBe('44 records read. 0 errors, 2 warnings.');
+    expect(lastLine(['list'], 'twice')).toBe(`44 records read. ${said}`);
+    expect(lastLine(['uses', 'app-1'], 'twice')).toBe(said);
+    const checked = counts(['check'], 'twice');
+    expect(checked).toEqual({ code: 0, errors: 0, warnings: 2 });
+    expect(counts(['list'], 'twice')).toEqual(checked);
+    expect(counts(['uses', 'app-1'], 'twice')).toEqual(checked);
   });
 });
 

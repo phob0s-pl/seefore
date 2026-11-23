@@ -1,11 +1,14 @@
+import { viewOf } from '@seefore/core';
 import type { C4Finding, C4Report, Drawn, Failed, Model, Outline, Picture, PictureAnswer, Problem, View, ViewBox, ViewerState } from '@seefore/core';
+import { placedPicture } from './placed.ts';
 
 /**
  * A made-up reading of a small shop, as the server would hand it to the page: the state, and
- * the picture of each view. The places are made by hand, left to right, so that nothing lies
- * over anything. The container view has a boundary with two boxes inside, a person and a system
- * outside, an arrow that stands for three connections, an arrow that ends at the boundary, and a
- * box with a mark for connections between its copies. One view's layout failed.
+ * the view and the picture of some settings. The places are made by hand, left to right, so that
+ * nothing lies over anything. The container view has a boundary with two boxes inside, a person
+ * and a system outside, an arrow that stands for three connections, an arrow that ends at the
+ * boundary, and a box with a mark for connections between its copies. The view at Component
+ * depth has a boundary inside a boundary and two components. One view's layout failed.
  */
 
 export const MODEL: Model = {
@@ -132,13 +135,13 @@ const PAYMENTS = {
 };
 
 export const CONTEXT: View = {
-  id: 'shop.context',
-  kind: 'context',
+  id: 'system~shop',
+  depth: 'system',
   scope: 'shop',
   title: 'Context view: Shop',
   boxes: [
-    { id: 'card-provider', family: 'systems', look: 'system', name: 'Card provider', line: '[System]', sentence: 'Takes card payments.', scope: false, inside: false, loops: [], within: [], passing: [], kept: [] },
-    { id: 'customer', family: 'people', look: 'person', name: 'Customer', line: '[Person]', sentence: 'Buys from the shop.', scope: false, inside: false, loops: [], within: [], passing: [], kept: [] },
+    { id: 'card-provider', family: 'systems', look: 'system', name: 'Card provider', line: '[System]', sentence: 'Takes card payments.', scope: false, loops: [], within: [], passing: [], kept: [] },
+    { id: 'customer', family: 'people', look: 'person', name: 'Customer', line: '[Person]', sentence: 'Buys from the shop.', scope: false, loops: [], within: [], passing: [], kept: [] },
     {
       id: 'shop',
       family: 'systems',
@@ -147,13 +150,14 @@ export const CONTEXT: View = {
       line: '[System]',
       sentence: 'Sells goods and ships them.',
       scope: true,
-      inside: false,
+     
       loops: [],
       within: ['checkout-asks-status', 'checkout-writes-orders', 'order-api-shares-locks'],
       passing: [],
       kept: [],
     },
   ],
+  boundaries: [],
   arrows: [
     { id: 'customer~shop', from: 'customer', to: 'shop', connections: ['customer-uses-shop'], names: ['Buys goods'], technology: [] },
     {
@@ -177,13 +181,13 @@ export const CONTEXT: View = {
 };
 
 export const CONTAINERS: View = {
-  id: 'shop.containers',
-  kind: 'containers',
+  id: 'container~shop',
+  depth: 'container',
   scope: 'shop',
   title: 'Container view: Shop',
   boxes: [
-    { id: 'card-provider', family: 'systems', look: 'system', name: 'Card provider', line: '[System]', sentence: 'Takes card payments.', scope: false, inside: false, loops: [], within: [], passing: [], kept: [] },
-    { id: 'customer', family: 'people', look: 'person', name: 'Customer', line: '[Person]', sentence: 'Buys from the shop.', scope: false, inside: false, loops: [], within: [], passing: [], kept: [] },
+    { id: 'card-provider', family: 'systems', look: 'system', name: 'Card provider', line: '[System]', sentence: 'Takes card payments.', scope: false, loops: [], within: [], passing: [], kept: [] },
+    { id: 'customer', family: 'people', look: 'person', name: 'Customer', line: '[Person]', sentence: 'Buys from the shop.', scope: false, loops: [], within: [], passing: [], kept: [] },
     {
       id: 'order-api',
       family: 'apps',
@@ -192,7 +196,7 @@ export const CONTAINERS: View = {
       line: '[App: service · Go]',
       sentence: 'Takes orders and says how far each has got.',
       scope: false,
-      inside: true,
+      boundary: 'shop',
       loops: ['order-api-shares-locks'],
       within: ['checkout-asks-status'],
       passing: [],
@@ -206,14 +210,14 @@ export const CONTAINERS: View = {
       line: '[Store: database · PostgreSQL]',
       sentence: 'Keeps orders < 90 days old & how far each has got.',
       scope: false,
-      inside: true,
+      boundary: 'shop',
       loops: [],
       within: [],
       passing: [],
       kept: [],
     },
   ],
-  boundary: { id: 'shop', name: 'Shop', line: '[System]', title: 'Shop [System]' },
+  boundaries: [{ id: 'shop', family: 'systems', name: 'Shop', line: '[System]', title: 'Shop [System]', scope: true, loops: [], within: [], passing: [], kept: [] }],
   arrows: [
     { id: 'customer~shop', from: 'customer', to: 'shop', connections: ['customer-uses-shop'], names: ['Buys goods'], technology: [] },
     { id: 'order-api~card-provider', from: 'order-api', to: 'card-provider', ...PAYMENTS },
@@ -234,15 +238,16 @@ export const CONTAINERS: View = {
 };
 
 export const CARD_CONTEXT: View = {
-  id: 'card-provider.context',
-  kind: 'context',
+  id: 'system~card-provider',
+  depth: 'system',
   scope: 'card-provider',
   title: 'Context view: Card provider',
   boxes: [
-    { id: 'card-provider', family: 'systems', look: 'system-scope', name: 'Card provider', line: '[System]', sentence: 'Takes card payments.', scope: true, inside: false, loops: [], within: [], passing: [], kept: [] },
-    { id: 'customer', family: 'people', look: 'person', name: 'Customer', line: '[Person]', sentence: 'Buys from the shop.', scope: false, inside: false, loops: [], within: [], passing: [], kept: [] },
-    { id: 'shop', family: 'systems', look: 'system', name: 'Shop', line: '[System]', sentence: 'Sells goods and ships them.', scope: false, inside: false, loops: [], within: [], passing: [], kept: [] },
+    { id: 'card-provider', family: 'systems', look: 'system-scope', name: 'Card provider', line: '[System]', sentence: 'Takes card payments.', scope: true, loops: [], within: [], passing: [], kept: [] },
+    { id: 'customer', family: 'people', look: 'person', name: 'Customer', line: '[Person]', sentence: 'Buys from the shop.', scope: false, loops: [], within: [], passing: [], kept: [] },
+    { id: 'shop', family: 'systems', look: 'system', name: 'Shop', line: '[System]', sentence: 'Sells goods and ships them.', scope: false, loops: [], within: [], passing: [], kept: [] },
   ],
+  boundaries: [],
   arrows: [
     { id: 'customer~card-provider', from: 'customer', to: 'card-provider', connections: ['customer-pays-card-provider'], names: ['Pays by card'], technology: [] },
     { id: 'shop~card-provider', from: 'shop', to: 'card-provider', ...PAYMENTS },
@@ -264,7 +269,7 @@ function at(x: number, y: number, inset = { left: 12, right: 12 }) {
 }
 
 export const CONTEXT_PICTURE: Drawn = {
-  view: 'shop.context',
+  view: 'system~shop',
   width: 1160,
   height: 330,
   boxes: [
@@ -272,6 +277,7 @@ export const CONTEXT_PICTURE: Drawn = {
     { id: 'customer', ...at(40, 90), name: ['Customer'], line: '[Person]', sentence: ['Buys from the shop.'] },
     { id: 'shop', ...at(460, 90), name: ['Shop'], line: '[System]', sentence: ['Sells goods and ships them.'] },
   ],
+  boundaries: [],
   arrows: [
     {
       id: 'customer~shop',
@@ -291,10 +297,10 @@ export const CONTEXT_PICTURE: Drawn = {
 };
 
 export const CONTAINER_PICTURE: Drawn = {
-  view: 'shop.containers',
+  view: 'container~shop',
   width: 1520,
   height: 670,
-  boundary: { id: 'shop', x: 440, y: 40, width: 700, height: 400, title: 'Shop [System]', titleAt: { x: 464, y: 52, width: 128, height: 20 } },
+  boundaries: [{ id: 'shop', x: 440, y: 40, width: 700, height: 400, title: 'Shop [System]', titleAt: { x: 464, y: 52, width: 128, height: 20 } }],
   boxes: [
     { id: 'card-provider', ...at(1240, 480), name: ['Card provider'], line: '[System]', sentence: ['Takes card payments.'] },
     { id: 'customer', ...at(40, 200), name: ['Customer'], line: '[Person]', sentence: ['Buys from the shop.'] },
@@ -334,7 +340,7 @@ export const CONTAINER_PICTURE: Drawn = {
 };
 
 export const FAILED_PICTURE: Failed = {
-  view: 'card-provider.context',
+  view: 'system~card-provider',
   failed: { reason: 'time', message: 'The layout of this view took longer than 5 seconds, so it was stopped.' },
 };
 
@@ -359,22 +365,54 @@ export const STATE: ViewerState = {
   },
   conditions: {},
   outline: OUTLINE,
-  views: [CONTEXT, CONTAINERS, CARD_CONTEXT],
+  scopes: [
+    { id: 'customer', family: 'people', depth: 'system' },
+    { id: 'shop', family: 'systems', depth: 'system' },
+    { id: 'order-api', family: 'apps', depth: 'container' },
+    { id: 'checkout', family: 'components', depth: 'component' },
+    { id: 'order-status', family: 'components', depth: 'component' },
+    { id: 'orders-database', family: 'stores', depth: 'container' },
+    { id: 'card-provider', family: 'systems', depth: 'system' },
+  ],
   inNoView: [],
+};
+
+/**
+ * The shop at Component depth, worked out by the engine from the model: the Order API open
+ * inside the shop's boundary, with its two components, and the mark for its copies on its own
+ * boundary; arrows from a component, from the app's boundary and to the shop's. Its picture is
+ * placed by hand.
+ */
+export const COMPONENTS: View = (() => {
+  const view = viewOf(MODEL, { depth: 'component', scope: 'shop' });
+  if (view === undefined) throw new Error('The shop has a view at Component depth.');
+  return view;
+})();
+
+export const COMPONENT_PICTURE: Drawn = placedPicture(COMPONENTS);
+
+/** The views of the state, by the key of their setting: three made by hand, one by the engine. */
+export const VIEWS: Readonly<Record<string, View>> = {
+  'system~shop': CONTEXT,
+  'container~shop': CONTAINERS,
+  'component~shop': COMPONENTS,
+  'system~card-provider': CARD_CONTEXT,
 };
 
 /** The picture of each view of the state. */
 export const PICTURES: Readonly<Record<string, Picture>> = {
-  'shop.context': CONTEXT_PICTURE,
-  'shop.containers': CONTAINER_PICTURE,
-  'card-provider.context': FAILED_PICTURE,
+  'system~shop': CONTEXT_PICTURE,
+  'container~shop': CONTAINER_PICTURE,
+  'component~shop': COMPONENT_PICTURE,
+  'system~card-provider': FAILED_PICTURE,
 };
 
-/** The server's answer for a view at the state's revision. */
-export function answerFor(view: string, revision = STATE.revision): PictureAnswer {
-  const picture = PICTURES[view];
-  if (picture === undefined) throw new Error(`No picture of ${view} in the fixture.`);
-  return { revision, picture };
+/** The server's answer for a setting at the state's revision: its view and its picture. */
+export function answerFor(key: string, revision = STATE.revision): PictureAnswer {
+  const view = VIEWS[key];
+  const picture = PICTURES[key];
+  if (view === undefined || picture === undefined) throw new Error(`No picture of ${key} in the fixture.`);
+  return { revision, view, picture };
 }
 
 /**
@@ -437,15 +475,15 @@ function hardBox(box: Omit<ViewBox, 'scope' | 'loops' | 'within' | 'passing' | '
 }
 
 export const HARD_CONTAINERS: View = {
-  id: 'desk.containers',
-  kind: 'containers',
+  id: 'container~desk',
+  depth: 'container',
   scope: 'desk',
   title: 'Container view: Desk',
   boxes: [
-    hardBox({ id: 'cards', family: 'systems', look: 'system-external', name: 'Card provider', line: '[System: external]', sentence: 'Takes card payments.', inside: false }),
-    hardBox({ id: 'clerk', family: 'people', look: 'person', name: 'Clerk', line: '[Person]', sentence: 'Answers the tickets.', inside: false }),
-    hardBox({ id: 'events', family: 'stores', look: 'queue-or-topic', name: 'Ticket events', line: '[Store: topic · Kafka]', sentence: 'What changed on a ticket.', inside: true }),
-    hardBox({ id: 'gateway', family: 'apps', look: 'app', name: 'Gateway', line: '[App: service]', sentence: 'Signs the calls that leave the desk.', inside: true, passing: ['web-calls-cards'], kept: [] }),
+    hardBox({ id: 'cards', family: 'systems', look: 'system-external', name: 'Card provider', line: '[System: external]', sentence: 'Takes card payments.' }),
+    hardBox({ id: 'clerk', family: 'people', look: 'person', name: 'Clerk', line: '[Person]', sentence: 'Answers the tickets.' }),
+    hardBox({ id: 'events', family: 'stores', look: 'queue-or-topic', name: 'Ticket events', line: '[Store: topic · Kafka]', sentence: 'What changed on a ticket.', boundary: 'desk' }),
+    hardBox({ id: 'gateway', family: 'apps', look: 'app', name: 'Gateway', line: '[App: service]', sentence: 'Signs the calls that leave the desk.', boundary: 'desk', passing: ['web-calls-cards'], kept: [] }),
     hardBox({
       id: 'proxy',
       family: 'infrastructure',
@@ -453,13 +491,13 @@ export const HARD_CONTAINERS: View = {
       name: 'HTTPS proxy',
       line: '[Infrastructure · nginx]',
       sentence: "Ends HTTPS on the desk's host and passes requests on.",
-      inside: false,
+     
       passing: ['clerk-uses-web'],
       kept: [],
     }),
-    hardBox({ id: 'web', family: 'apps', look: 'app', name: 'Web', line: '[App: service]', sentence: 'The pages of the desk.', inside: true }),
+    hardBox({ id: 'web', family: 'apps', look: 'app', name: 'Web', line: '[App: service]', sentence: 'The pages of the desk.', boundary: 'desk' }),
   ],
-  boundary: { id: 'desk', name: 'Desk', line: '[System]', title: 'Desk [System]' },
+  boundaries: [{ id: 'desk', family: 'systems', name: 'Desk', line: '[System]', title: 'Desk [System]', scope: true, loops: [], within: [], passing: [], kept: [] }],
   arrows: [
     {
       id: 'clerk~web',
@@ -499,10 +537,10 @@ export const HARD_CONTAINERS: View = {
 };
 
 export const HARD_PICTURE: Drawn = {
-  view: 'desk.containers',
+  view: 'container~desk',
   width: 1500,
   height: 600,
-  boundary: { id: 'desk', x: 360, y: 40, width: 760, height: 520, title: 'Desk [System]', titleAt: { x: 384, y: 52, width: 116, height: 20 } },
+  boundaries: [{ id: 'desk', x: 360, y: 40, width: 760, height: 520, title: 'Desk [System]', titleAt: { x: 384, y: 52, width: 116, height: 20 } }],
   boxes: [
     { id: 'cards', ...at(1220, 200), name: ['Card provider'], line: '[System: external]', sentence: ['Takes card payments.'] },
     { id: 'clerk', ...at(40, 330), name: ['Clerk'], line: '[Person]', sentence: ['Answers the tickets.'] },
@@ -557,7 +595,15 @@ export const HARD_STATE: ViewerState = {
   ownership: {},
   conditions: {},
   outline: HARD_OUTLINE,
-  views: [HARD_CONTAINERS],
+  scopes: [
+    { id: 'clerk', family: 'people', depth: 'system' },
+    { id: 'desk', family: 'systems', depth: 'system' },
+    { id: 'gateway', family: 'apps', depth: 'container' },
+    { id: 'web', family: 'apps', depth: 'container' },
+    { id: 'events', family: 'stores', depth: 'container' },
+    { id: 'cards', family: 'systems', depth: 'system' },
+    { id: 'proxy', family: 'infrastructure', depth: 'system' },
+  ],
   inNoView: [],
 };
 
@@ -572,7 +618,12 @@ export const BROKEN_HOP_STATE: ViewerState = {
   problems: [{ file: 'infrastructure/balancer.yaml', line: 2, column: 1, severity: 'error', code: 'key-unknown', message: 'A piece of infrastructure has no `colour`.' }],
   model: { ...HARD_MODEL, infrastructure: HARD_MODEL.infrastructure.filter((piece) => piece.id !== 'balancer') },
   outline: { ...HARD_OUTLINE, infrastructure: ['proxy'] },
-  views: [{ ...HARD_CONTAINERS, passed: [{ id: 'balancer', name: 'balancer', conditions: [], own: false, connections: ['web-calls-cards'], arrows: ['web~cards'] }] }],
+};
+
+/** The container view of the hard cases in that reading: the load balancer is named by its id. */
+export const BROKEN_HOP_CONTAINERS: View = {
+  ...HARD_CONTAINERS,
+  passed: [{ id: 'balancer', name: 'balancer', conditions: [], own: false, connections: ['web-calls-cards'], arrows: ['web~cards'] }],
 };
 
 /** What one of the C4 checks found at the start of a file, where a note stands. */

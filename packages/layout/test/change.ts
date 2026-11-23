@@ -1,5 +1,5 @@
 import type { Drawn, Point, View } from '@seefore/core';
-import { sorted, turnsOf } from '../src/graph.ts';
+import { sorted, turnsFrom } from '../src/graph.ts';
 import { BOX_HEIGHT, BOX_WIDTH } from '../src/sizes.ts';
 
 /**
@@ -140,8 +140,8 @@ function runsOf(sections: readonly Point[][]): [Point, Point][] {
 }
 
 /**
- * Where a picture stands without its words: every box, the boundary, the points of every line,
- * the middle of every label and the size of the picture, as one text. A new name or a new
+ * Where a picture stands without its words: every box, every boundary, the points of every
+ * line, the middle of every label and the size of the picture, as one text. A new name or a new
  * description must leave it as it was. A label's own size is not in it: a label is where its
  * words are, and the words change, but they stand in the middle of a room that does not.
  */
@@ -149,7 +149,7 @@ export function placesOf(drawn: Drawn): string {
   return JSON.stringify({
     size: [drawn.width, drawn.height],
     boxes: drawn.boxes.map((box) => [box.id, box.x, box.y, box.width, box.height]),
-    boundary: drawn.boundary === undefined ? null : [drawn.boundary.x, drawn.boundary.y, drawn.boundary.width, drawn.boundary.height],
+    boundaries: drawn.boundaries.map((boundary) => [boundary.id, boundary.x, boundary.y, boundary.width, boundary.height]),
     lines: drawn.arrows.map((arrow) => [arrow.id, arrow.sections]),
     labels: drawn.arrows.map((arrow) => [arrow.id, arrow.label === undefined ? null : middle(arrow.label)]),
   });
@@ -173,18 +173,19 @@ export interface ColumnPair {
 }
 
 /**
- * Every pair of boxes of a picture that have the same parent, the boundary or the whole
- * picture, and stand in one column: their left edges less than a pixel apart. The walk of
- * `graph.ts` says which should stand above; the picture says which does. A pair disagrees when
- * the two orders differ, and `docs/layout.md` says none does.
+ * Every pair of boxes of a picture that have the same parent, one boundary or the whole
+ * picture, and stand in one column: their left edges less than a pixel apart. The turns the
+ * layout gave them say which should stand above, those of the walk taken from the views above
+ * when there are any; the picture says which does. A pair disagrees when the two orders differ,
+ * and `docs/layout.md` and `docs/depth-and-scope.md` say none does.
  */
-export function columnPairs(view: View, drawn: Drawn): ColumnPair[] {
-  const turns = turnsOf(sorted(view));
-  const inside = new Set(view.boundary === undefined ? [] : view.boxes.filter((box) => box.inside).map((box) => box.id));
+export function columnPairs(view: View, drawn: Drawn, above: readonly View[] = []): ColumnPair[] {
+  const turns = turnsFrom(sorted(view), above);
+  const parents = new Map(view.boxes.map((box) => [box.id, box.boundary]));
   const pairs: ColumnPair[] = [];
   for (const [at, a] of drawn.boxes.entries()) {
     for (const b of drawn.boxes.slice(at + 1)) {
-      if (inside.has(a.id) !== inside.has(b.id) || Math.abs(a.x - b.x) >= 1) continue;
+      if (parents.get(a.id) !== parents.get(b.id) || Math.abs(a.x - b.x) >= 1) continue;
       const first = (turns.get(a.id) ?? 0) <= (turns.get(b.id) ?? 0);
       pairs.push({ byWalk: first ? [a.id, b.id] : [b.id, a.id], byPicture: a.y <= b.y ? [a.id, b.id] : [b.id, a.id] });
     }
@@ -192,7 +193,7 @@ export function columnPairs(view: View, drawn: Drawn): ColumnPair[] {
   return pairs;
 }
 
-/** The pairs of `columnPairs` that stand the other way round from the walk. */
-export function againstWalk(view: View, drawn: Drawn): ColumnPair[] {
-  return columnPairs(view, drawn).filter((pair) => pair.byWalk[0] !== pair.byPicture[0]);
+/** The pairs of `columnPairs` that stand the other way round from the turns. */
+export function againstWalk(view: View, drawn: Drawn, above: readonly View[] = []): ColumnPair[] {
+  return columnPairs(view, drawn, above).filter((pair) => pair.byWalk[0] !== pair.byPicture[0]);
 }

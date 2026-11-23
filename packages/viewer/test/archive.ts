@@ -1,4 +1,4 @@
-import { conditionsOf, connectionsInNoView, load, outlineOf, ownership, viewsOf } from '@seefore/core';
+import { conditionsOf, connectionsInNoView, load, outlineOf, ownership, settingOf, viewsFor } from '@seefore/core';
 import type { Condition, Drawn, PlacedArrow, PlacedBox, View, ViewerState } from '@seefore/core';
 
 /**
@@ -38,8 +38,7 @@ export const ARCHIVE_FILES: Readonly<Record<string, string>> = {
 export function stateOf(files: Readonly<Record<string, string>>): ViewerState {
   const loaded = load(Object.entries(files).map(([path, text]) => ({ path, text })));
   const { model } = loaded;
-  const views = viewsOf(model);
-  const records = [model.people, model.systems, model.apps, model.stores, model.components, model.infrastructure, model.connections].flat();
+  const records =[model.people, model.systems, model.apps, model.stores, model.components, model.infrastructure, model.connections].flat();
   return {
     revision: 'a1',
     directory: '/work/archive/architecture',
@@ -54,19 +53,26 @@ export function stateOf(files: Readonly<Record<string, string>>): ViewerState {
     ownership: Object.fromEntries(ownership(model)),
     conditions: Object.fromEntries(records.map((record): [string, Condition[]] => [record.id, conditionsOf(model, record.id)]).filter(([, found]) => found.length > 0)),
     outline: outlineOf(model),
-    views,
-    inNoView: connectionsInNoView(model, views),
+    scopes: [...viewsFor(model).scopes],
+    inNoView: connectionsInNoView(model),
   };
 }
 
 /** The reading of the archive. */
 export const ARCHIVE_STATE: ViewerState = stateOf(ARCHIVE_FILES);
 
-/** The view with this id of a reading, the archive's unless another is given. */
-export function archiveView(id: string, state: ViewerState = ARCHIVE_STATE): View {
-  const found = state.views.find((view) => view.id === id);
-  if (found === undefined) throw new Error(`The reading has no view ${id}.`);
+/** The view of the setting with this key in a reading, as the server works it out: the archive's unless another reading is given. */
+export function archiveView(key: string, state: ViewerState = ARCHIVE_STATE): View {
+  const setting = settingOf(key);
+  const found = setting === undefined ? undefined : viewsFor(state.model).viewOf(setting);
+  if (found === undefined) throw new Error(`The reading has no setting ${key}.`);
   return found;
+}
+
+/** The view of every setting a reading has, as the server works each out. */
+export function everyView(state: ViewerState): View[] {
+  const views = viewsFor(state.model);
+  return views.settings().flatMap((setting) => views.viewOf(setting) ?? []);
 }
 
 /**
@@ -77,8 +83,8 @@ export function archiveView(id: string, state: ViewerState = ARCHIVE_STATE): Vie
  */
 export function archivePicture(view: View): Drawn {
   const places = new Map<string, { x: number; y: number }>();
-  const insideBoxes = view.boxes.filter((box) => box.inside);
-  const outside = view.boxes.filter((box) => !box.inside);
+  const insideBoxes = view.boxes.filter((box) => box.boundary !== undefined);
+  const outside = view.boxes.filter((box) => box.boundary === undefined);
   insideBoxes.forEach((box, at) => places.set(box.id, { x: 64 + at * 320, y: 104 }));
   outside.forEach((box, at) => places.set(box.id, { x: 40 + at * 320, y: 440 }));
   const boxes: PlacedBox[] = view.boxes.map((box) => {
@@ -96,7 +102,7 @@ export function archivePicture(view: View): Drawn {
     };
   });
   const width = 40 + Math.max(insideBoxes.length * 320 + 24, outside.length * 320) + 40;
-  const boundary = view.boundary;
+  const [boundary] = view.boundaries;
   const arrows: PlacedArrow[] = view.arrows.map((arrow) => {
     const [from, to] = [places.get(arrow.from) ?? { x: 40, y: 80 }, places.get(arrow.to) ?? { x: 40, y: 80 }];
     const start = { x: from.x + 240, y: from.y + 75 };
@@ -120,11 +126,8 @@ export function archivePicture(view: View): Drawn {
     width,
     height: 640,
     boxes,
-    ...(boundary === undefined
-      ? {}
-      : {
-          boundary: { id: boundary.id, x: 40, y: 40, width: insideBoxes.length * 320 + 24, height: 260, title: boundary.title, titleAt: { x: 64, y: 52, width: 140, height: 20 } },
-        }),
+    boundaries:
+      boundary === undefined ? [] : [{ id: boundary.id, x: 40, y: 40, width: insideBoxes.length * 320 + 24, height: 260, title: boundary.title, titleAt: { x: 64, y: 52, width: 140, height: 20 } }],
     arrows,
   };
 }

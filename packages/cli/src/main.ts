@@ -42,7 +42,8 @@ Commands:
            condition, what goes with it, what must go or change, what would be left
            behind, and which records may speak of it in their text.
   --server Show the model in the browser: a page on this machine that draws the
-           views of each system and lists the model and its problems. It follows
+           model at a depth, System, Container or Component, everything or one box
+           with its neighbours, and lists the model and its problems. It follows
            the files as they change, and only reads. Press Ctrl+C to stop it.
 
 Options:

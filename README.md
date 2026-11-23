@@ -34,5 +34,6 @@ claude --plugin-dir /path/to/seefore/plugin
 ```
 
 Then `/seefore:init` starts a source directory, `/seefore:model` writes its records, and
-`seefore check` reads it. `seefore --server` shows it in the browser: the views of each system,
-laid out by the engine, on a page that follows the files as they change.
+`seefore check` reads it. `seefore --server` shows it in the browser: one view of the model, at
+a depth and with a scope the reader chooses, laid out by the engine, on a page that follows the
+files as they change.

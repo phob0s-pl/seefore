@@ -1,4 +1,4 @@
-import type { LegendKey, View, ViewArrow, ViewBox } from '@seefore/core';
+import type { LegendKey, View, ViewArrow, ViewBoundary, ViewBox } from '@seefore/core';
 
 /**
  * What the reader points at, focuses or chooses in a picture, by id: a box (or the boundary), an
@@ -27,17 +27,18 @@ function none(): Lit {
 }
 
 /**
- * The boxes of a view that hold, inside them or between their copies, one of these connections.
- * Such a connection has no arrow, so the box that holds it lights in its place.
+ * The boxes and boundaries of a view that hold, inside them or between their copies, one of these
+ * connections. Such a connection has no arrow, so what holds it lights in its place.
  */
 function holdersOf(view: View, connections: ReadonlySet<string>): string[] {
-  return view.boxes.filter((box) => [...box.within, ...box.loops].some((id) => connections.has(id))).map((box) => box.id);
+  return [...view.boxes, ...view.boundaries].filter((box) => [...box.within, ...box.loops].some((id) => connections.has(id))).map((box) => box.id);
 }
 
 /**
  * What lights when the reader points at a target. A box lights itself, every arrow that starts
  * or ends at it or passes through it, and the boxes at the ends of each, and every box that
- * holds, inside it or between its copies, a connection that passes through it. An arrow lights
+ * holds, inside it or between its copies, a connection that passes through it. A boundary
+ * lights as a box does: what it holds is not its own light. An arrow lights
  * itself, its two ends and the boxes it passes through, and in the list under the legend what
  * it passes through that has no box. Something with no box lights itself in that list, the
  * arrows that pass through it and their ends, and the boxes that hold a connection that passes
@@ -62,7 +63,7 @@ export function litBy(view: View, target: Pointed): Lit {
     if (!holds(view, target)) return lit;
     light(new Set([target.id]));
     const connections = new Set(view.arrows.find((arrow) => arrow.id === target.id)?.connections ?? []);
-    for (const box of view.boxes) if (box.passing.some((id) => connections.has(id))) lit.boxes.add(box.id);
+    for (const box of [...view.boxes, ...view.boundaries]) if (box.passing.some((id) => connections.has(id))) lit.boxes.add(box.id);
     for (const each of view.passed) if (each.arrows.includes(target.id)) lit.passed.add(each.id);
     return lit;
   }
@@ -76,7 +77,7 @@ export function litBy(view: View, target: Pointed): Lit {
   }
   if (!holdsBox(view, target.id)) return lit;
   lit.boxes.add(target.id);
-  const passing = new Set(view.boxes.find((box) => box.id === target.id)?.passing ?? []);
+  const passing = new Set([...view.boxes, ...view.boundaries].find((box) => box.id === target.id)?.passing ?? []);
   const arrows = view.arrows.filter((arrow) => arrow.from === target.id || arrow.to === target.id || arrow.connections.some((id) => passing.has(id)));
   light(new Set(arrows.map((arrow) => arrow.id)));
   lightHolders(passing);
@@ -100,7 +101,7 @@ export function litByKept(view: View, keeper: string, connections: ReadonlySet<s
     lit.boxes.add(arrow.from);
     lit.boxes.add(arrow.to);
   }
-  for (const box of view.boxes) if (box.passing.some((id) => connections.has(id))) lit.boxes.add(box.id);
+  for (const box of [...view.boxes, ...view.boundaries]) if (box.passing.some((id) => connections.has(id))) lit.boxes.add(box.id);
   return lit;
 }
 
@@ -112,8 +113,9 @@ export function litByKept(view: View, keeper: string, connections: ReadonlySet<s
  * - A look lights every box of that look, and the line of an external system in scope lights
  *   that box, which the line of external systems lights too. Infrastructure lights the pieces
  *   that have a box: those only passed through are in the list under the legend.
- * - The boundary lights the boundary; an arrow, every arrow; an arrow for several connections,
- *   each that stands for more than one.
+ * - The chosen box lights it, as a box or a boundary. The boundary lights each boundary of a
+ *   system, and that of an app each boundary of an app; an arrow, every arrow; an arrow for
+ *   several connections, each that stands for more than one.
  * - A route lights every arrow with a route line. A name in brackets on a route lights every
  *   arrow whose route has one; and for each thing in the list under the legend that has a
  *   condition, that thing in the list, every arrow that passes through it, though its line may
@@ -121,8 +123,8 @@ export function litByKept(view: View, keeper: string, connections: ReadonlySet<s
  *   has no arrow. So the line lights something wherever the core puts it in the legend.
  * - The ring lights every arrow that has it; the line that says on how many the far side opened
  *   lights every arrow that has that line.
- * - `only` lights every box, the boundary and every arrow that has an `only` line.
- * - Copies, passing through and kept stores light every box that carries that mark.
+ * - `only` lights every box, boundary and arrow that has an `only` line.
+ * - Copies, passing through and kept stores light every box and boundary that carries that mark.
  *
  * No other line can be about a thing held inside a box or only in the list: the core puts each
  * of them in the legend only for a box, the boundary or an arrow that the view has.
@@ -131,6 +133,10 @@ export function litByLegend(view: View, key: LegendKey): Lit {
   const lit = none();
   const boxes = (keep: (box: ViewBox) => boolean) => {
     for (const box of view.boxes) if (keep(box)) lit.boxes.add(box.id);
+  };
+  // A boundary is lit as a box is: it carries the same marks, and the chosen box may be one.
+  const boundaries = (keep: (boundary: ViewBoundary) => boolean) => {
+    for (const boundary of view.boundaries) if (keep(boundary)) lit.boxes.add(boundary.id);
   };
   const arrows = (keep: (arrow: ViewArrow) => boolean) => {
     for (const arrow of view.arrows) if (keep(arrow)) lit.arrows.add(arrow.id);
@@ -143,14 +149,22 @@ export function litByLegend(view: View, key: LegendKey): Lit {
     case 'app':
     case 'store':
     case 'queue-or-topic':
+    case 'component':
     case 'infrastructure':
       boxes((box) => box.look === key);
       break;
     case 'system-scope-external':
       boxes((box) => box.scope && box.look === 'system-external');
       break;
+    case 'scope':
+      boxes((box) => box.scope);
+      boundaries((boundary) => boundary.scope);
+      break;
     case 'boundary':
-      if (view.boundary !== undefined) lit.boxes.add(view.boundary.id);
+      boundaries((boundary) => boundary.family === 'systems');
+      break;
+    case 'boundary-app':
+      boundaries((boundary) => boundary.family === 'apps');
       break;
     case 'arrow':
       arrows(() => true);
@@ -177,17 +191,20 @@ export function litByLegend(view: View, key: LegendKey): Lit {
       break;
     case 'only':
       boxes((box) => box.only !== undefined);
-      if (view.boundary?.only !== undefined) lit.boxes.add(view.boundary.id);
+      boundaries((boundary) => boundary.only !== undefined);
       arrows((arrow) => arrow.only !== undefined);
       break;
     case 'loop':
       boxes((box) => box.loops.length > 0);
+      boundaries((boundary) => boundary.loops.length > 0);
       break;
     case 'passing':
       boxes((box) => box.passing.length > 0);
+      boundaries((boundary) => boundary.passing.length > 0);
       break;
     case 'kept':
       boxes((box) => box.kept.length > 0);
+      boundaries((boundary) => boundary.kept.length > 0);
       break;
     default: {
       // Every key the core can put in a legend is above: a new one fails the type check here, so that none lights nothing unseen.
@@ -223,9 +240,9 @@ export function speakingOf(view: View, acts: readonly (Act | null)[], chosen: Ta
   return chosen !== null && holds(view, chosen) ? { target: chosen, whole: false } : null;
 }
 
-/** True when a view draws a box, or its boundary, with this id. */
+/** True when a view draws a box, or a boundary, with this id. */
 export function holdsBox(view: View, id: string): boolean {
-  return view.boundary?.id === id || view.boxes.some((box) => box.id === id);
+  return view.boundaries.some((boundary) => boundary.id === id) || view.boxes.some((box) => box.id === id);
 }
 
 /** True when a view holds what a target names: for a line of the legend, when its legend has it. */

@@ -8,7 +8,8 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { Drawn, Picture, View, ViewerState } from '@seefore/core';
+import { DEPTHS, keyOf, viewOf } from '@seefore/core';
+import type { Drawn, Model, Picture, PictureAnswer, Setting, View, ViewerState, Views } from '@seefore/core';
 import { EXAMPLE } from '../../core/test/example.ts';
 import type { CheckResult } from '../src/check.ts';
 import type { Io } from '../src/io.ts';
@@ -66,23 +67,52 @@ async function waitFor<T>(what: () => T | undefined | false, ms = 10_000): Promi
   }
 }
 
-/** A view made up for a test, with nothing in it. */
-function view(id: string): View {
-  return { id, kind: 'context', scope: id.split('.')[0] ?? id, title: `Context view: ${id}`, boxes: [], arrows: [], left: { outside: [], broken: [] }, legend: [], passed: [] };
+/** The view of a setting made up for a test, with nothing in it. */
+function view(setting: Setting): View {
+  const id = keyOf(setting);
+  return { id, depth: setting.depth, scope: setting.scope, title: `View: ${id}`, boxes: [], boundaries: [], arrows: [], left: { outside: [], broken: [] }, legend: [], passed: [] };
 }
+
+/**
+ * The views of a model made up for a test: everything, and each of these boxes, at every depth,
+ * each taking its turns from the same scope at each depth up. The model is not read, and each
+ * look-up is counted.
+ */
+function madeUp(...scopes: string[]): ((model: Model) => Views) & { looked: number } {
+  const lookUp = Object.assign(
+    (): Views => {
+      lookUp.looked += 1;
+      const has = (setting: Setting) => setting.scope === null || scopes.includes(setting.scope);
+      return {
+        scopes: scopes.map((id) => ({ id, family: 'systems', depth: 'system' })),
+        viewOf: (setting) => (has(setting) ? view(setting) : undefined),
+        above: (setting) => (has(setting) ? DEPTHS.slice(0, DEPTHS.indexOf(setting.depth)).reverse().map((depth) => ({ depth, scope: setting.scope })) : []),
+        settings: () => [],
+      };
+    },
+    { looked: 0 },
+  );
+  return lookUp;
+}
+
+/** A model for the made-up views, which do not read it. */
+const NO_MODEL: Model = { people: [], systems: [], apps: [], stores: [], components: [], infrastructure: [], connections: [], owners: [], technologies: [] };
 
 /** The picture a made-up layout gives for a view. */
 function drawn(of: View): Drawn {
-  return { view: of.id, width: 100, height: 50, boxes: [], arrows: [] };
+  return { view: of.id, width: 100, height: 50, boxes: [], boundaries: [], arrows: [] };
 }
 
-/** Layouts that answer at once, and count what they ran. */
-function atOnce(): Layouts & { runs: string[] } {
+/** Layouts that answer at once, and count what they ran, each with the views it was handed from above. */
+function atOnce(): Layouts & { runs: string[]; above: string[][] } {
   const runs: string[] = [];
+  const above: string[][] = [];
   return {
     runs,
-    run: async (of) => {
+    above,
+    run: async (of, from) => {
       runs.push(of.id);
+      above.push(from.map((each) => each.id));
       return drawn(of);
     },
     close: () => {},
@@ -130,14 +160,9 @@ function makePage(): Page {
   return page;
 }
 
-/** Reads like the server does, with views made up, since the views of the core may not be built. */
-function withViews(...ids: string[]): (directory: string) => Reading {
-  return (directory) => readingOf(directory, () => ids.map(view));
-}
-
 /** Starts a viewer on `arch/` that listens on a free port, and stops it after the test. */
-async function serving(layouts: Layouts = atOnce(), read = withViews('shop.context', 'shop.containers')): Promise<{ viewer: Viewer; port: number }> {
-  const viewer = startViewer({ directory: join(root, 'arch'), layouts, page: makePage(), read });
+async function serving(layouts: Layouts = atOnce()): Promise<{ viewer: Viewer; port: number }> {
+  const viewer = startViewer({ directory: join(root, 'arch'), layouts, page: makePage() });
   cleanups.push(() => viewer.close());
   const port = await listen(viewer.server, 0);
   return { viewer, port };
@@ -207,79 +232,122 @@ async function occupy(port: number): Promise<NetServer> {
   return server;
 }
 
+/** The answer for a made-up setting at a revision: its view, and the picture a made-up layout gives. */
+function answered(revision: string, key: string): { answer: PictureAnswer } {
+  const [depth = 'system', scope = null] = key.split('~') as [Setting['depth'], string?];
+  const shown = view({ depth, scope });
+  return { answer: { revision, view: shown, picture: drawn(shown) } };
+}
+
 describe('the pictures', () => {
-  it('lays a view out once for each revision, however often it is asked', async () => {
+  it('lays a setting out once for each revision, however often it is asked: two questions share one layout', async () => {
     const layouts = atOnce();
-    const pictures = new Pictures(layouts);
-    pictures.update('r1', [view('a.context')]);
-    const [first, second] = await Promise.all([pictures.ask('r1', 'a.context'), pictures.ask('r1', 'a.context')]);
-    const third = await pictures.ask('r1', 'a.context');
-    expect(layouts.runs).toEqual(['a.context']);
-    expect(first).toEqual({ answer: { revision: 'r1', picture: drawn(view('a.context')) } });
+    const pictures = new Pictures(layouts, madeUp('a'));
+    pictures.update('r1', NO_MODEL);
+    const [first, second] = await Promise.all([pictures.ask('r1', 'container~a'), pictures.ask('r1', 'container~a')]);
+    const third = await pictures.ask('r1', 'container~a');
+    expect(layouts.runs).toEqual(['container~a']);
+    expect(first).toEqual(answered('r1', 'container~a'));
     expect(second).toEqual(first);
     expect(third).toEqual(first);
   });
 
+  it('answers with the view of the setting and its picture, for everything and for one box', async () => {
+    const pictures = new Pictures(atOnce(), madeUp('a'));
+    pictures.update('r1', NO_MODEL);
+    expect(await pictures.ask('r1', 'system')).toEqual(answered('r1', 'system'));
+    expect(await pictures.ask('r1', 'component~a')).toEqual(answered('r1', 'component~a'));
+  });
+
+  it('hands the layout the views of the settings it takes its turns from, nearest first', async () => {
+    const layouts = atOnce();
+    const pictures = new Pictures(layouts, madeUp('a'));
+    pictures.update('r1', NO_MODEL);
+    await pictures.ask('r1', 'component~a');
+    await pictures.ask('r1', 'system~a');
+    await pictures.ask('r1', 'container');
+    expect(layouts.above).toEqual([['container~a', 'system~a'], [], ['system']]);
+  });
+
+  it('looks the model up once for each reading, and not before a picture is asked for', async () => {
+    const lookUp = madeUp('a', 'b');
+    const pictures = new Pictures(atOnce(), lookUp);
+    pictures.update('r1', NO_MODEL);
+    expect(lookUp.looked).toBe(0);
+    for (const key of ['system', 'container~a', 'component~b', 'system~nowhere']) await pictures.ask('r1', key);
+    expect(lookUp.looked).toBe(1);
+    pictures.update('r2', NO_MODEL);
+    await pictures.ask('r2', 'system');
+    expect(lookUp.looked).toBe(2);
+  });
+
   it('runs one layout at a time, in the order asked', async () => {
     const layouts = byHand();
-    const pictures = new Pictures(layouts);
-    pictures.update('r1', [view('a.context'), view('b.context'), view('c.context')]);
-    const asked = ['a.context', 'b.context', 'c.context'].map((id) => pictures.ask('r1', id));
+    const pictures = new Pictures(layouts, madeUp('a', 'b', 'c'));
+    pictures.update('r1', NO_MODEL);
+    const asked = ['system~a', 'system~b', 'system~c'].map((key) => pictures.ask('r1', key));
     await sleep(10);
-    expect(layouts.started.map((job) => job.view)).toEqual(['a.context']);
+    expect(layouts.started.map((job) => job.view)).toEqual(['system~a']);
     for (let n = 0; n < 3; n++) {
       await waitFor(() => layouts.started.length === n + 1);
       layouts.started[n]?.finish();
     }
     const answers = await Promise.all(asked);
-    expect(answers.map((answer) => ('answer' in answer ? answer.answer.picture.view : answer))).toEqual(['a.context', 'b.context', 'c.context']);
+    expect(answers.map((answer) => ('answer' in answer ? answer.answer.picture.view : answer))).toEqual(['system~a', 'system~b', 'system~c']);
     expect(layouts.most).toBe(1);
   });
 
   it('keeps a failure as the answer, and says what went wrong in plain words', async () => {
     let runs = 0;
-    const pictures = new Pictures({
-      run: async () => {
-        runs += 1;
-        throw new Error('ELK fell over');
+    const pictures = new Pictures(
+      {
+        run: async () => {
+          runs += 1;
+          throw new Error('ELK fell over');
+        },
+        close: () => {},
       },
-      close: () => {},
-    });
-    pictures.update('r1', [view('a.context')]);
-    const first = await pictures.ask('r1', 'a.context');
+      madeUp('a'),
+    );
+    pictures.update('r1', NO_MODEL);
+    const first = await pictures.ask('r1', 'system~a');
     expect(first).toEqual({
-      answer: { revision: 'r1', picture: { view: 'a.context', failed: { reason: 'crash', message: 'This view could not be laid out: ELK fell over' } } },
+      answer: { revision: 'r1', view: view({ depth: 'system', scope: 'a' }), picture: { view: 'system~a', failed: { reason: 'crash', message: 'This view could not be laid out: ELK fell over' } } },
     });
-    expect(await pictures.ask('r1', 'a.context')).toEqual(first);
+    expect(await pictures.ask('r1', 'system~a')).toEqual(first);
     expect(runs).toBe(1);
   });
 
   it('drops the work of a revision that is no longer the latest, and lets its answers go', async () => {
     const layouts = byHand();
-    const pictures = new Pictures(layouts);
-    pictures.update('r1', [view('a.context'), view('b.context')]);
-    const a = pictures.ask('r1', 'a.context');
-    const b = pictures.ask('r1', 'b.context');
+    const pictures = new Pictures(layouts, madeUp('a', 'b'));
+    pictures.update('r1', NO_MODEL);
+    const a = pictures.ask('r1', 'system~a');
+    const b = pictures.ask('r1', 'system~b');
     await waitFor(() => layouts.started.length === 1);
 
-    pictures.update('r2', [view('a.context'), view('b.context')]);
+    pictures.update('r2', NO_MODEL);
     expect(await b).toEqual({ old: true });
     layouts.started[0]?.finish();
     expect(await a).toEqual({ old: true });
 
-    const again = pictures.ask('r2', 'a.context');
+    const again = pictures.ask('r2', 'system~a');
     await waitFor(() => layouts.started.length === 2);
     layouts.started[1]?.finish();
-    expect(await again).toEqual({ answer: { revision: 'r2', picture: drawn(view('a.context')) } });
+    expect(await again).toEqual(answered('r2', 'system~a'));
     // b of r1 never ran.
-    expect(layouts.started.map((job) => job.view)).toEqual(['a.context', 'a.context']);
+    expect(layouts.started.map((job) => job.view)).toEqual(['system~a', 'system~a']);
   });
 
-  it('answers that a revision is old, or that the reading has no such view', async () => {
-    const pictures = new Pictures(atOnce());
-    pictures.update('r2', [view('a.context')]);
-    expect(await pictures.ask('r1', 'a.context')).toEqual({ old: true });
-    expect(await pictures.ask('r2', 'b.context')).toEqual({ unknown: true });
+  it('answers that a revision is old, or that the reading has no such setting', async () => {
+    const pictures = new Pictures(atOnce(), madeUp('a'));
+    pictures.update('r2', NO_MODEL);
+    expect(await pictures.ask('r1', 'system~a')).toEqual({ old: true });
+    // A box that is not the scope of any setting, a key of no known form, and an address of stage 5.
+    for (const key of ['system~b', 'deep~a', 'system~a~b', 'system~', 'a.context', 'a.containers']) expect(await pictures.ask('r2', key), key).toEqual({ unknown: true });
+    // A reading with no model has no setting at all.
+    pictures.update('r3', undefined);
+    expect(await pictures.ask('r3', 'system')).toEqual({ unknown: true });
   });
 });
 
@@ -306,22 +374,43 @@ describe('a reading of the source directory', () => {
     expect(reading.ownership['shipping']).toEqual({ owner: 'logistics-team', from: 'shipping' });
   });
 
-  it('has no model and no views when the marker cannot say which format the directory is in', () => {
+  it('lists what can be the scope, each with the shallowest depth it has, and sends no view', () => {
+    write(EXAMPLE);
+    const reading = readingOf(join(root, 'arch'));
+    expect(reading.scopes).toEqual([
+      { id: 'customer', family: 'people', depth: 'system' },
+      { id: 'warehouse-clerk', family: 'people', depth: 'system' },
+      { id: 'shop', family: 'systems', depth: 'system' },
+      { id: 'order-api', family: 'apps', depth: 'container' },
+      { id: 'checkout', family: 'components', depth: 'component' },
+      { id: 'order-status', family: 'components', depth: 'component' },
+      { id: 'shipping', family: 'apps', depth: 'container' },
+      { id: 'storefront', family: 'apps', depth: 'container' },
+      { id: 'orders-database', family: 'stores', depth: 'container' },
+      { id: 'card-provider', family: 'systems', depth: 'system' },
+    ]);
+    expect(Object.keys(reading)).not.toContain('views');
+  });
+
+  it('has no model and nothing that can be the scope when the marker cannot say which format the directory is in', () => {
     write({ ...EXAMPLE, 'seefore.yaml': 'format: 99\nname: Shop\n' });
-    const reading = readingOf(join(root, 'arch'), () => [view('shop.context')]);
+    const reading = readingOf(join(root, 'arch'));
     expect(reading.available).toBe(false);
     expect(reading.format).toBe(99);
-    expect(reading.views).toEqual([]);
+    expect(reading.scopes).toEqual([]);
     expect(reading.model.people).toEqual([]);
     expect(reading.problems.map((problem) => problem.code)).toContain('format-not-readable');
   });
 
-  it('gives the connections that no view holds, which the listing of the model still has', () => {
-    // A person reloads a proxy, the proxy checks a peer and itself, and none of it touches the one system.
+  it('gives the connections that no view holds, those with an end that cannot be followed, which the listing of the model still has', () => {
+    // A person reloads a proxy, the proxy checks a peer and itself, and none of it touches the one
+    // system: no view of the system draws it, and everything as the scope does. The person also
+    // asks an app whose `in` names nothing, which is not in the model.
     write({
       'seefore.yaml': 'format: 1\nname: Desk\n',
       'systems/desk.yaml': 'name: Desk\n',
       'apps/api.yaml': 'name: API\nin: desk\n',
+      'apps/lost.yaml': 'name: Lost\nin: nowhere\n',
       'people/operator.yaml': 'name: Operator\n',
       'infrastructure/proxy.yaml': 'name: Proxy\n',
       'infrastructure/peer.yaml': 'name: Peer proxy\n',
@@ -329,18 +418,18 @@ describe('a reading of the source directory', () => {
       'connections/proxy-checks-peer.yaml': 'from: proxy\nto: peer\n',
       'connections/proxy-syncs-proxy.yaml': 'from: proxy\nto: proxy\n',
       'connections/operator-uses-api.yaml': 'from: operator\nto: api\n',
+      'connections/operator-asks-lost.yaml': 'from: operator\nto: lost\n',
     });
     const reading = readingOf(join(root, 'arch'));
-    const unseen = ['operator-reloads-proxy', 'proxy-checks-peer', 'proxy-syncs-proxy'];
-    expect(reading.problems).toEqual([]);
-    expect(reading.inNoView).toEqual(unseen);
-    // No view draws them, leaves them out or marks them, and the listing of the model has each under where it starts.
-    expect(JSON.stringify(reading.views)).not.toMatch(/operator-reloads-proxy|proxy-checks-peer|proxy-syncs-proxy/);
-    expect(reading.outline.connections.flatMap((group) => group.connections)).toEqual(expect.arrayContaining(unseen));
-    expect(reading.model.connections.map((one) => one.id)).toEqual(expect.arrayContaining(unseen));
-    // Once the proxy stands beside the system, its copies are its mark; what it does with the operator is left out there, and still in no picture.
-    write({ 'connections/proxy-checks-api.yaml': 'from: proxy\nto: api\n' });
-    expect(readingOf(join(root, 'arch')).inNoView).toEqual(['operator-reloads-proxy', 'proxy-checks-peer']);
+    expect(reading.problems.map((problem) => problem.code)).toEqual(['reference-unknown']);
+    expect(reading.inNoView).toEqual(['operator-asks-lost']);
+    expect(JSON.stringify(viewOf(reading.model, { depth: 'container', scope: 'desk' }))).not.toMatch(/operator-reloads-proxy|proxy-checks-peer|proxy-syncs-proxy/);
+    const everything = JSON.stringify(viewOf(reading.model, { depth: 'system', scope: null }));
+    for (const id of ['operator-reloads-proxy', 'proxy-checks-peer', 'proxy-syncs-proxy']) expect(everything).toContain(`"${id}"`);
+    // The listing of the model has each under where it starts.
+    expect(reading.outline.connections.flatMap((group) => group.connections)).toEqual(expect.arrayContaining(['operator-asks-lost', 'operator-reloads-proxy']));
+    // What can be the scope, for the page: the proxy and its peer have boxes.
+    expect(reading.scopes.map((scope) => scope.id)).toEqual(['operator', 'desk', 'api', 'peer', 'proxy']);
     // With no model there is nothing in no view.
     expect(readingOf(join(root, 'gone')).inNoView).toEqual([]);
   });
@@ -486,7 +575,7 @@ describe('following the files', () => {
     const { source } = following();
     rmSync(join(root, 'arch'), { recursive: true });
     await waitFor(() => !source.state.available && source.state.problems[0]?.code === 'directory-gone');
-    expect(source.state.views).toEqual([]);
+    expect(source.state.scopes).toEqual([]);
 
     write({ ...EXAMPLE, 'seefore.yaml': 'format: 1\nname: Shop again\n' });
     await waitFor(() => source.state.available && source.state.name === 'Shop again');
@@ -586,36 +675,62 @@ describe('the server', () => {
     const state = JSON.parse(answer.body) as ViewerState;
     expect(state).toEqual(viewer.source.state);
     expect(state.name).toBe('Shop');
-    expect(state.views.map((shown) => shown.id)).toEqual(['shop.context', 'shop.containers']);
+    expect(state.scopes.map((scope) => scope.id)).toContain('checkout');
+    expect(Object.keys(state)).not.toContain('views');
   });
 
-  it('answers the picture of a view at the latest revision', async () => {
-    const { viewer, port } = await serving();
-    const { revision } = viewer.source.state;
-    const answer = await get(port, `/api/pictures/${revision}/shop.context`);
-    expect(answer.status).toBe(200);
-    expect(JSON.parse(answer.body)).toEqual({ revision, picture: drawn(view('shop.context')) });
-    expect((await get(port, `/api/pictures/${encodeURIComponent(revision)}/${encodeURIComponent('shop.context')}`)).status).toBe(200);
+  it('answers the view of a setting at the latest revision, with its picture, the setting named as the address names it', async () => {
+    const layouts = atOnce();
+    const { viewer, port } = await serving(layouts);
+    const { revision, model } = viewer.source.state;
+    for (const setting of [{ depth: 'system', scope: null }, { depth: 'container', scope: 'shop' }, { depth: 'component', scope: 'checkout' }] satisfies Setting[]) {
+      const answer = await get(port, `/api/pictures/${revision}/${keyOf(setting)}`);
+      expect(answer.status, keyOf(setting)).toBe(200);
+      const shown = viewOf(model, setting);
+      if (shown === undefined) throw new Error(`The shop has the setting ${keyOf(setting)}.`);
+      expect(JSON.parse(answer.body)).toEqual({ revision, view: shown, picture: drawn(shown) });
+    }
+    expect((await get(port, `/api/pictures/${encodeURIComponent(revision)}/${encodeURIComponent('container~shop')}`)).status).toBe(200);
+    // Each laid out once, and handed the views above it.
+    expect(layouts.runs).toEqual(['system', 'container~shop', 'component~checkout']);
+    expect(layouts.above).toEqual([[], [], []]);
+    // One system at Component depth takes its turns from its container view, which takes none.
+    await get(port, `/api/pictures/${revision}/component~shop`);
+    expect(layouts.above.at(-1)).toEqual(['container~shop']);
+    await get(port, `/api/pictures/${revision}/component`);
+    expect(layouts.above.at(-1)).toEqual(['container', 'system']);
   });
 
-  it('answers 409 for a revision that is not the latest, and 404 for a view the reading does not have', async () => {
+  it('answers 409 for a revision that is not the latest, and 404 for a setting the reading does not have', async () => {
     const { viewer, port } = await serving();
-    const old = await get(port, '/api/pictures/not-a-revision/shop.context');
+    const old = await get(port, '/api/pictures/not-a-revision/system~shop');
     expect(old.status).toBe(409);
     expect(JSON.parse(old.body)).toEqual({
       error: { code: 'revision-old', message: 'This reading of the files is no longer the latest. Ask for the state again.' },
     });
-    const missing = await get(port, `/api/pictures/${viewer.source.state.revision}/nowhere.context`);
+    const { revision } = viewer.source.state;
+    const missing = await get(port, `/api/pictures/${revision}/container~nowhere`);
     expect(missing.status).toBe(404);
-    expect(JSON.parse(missing.body)).toEqual({ error: { code: 'no-such-view', message: 'The latest reading has no view `nowhere.context`.' } });
+    expect(JSON.parse(missing.body)).toEqual({ error: { code: 'no-such-view', message: 'The latest reading has no view `container~nowhere`.' } });
+    // A depth the box does not have, the address of a view of stage 5, and one of no known form.
+    for (const setting of ['system~order-api', 'container~checkout', 'shop.context', 'shop.containers', 'everything', 'system~']) {
+      expect((await get(port, `/api/pictures/${revision}/${encodeURIComponent(setting)}`)).status, setting).toBe(404);
+    }
     expect((await get(port, '/api/pictures/one/two/three')).status).toBe(404);
     expect((await get(port, '/api/pictures/%E0%A4%A/x')).status).toBe(404);
+  });
+
+  it('answers 404 for every setting while the directory is gone', async () => {
+    rmSync(join(root, 'arch'), { recursive: true });
+    const { viewer, port } = await serving();
+    expect(viewer.source.state.available).toBe(false);
+    expect((await get(port, `/api/pictures/${viewer.source.state.revision}/system`)).status).toBe(404);
   });
 
   it('answers the state and the events while a layout runs', async () => {
     const { viewer, port } = await serving(never());
     let pictureAnswered = false;
-    void get(port, `/api/pictures/${viewer.source.state.revision}/shop.context`).then(() => (pictureAnswered = true), () => {});
+    void get(port, `/api/pictures/${viewer.source.state.revision}/system~shop`).then(() => (pictureAnswered = true), () => {});
     await sleep(50);
     expect((await get(port, '/api/state')).status).toBe(200);
     const followed = events(port);
@@ -635,8 +750,8 @@ describe('the server', () => {
     const second = followed.revisions[1] as string;
     expect(second).not.toBe(first);
     expect((JSON.parse((await get(port, '/api/state')).body) as ViewerState).revision).toBe(second);
-    expect((await get(port, `/api/pictures/${first}/shop.context`)).status).toBe(409);
-    expect((await get(port, `/api/pictures/${second}/shop.context`)).status).toBe(200);
+    expect((await get(port, `/api/pictures/${first}/system~shop`)).status).toBe(409);
+    expect((await get(port, `/api/pictures/${second}/system~shop`)).status).toBe(200);
   });
 
   it('serves the page from its files, and the page itself at an address the page made', async () => {
@@ -649,7 +764,7 @@ describe('the server', () => {
     expect(app.headers['content-type']).toBe('text/javascript; charset=utf-8');
     expect(app.body).toBe('console.log("app");');
     expect(app.headers['x-content-type-options']).toBe('nosniff');
-    expect((await get(port, '/views/shop.containers?x=1', { accept: 'text/html,application/xhtml+xml' })).body).toBe(index.body);
+    expect((await get(port, '/view/container~shop?x=1', { accept: 'text/html,application/xhtml+xml' })).body).toBe(index.body);
   });
 
   it('serves no file but those of the page, listed when it started', async () => {
@@ -888,6 +1003,14 @@ describe('the built command', () => {
     const state = JSON.parse((await get(port, '/api/state')).body) as ViewerState;
     expect(state.name).toBe('Shop');
     expect(state.records).toBe(Object.keys(EXAMPLE).length - 1);
+    // A picture laid out in the worker thread, with a boundary inside a boundary.
+    const answer = JSON.parse((await get(port, `/api/pictures/${state.revision}/component~shop`)).body) as PictureAnswer;
+    expect(answer.view.boundaries.map((boundary) => [boundary.id, boundary.boundary])).toEqual([
+      ['order-api', 'shop'],
+      ['shop', undefined],
+    ]);
+    if ('failed' in answer.picture) throw new Error(answer.picture.failed.message);
+    expect(answer.picture.boundaries.map((boundary) => boundary.id)).toEqual(['order-api', 'shop']);
 
     running.child.kill('SIGTERM');
     expect(await running.exited).toBe(0);

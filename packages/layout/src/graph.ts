@@ -16,42 +16,66 @@ const ROOT = '~picture';
 /** How far apart, top to bottom, the made-up places of two turns of the walk are. Any number would do: only their order counts. */
 const TURN_STEP = 200;
 
-/** A view with its boxes and arrows in order of id. */
+/** A view with its boxes, its boundaries and its arrows in order of id. */
 export function sorted(view: View): View {
-  return { ...view, boxes: [...view.boxes].sort(byId), arrows: [...view.arrows].sort(byId) };
+  return { ...view, boxes: [...view.boxes].sort(byId), boundaries: [...view.boundaries].sort(byId), arrows: [...view.arrows].sort(byId) };
 }
 
 /**
- * The graph ELK lays out: the boxes outside, the boundary with the boxes inside it, and one
- * edge for each arrow with its label's room. Each box and the boundary has a made-up place
- * whose height is its turn in the walk, and ELK keeps the boxes of every column in the order
- * of those places. A context view of `UNZIP_FROM` boxes or more has its long column split. The
- * view must be sorted.
+ * The graph ELK lays out, as a tree: the boxes and boundaries that stand in none at the top,
+ * each boundary with what stands in it as its children, and one edge for each arrow with its
+ * label's room, from the top. Each box and boundary has a made-up place whose height is its
+ * turn, and ELK keeps the boxes of every column in the order of those places. A person acted on
+ * by a person is let go of the first column, where every other person stands: ELK fails when
+ * both must be first. One system drawn closed, with `UNZIP_FROM` boxes or more, has its long
+ * column split. The view must be sorted.
  */
-export function graphOf(view: View, labels: ReadonlyMap<string, LabelText>): ElkNode {
-  const boundary = view.boundary;
-  const turns = turnsOf(view);
-  const node = (box: ViewBox) => nodeOf(box, turns.get(box.id) ?? 0);
-  const outside = view.boxes.filter((box) => boundary === undefined || !box.inside).map(node);
-  const children =
-    boundary === undefined
-      ? outside
-      : [
-          ...outside,
-          { id: boundary.id, layoutOptions: { ...BOUNDARY_OPTIONS, ...placeOf(turns.get(boundary.id) ?? 0) }, children: view.boxes.filter((box) => box.inside).map(node) },
-        ].sort(byId);
+export function graphOf(view: View, labels: ReadonlyMap<string, LabelText>, turns: ReadonlyMap<string, number> = turnsOf(view)): ElkNode {
+  const people = new Set(view.boxes.filter((box) => box.family === 'people').map((box) => box.id));
+  const released = new Set(view.arrows.filter((arrow) => people.has(arrow.from) && people.has(arrow.to)).map((arrow) => arrow.to));
+  const childrenOf = (parent: string | undefined): ElkNode[] =>
+    [
+      ...view.boxes.filter((box) => box.boundary === parent).map((box) => nodeOf(box, turns.get(box.id) ?? 0, !released.has(box.id))),
+      ...view.boundaries
+        .filter((boundary) => boundary.boundary === parent)
+        .map((boundary): ElkNode => ({ id: boundary.id, layoutOptions: { ...BOUNDARY_OPTIONS, ...placeOf(turns.get(boundary.id) ?? 0) }, children: childrenOf(boundary.id) })),
+    ].sort(byId);
   return {
     id: ROOT,
-    layoutOptions: { ...ROOT_OPTIONS, ...(view.kind === 'context' && view.boxes.length >= UNZIP_FROM ? UNZIP_OPTIONS : {}) },
-    children,
+    layoutOptions: { ...ROOT_OPTIONS, ...(unzips(view) ? UNZIP_OPTIONS : {}) },
+    children: childrenOf(undefined),
     edges: view.arrows.map((arrow) => edgeOf(arrow, labels.get(arrow.id))),
   };
 }
 
 /**
- * The turn of each box of a view in a walk through it, level by level, and the turn of the
- * boundary. The order of every column is the order of the walk. The turns are the same in
- * whatever order the boxes and arrows come.
+ * True for a view whose long column is split: one system as the scope, drawn closed, with
+ * `UNZIP_FROM` boxes or more. That is the context view of stage 5, and the same picture at a
+ * deeper depth of a system that has nothing to open, which must not change with the depth.
+ */
+export function unzips(view: View): boolean {
+  const chosen = view.boxes.find((box) => box.id === view.scope);
+  return chosen?.family === 'systems' && view.boundaries.length === 0 && view.boxes.length >= UNZIP_FROM;
+}
+
+/**
+ * The turns of a view's boxes and boundaries, taken from the pictures above it, nearest first:
+ * the same scope one depth up, and so on up, as `Views.above` gives them. The turns of the one
+ * furthest up are its own walk's; each nearer one keeps the turns of the one above it for
+ * every thing that is in both, also a box that is now open, and takes the turns of its own walk
+ * for what is newly shown. Nothing is taken from a picture laid out before: the views above are
+ * made from the same model, so that an address opened afresh and a change of depth by hand give
+ * the same picture.
+ */
+export function turnsFrom(view: View, above: readonly View[]): Map<string, number> {
+  const kept = above.reduceRight<Map<string, number> | undefined>((turns, each) => turnsOf(each, turns), undefined);
+  return turnsOf(view, kept);
+}
+
+/**
+ * The turn of each box and boundary of a view in a walk through it, level by level. The order
+ * of every column is the order of the walk. The turns are the same in whatever order the boxes,
+ * the boundaries and the arrows come.
  *
  * - The walk starts at the boxes that nothing acts on: people first, then the others, each
  *   group in order of id.
@@ -59,15 +83,19 @@ export function graphOf(view: View, labels: ReadonlyMap<string, LabelText>): Elk
  *   id, that it has not yet taken.
  * - A box in a circle that no start reaches is a start of its own, in order of id. Every box
  *   that no start reaches hangs on such a circle, so the walk takes every box.
- * - An arrow may start or end at the boundary, so the walk takes the boundary as it takes a
- *   box. Then the boundary has the turn of the first box inside it, or its own when it holds
- *   none.
+ * - An arrow may start or end at a boundary, so the walk takes every boundary as it takes a
+ *   box. Then each boundary has the turn of the earliest thing inside it, worked out from the
+ *   inside out, or its own when it holds none.
+ * - Given the turns of the picture one depth up, every thing that is in both keeps its turn
+ *   from there, also a box that is now open; what is newly shown keeps the turn of this walk.
+ *   What is newly shown stands inside a box that opened, among things that are all new, so the
+ *   two counts never meet in one column of one boundary.
  *
- * Nothing is stored: the turns come from the view alone, each time, so that the picture is
+ * Nothing is stored: the turns come from the views alone, each time, so that the picture is
  * made from its model and never from the picture before it.
  */
-export function turnsOf(view: View): Map<string, number> {
-  const ids = [...view.boxes.map((box) => box.id), ...(view.boundary === undefined ? [] : [view.boundary.id])].sort(byText);
+export function turnsOf(view: View, above?: ReadonlyMap<string, number>): Map<string, number> {
+  const ids = [...view.boxes.map((box) => box.id), ...view.boundaries.map((boundary) => boundary.id)].sort(byText);
   const joined = new Map<string, Set<string>>(ids.map((id) => [id, new Set()]));
   const onward = new Map<string, Set<string>>(ids.map((id) => [id, new Set()]));
   const acted = new Set<string>();
@@ -99,12 +127,25 @@ export function turnsOf(view: View): Map<string, number> {
   const circled = inCircles(ids, onward);
   for (const id of ids) if (!taken.has(id) && circled.has(id)) walkFrom(id);
   const turns = new Map(order.map((id, turn) => [id, turn]));
-  const boundary = view.boundary;
-  if (boundary !== undefined) {
-    const held = view.boxes.filter((box) => box.inside).map((box) => turns.get(box.id) ?? 0);
+  const inside = [...view.boxes, ...view.boundaries];
+  for (const boundary of insideOut(view.boundaries)) {
+    const held = inside.filter((each) => each.boundary === boundary.id).map((each) => turns.get(each.id) ?? 0);
     if (held.length > 0) turns.set(boundary.id, Math.min(...held));
   }
+  if (above !== undefined) for (const id of ids) if (above.has(id)) turns.set(id, above.get(id) ?? 0);
   return turns;
+}
+
+/** Boundaries from the inside out: each after every boundary that stands in it. */
+function insideOut(boundaries: readonly ViewBoundary[]): ViewBoundary[] {
+  const parents = new Map(boundaries.map((boundary) => [boundary.id, boundary.boundary]));
+  const depth = (id: string): number => {
+    let count = 0;
+    // A boundary stands in none of its own: the guard keeps a view made by hand from going round for ever.
+    for (let at = parents.get(id); at !== undefined && count <= boundaries.length; at = parents.get(at)) count++;
+    return count;
+  };
+  return [...boundaries].sort((a, b) => depth(b.id) - depth(a.id) || byText(a.id, b.id));
 }
 
 /**
@@ -161,9 +202,9 @@ function placeOf(turn: number): { 'elk.position': string } {
   return { 'elk.position': `(0, ${turn * TURN_STEP})` };
 }
 
-/** The node of a box: every box one size, at the place of its turn, and a person in the first column. */
-function nodeOf(box: ViewBox, turn: number): ElkNode {
-  return { id: box.id, width: BOX_WIDTH, height: BOX_HEIGHT, layoutOptions: { ...(box.family === 'people' ? PERSON_OPTIONS : {}), ...placeOf(turn) } };
+/** The node of a box: every box one size, at the place of its turn, and a person in the first column unless it is let go. */
+function nodeOf(box: ViewBox, turn: number, first: boolean): ElkNode {
+  return { id: box.id, width: BOX_WIDTH, height: BOX_HEIGHT, layoutOptions: { ...(box.family === 'people' && first ? PERSON_OPTIONS : {}), ...placeOf(turn) } };
 }
 
 /**
@@ -183,9 +224,9 @@ export function drawnOf(view: View, laid: ElkNode, labels: ReadonlyMap<string, L
   const edges = new Map<string, ElkExtendedEdge>();
   collect(laid, shapes, edges);
   const boxes = view.boxes.map((box) => placedBox(box, shapeOf(shapes, box.id)));
-  const boundary = view.boundary === undefined ? undefined : placedBoundary(view.boundary, shapeOf(shapes, view.boundary.id));
+  const boundaries = view.boundaries.map((boundary) => placedBoundary(boundary, shapeOf(shapes, boundary.id)));
   const arrows = view.arrows.map((arrow) => placedArrow(arrow, edges.get(arrow.id), labels.get(arrow.id)));
-  return { view: view.id, width: laid.width ?? 0, height: laid.height ?? 0, boxes, ...(boundary === undefined ? {} : { boundary }), arrows };
+  return { view: view.id, width: laid.width ?? 0, height: laid.height ?? 0, boxes, boundaries, arrows };
 }
 
 /** Every node and edge of ELK's answer, by id, at every depth. */
@@ -209,7 +250,7 @@ function placedBox(box: ViewBox, shape: ElkShape): PlacedBox {
   return { id: box.id, ...rectOf(shape), ...boxText(box) };
 }
 
-/** The boundary at its place, with its title in the top padding, cut to the room inside. */
+/** A boundary at its place, with its title in the top padding, cut to the room inside. */
 function placedBoundary(boundary: ViewBoundary, shape: ElkShape): PlacedBoundary {
   const rect = rectOf(shape);
   const title = titleText(boundary, rect.width - BOUNDARY_PADDING.left - BOUNDARY_PADDING.right);

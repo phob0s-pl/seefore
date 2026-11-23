@@ -3,8 +3,8 @@ import { holds, litBy, litByKept, litByLegend, speakingOf } from '../src/light.t
 import type { Act } from '../src/light.ts';
 import { legendWords } from '../src/reading.ts';
 import type { LegendKey, View, ViewBox } from '@seefore/core';
-import { ARCHIVE_FILES, ARCHIVE_STATE, archiveView, stateOf } from './archive.ts';
-import { CONTAINERS, CONTEXT, HARD_CONTAINERS, STATE } from './fixture.ts';
+import { ARCHIVE_FILES, ARCHIVE_STATE, archiveView, everyView, stateOf } from './archive.ts';
+import { COMPONENTS, CONTAINERS, CONTEXT, HARD_CONTAINERS, STATE } from './fixture.ts';
 import { STUDIO_STATE, studioView } from './studio.ts';
 
 /** Which boxes and arrows a hover, the focus or a choice lights. */
@@ -33,6 +33,20 @@ describe('what a hover lights', () => {
 
   it('lights an arrow and its two ends', () => {
     expect(lit({ kind: 'arrow', id: 'order-api~card-provider' })).toEqual({ boxes: ['card-provider', 'order-api'], arrows: ['order-api~card-provider'] });
+  });
+
+  it('lights a boundary inside a boundary as a box: itself, the arrows at its edge and their other ends, and not what it holds', () => {
+    expect(lit({ kind: 'box', id: 'order-api' }, COMPONENTS)).toEqual({ boxes: ['card-provider', 'order-api'], arrows: ['order-api~card-provider'] });
+    expect(lit({ kind: 'box', id: 'checkout' }, COMPONENTS)).toEqual({
+      boxes: ['card-provider', 'checkout', 'order-status', 'orders-database'],
+      arrows: ['checkout~card-provider', 'checkout~order-status', 'checkout~orders-database'],
+    });
+  });
+
+  it('lights, with a boundary that connections pass through, their arrows, and the boundary with an arrow that passes through it', () => {
+    const view = { ...COMPONENTS, boundaries: COMPONENTS.boundaries.map((boundary) => (boundary.id === 'order-api' ? { ...boundary, passing: ['checkout-takes-payment'] } : boundary)) };
+    expect(lit({ kind: 'box', id: 'order-api' }, view)).toEqual({ boxes: ['card-provider', 'checkout', 'order-api'], arrows: ['checkout~card-provider', 'order-api~card-provider'] });
+    expect(lit({ kind: 'arrow', id: 'checkout~card-provider' }, view)).toEqual({ boxes: ['card-provider', 'checkout', 'order-api'], arrows: ['checkout~card-provider'] });
   });
 
   it('lights a box with no arrow alone', () => {
@@ -81,7 +95,7 @@ describe('what passes through', () => {
 
 /** A box of a made-up view, with nothing in its marks unless given. */
 function made(id: string, more: Partial<ViewBox> = {}): ViewBox {
-  return { id, family: 'apps', look: 'app', name: id, line: '[App]', scope: false, inside: true, loops: [], within: [], passing: [], kept: [], ...more };
+  return { id, family: 'apps', look: 'app', name: id, line: '[App]', scope: false, boundary: 'vellum', loops: [], within: [], passing: [], kept: [], ...more };
 }
 
 /**
@@ -91,17 +105,17 @@ function made(id: string, more: Partial<ViewBox> = {}): ViewBox {
  */
 const HELD: View = {
   id: 'vellum.containers',
-  kind: 'containers',
+  depth: 'container',
   scope: 'vellum',
   title: 'Container view: Vellumoak',
   boxes: [
     made('browser'),
     made('jobs', { loops: ['jobs-tell-jobs'] }),
-    made('proxy', { family: 'infrastructure', look: 'infrastructure', inside: false, passing: ['browser-asks-web', 'jobs-tell-jobs'] }),
+    { id: 'proxy', family: 'infrastructure', look: 'infrastructure', name: 'proxy', line: '[App]', scope: false, loops: [], within: [], passing: ['browser-asks-web', 'jobs-tell-jobs'], kept: [] },
     made('runner'),
     made('web'),
   ],
-  boundary: { id: 'vellum', name: 'Vellumoak', line: '[System]', title: 'Vellumoak [System]' },
+  boundaries: [{ id: 'vellum', family: 'systems', name: 'Vellumoak', line: '[System]', title: 'Vellumoak [System]', scope: true, loops: [], within: [], passing: [], kept: [] }],
   arrows: [
     { id: 'browser~web', from: 'browser', to: 'web', connections: ['browser-asks-web'], names: ['Asks'], technology: [], route: { count: 1, hops: [{ name: 'proxy', bracketed: false }], bracketed: false, line: 'via proxy' } },
     { id: 'runner~proxy', from: 'runner', to: 'proxy', connections: ['runner-reloads-proxy'], names: ['Reloads'], technology: [] },
@@ -122,7 +136,7 @@ describe('what passes through a connection held in a box', () => {
 });
 
 describe('what choosing a store that an app keeps lights', () => {
-  const view = archiveView('archive.containers');
+  const view = archiveView('container~archive');
   /** The connections of the archive that start or end at a record. */
   const of = (id: string) => new Set(ARCHIVE_STATE.model.connections.filter((one) => one.from === id || one.to === id).map((one) => one.id));
   const sorted = ({ boxes, arrows }: { boxes: Set<string>; arrows: Set<string> }) => ({ boxes: [...boxes].sort(), arrows: [...arrows].sort() });
@@ -137,12 +151,12 @@ describe('what choosing a store that an app keeps lights', () => {
   });
 
   it('lights nothing where the view does not draw the app', () => {
-    expect(sorted(litByKept(archiveView('archive.context'), 'desk', of('drafts')))).toEqual({ boxes: [], arrows: [] });
+    expect(sorted(litByKept(archiveView('system~archive'), 'desk', of('drafts')))).toEqual({ boxes: [], arrows: [] });
   });
 });
 
 describe('what a line of the legend lights', () => {
-  const containers = studioView('studio.containers');
+  const containers = studioView('container~studio');
   /** What a line of the legend of a view of the studio lights, as sorted lists. */
   const legend = (key: LegendKey, view = containers) => lit({ kind: 'legend', id: key }, view);
 
@@ -158,8 +172,8 @@ describe('what a line of the legend lights', () => {
   });
 
   it('lights the system in scope, and an external one in scope for both its lines', () => {
-    expect(legend('system-scope', studioView('studio.context'))).toEqual({ boxes: ['studio'], arrows: [] });
-    const payments = studioView('payments.context');
+    expect(legend('system-scope', studioView('system~studio'))).toEqual({ boxes: ['studio'], arrows: [] });
+    const payments = studioView('system~payments');
     expect(legend('system-scope-external', payments)).toEqual({ boxes: ['payments'], arrows: [] });
     expect(legend('system-external', payments)).toEqual({ boxes: ['payments'], arrows: [] });
   });
@@ -179,7 +193,7 @@ describe('what a line of the legend lights', () => {
 
   it('lights for a thing in brackets an arrow that passes through it though its route line says only on how many', () => {
     // The context view: the edit and the reload share an arrow, so its line says `via on 1 of 2`.
-    const context = studioView('studio.context');
+    const context = studioView('system~studio');
     expect(context.arrows.find((arrow) => arrow.id === 'editor~studio')?.route?.line).toBe('via on 1 of 2');
     // Were the edge there only sometimes, the legend would explain the brackets the list puts it in.
     const view: View = {
@@ -192,7 +206,7 @@ describe('what a line of the legend lights', () => {
 
   it('lights every `only`: of a box, of the boundary and of an arrow', () => {
     expect(legend('only')).toEqual({ boxes: ['api', 'studio'], arrows: ['worker~crm'] });
-    expect(legend('only', studioView('studio.context'))).toEqual({ boxes: ['studio'], arrows: ['proxy~studio', 'studio~crm', 'studio~payments'] });
+    expect(legend('only', studioView('system~studio'))).toEqual({ boxes: ['studio'], arrows: ['proxy~studio', 'studio~crm', 'studio~payments'] });
   });
 
   it('lights every box that carries a mark: copies, passing through, kept stores', () => {
@@ -202,9 +216,9 @@ describe('what a line of the legend lights', () => {
   });
 
   it('lights for every line a view of the studio has, the studio holding every line there is', () => {
-    const keys = new Set(['studio.context', 'studio.containers', 'payments.context'].flatMap((id) => studioView(id).legend.map((entry) => entry.key)));
+    const keys = new Set(['system~studio', 'container~studio', 'system~payments'].flatMap((id) => studioView(id).legend.map((entry) => entry.key)));
     expect(keys.size).toBe(20);
-    for (const id of ['studio.context', 'studio.containers', 'payments.context']) {
+    for (const id of ['system~studio', 'container~studio', 'system~payments']) {
       const view = studioView(id);
       for (const { key } of view.legend) {
         const { boxes, arrows } = litByLegend(view, key);
@@ -216,7 +230,7 @@ describe('what a line of the legend lights', () => {
   it('lights something for every line of every view of every reading the tests make', () => {
     const states = [STUDIO_STATE, ARCHIVE_STATE, HELD_STATE, STATE, stateOf({ ...ARCHIVE_FILES, 'systems/edge.yaml': 'name: Edge\nonly: in production\n', 'infrastructure/edge-gate.yaml': 'name: Edge gate\nin: edge\n' })];
     for (const state of states) {
-      for (const view of state.views) {
+      for (const view of everyView(state)) {
         for (const { key } of view.legend) {
           const { boxes, arrows, passed } = litByLegend(view, key);
           expect(boxes.size + arrows.size + passed.size, `${key} in ${view.id}`).toBeGreaterThan(0);
@@ -250,8 +264,7 @@ const HELD_STATE = stateOf({
 });
 
 describe('the line for a thing in brackets on a route, when its connection is held in a box', () => {
-  const view = HELD_STATE.views.find((each) => each.id === 'ferry.context');
-  if (view === undefined) throw new Error('The ferry has a context view.');
+  const view = archiveView('system~ferry', HELD_STATE);
 
   it('is in the legend though no arrow passes through the thing, which only the list under the legend shows', () => {
     expect(view.legend.map((entry) => entry.key)).toContain('route-only');
@@ -270,7 +283,7 @@ describe('the line for a thing in brackets on a route, when its connection is he
 });
 
 describe('what speaks and lights', () => {
-  const view = studioView('studio.containers');
+  const view = studioView('container~studio');
   const act = (target: Act['target'], at: number, whole = false): Act => ({ target, at, whole });
   const box = { kind: 'box' as const, id: 'api' };
   const line = { kind: 'legend' as const, id: 'route' as const };

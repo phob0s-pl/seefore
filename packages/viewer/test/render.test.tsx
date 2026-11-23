@@ -1,9 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { C4_CODES, c4Line, CROWDED_FROM } from '@seefore/core';
-import type { C4Report, Drawn, View, ViewerState } from '@seefore/core';
+import { C4_CODES, c4Line, settingOf } from '@seefore/core';
+import type { C4Report, Drawn, Picture, View, ViewerState } from '@seefore/core';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
+import { START } from '../src/address.ts';
 import type { Route } from '../src/address.ts';
 import { Legend } from '../src/diagram.tsx';
 import { HEAD_HALF_WIDTH, HEAD_LENGTH } from '../src/flow.ts';
@@ -12,10 +13,11 @@ import { holdersWords } from '../src/listing.tsx';
 import type { Shown } from '../src/live.ts';
 import { Page, pageTitle } from '../src/page.tsx';
 import { legendWords } from '../src/reading.ts';
-import { crowdedNote, fitViewport, whole } from '../src/zoom.ts';
+import { fitViewport, smallNote, whole } from '../src/zoom.ts';
 import { ARCHIVE_FILES, ARCHIVE_STATE, archivePicture, archiveView, stateOf } from './archive.ts';
 import { STUDIO_STATE, studioView } from './studio.ts';
 import {
+  BROKEN_HOP_CONTAINERS,
   BROKEN_HOP_STATE,
   C4_REPORT,
   C4_STATE,
@@ -32,6 +34,7 @@ import {
   MODEL,
   PROBLEMS,
   STATE,
+  VIEWS,
 } from './fixture.ts';
 import { grid } from './grid.ts';
 
@@ -39,9 +42,35 @@ import { grid } from './grid.ts';
 
 const ROOM = { width: 1600, height: 1000 };
 
-/** The markup of the page for a route, with its picture, and something chosen when given. */
-function render(route: Route, picture: Shown['picture'] = null, selection: Selection | null = null, state = STATE): string {
-  return renderToStaticMarkup(<Page shown={{ state, route, picture, trouble: null }} room={ROOM} initialSelection={selection} />);
+/** The route of the setting with this key. */
+function routeTo(key: string): Route {
+  const setting = settingOf(key);
+  if (setting === undefined) throw new Error(`No setting ${key}.`);
+  return { page: 'view', setting };
+}
+
+/**
+ * The view a route shows in a state: the fixture's made by hand for the shop and the hard cases,
+ * else the engine's, as the server would hand it.
+ */
+function viewFor(route: Route, state: ViewerState): View | undefined {
+  if (route.page !== 'view') return undefined;
+  const key = `${route.setting.depth}${route.setting.scope === null ? '' : `~${route.setting.scope}`}`;
+  if (state.model === STATE.model && VIEWS[key] !== undefined) return VIEWS[key];
+  if (state.model === BROKEN_HOP_STATE.model && key === HARD_CONTAINERS.id) return BROKEN_HOP_CONTAINERS;
+  if (state.model === HARD_STATE.model && key === HARD_CONTAINERS.id) return HARD_CONTAINERS;
+  return archiveView(key, state);
+}
+
+/** What the page is shown for a route, with the view and picture drawn, when there is a picture. */
+function shownFor(route: Route, picture: Picture | null, state: ViewerState, view = viewFor(route, state), more: Partial<Shown> = {}): Shown {
+  const shot = picture === null || view === undefined ? null : { view, picture };
+  return { state, route, shot, laying: false, gone: false, setting: route.page === 'view' ? route.setting : START, trouble: null, ...more };
+}
+
+/** The markup of the page for a route, with its picture, and something chosen when given; the view is the one the route names unless another is given. */
+function render(route: Route, picture: Picture | null = null, selection: Selection | null = null, state = STATE, view?: View): string {
+  return renderToStaticMarkup(<Page shown={shownFor(route, picture, state, view)} room={ROOM} initialSelection={selection} />);
 }
 
 /** A text as the markup holds it. */
@@ -59,11 +88,11 @@ function linesOf(drawn: Drawn): string[] {
   return [
     ...drawn.boxes.flatMap((box) => [...box.name, box.line, ...box.sentence]),
     ...drawn.arrows.flatMap((arrow) => (arrow.label === undefined ? [] : [...arrow.label.lines, ...(arrow.label.technology === undefined ? [] : [arrow.label.technology])])),
-    ...(drawn.boundary === undefined ? [] : [drawn.boundary.title]),
+    ...drawn.boundaries.map((boundary) => boundary.title),
   ];
 }
 
-const containers: Route = { page: 'view', view: CONTAINERS.id };
+const containers: Route = routeTo(CONTAINERS.id);
 
 describe('a picture drawn without a browser', () => {
   const html = render(containers, CONTAINER_PICTURE);
@@ -153,8 +182,7 @@ describe('a picture drawn without a browser', () => {
   it('draws text that looks like markup as text', () => {
     const view: View = { ...CONTEXT, boxes: CONTEXT.boxes.map((box) => (box.id === 'customer' ? { ...box, name: '<script>alert(1)</script>' } : box)) };
     const drawn: Drawn = { ...CONTEXT_PICTURE, boxes: CONTEXT_PICTURE.boxes.map((box) => (box.id === 'customer' ? { ...box, name: ['<img src=x onerror=alert(1)>'] } : box)) };
-    const state = { ...STATE, views: [view, CONTAINERS] };
-    const markup = render({ page: 'view', view: view.id }, drawn, null, state);
+    const markup = render(routeTo(view.id), drawn, null, STATE, view);
     expect(markup).not.toContain('<script>alert');
     expect(markup).not.toContain('<img src=x');
     expect(markup).toContain('&lt;img src=x onerror=alert(1)&gt;');
@@ -168,7 +196,7 @@ describe('a picture drawn without a browser', () => {
 });
 
 describe('the context view', () => {
-  const html = render({ page: 'view', view: CONTEXT.id }, CONTEXT_PICTURE);
+  const html = render(routeTo(CONTEXT.id), CONTEXT_PICTURE);
 
   it('draws the system in scope with a thicker line, and has no boundary', () => {
     expect(html).toContain('box family-systems scope');
@@ -182,9 +210,9 @@ describe('the context view', () => {
 
 describe('the title of the tab', () => {
   it('names what is shown and the model', () => {
-    expect(pageTitle({ state: STATE, route: containers, picture: null, trouble: null })).toBe('Container view: Shop · Shop · seefore');
-    expect(pageTitle({ state: STATE, route: { page: 'problems' }, picture: null, trouble: null })).toBe('Problems · Shop · seefore');
-    expect(pageTitle({ state: null, route: { page: 'start' }, picture: null, trouble: null })).toBe('seefore');
+    expect(pageTitle(shownFor(containers, CONTAINER_PICTURE, STATE))).toBe('Container view: Shop · Shop · seefore');
+    expect(pageTitle(shownFor({ page: 'problems' }, null, STATE))).toBe('Problems · Shop · seefore');
+    expect(pageTitle({ ...shownFor({ page: 'start' }, null, STATE), state: null })).toBe('seefore');
   });
 });
 
@@ -221,7 +249,7 @@ describe('the panel', () => {
   it('lights what is chosen and fades the rest', () => {
     const html = render(containers, CONTAINER_PICTURE, { kind: 'box', id: 'customer' });
     expect(html).toContain('box family-people lit chosen');
-    expect(html).toContain('boundary lit');
+    expect(html).toContain('boundary family-systems scope lit');
     expect(html).toContain('box family-apps faded');
     expect(html).toMatch(/class="arrow lit"[^]*?M280,275/);
     expect(html).toContain('class="arrow arrow-many faded"');
@@ -230,7 +258,7 @@ describe('the panel', () => {
 
 describe('what stands in place of a picture', () => {
   it('shows the message of a view whose layout failed', () => {
-    const html = render({ page: 'view', view: 'card-provider.context' }, FAILED_PICTURE);
+    const html = render(routeTo('system~card-provider'), FAILED_PICTURE);
     expect(html).toContain('>Context view: Card provider</h1>');
     expect(html).toContain(FAILED_PICTURE.failed.message);
     expect(html).not.toContain('react-flow__node');
@@ -242,7 +270,7 @@ describe('what stands in place of a picture', () => {
   });
 
   it('says that the directory is gone, and that the page waits', () => {
-    const state = { ...STATE, available: false, problems: [], views: [], errors: 0, warnings: 0 };
+    const state = { ...STATE, available: false, problems: [], scopes: [], errors: 0, warnings: 0 };
     const html = render({ page: 'start' }, null, null, state);
     expect(html).toContain('The directory is gone');
     expect(html).toContain('/work/shop/architecture is not there any more. The page waits for it to come back');
@@ -250,26 +278,11 @@ describe('what stands in place of a picture', () => {
 
   it('shows the problem of a marker that cannot be read in place of the views', () => {
     const marker = { file: 'seefore.yaml', line: 1, column: 1, severity: 'error' as const, code: 'marker-unreadable', message: 'The marker file is not YAML.' };
-    const state = { ...STATE, available: false, name: null, format: null, problems: [marker], views: [] };
+    const state = { ...STATE, available: false, name: null, format: null, problems: [marker], scopes: [] };
     const html = render({ page: 'start' }, null, null, state);
     expect(html).toContain('No views');
     expect(html).toContain('seefore.yaml:1:1');
     expect(html).toContain('The marker file is not YAML.');
-  });
-});
-
-describe('the sidebar', () => {
-  const html = render(containers, CONTAINER_PICTURE);
-
-  it('lists the systems with parts with their views, then the others folded, then the model and the problems with their number', () => {
-    const order = ['>Shop</span>', '#/view/shop.context', '#/view/shop.containers', '<details class="others"', '#/view/card-provider.context', '#/model', '>Problems (2)<'];
-    const places = order.map((piece) => html.indexOf(piece));
-    expect(places.every((place) => place >= 0)).toBe(true);
-    expect([...places].sort((a, b) => a - b)).toEqual(places);
-  });
-
-  it('marks the view shown', () => {
-    expect(html).toMatch(/href="#\/view\/shop.containers" aria-current="page"/);
   });
 });
 
@@ -401,7 +414,7 @@ describe('the C4 checks on the problems page', () => {
     expect(c4LineOf(shop, 'element-unconnected')).toBe('<li class="c4-check" data-code="element-unconnected">A connection: not checked: part of the directory was left out, as the problems above say.</li>');
     // With the marker unreadable none of the five is run.
     const none = C4_CODES.reduce<C4Report>((report, code) => ({ ...report, [code]: { severity: report[code].severity, checked: null, findings: [] } }), partial);
-    const marker = render({ page: 'problems' }, null, null, { ...STATE, available: false, name: null, format: null, views: [], c4: none });
+    const marker = render({ page: 'problems' }, null, null, { ...STATE, available: false, name: null, format: null, c4: none });
     expect(c4LinesOf(marker).map(([, line]) => line)).toEqual([
       'A description: not checked, since the records were not read.',
       'A technology: not checked, since the records were not read.',
@@ -438,7 +451,7 @@ describe('the C4 checks on the problems page', () => {
     expect(before).not.toContain('C4 checks');
     expect(before).not.toContain('class="c4');
     expect(before).toContain('The check found 1 error and 1 warning.');
-    const gone = render({ page: 'problems' }, null, null, { ...STATE, available: false, problems: [], views: [], errors: 0, warnings: 0 });
+    const gone = render({ page: 'problems' }, null, null, { ...STATE, available: false, problems: [], errors: 0, warnings: 0 });
     expect(gone).toContain('The check found no problems.');
     expect(gone).not.toContain('C4 checks');
   });
@@ -452,12 +465,12 @@ describe('the C4 checks on the problems page', () => {
 
   it('puts no mark on a box or an arrow: a view is drawn the same with a report as without', () => {
     expect(render(containers, CONTAINER_PICTURE, null, { ...STATE, c4: partial })).toBe(render(containers, CONTAINER_PICTURE));
-    expect(render({ page: 'view', view: HARD_CONTAINERS.id }, HARD_PICTURE, null, { ...HARD_STATE, c4: C4_REPORT })).toBe(hard());
+    expect(render(routeTo(HARD_CONTAINERS.id), HARD_PICTURE, null, { ...HARD_STATE, c4: C4_REPORT })).toBe(hard());
   });
 });
 
 /** The page of the hard cases for a route, with their picture, and something chosen when given. */
-function hard(route: Route = { page: 'view', view: HARD_CONTAINERS.id }, selection: Selection | null = null): string {
+function hard(route: Route = routeTo(HARD_CONTAINERS.id), selection: Selection | null = null): string {
   return render(route, HARD_PICTURE, selection, HARD_STATE);
 }
 
@@ -522,7 +535,7 @@ describe('the hard cases in a picture', () => {
 
   it('puts the mark beside the mark for copies', () => {
     const view = { ...HARD_CONTAINERS, boxes: HARD_CONTAINERS.boxes.map((box) => (box.id === 'proxy' ? { ...box, loops: ['proxy-asks-proxy'] } : box)) };
-    const markup = render({ page: 'view', view: view.id }, HARD_PICTURE, null, { ...HARD_STATE, views: [view] });
+    const markup = render(routeTo(view.id), HARD_PICTURE, null, HARD_STATE, view);
     expect(markup).toContain('<div class="marks" aria-hidden="true"><div class="mark mark-passing">⇢ 1</div><div class="mark">↻ 1</div></div>');
   });
 
@@ -638,7 +651,7 @@ function name(text: string): string {
 }
 
 describe('a step of a route whose record has an error in its file', () => {
-  const desk: Route = { page: 'view', view: HARD_CONTAINERS.id };
+  const desk: Route = routeTo(HARD_CONTAINERS.id);
 
   it('is shown by its id in the panel of the arrow, as a link like any other step', () => {
     const html = render(desk, HARD_PICTURE, { kind: 'arrow', id: 'web~cards' }, BROKEN_HOP_STATE);
@@ -671,7 +684,7 @@ describe('the legend of an external system', () => {
 
   it('draws for the system in scope, when it is external, its thicker line with the tab', () => {
     const legend = { ...HARD_CONTAINERS, legend: [{ key: 'system-scope-external' as const, text: 'This system, which is external: what the view is about' }] };
-    const html = render(desk(legend), HARD_PICTURE, null, { ...HARD_STATE, views: [legend] });
+    const html = render(routeTo(legend.id), HARD_PICTURE, null, HARD_STATE, legend);
     const start = html.indexOf('data-key="system-scope-external"');
     const sample = html.slice(start, html.indexOf('</svg>', start));
     expect(sample).toContain('stroke-width="3"');
@@ -680,11 +693,6 @@ describe('the legend of an external system', () => {
     expect(html).toContain('<span>This system, which is external: what the view is about</span>');
   });
 });
-
-/** The route of a view of the hard cases. */
-function desk(view: View): Route {
-  return { page: 'view', view: view.id };
-}
 
 describe('the listing, for what passes through and what is in no picture', () => {
   it('says how many connections pass through a system, an app and a component, as `seefore list` does', () => {
@@ -711,22 +719,22 @@ describe('the listing, for what passes through and what is in no picture', () =>
     const html = render({ page: 'model' }, null, null, { ...HARD_STATE, inNoView: ['proxy-checks-web', 'web-asks-cards'] });
     const listing = html.slice(html.indexOf('<article class="listing"'));
     const notice =
-      '<p class="in-no-picture" role="note">2 connections are in no picture: no view draws them. A view is about a system, and draws a connection only where an end of it is in that system and neither end is a record with an error. Each is marked “in no picture” under Connections.</p>';
+      '<p class="in-no-picture" role="note">2 connections are in no picture: no view draws them, since each has an end that cannot be followed: a record with an error, or a part of one. Everything as the scope draws every other connection. Each is marked “in no picture” under Connections.</p>';
     expect(listing).toContain(notice);
     // Under the name of the model and where it is, before every section.
     expect(listing.indexOf(notice)).toBeLessThan(listing.indexOf('<section'));
     expect(times(listing, '(in no picture)')).toBe(2);
     expect(listing).toMatch(/<code>proxy-checks-web<\/code><\/span><span class="entry-facts"> \(in no picture\)<\/span>/);
     expect(render({ page: 'model' }, null, null, { ...HARD_STATE, inNoView: ['proxy-checks-web'] })).toContain(
-      '1 connection is in no picture: no view draws it. A view is about a system, and draws a connection only where an end of it is in that system and neither end is a record with an error. It is marked “in no picture” under Connections.',
+      '1 connection is in no picture: no view draws it, since an end of it cannot be followed: a record with an error, or a part of one. Everything as the scope draws every other connection. It is marked “in no picture” under Connections.',
     );
     expect(render({ page: 'model' }, null, null, HARD_STATE)).not.toContain('in no picture');
   });
 });
 
 /** The page of the archive of stage 6b, on a route, with something chosen when given. */
-function archive(route: Route = { page: 'view', view: 'archive.containers' }, selection: Selection | null = null): string {
-  const view = route.page === 'view' ? archiveView(route.view) : undefined;
+function archive(route: Route = routeTo('container~archive'), selection: Selection | null = null): string {
+  const view = viewFor(route, ARCHIVE_STATE);
   return render(route, view === undefined ? null : archivePicture(view), selection, ARCHIVE_STATE);
 }
 
@@ -857,8 +865,8 @@ describe('a channel that the far side opened, in the picture and the panel', () 
 
   it('says it in a line of the label when only some connections say so, and in the legend', () => {
     const state = stateOf({ ...ARCHIVE_FILES, 'connections/desk-pings-browser.yaml': 'from: desk\nto: browser\nname: Pings it\n' });
-    const view = archiveView('archive.containers', state);
-    const html = render({ page: 'view', view: view.id }, archivePicture(view), null, state);
+    const view = archiveView('container~archive', state);
+    const html = render(routeTo(view.id), archivePicture(view), null, state);
     expect(html).not.toContain('<circle class="arrow-ring"');
     expect(html).toContain('<text class="label-opened"');
     expect(html).toContain('>far side opened on 1 of 2<');
@@ -951,8 +959,8 @@ describe('a record whose id every object has a property of', () => {
   });
 
   it('is drawn in a view, its panel opened there too', () => {
-    const view = archiveView('shelf.context', state);
-    const html = render({ page: 'view', view: view.id }, archivePicture(view), { kind: 'box', id: 'constructor' }, state);
+    const view = archiveView('system~shelf', state);
+    const html = render(routeTo(view.id), archivePicture(view), { kind: 'box', id: 'constructor' }, state);
     expect(html).toContain('data-id="constructor"');
     expect(panelOf(html)).toContain('<dt>Kind</dt><dd>Person</dd>');
   });
@@ -974,8 +982,8 @@ const EDGED: Readonly<Record<string, string>> = {
 const EDGED_STATE = stateOf(EDGED);
 
 /** The page of the edged archive on a route, with something chosen when given. */
-function edged(route: Route = { page: 'view', view: 'archive.containers' }, selection: Selection | null = null): string {
-  const view = route.page === 'view' ? archiveView(route.view, EDGED_STATE) : undefined;
+function edged(route: Route = routeTo('container~archive'), selection: Selection | null = null): string {
+  const view = viewFor(route, EDGED_STATE);
   return render(route, view === undefined ? null : archivePicture(view), selection, EDGED_STATE);
 }
 
@@ -1004,14 +1012,16 @@ describe('a thing on a route whose condition comes from what it is in', () => {
 });
 
 describe('a system that holds only pieces of infrastructure', () => {
-  it('has a container view when a connection ends at its piece, and none when its piece is only passed through', () => {
-    expect(EDGED_STATE.views.map((view) => view.id)).toEqual(['archive.context', 'archive.containers', 'vault.context', 'vault.containers', 'edge.context']);
+  it('opens at Container depth when a connection ends at its piece, and not when its piece is only passed through', () => {
+    expect(archiveView('container~vault', EDGED_STATE).boundaries.map((boundary) => boundary.id)).toEqual(['vault']);
+    expect(archiveView('container~edge', EDGED_STATE).boundaries).toEqual([]);
+    expect(EDGED_STATE.scopes.filter((scope) => ['vault', 'lock', 'edge', 'edge-gate'].includes(scope.id)).map((scope) => scope.id)).toEqual(['vault', 'lock', 'edge']);
   });
 
-  it('stands with the systems with parts in the sidebar and the listing alike, or with the others in both', () => {
+  it('stands with the systems with parts in the list of what can be the scope and in the listing alike, or with the others in both', () => {
     const html = edged();
     const sidebar = html.slice(0, html.indexOf('</nav>'));
-    const order = ['>Archive</span>', '>Vault</span>', '#/view/vault.containers', '<details class="others"', '#/view/edge.context'].map((piece) => sidebar.indexOf(piece));
+    const order = ['<optgroup label="Archive">', '<optgroup label="Vault"><option value="vault">Vault</option><option value="lock">Lock</option>', '<optgroup label="Other systems"><option value="edge">Edge</option></optgroup>'].map((piece) => sidebar.indexOf(piece));
     expect(order.every((place) => place >= 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
     const whole = edged({ page: 'model' });
@@ -1041,7 +1051,7 @@ describe('a store that an app keeps, chosen while the view is shown', () => {
     expect(panel).toContain('Desk keeps it, and this view draws it at Desk: 1 of its connections is inside Desk, and so not drawn. 2 are on the arrows that light with it.');
     expect(panel).toContain('>Keeps edits that are not yet saved</p>');
     // Not where the app has no box.
-    expect(panelOf(archive({ page: 'view', view: 'archive.context' }, { kind: 'record', id: 'drafts' }))).not.toContain('Inside Desk');
+    expect(panelOf(archive(routeTo('system~archive'), { kind: 'record', id: 'drafts' }))).not.toContain('Inside Desk');
   });
 });
 
@@ -1049,8 +1059,8 @@ describe('the line under the title of a view that draws stores at their apps', (
   it('says how many', () => {
     expect(archive()).toMatch(/<p class="view-counts">[^<]*2 stores are drawn at the apps that keep them\./);
     const one = stateOf({ ...ARCHIVE_FILES, 'stores/cache.yaml': 'name: Cache\nin: archive\nkind: cache\n' });
-    const view = archiveView('archive.containers', one);
-    expect(render({ page: 'view', view: view.id }, archivePicture(view), null, one)).toContain('1 store is drawn at the app that keeps it.');
+    const view = archiveView('container~archive', one);
+    expect(render(routeTo(view.id), archivePicture(view), null, one)).toContain('1 store is drawn at the app that keeps it.');
     expect(render(containers, CONTAINER_PICTURE)).not.toContain('drawn at the app');
   });
 });
@@ -1058,8 +1068,8 @@ describe('the line under the title of a view that draws stores at their apps', (
 describe('the boundary of a system that has a condition', () => {
   it('says it after the kind line, whole for a screen reader', () => {
     const state = stateOf({ ...ARCHIVE_FILES, 'systems/archive.yaml': 'name: Archive\nonly: in production\n' });
-    const view = archiveView('archive.containers', state);
-    const html = render({ page: 'view', view: view.id }, archivePicture(view), null, state);
+    const view = archiveView('container~archive', state);
+    const html = render(routeTo(view.id), archivePicture(view), null, state);
     expect(html).toContain('>Archive [System] only in production<');
     expect(html).toContain('aria-label="Archive [System] only in production, the boundary of the system"');
     expect(html).toMatch(/data-key="only" tabindex="0" aria-describedby="[^"]+"><svg/);
@@ -1083,8 +1093,8 @@ describe('the legend, with every mark of the stage', () => {
   });
 
   it('tells a screen reader, as the description of each line, what it lights and how much', () => {
-    const view = studioView('studio.containers');
-    const html = render({ page: 'view', view: view.id }, archivePicture(view), null, STUDIO_STATE);
+    const view = studioView('container~studio');
+    const html = render(routeTo(view.id), archivePicture(view), null, STUDIO_STATE);
     for (const entry of view.legend) {
       const described = new RegExp(`<li data-key="${entry.key}" tabindex="0" aria-describedby="([^"]+)">`).exec(html)?.[1] ?? 'none';
       expect(html).toContain(`<span id="${described}" hidden="">${escaped(legendWords(view, entry.key))}</span>`);
@@ -1093,7 +1103,7 @@ describe('the legend, with every mark of the stage', () => {
   });
 
   it('marks the line that speaks and lights, as a tap leaves it, and no other', () => {
-    const view = studioView('studio.containers');
+    const view = studioView('container~studio');
     const none = () => undefined;
     const html = renderToStaticMarkup(<Legend view={view} speaking={{ kind: 'legend', id: 'route-only' }} onPoint={none} onFocusTarget={none} onTap={none} />);
     expect(times(html, 'class="lit"')).toBe(1);
@@ -1176,32 +1186,24 @@ describe('the reading line', () => {
     const html = archive(undefined, { kind: 'record', id: 'drafts' });
     expect(html).toContain('<p class="reading-line" title="Drafts [Store: files], kept by Desk"><span>Drafts [Store: files], kept by Desk</span></p>');
     // Nothing where the view does not draw its app, as nothing lights there.
-    expect(archive({ page: 'view', view: 'archive.context' }, { kind: 'record', id: 'drafts' })).toContain('<p class="reading-line"><span></span></p>');
+    expect(archive(routeTo('system~archive'), { kind: 'record', id: 'drafts' })).toContain('<p class="reading-line"><span></span></p>');
   });
 
   it('says for an arrow of more connections than it names how many of how many', () => {
     const view = { ...CONTAINERS, arrows: CONTAINERS.arrows.map((arrow) => (arrow.id === 'customer~shop' ? { ...arrow, connections: ['a', 'b', 'c', 'd'], names: ['Asks', 'Buys', 'Calls', 'Drops'] } : arrow)) };
-    const html = render(containers, CONTAINER_PICTURE, { kind: 'arrow', id: 'customer~shop' }, { ...STATE, views: [CONTEXT, view] });
+    const html = render(containers, CONTAINER_PICTURE, { kind: 'arrow', id: 'customer~shop' }, STATE, view);
     expect(html).toContain('<span>Customer → Shop, 3 of its 4 connections: Asks; Buys; Calls</span>');
   });
 });
 
-describe('the note of a crowded view on the page', () => {
-  /** The page of a grid of so many apps, and the note for the zoom it opens at in the room. */
-  const page = (apps: number) => {
-    const { state, view, drawn } = grid(apps);
-    return { html: render({ page: 'view', view: view.id }, drawn, null, state), note: crowdedNote(view, fitViewport(whole(drawn), ROOM).zoom) };
-  };
-
-  it('says it under the counts for a view of more boxes than the limit, with what it shows at the zoom it opens at', () => {
-    const { html, note } = page(CROWDED_FROM + 1);
-    expect(note).toContain('It opens with the names of its boxes and no other words.');
-    expect(html).toContain(`<p class="small-note" role="status">${escaped(note ?? '')}</p>`);
-    expect(html).not.toContain('Too small to read');
-  });
-
-  it('is not there for a view at the limit', () => {
-    expect(page(CROWDED_FROM).html).not.toContain('A crowded view');
+describe('the note of a large picture on the page', () => {
+  it('is said of the zoom the picture is shown at, and never of the zoom it would open at: drawn without a browser it stands at full size, and says nothing', () => {
+    const { state, view, drawn } = grid(81);
+    // Fitted to its room, this picture would be too small to read, and the stage 7 page said so before it was shown.
+    expect(smallNote(view, fitViewport(whole(drawn), ROOM).zoom)).toContain('Too small to read at');
+    const html = render(routeTo(view.id), drawn, null, state);
+    expect(html).toContain('<p class="small-note" role="status"></p>');
+    expect(html).not.toContain('crowded');
   });
 });
 
@@ -1238,8 +1240,8 @@ describe('a picture at a map’s zoom', () => {
 
 describe('a view whose layout failed', () => {
   it('says once that the other views still draw, as the layout’s message says it', () => {
-    const failed = { view: 'card-provider.context', failed: { reason: 'time' as const, message: 'This view took more than 5 seconds to lay out, so it was stopped and is not drawn. The other views still draw.' } };
-    const html = render({ page: 'view', view: 'card-provider.context' }, failed);
+    const failed = { view: 'system~card-provider', failed: { reason: 'time' as const, message: 'This view took more than 5 seconds to lay out, so it was stopped and is not drawn. The other views still draw.' } };
+    const html = render(routeTo('system~card-provider'), failed);
     expect(times(html, 'The other views still draw.')).toBe(1);
   });
 });
