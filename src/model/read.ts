@@ -1,28 +1,20 @@
 import type { z } from 'zod';
 import type { ModelRead, ModelRecord, Problem } from './answer.ts';
 import { idProblem } from './id.ts';
-import { KINDS } from './kinds.ts';
+import { KINDS, NOUNS } from './kinds.ts';
+import type { Entry } from './model.ts';
+import { runRules } from './rules.ts';
 import { MARKER_FILE, readMarker } from './marker.ts';
 import { START, compareProblems, error, list, quote, warning } from './problem.ts';
 import { SHAPES } from './records.ts';
 import { checkShape } from './shape.ts';
 import { readYaml } from './yaml.ts';
+import { isSeq } from 'yaml';
+import type { YamlFile } from './yaml.ts';
+import type { Position } from './problem.ts';
 
 /** One YAML file of a model: its path from the model's folder, with `/`, and its text. */
 export type SourceFile = { path: string; text: string };
-
-/** What each folder's records are called in a message, with their article. */
-const NOUNS: Record<string, string> = {
-  people: 'a person',
-  systems: 'a system',
-  apps: 'an app',
-  stores: 'a store',
-  components: 'a component',
-  connections: 'a connection',
-  infrastructure: 'a piece of infrastructure',
-  owners: 'an owner',
-  technologies: 'a technology',
-};
 
 /**
  * Reads a model from the texts of its YAML files. Each file is checked by itself, so a broken
@@ -31,16 +23,22 @@ const NOUNS: Record<string, string> = {
 export function readModel(files: readonly SourceFile[]): ModelRead {
   const problems: Problem[] = [];
   const records: ModelRecord[] = [];
+  const entries: Entry[] = [];
   const sorted = [...files].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
 
   const marker = sorted.find((file) => file.path === MARKER_FILE);
   if (!marker) {
     problems.push(error(MARKER_FILE, START, 'marker-missing', `There is no ${quote(MARKER_FILE)} here, so this is not a seefore model.`));
-    return { records, problems };
+    return { records, problems, counts: runRules([], false, false).counts };
   }
   const read = readMarker(marker.text);
   problems.push(...read.problems);
-  const result = (): ModelRead => ({ ...(read.name !== undefined ? { name: read.name } : {}), records, problems: problems.sort(compareProblems) });
+  const result = (): ModelRead => {
+    // The rules run only on a model that has been read as format 1. A count needs every file read.
+    const whole = !problems.some((problem) => problem.severity === 'error') && entries.every((entry) => entry.ok);
+    const ruled = runRules(entries, whole, read.readable);
+    return { ...(read.name !== undefined ? { name: read.name } : {}), records, problems: [...problems, ...ruled.problems].sort(compareProblems), counts: ruled.counts };
+  };
   if (!read.readable) return result();
 
   const folders = KINDS.map((kind) => kind.folder);
@@ -76,10 +74,32 @@ export function readModel(files: readonly SourceFile[]): ModelRead {
 
     const yaml = readYaml(file.path, file.text, 'A record');
     problems.push(...yaml.problems);
+    const entry: Entry = { id, kind: folder, file: file.path, ok: false, fields: {}, at: new Map() };
+    entries.push(entry);
     if (!yaml.doc || !yaml.map) continue;
     const shape = checkShape(file.path, yaml, SHAPES[folder as keyof typeof SHAPES] as z.ZodType, NOUNS[folder] as string);
     problems.push(...shape.problems.map((problem) => ({ ...problem, record: id })));
-    if (shape.value !== undefined) records.push({ kind: folder, id, file: file.path, fields: shape.value as Record<string, unknown> });
+    if (shape.value !== undefined) {
+      const fields = shape.value as Record<string, unknown>;
+      records.push({ kind: folder, id, file: file.path, fields });
+      if (yaml.problems.length === 0) {
+        entry.ok = true;
+        entry.fields = fields;
+        entry.at = placesOf(yaml);
+      }
+    }
   }
   return result();
+}
+
+/** Where each field of a file is written, and each item of a list, as `via[1]`. */
+function placesOf(yaml: YamlFile): Map<string, Position> {
+  const at = new Map<string, Position>();
+  if (!yaml.map) return at;
+  for (const pair of yaml.map.items) {
+    const key = String((pair.key as { value?: unknown }).value);
+    at.set(key, yaml.at(pair.value));
+    if (isSeq(pair.value)) pair.value.items.forEach((item, index) => at.set(`${key}[${index}]`, yaml.at(item)));
+  }
+  return at;
 }

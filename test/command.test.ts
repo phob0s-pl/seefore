@@ -5,9 +5,11 @@ import { expect, test } from 'vitest';
 import { readOptions, run } from '../src/server/command.ts';
 
 test('the options read right', () => {
-  expect(readOptions([], '/here')).toEqual({ server: false, workdir: '/here', port: 4400 });
+  expect(readOptions([], '/here')).toEqual({ server: false, check: false, json: false, workdir: '/here', port: 4400 });
   expect(readOptions(['--server', '--workdir=models/shop', '--port=4411'], '/here')).toEqual({
     server: true,
+    check: false,
+    json: false,
     workdir: 'models/shop',
     port: 4411,
   });
@@ -30,7 +32,7 @@ test('a folder that is not there, or no --server, ends with 1 and one line', asy
 
   lines.length = 0;
   expect(await run(['--workdir=nowhere'], '/here', io)).toBe(1);
-  expect(lines).toEqual(['seefore: run it as "seefore --server [--workdir=<dir>] [--port=<n>]"']);
+  expect(lines).toEqual(['seefore: run it as "seefore --server [--workdir=<dir>] [--port=<n>]" or "seefore check [--workdir=<dir>] [--json]"']);
 });
 
 test('a folder with no seefore.yaml is not a model', async () => {

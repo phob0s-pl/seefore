@@ -39,7 +39,7 @@ const FIXES: Record<string, string> = {
 };
 
 function make(severity: Problem['severity'], file: string, at: Position, rule: string, message: string, fix?: string): Problem {
-  return { file, line: at.line, rule, severity, message, fix: fix ?? FIXES[rule] ?? 'Change the file as the message says.' };
+  return { file, line: at.line, column: at.column, rule, severity, message, fix: fix ?? FIXES[rule] ?? 'Change the file as the message says.' };
 }
 
 export function error(file: string, at: Position, rule: string, message: string, fix?: string): Problem {
@@ -50,10 +50,11 @@ export function warning(file: string, at: Position, rule: string, message: strin
   return make('warning', file, at, rule, message, fix);
 }
 
-/** Orders problems by file, then by line, so a report reads top to bottom. */
+/** Orders problems by file, line, column and rule, so a report reads top to bottom. */
 export function compareProblems(a: Problem, b: Problem): number {
   if (a.file !== b.file) return a.file < b.file ? -1 : 1;
   if (a.line !== b.line) return a.line - b.line;
+  if (a.column !== b.column) return a.column - b.column;
   return a.rule < b.rule ? -1 : a.rule > b.rule ? 1 : 0;
 }
 

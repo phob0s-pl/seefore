@@ -41,7 +41,7 @@ function Page() {
             <li key={index}>
               <p className="where">
                 {problem.severity === 'warning' && <strong>Warning </strong>}
-                {problem.file}, line {problem.line}
+                {problem.file}, line {problem.line}, column {problem.column}
               </p>
               <p>{problem.message}</p>
               <p>Mend: {problem.fix}</p>
@@ -49,6 +49,15 @@ function Page() {
           ))}
         </ul>
         </>
+      )}
+      {answer.counts.map((count) =>
+        count.checked === null ? (
+          <p key={count.rule}>Not counted: {count.says} A file could not be read.</p>
+        ) : count.found.length > 0 ? (
+          <p key={count.rule}>
+            {count.found.length} found, not a problem: {count.found.map((item) => item.record).join(', ')}. {count.says}
+          </p>
+        ) : null,
       )}
     </main>
   );

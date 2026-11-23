@@ -40,7 +40,10 @@ export function checkShape<T>(file: string, yaml: YamlFile, schema: z.ZodType<T>
           const where = isMap(parent) ? keyPosition(yaml, parent, key) : yaml.at(parent);
           const hint = known.length > 0 ? ` Its keys are ${list(known)}.` : '';
           const owner = path.length === 0 ? what : label(path);
-          const fix = `Delete the key ${quote(key)} from the file, or, if a known key was meant, rename it.${hint}`;
+          const nothing = path.length === 0 && key === 'in' && (what === 'a system' || what === 'a person');
+          const fix = nothing
+            ? `${capital(what)} is in nothing. Say what it belongs to in its description.`
+            : `Delete the key ${quote(key)} from the file, or, if a known key was meant, rename it.${hint}`;
           problems.push({ ...error(file, where, 'key-unknown', `${quote(key)} is not a key of ${owner}.${hint}`, fix), field: path.length === 0 ? key : String(path[0]) });
         }
         break;
