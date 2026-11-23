@@ -32,8 +32,9 @@ test('a key that is not known is a problem, with the keys that are', () => {
 
 test('a key that is missing is a problem', () => {
   const [problem] = problemsOf({ path: 'apps/api.yaml', text: 'name: API\n' });
-  expect(problem).toMatchObject({ rule: 'key-missing', file: 'apps/api.yaml' });
+  expect(problem).toMatchObject({ rule: 'key-missing', file: 'apps/api.yaml', field: 'in', severity: 'error' });
   expect(problem?.message).toContain('`in` is missing');
+  expect(problem?.fix).toContain('The id of the system the app is part of');
 });
 
 test('a value of the wrong kind is a problem', () => {

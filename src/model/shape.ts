@@ -31,6 +31,7 @@ export function checkShape<T>(file: string, yaml: YamlFile, schema: z.ZodType<T>
   const problems: Problem[] = [];
   for (const issue of result.error.issues) {
     const path: Path = issue.path;
+    const first = problems.length;
     switch (issue.code) {
       case 'unrecognized_keys': {
         const parent = nodeAt(doc, path);
@@ -40,7 +41,7 @@ export function checkShape<T>(file: string, yaml: YamlFile, schema: z.ZodType<T>
           const hint = known.length > 0 ? ` Its keys are ${list(known)}.` : '';
           const owner = path.length === 0 ? what : label(path);
           const fix = `Delete the key ${quote(key)} from the file, or, if a known key was meant, rename it.${hint}`;
-          problems.push(error(file, where, 'key-unknown', `${quote(key)} is not a key of ${owner}.${hint}`, fix));
+          problems.push({ ...error(file, where, 'key-unknown', `${quote(key)} is not a key of ${owner}.${hint}`, fix), field: path.length === 0 ? key : String(path[0]) });
         }
         break;
       }
@@ -51,7 +52,8 @@ export function checkShape<T>(file: string, yaml: YamlFile, schema: z.ZodType<T>
           problems.push(error(file, valuePosition(yaml, doc, path), 'value-not-allowed', notAllowed(path, allowed)));
         } else if (!doc.hasIn(path)) {
           const owner = path.length <= 1 ? what : label(path.slice(0, -1));
-          const fix = `Add the key ${quote(String(path[path.length - 1]))}, with a value of the kind its definition says (see the schema of this folder).`;
+          const definition = definitionOf(schema, path);
+          const fix = `Add the key ${quote(String(path[path.length - 1]))}.${definition ? ` ${definition}` : ''}`;
           problems.push(error(file, parentPosition(yaml, doc, path), 'key-missing', `${capital(label(path))} is missing from ${owner}.`, fix));
         } else if (issue.code === 'invalid_type') {
           const found = describe(doc.getIn(path));
@@ -84,7 +86,7 @@ export function checkShape<T>(file: string, yaml: YamlFile, schema: z.ZodType<T>
       case 'too_big': {
         const value: unknown = doc.getIn(path);
         if (issue.origin === 'array') {
-          problems.push(error(file, valuePosition(yaml, doc, path), 'value-too-small', `${capital(label(path))} is an empty list.`, `Give ${label(path)} at least one id, or delete the key.`));
+          problems.push(error(file, valuePosition(yaml, doc, path), 'value-too-big', `${capital(label(path))} is too long a list: it may have at most ${issue.maximum}.`, `Take ids out of ${label(path)} until it has at most ${issue.maximum}.`));
           break;
         }
         const message =
@@ -100,6 +102,8 @@ export function checkShape<T>(file: string, yaml: YamlFile, schema: z.ZodType<T>
         problems.push(error(file, valuePosition(yaml, doc, path), code, issue.message));
       }
     }
+    // The field at fault is the first key of the path; a key that is not known names itself.
+    if (path.length > 0) for (const problem of problems.slice(first)) problem.field ??= String(path[0]);
   }
   return { problems };
 }
@@ -198,6 +202,18 @@ function knownKeys(schema: z.ZodType, path: Path): string[] {
   }
   const shape = shapeOf(current);
   return shape ? Object.keys(shape) : [];
+}
+
+/** The definition, in words, that the schema gives the key at a path; none when it gives none. */
+function definitionOf(schema: z.ZodType, path: Path): string | undefined {
+  let current: unknown = schema;
+  for (const part of path) {
+    const shape = shapeOf(current);
+    if (!shape || typeof part !== 'string' || !(part in shape)) return undefined;
+    current = shape[part];
+  }
+  const description = (current as { description?: unknown }).description;
+  return typeof description === 'string' && description !== '' ? description : undefined;
 }
 
 function shapeOf(schema: unknown): Record<string, unknown> | undefined {

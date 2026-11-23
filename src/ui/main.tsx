@@ -34,6 +34,8 @@ function Page() {
       {answer.problems.length === 0 ? (
         <p>No problems.</p>
       ) : (
+        <>
+        <p>{answer.problems.length === 1 ? '1 problem' : `${answer.problems.length} problems`}</p>
         <ul className="problems">
           {answer.problems.map((problem, index) => (
             <li key={index}>
@@ -46,6 +48,7 @@ function Page() {
             </li>
           ))}
         </ul>
+        </>
       )}
     </main>
   );
