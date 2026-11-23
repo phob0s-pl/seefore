@@ -15,18 +15,19 @@ of a connection moved boxes.
 
 ## What holds
 
-- **The same model gives the same picture**, on a second run, with the files read in another
-  order, in a new process.
+- **The same model gives the same picture**, on a second run and with its files, boxes and
+  arrows handed over in another order.
 - **A rename moves nothing.** A new name for a person, a system, an app, a store, a piece of
   infrastructure, a connection or a technology changes the words where the name stands. Every
   box, the boundary, the run of every line and the size of the picture stay as they were. So
   does a new description.
-- **One edit keeps the order.** An app, a store or a connection added or taken out, or an app
-  moved to another system: the boxes that stand in one column before and after stand in the
-  same order, top to bottom. Most pairs of boxes keep their order both across and down.
+- **One edit keeps the order, nearly always.** An app, a store or a connection added or taken
+  out, or an app moved to another system: the boxes that stand in one column before and
+  after stand in the same order, top to bottom. On the trial models 98.6 % of such pairs do,
+  and 89 % of all pairs keep their order both across and down.
 - **Not the place.** A column that gains a box pushes down what stands under it, and the
-  columns to its right may step along. After one edit two boxes in three stand more than half
-  a box from where they stood.
+  columns to its right may step along. After one edit more than half of the boxes of a
+  container view stand more than half a box from where they stood.
 - **Not when a box that the walk passes early goes.** The order of a column comes from a walk
   through the view, as the next section says. When the box that most others hang on is taken
   out or moved, or the first box the walk reaches from its start, the walk reaches the rest
@@ -212,9 +213,9 @@ owner's reading of the pictures decides that.
 | 2 | A new name or a new description | Nothing moves in any try |
 | 3 | One edit, container view: pairs in one column that keep their order | 95 % over all models; 75 % in the worst edit |
 | 4 | One edit, container view: pairs that keep their order both ways | 80 % over all models; 65 % in each model |
-| 5 | One edit, context view: pairs that keep their order both ways | 80 % over all models |
+| 5 | One edit, context view: pairs that keep their order both ways, over the edits that reach the view | 80 % over all models |
 | 6 | The slowest layout | 2 seconds |
-| 7 | A view of more than 40 boxes | Each is reported |
+| 7 | A view of more than 40 boxes | Each is reported, and no other |
 
 - **As built, number 3 is missed in its worst edit.** Over all models 98.6 % of the pairs in
   one column keep their order. But taking out one app keeps 48 %: the app that the first
