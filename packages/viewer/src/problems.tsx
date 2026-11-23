@@ -1,4 +1,4 @@
-import { C4_CODES } from '@seefore/core';
+import { C4_CODES, c4Line } from '@seefore/core';
 import type { C4Check, C4Code, C4Report, Problem } from '@seefore/core';
 import { count, problemWords } from './listing.tsx';
 
@@ -54,32 +54,6 @@ export function ProblemList({ problems }: { problems: readonly Problem[] }) {
 }
 
 /**
- * What each check of the set is called, what it looks at and what it finds, in the words
- * `seefore check` prints, so that a line here reads as the command's line does.
- */
-const C4_WORDS: Record<C4Code, { name: string; checked(n: number): string; found(n: number): string }> = {
-  'description-missing': { name: 'A description', checked: (n) => count(n, 'thing'), found: (n) => `${n} without` },
-  'technology-missing': {
-    name: 'A technology',
-    checked: (n) => (n === 1 ? '1 app, store or component' : `${n} apps, stores and components`),
-    found: (n) => `${n} without`,
-  },
-  'connection-unnamed': { name: 'A name for a connection', checked: (n) => count(n, 'connection'), found: (n) => `${n} without` },
-  'connection-vague': { name: 'A name that says more than "Uses"', checked: (n) => count(n, 'name'), found: (n) => `${n} ${n === 1 ? 'that does not' : 'that do not'}` },
-  'element-unconnected': { name: 'A connection', checked: (n) => count(n, 'thing'), found: (n) => `${n} with none` },
-};
-
-/**
- * The line of one check: how many records it looked at and how many it found, or that it was
- * not run, and why. A check is not run only when the directory was not read in full.
- */
-export function c4Line(code: C4Code, check: C4Check, complete: boolean): string {
-  const words = C4_WORDS[code];
-  if (check.checked === null) return `${words.name}: not checked${complete ? '' : ', since the directory was not read in full'}.`;
-  return `${words.name}: ${words.checked(check.checked)} checked, ${words.found(check.findings.length)}.`;
-}
-
-/**
  * What the C4 checks counted, a line for each in the order of the set. A line that found
  * something opens to what it found, and is closed until the reader opens it, so that a long
  * list stands below the problems and pushes none of them away. A summary of a disclosure opens
@@ -94,7 +68,8 @@ function C4Checks({ report }: { report: C4Report }) {
       <ul className="c4-checks">
         {C4_CODES.map((code) => {
           const check = report[code];
-          const line = c4Line(code, check, report.complete);
+          // The words are the core library's, so that a line here reads as the command's line does.
+          const line = c4Line(report, code);
           return (
             <li key={code} className="c4-check" data-code={code}>
               {check.findings.length === 0 ? (

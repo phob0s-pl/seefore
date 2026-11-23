@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { C4_CODES, CROWDED_FROM } from '@seefore/core';
+import { C4_CODES, c4Line, CROWDED_FROM } from '@seefore/core';
 import type { C4Report, Drawn, View, ViewerState } from '@seefore/core';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
@@ -11,7 +11,6 @@ import type { Selection } from '../src/follow.ts';
 import { holdersWords } from '../src/listing.tsx';
 import type { Shown } from '../src/live.ts';
 import { Page, pageTitle } from '../src/page.tsx';
-import { c4Line } from '../src/problems.tsx';
 import { legendWords } from '../src/reading.ts';
 import { crowdedNote, fitViewport, whole } from '../src/zoom.ts';
 import { ARCHIVE_FILES, ARCHIVE_STATE, archivePicture, archiveView, stateOf } from './archive.ts';
@@ -404,20 +403,20 @@ describe('the C4 checks on the problems page', () => {
     const none = C4_CODES.reduce<C4Report>((report, code) => ({ ...report, [code]: { severity: report[code].severity, checked: null, findings: [] } }), partial);
     const marker = render({ page: 'problems' }, null, null, { ...STATE, available: false, name: null, format: null, views: [], c4: none });
     expect(c4LinesOf(marker).map(([, line]) => line)).toEqual([
-      'A description: not checked, since the directory was not read in full.',
-      'A technology: not checked, since the directory was not read in full.',
-      'A name for a connection: not checked, since the directory was not read in full.',
-      'A name that says more than "Uses": not checked, since the directory was not read in full.',
-      'A connection: not checked, since the directory was not read in full.',
+      'A description: not checked, since the records were not read.',
+      'A technology: not checked, since the records were not read.',
+      'A name for a connection: not checked, since the records were not read.',
+      'A name that says more than "Uses": not checked, since the records were not read.',
+      'A connection: not checked, since the records were not read.',
     ]);
     expect(marker).not.toContain('<details>');
   });
 
   it('says of a check that looked at nothing or found nothing that it did, and that line does not open', () => {
-    const empty = { severity: 'note' as const, checked: 0, findings: [] };
-    expect(c4Line('connection-unnamed', empty, true)).toBe('A name for a connection: 0 connections checked, 0 without.');
-    expect(c4Line('connection-vague', { ...empty, severity: 'warning' }, true)).toBe('A name that says more than "Uses": 0 names checked, 0 that do not.');
-    expect(c4Line('technology-missing', empty, true)).toBe('A technology: 0 apps, stores and components checked, 0 without.');
+    const empty = C4_CODES.reduce<C4Report>((report, code) => ({ ...report, [code]: { severity: report[code].severity, checked: 0, findings: [] } }), C4_REPORT);
+    expect(c4Line(empty, 'connection-unnamed')).toBe('A name for a connection: 0 connections checked, 0 without.');
+    expect(c4Line(empty, 'connection-vague')).toBe('A name that says more than "Uses": 0 names checked, 0 that do not.');
+    expect(c4Line(empty, 'technology-missing')).toBe('A technology: 0 apps, stores and components checked, 0 without.');
     const cleared: C4Report = { ...C4_REPORT, 'technology-missing': { severity: 'note', checked: 3, findings: [] } };
     expect(c4LineOf(render({ page: 'problems' }, null, null, { ...C4_STATE, c4: cleared }), 'technology-missing')).toBe(
       '<li class="c4-check" data-code="technology-missing">A technology: 3 apps, stores and components checked, 0 without.</li>',
@@ -425,12 +424,12 @@ describe('the C4 checks on the problems page', () => {
   });
 
   it('counts one of each in the singular', () => {
-    const one = { severity: 'note' as const, checked: 1, findings: [{ file: 'a.yaml', line: 1, column: 1, message: 'A.' }] };
-    expect(c4Line('description-missing', one, true)).toBe('A description: 1 thing checked, 1 without.');
-    expect(c4Line('technology-missing', one, true)).toBe('A technology: 1 app, store or component checked, 1 without.');
-    expect(c4Line('connection-unnamed', one, true)).toBe('A name for a connection: 1 connection checked, 1 without.');
-    expect(c4Line('connection-vague', { ...one, severity: 'warning' }, true)).toBe('A name that says more than "Uses": 1 name checked, 1 that does not.');
-    expect(c4Line('element-unconnected', one, true)).toBe('A connection: 1 thing checked, 1 with none.');
+    const one = C4_CODES.reduce<C4Report>((report, code) => ({ ...report, [code]: { severity: report[code].severity, checked: 1, findings: [{ file: 'a.yaml', line: 1, column: 1, message: 'A.' }] } }), C4_REPORT);
+    expect(c4Line(one, 'description-missing')).toBe('A description: 1 thing checked, 1 without.');
+    expect(c4Line(one, 'technology-missing')).toBe('A technology: 1 app, store or component checked, 1 without.');
+    expect(c4Line(one, 'connection-unnamed')).toBe('A name for a connection: 1 connection checked, 1 without.');
+    expect(c4Line(one, 'connection-vague')).toBe('A name that says more than "Uses": 1 name checked, 1 that does not.');
+    expect(c4Line(one, 'element-unconnected')).toBe('A connection: 1 thing checked, 1 with none.');
   });
 
   it('has no block when there is no report, as from an older server or with the directory gone, and the page stands as before', () => {

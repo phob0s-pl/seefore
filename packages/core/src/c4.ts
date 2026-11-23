@@ -208,3 +208,30 @@ function notRun(code: C4Code): C4Check {
 function note(file: string, message: string): C4Finding {
   return { file, ...START, message };
 }
+
+/** What each check of the set looks at, as its line names it: a title, and the noun for one record and for many. */
+const LOOKED_AT: Readonly<Record<C4Code, { title: string; one: string; many: string }>> = {
+  'description-missing': { title: 'A description', one: 'thing', many: 'things' },
+  'technology-missing': { title: 'A technology', one: 'app, store or component', many: 'apps, stores and components' },
+  'connection-unnamed': { title: 'A name for a connection', one: 'connection', many: 'connections' },
+  'connection-vague': { title: 'A name that says more than "Uses"', one: 'name', many: 'names' },
+  'element-unconnected': { title: 'A connection', one: 'thing', many: 'things' },
+};
+
+/**
+ * The line of one check of a report: how many records it looked at and how many it found, or
+ * that it was not run, and why. `seefore check` and the page both write it from here, so that
+ * the two read alike. The check of a connection is left out by itself when the directory was
+ * not read in full; when the records were not read at all, none of the five is run.
+ */
+export function c4Line(report: C4Report, code: C4Code): string {
+  const { title, one, many } = LOOKED_AT[code];
+  const check = report[code];
+  if (check.checked === null) {
+    const recordsRead = C4_CODES.some((each) => report[each].checked !== null);
+    return `${title}: not checked, since ${recordsRead ? 'the directory was not read in full' : 'the records were not read'}.`;
+  }
+  const n = check.findings.length;
+  const found = code === 'connection-vague' ? `${n} that ${n === 1 ? 'does' : 'do'} not` : code === 'element-unconnected' ? `${n} with none` : `${n} without`;
+  return `${title}: ${check.checked} ${check.checked === 1 ? one : many} checked, ${found}.`;
+}

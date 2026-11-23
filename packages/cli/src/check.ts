@@ -1,5 +1,5 @@
 import { dirname, isAbsolute, relative, sep } from 'node:path';
-import { C4_CODES, MARKER_FILE, compareProblems, load } from '@seefore/core';
+import { C4_CODES, MARKER_FILE, c4Line, compareProblems, load } from '@seefore/core';
 import type { C4Check, C4Code, C4Report, Loaded, Problem } from '@seefore/core';
 import { findSourceDirectoriesBelow, findSourceDirectory, isDirectory, physical, readSourceFiles, withSlashes } from './directory.ts';
 import type { Io } from './io.ts';
@@ -243,10 +243,9 @@ function report(result: CheckResult, here: Here, full: boolean): string {
   if (result.problems.length > 0) lines.push('');
 
   lines.push('C4 checks:');
-  const recordsRead = C4_CODES.some((code) => result.c4[code].checked !== null);
   for (const code of C4_CODES) {
     const check = result.c4[code];
-    lines.push(`- ${c4Line(code, check, recordsRead)}`);
+    lines.push(`- ${c4Line(result.c4, code)}`);
     if (full) for (const finding of check.findings) lines.push(`${at(finding.file, finding.line, finding.column)}: ${check.severity}: ${finding.message}`);
   }
   // The line that sends the reader on is for a run that found something and did not list it.
@@ -263,28 +262,6 @@ function report(result: CheckResult, here: Here, full: boolean): string {
       : `${count(result.errors, 'error')}, ${count(result.warnings, 'warning')}.`;
   lines.push(`${read} ${found}`);
   return lines.join('\n');
-}
-
-/** What each check of the set looks at, as its line names it: a title, and the noun for one record and for many. */
-const LOOKED_AT: Readonly<Record<C4Code, { title: string; one: string; many: string }>> = {
-  'description-missing': { title: 'A description', one: 'thing', many: 'things' },
-  'technology-missing': { title: 'A technology', one: 'app, store or component', many: 'apps, stores and components' },
-  'connection-unnamed': { title: 'A name for a connection', one: 'connection', many: 'connections' },
-  'connection-vague': { title: 'A name that says more than "Uses"', one: 'name', many: 'names' },
-  'element-unconnected': { title: 'A connection', one: 'thing', many: 'things' },
-};
-
-/**
- * The line of one check: how many records it looked at and how many it found, or that it was
- * not run, and why. The check of a connection is left out by itself when the directory was not
- * read in full. When the records were not read, none of the five is run.
- */
-function c4Line(code: C4Code, check: C4Check, recordsRead: boolean): string {
-  const { title, one, many } = LOOKED_AT[code];
-  if (check.checked === null) return `${title}: not checked, since ${recordsRead ? 'the directory was not read in full' : 'the records were not read'}.`;
-  const n = check.findings.length;
-  const found = code === 'connection-vague' ? `${n} that ${n === 1 ? 'does' : 'do'} not` : code === 'element-unconnected' ? `${n} with none` : `${n} without`;
-  return `${title}: ${check.checked} ${check.checked === 1 ? one : many} checked, ${found}.`;
 }
 
 /** What `--require-names` says when the names are not all there: the first of its conditions that does not hold. */
