@@ -500,14 +500,17 @@ When several kinds of fact are lifted, go in this order:
 ## 8. Check it
 
 Run `seefore check --workdir=<folder>`. Mend every error it reports in a file you wrote, and
-run it again. For a warning, say what it is and ask. Do not change a file you did not mean to
-change.
+run it again. For a warning, say what it is and ask, except for `view-crowded`, which asks
+nothing. Do not change a file you did not mean to change.
 
-`view-crowded` is the one warning that asks nothing. When your change takes a view over the
-limit, or adds to a view that was over it in the check of section 1, say so in one sentence:
-which view, how many boxes, that the page draws it as a map, and that pointing at a box reads
-it. Do not propose merging records or leaving any out to get under the limit. A system with
-many real parts has many boxes.
+`view-crowded` names a view and how many boxes it has: "The container view of Shop has 41
+boxes." Set these warnings beside those of the check of section 1, made before your change. A
+view that this check names and that one did not went over the limit with your change. A view
+that both name, with more boxes now, had boxes added. For each, say so in one sentence: which
+view, how many boxes it has now and, if it was over the limit before, how many it had; that
+the page draws it as a map; and that pointing at a box reads it. Do not propose merging
+records or leaving any out to get under the limit. A system with many real parts has many
+boxes.
 
 ## 9. Say what happened
 

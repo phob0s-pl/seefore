@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { load } from '../src/load.ts';
 import type { Model } from '../src/model.ts';
 import type { View, ViewArrow } from '../src/picture.ts';
-import { connectionsInNoView, viewsOf } from '../src/views.ts';
+import { boxCountsOf, connectionsInNoView, viewsOf } from '../src/views.ts';
 import { EXAMPLE } from './example.ts';
 
 /** `viewsOf`: which views a model has, and which boxes, arrows, marks and legend each holds. */
@@ -1349,5 +1349,26 @@ describe('a connection in no picture', () => {
     const views = viewsOf(model);
     expect(views.map((one) => [one.id, one.left.outside])).toEqual([['portal.context', ['watch']]]);
     expect(connectionsInNoView(model, views)).toEqual(['watch']);
+  });
+});
+
+describe('how many boxes each view draws', () => {
+  it('is counted as the views pick their boxes, view by view in their order, without drawing them', () => {
+    const models = [
+      EXAMPLE,
+      SHOP,
+      DESK,
+      ARCHIVE,
+      // A record with an error is no box, and a piece of infrastructure in no system that acts is one.
+      { ...ARCHIVE, 'apps/desk.yaml': 'name: [Desk\n' },
+      { ...ARCHIVE, 'connections/proxy-checks-desk.yaml': 'from: proxy\nto: desk\n' },
+    ];
+    for (const files of models) {
+      const model = modelOf(files);
+      const drawn = viewsOf(model).map((one) => ({ id: one.id, kind: one.kind, scope: one.scope, count: one.boxes.length }));
+      expect(drawn.length).toBeGreaterThan(1);
+      expect(boxCountsOf(model)).toEqual(drawn);
+    }
+    expect(boxCountsOf(modelOf({}))).toEqual([]);
   });
 });

@@ -8,7 +8,7 @@ import { START, error, list, quote, warning } from './problem.ts';
 import type { Position, Problem } from './problem.ts';
 import { ACCESS, OPENS } from './records.ts';
 import type { Connection, Store, Technology } from './records.ts';
-import { CROWDED_FROM, viewsOf } from './views.ts';
+import { CROWDED_FROM, boxCountsOf } from './views.ts';
 
 /**
  * The rules and checks that look at more than one record. A rule says the model can be read
@@ -628,24 +628,24 @@ function sameName(name: string): string {
  * The check of a crowded view. A view of more than `CROWDED_FROM` boxes cannot be read as one
  * picture, and the page draws it as a map. The warning stands at the file of the view's system,
  * once for each such view, in the order of the views: a system's context view before its
- * container view. It reads the views of the model, which are what the page draws, so a record
- * with an error in its file is not counted. They are worked out once, for every system at once,
- * since that is the costly part. It asks for no record less: a system with many real parts has
- * many boxes.
+ * container view. It counts the boxes of the views of the model, which are what the page
+ * draws, so a record with an error in its file is not counted. It counts them as the views pick
+ * them and makes no view: a check needs no arrow, label or legend, and whoever draws the views
+ * makes them once. It asks for no record less: a system with many real parts has many boxes.
  */
 export function crowdedProblems(model: Model): Problem[] {
   const systems = new Map(model.systems.map((system) => [system.id, system]));
   const problems: Problem[] = [];
-  for (const view of viewsOf(model)) {
+  for (const view of boxCountsOf(model)) {
     const system = systems.get(view.scope);
-    if (system === undefined || view.boxes.length <= CROWDED_FROM) continue;
+    if (system === undefined || view.count <= CROWDED_FROM) continue;
     const kind = view.kind === 'context' ? 'context' : 'container';
     problems.push(
       warning(
         system.file,
         START,
         'view-crowded',
-        `The ${kind} view of ${system.name} has ${view.boxes.length} boxes. A view of more than ${CROWDED_FROM} cannot be read as one picture: ` +
+        `The ${kind} view of ${system.name} has ${view.count} boxes. A view of more than ${CROWDED_FROM} cannot be read as one picture: ` +
           'the page draws it as a map. Until focused views exist, read it by pointing at a box.',
       ),
     );

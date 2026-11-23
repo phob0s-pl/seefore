@@ -111,9 +111,19 @@ describe('the model skill', () => {
       { path: 'seefore.yaml', text: 'format: 1\nname: Shop\n' },
       { path: 'systems/shop.yaml', text: 'name: Shop\n' },
     ];
-    expect(load([...shop, ...apps]).problems.map((problem) => problem.code)).toEqual(['view-crowded']);
-    const said = skill.split('\n\n').find((paragraph) => paragraph.startsWith('`view-crowded`')) ?? '';
-    expect(said.replace(/\s+/g, ' ')).toContain('Do not propose merging records or leaving any out to get under the limit.');
+    const [crowded] = load([...shop, ...apps]).problems;
+    expect(crowded?.code).toBe('view-crowded');
+    const paragraphs = skill.split('\n\n').map((paragraph) => paragraph.replace(/\s+/g, ' '));
+    // The rule for every warning says, where it stands, that this one asks nothing.
+    const rule = paragraphs.find((paragraph) => paragraph.startsWith('Run `seefore check --workdir=<folder>`.')) ?? '';
+    expect(rule).toContain('For a warning, say what it is and ask, except for `view-crowded`, which asks nothing.');
+    const said = paragraphs.find((paragraph) => paragraph.startsWith('`view-crowded`')) ?? '';
+    // What the skill quotes is how the warning begins, so that the view and its boxes are read from it.
+    const quoted = /"(The container view of Shop has \d+ boxes\.)"/.exec(said)?.[1] ?? '';
+    expect(quoted).not.toBe('');
+    expect(crowded?.message.startsWith(quoted.replace(/\d+/, String(CROWDED_FROM + 1)))).toBe(true);
+    expect(said).toContain('Set these warnings beside those of the check of section 1, made before your change.');
+    expect(said).toContain('Do not propose merging records or leaving any out to get under the limit.');
   });
 
   it('names the kinds the engine allows, in order', () => {
