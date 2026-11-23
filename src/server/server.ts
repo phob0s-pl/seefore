@@ -1,9 +1,9 @@
 import { readFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import type { Server, ServerResponse } from 'node:http';
-import { basename, extname, join, resolve, sep } from 'node:path';
+import { extname, join, resolve, sep } from 'node:path';
 import type { ModelAnswer } from '../model/answer.ts';
-import { listFiles } from './files.ts';
+import { readFolder } from './files.ts';
 
 /** The only address the server listens on: this machine. */
 export const HOST = '127.0.0.1';
@@ -13,11 +13,6 @@ const TYPES: Record<string, string> = {
   '.js': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
 };
-
-/** Reads the folder anew and gives the answer of `/api/model`. */
-async function readModel(folder: string): Promise<ModelAnswer> {
-  return { folder: basename(resolve(folder)), files: await listFiles(folder), problems: [] };
-}
 
 /**
  * Serves `/api/model` for the folder, and the built page from `page`, on this machine at the
@@ -61,7 +56,7 @@ async function answer(folder: string, page: string, url: string, response: Serve
 async function model(folder: string, response: ServerResponse): Promise<void> {
   let answer: ModelAnswer;
   try {
-    answer = await readModel(folder);
+    answer = await readFolder(folder);
   } catch {
     send(response, 500, 'text/plain; charset=utf-8', `Cannot read the folder "${folder}".\n`);
     return;

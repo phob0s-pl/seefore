@@ -1,0 +1,79 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "from": {
+      "type": "string",
+      "maxLength": 80,
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+      "description": "The id of the one that acts: a person, a system, an app, a store, a component or a piece of infrastructure, at any level."
+    },
+    "to": {
+      "type": "string",
+      "maxLength": 80,
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+      "description": "The id of the one it acts on: a person, a system, an app, a store, a component or a piece of infrastructure, at any level."
+    },
+    "via": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 80,
+        "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+      },
+      "description": "What the exchange passes through, in order from `from`: pieces of infrastructure, apps, components, systems. Never a store, never an end."
+    },
+    "opens": {
+      "type": "string",
+      "const": "to",
+      "description": "`to`: the far side opened the channel this exchange goes down. Left out when the one that sends opened it, or nobody has said."
+    },
+    "access": {
+      "type": "string",
+      "enum": [
+        "read",
+        "write",
+        "read-write"
+      ],
+      "description": "What the connection does to the store it ends at: read, write or read-write. Left out for neither, and for \"not said\"."
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100,
+      "pattern": "^\\S(?:[^\\n\\r\\u0085\\u2028\\u2029]*\\S)?$",
+      "description": "The few words on the arrow, a verb first: one line of 1 to 100 characters. May be left out."
+    },
+    "only": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100,
+      "pattern": "^\\S(?:[^\\n\\r\\u0085\\u2028\\u2029]*\\S)?$",
+      "description": "When the thing is there at all: the words that read after \"only\", one line of at most 100 characters. Left out when it is always there."
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000,
+      "pattern": "\\S",
+      "description": "What it is responsible for, in 1 to 2,000 characters. Its first sentence says what the thing is: a box shows that sentence."
+    },
+    "technology": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 80,
+        "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+      },
+      "description": "What the exchange is carried in, such as a protocol or a format: ids of records in technologies/, a set."
+    }
+  },
+  "required": [
+    "from",
+    "to"
+  ],
+  "additionalProperties": false,
+  "description": "One thing acts on another, for one purpose. It has an id of its own. C4 calls it a relationship."
+}

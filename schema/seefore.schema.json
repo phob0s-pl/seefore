@@ -1,0 +1,24 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "format": {
+      "type": "number",
+      "const": 1,
+      "description": "The format of the files. It is 1."
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100,
+      "pattern": "^\\S(?:[^\\n\\r\\u0085\\u2028\\u2029]*\\S)?$",
+      "description": "The name of the model: one line of 1 to 100 characters, with no space at either end."
+    }
+  },
+  "required": [
+    "format",
+    "name"
+  ],
+  "additionalProperties": false,
+  "description": "The marker of a seefore model: the file seefore.yaml at the top of its folder."
+}

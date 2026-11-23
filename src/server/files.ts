@@ -1,5 +1,7 @@
-import { readdir } from 'node:fs/promises';
-import { join } from 'node:path';
+import { readFile, readdir } from 'node:fs/promises';
+import { basename, join, resolve } from 'node:path';
+import type { ModelAnswer } from '../model/answer.ts';
+import { readModel } from '../model/read.ts';
 
 /**
  * The `.yaml` and `.yml` files under a folder, at any depth, relative to it with `/`, in
@@ -21,4 +23,10 @@ export async function listFiles(folder: string): Promise<string[]> {
   };
   await walk(folder, '');
   return found.sort();
+}
+
+/** Reads the folder anew: the text of each YAML file goes into the reader of `src/model/`. */
+export async function readFolder(folder: string): Promise<ModelAnswer> {
+  const files = await Promise.all((await listFiles(folder)).map(async (path) => ({ path, text: await readFile(join(folder, path), 'utf8') })));
+  return { folder: basename(resolve(folder)), ...readModel(files) };
 }
