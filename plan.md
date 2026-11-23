@@ -49,7 +49,7 @@ The core library and the command together are called the engine below.
 2. The format and its check in the engine. Every error names a file and a line.
 3. A skill can write it.
 4. The viewer shows it.
-5. `seefore diff` reports changes to it (from stage 14 on).
+5. `seefore diff` reports changes to it (from stage 13 on).
 6. It was tried on the trial systems, and a short note in `research/trial/` says what did not
    fit. What did not fit is fixed, or accepted in writing.
 7. It was reviewed against `research/synthesis.md`. The review is a short section at the end
@@ -139,12 +139,13 @@ Decided:
 | Which order a column has | The walk, as built. Two others were measured: every start first, and by id alone. They hold better when a box that the walk passes early goes, at 28 and 44 % more crossings than the walk on every picture | 2026-11-23 |
 | The floor for the worst edit at stage 7 | 75 % of the order within a column, for an edit that adds something. An edit that takes out or moves has no floor: under the walk the worst keeps 48 %. Set again after the measurement | 2026-11-23 |
 | The split column of a context view | From 16 boxes, as stage 5 built it. Split at every size, the small context views held worse | 2026-11-23 |
+| Where finding things stands | Among the last stages: stage 25, before sharing. It was stage 10. Stages 11 to 25 became 10 to 24. Notes in `research/` written before this date name those stages by their old numbers | 2026-11-23 |
 
 To settle in the stage named, with the recommendation the two proposals reached:
 
 | Decision | Stage | Recommendation |
 | --- | --- | --- |
-| A call that does not wait | 11 | No field at stage 6b: a queue or a topic says it, and else the connection's name. Flows have asynchronous sends; ask again there |
+| A call that does not wait | 10 | No field at stage 6b: a queue or a topic says it, and else the connection's name. Flows have asynchronous sends; ask again there |
 | Groups, code that several apps share, one program that runs as several apps | A stage of its own, before 9 | Moved out of stage 6b, and still to be planned. Tools differ on whether a thing is in one group or in several |
 | A condition as a record | When free words prove too loose | Open. At stage 6b nothing ties two records with one condition together but their spelling |
 | Callers on the left and callees on the right in a context view | When a context view does not hold in the owner's reading | Not at stage 7. A first arrow back from a neighbour is the weak edit of a context view; sides by rule lift it and cost two views 9 to 22 % of their fit |
@@ -164,22 +165,22 @@ To settle in the stage named, with the recommendation the two proposals reached:
 | 7 | Layout stability (gate) | built 2026-11-23; it passes its pass numbers, one of them set again after it was measured; the owner's judging of the pictures, which is the gate, is still to do, and stage 8 waits for it |
 | 8 | C4 checks | |
 | 9 | Focused views | |
-| 10 | Finding things | |
-| 11 | Flows | |
-| 12 | Flow walkthrough | |
-| 13 | Features | |
-| 14 | Comparison | |
-| 15 | Proposal | |
-| 16 | Proposal in the viewer | |
-| 17 | Proposal drift | |
-| 18 | Review | |
-| 19 | Checks on the change | |
-| 20 | Decision record | |
-| 21 | Applying | |
-| 22 | Implementation status | |
-| 23 | Goals and quality scenarios | |
-| 24 | Constraints, assumptions, risks | |
-| 25 | Team rules | |
+| 10 | Flows | |
+| 11 | Flow walkthrough | |
+| 12 | Features | |
+| 13 | Comparison | |
+| 14 | Proposal | |
+| 15 | Proposal in the viewer | |
+| 16 | Proposal drift | |
+| 17 | Review | |
+| 18 | Checks on the change | |
+| 19 | Decision record | |
+| 20 | Applying | |
+| 21 | Implementation status | |
+| 22 | Goals and quality scenarios | |
+| 23 | Constraints, assumptions, risks | |
+| 24 | Team rules | |
+| 25 | Finding things | |
 | 26 | Sharing | |
 | 27 | Installation | |
 
@@ -313,19 +314,9 @@ To settle in the stage named, with the recommendation the two proposals reached:
   its neighbours" view, and a landscape with the systems around it.
 - **Leaves out:** a query language, a view for every element, deployment views.
 
-### 10. Finding things
-
-- **Adds:** search and navigation in the viewer.
-- **Ends with:** search over names, ids, descriptions, owners and technologies. A stable link
-  to every element and view. Drill-down from landscape to system to app. The element
-  panel shows what goes in and out, the owner, and the views it appears in.
-- **Trial:** someone who does not know a trial system finds a service, its owner and what
-  depends on it, without help.
-- **Leaves out:** a page per kind of record, a team directory.
-
 ## B. Behaviour
 
-### 11. Flows
+### 10. Flows
 
 - **Adds:** a flow: a named scenario with a trigger, an outcome and ordered steps. A step has
   its own id. A message step uses a declared connection. A step can also be an internal
@@ -335,7 +326,7 @@ To settle in the stage named, with the recommendation the two proposals reached:
 - **Leaves out:** branches, loops and parallel steps; a failure path is a flow of its own for
   now. Features.
 
-### 12. Flow walkthrough
+### 11. Flow walkthrough
 
 - **Adds:** reading a flow on the structure.
 - **Ends with:** the steps highlighted one by one on the diagram. A way from an element or a
@@ -344,7 +335,7 @@ To settle in the stage named, with the recommendation the two proposals reached:
 - **Trial:** walk the same paths with the owner.
 - **Leaves out:** runtime tracing, and any claim that a valid flow is how the system behaves.
 
-### 13. Features
+### 12. Features
 
 - **Adds:** what a flow belongs to.
 - **Ends with:** a decision made on the data: a feature is a record of its own, or only a
@@ -356,7 +347,7 @@ To settle in the stage named, with the recommendation the two proposals reached:
 
 ## C. Change
 
-### 14. Comparison
+### 13. Comparison
 
 - **Adds:** the difference between two revisions of a source directory, by id.
 - **Ends with:** `seefore diff` between two Git revisions or two directories: added, removed,
@@ -367,7 +358,7 @@ To settle in the stage named, with the recommendation the two proposals reached:
 
 From here on, every new concept also teaches the comparison.
 
-### 15. Proposal
+### 14. Proposal
 
 - **Adds:** a proposal: a Git branch on which the skill changes the model, and a brief that
   names its baseline.
@@ -378,7 +369,7 @@ From here on, every new concept also teaches the comparison.
 - **Trial:** re-do one real past change of a trial system from its original need.
 - **Leaves out:** review, decision, applying, proposals that depend on other proposals.
 
-### 16. Proposal in the viewer
+### 15. Proposal in the viewer
 
 - **Adds:** reading a proposal.
 - **Ends with:** a list of proposals. For each: as-is, changes and to-be on one layout, so
@@ -388,7 +379,7 @@ From here on, every new concept also teaches the comparison.
 - **Trial:** read that proposal as a reviewer would, without its author.
 - **Leaves out:** comments, a roadmap of several future states.
 
-### 17. Proposal drift
+### 16. Proposal drift
 
 - **Adds:** what happens when main moves, and when two proposals meet.
 - **Ends with:** a stale baseline is detected. Two open proposals that touch the same record
@@ -400,7 +391,7 @@ From here on, every new concept also teaches the comparison.
 
 ## D. Decision
 
-### 18. Review
+### 17. Review
 
 - **Adds:** the review of a proposal: who is accountable, who decides, who can block and on
   what concern, who is consulted, and by when. Findings.
@@ -409,11 +400,11 @@ From here on, every new concept also teaches the comparison.
   addressed, declined with a reason, or deferred to an action with an owner. A review skill
   runs a few reviewers, each with one lens. The viewer shows findings on the diagram and in a
   list. "Review is done" is computed from the record.
-- **Trial:** review the proposal from stage 15. Decline one finding with a reason and defer
+- **Trial:** review the proposal from stage 14. Decline one finding with a reason and defer
   one.
 - **Leaves out:** chat, notifications, boards, votes, sign-off by an AI.
 
-### 19. Checks on the change
+### 18. Checks on the change
 
 - **Adds:** checks that compare the proposed state with its baseline.
 - **Ends with:** the checks run on the proposed state and report what the proposal makes
@@ -421,7 +412,7 @@ From here on, every new concept also teaches the comparison.
 - **Trial:** the same proposal on a model that already has open findings.
 - **Leaves out:** the team's own rules.
 
-### 20. Decision record
+### 19. Decision record
 
 - **Adds:** the decision on a proposal.
 - **Ends with:** the outcome: accepted, accepted with conditions, rejected, deferred or
@@ -432,7 +423,7 @@ From here on, every new concept also teaches the comparison.
   and find the reasons again from main.
 - **Leaves out:** a decision made by an AI, a record for a trivial edit.
 
-### 21. Applying
+### 20. Applying
 
 - **Adds:** applying an accepted proposal to main.
 - **Ends with:** a skill that merges only when the decision is to accept, the review holds for
@@ -442,7 +433,7 @@ From here on, every new concept also teaches the comparison.
   was.
 - **Leaves out:** applying in parts, migration steps.
 
-### 22. Implementation status
+### 21. Implementation status
 
 - **Adds:** what happened after acceptance.
 - **Ends with:** dated entries on the decision: implemented, verified, by whom, and where the
@@ -454,7 +445,7 @@ From here on, every new concept also teaches the comparison.
 
 ## E. What a design is judged against
 
-### 23. Goals and quality scenarios
+### 22. Goals and quality scenarios
 
 - **Adds:** a few goals in order of priority, and measurable scenarios: the source of the
   stimulus, the stimulus, the conditions, the affected part, the response and its measure.
@@ -463,7 +454,7 @@ From here on, every new concept also teaches the comparison.
 - **Trial:** the real design criteria of the trial systems.
 - **Leaves out:** a questionnaire, a goal on every element, targets filled in by default.
 
-### 24. Constraints, assumptions, risks
+### 23. Constraints, assumptions, risks
 
 - **Adds:** where these live.
 - **Ends with:** sections of prose in the brief and the decision first. A record of its own
@@ -473,7 +464,7 @@ From here on, every new concept also teaches the comparison.
   must be records.
 - **Leaves out:** a schema per kind by default, registers nobody reads.
 
-### 25. Team rules
+### 24. Team rules
 
 - **Adds:** the team's own rules, checked over the model.
 - **Ends with:** a rule has a reason, a scope and a severity, and is switched on per source
@@ -485,6 +476,16 @@ From here on, every new concept also teaches the comparison.
 - **Leaves out:** a rule language, scores.
 
 ## F. For other people
+
+### 25. Finding things
+
+- **Adds:** search and navigation in the viewer.
+- **Ends with:** search over names, ids, descriptions, owners and technologies. A stable link
+  to every element and view. Drill-down from landscape to system to app. The element
+  panel shows what goes in and out, the owner, and the views it appears in.
+- **Trial:** someone who does not know a trial system finds a service, its owner and what
+  depends on it, without help.
+- **Leaves out:** a page per kind of record, a team directory.
 
 ### 26. Sharing
 
@@ -517,6 +518,8 @@ From here on, every new concept also teaches the comparison.
 - Comparison comes before the proposal, and the proposal before review. Each is tried on real
   data before the next is built on it.
 - Extra data comes last. A working path to a decision shows which of it is needed.
+- Finding things stands among the last stages, before sharing: search, links and drill-down
+  are for a reader who does not know the system.
 
 ## Not building
 

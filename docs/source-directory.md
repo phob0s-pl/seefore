@@ -225,7 +225,7 @@ Departs from it, with the reason:
 - **Readable ids, not opaque ones.** The research asks only that identity never changes. A
   readable id invites a rename when the name changes, and a rename looks like one record
   removed and another added. The guard is the rule "given once", which the skills follow, and
-  the comparison at stage 14, which must report a suspected rename.
+  the comparison at stage 13, which must report a suspected rename.
 - **Room to federate** (stage 2) is not built. An id is unique within one source directory,
   which leaves room: a later catalog can name a record by directory and id.
 
@@ -233,7 +233,7 @@ Risks it takes on:
 
 - **A proposal as a Git branch** (stage 4, open decision 2). The research found branches with
   no comparison a dead end, and one user for whom plain branches did not fit publishing
-  alternatives. So stage 14 must compare by id, and stage 16 must show a proposal without the
+  alternatives. So stage 13 must compare by id, and stage 15 must show a proposal without the
   reader checking out a branch.
 - **Many small files.** One record a file gives small, reviewable changes, and it makes a
   directory hard to read by eye. That is accepted, since people read through the viewer.

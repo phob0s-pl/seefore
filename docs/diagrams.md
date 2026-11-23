@@ -149,7 +149,7 @@ Of "Every stage ends the same way": part 3, since nothing new can be written, an
 ## Leaves out
 
 Editing, dragging, stored positions and styling controls. Search, a link to a box and
-drill-down: stage 10. Component views, a landscape and "this box and its neighbours" as a view:
+drill-down: stage 25. Component views, a landscape and "this box and its neighbours" as a view:
 stage 9. The limit for a crowded view, and what holds a picture still when the model changes:
 stage 7. What a connection passes through, and a mark for somebody else's system: stage 6a.
 Export of a picture.

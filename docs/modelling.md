@@ -401,7 +401,7 @@ Departs from it, with the reason:
   at the lowest level known". A picture needs words for an arrow that stands for several, and
   the research says to summarise.
 - **No tags and no links** (section 4, stage 2 lists both). A free tag is a kind of the user's
-  own by another door. Links come with decisions and evidence, at stages 20 and 22.
+  own by another door. Links come with decisions and evidence, at stages 19 and 21.
 - **An unknown key is an error**, where the research prefers "a few typed records and open
   properties" (section 4, stage 6). Every later change to the format is then a known one.
 - **No comments in a record.** The research does not speak of them. A comment is read by no
