@@ -121,6 +121,9 @@ and from the rules above, and none differed in a box, a mark, an arrow, a route,
 place. A test holds this on views made by code, and the trial script holds it on the trial
 models.
 
+One mark is new in a container view. A system with a connection from itself to itself has the
+mark ↻ on its boundary, as every open box has. Stage 5 drew no mark there. It moves nothing.
+
 ## The layout
 
 ELK lays a picture out as before: layered, left to right, in one run. What is new:
@@ -146,8 +149,9 @@ ELK lays a picture out as before: layered, left to right, in one run. What is ne
 - **Two people, one acting on the other.** A person stands in the first column. With
   everything as the scope an arrow can join two people, and ELK fails when both must be
   first. The person acted on is let go of the first column.
-- **The split of a long column** stays where it was and as it was: one system at System
-  depth, from 16 boxes.
+- **The split of a long column** stays where it was and as it was: one system as the scope,
+  drawn closed, from 16 boxes. That is its context view, and the same picture at a deeper
+  depth when the system has nothing to open.
 
 What it costs: more crossings. With the whole model at Container depth the seven models have
 2,942 crossings under the walk alone, 3,402 with the turns from the depth above, and 2,224
