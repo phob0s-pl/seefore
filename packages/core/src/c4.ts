@@ -81,6 +81,21 @@ type Thing = ModelRecord<{ in?: string | undefined; description?: string | undef
 const PARTS: readonly string[] = ['apps', 'stores', 'components'];
 
 /**
+ * What the note on a part that names no technology says, by its folder. Each says what can be
+ * named for that kind of part: a protocol is not what an app is built with, and files of no
+ * one format have none. A component is noted only when its app names none either.
+ */
+const NO_TECHNOLOGY: Readonly<Record<string, string>> = {
+  apps:
+    'This app names no technology. Name what it is built with, if the facts say: a language, a framework or a product. ' +
+    'A protocol that it speaks belongs on its connections.',
+  stores:
+    'This store names no technology. Name the product that holds it or the format of its files, if the facts say. ' +
+    'Files of no one format have none, and that is right.',
+  components: 'Neither this component nor its app names a technology. Name what it is built with, if the facts say.',
+};
+
+/**
  * Runs the five checks on a model. Each reads the model and no view, so hiding something in a
  * view never narrows what is checked. A record whose file has an error is not in the model, so
  * a field with a wrong value has its error and is in no count: only a field left out is.
@@ -90,6 +105,7 @@ export function c4Of(model: Model, options: C4Options): C4Report {
   const placeOf = options.placeOf ?? (() => START);
   const things = thingsOf(model);
   // What a part is built with. A person, a system and a piece of infrastructure are not asked.
+  // Every part is looked at, a component too, though it may be built with what its app names.
   const parts = things.filter(([folder]) => PARTS.includes(folder));
   const named = model.connections.filter((connection) => connection.name !== undefined);
 
@@ -105,9 +121,7 @@ export function c4Of(model: Model, options: C4Options): C4Report {
     'technology-missing': ran(
       'technology-missing',
       parts.length,
-      parts
-        .filter(([, part]) => part.technology === undefined)
-        .map(([folder, part]) => note(part.file, `This ${nounOf(format, folder)} names no technology. Name what it is built with, if the facts say.`)),
+      withNoTechnology(model, parts).map(([folder, part]) => note(part.file, NO_TECHNOLOGY[folder] as string)),
     ),
     'connection-unnamed': ran(
       'connection-unnamed',
@@ -150,6 +164,19 @@ export function c4Warnings(report: C4Report): Problem[] {
 }
 
 /**
+ * The parts that nothing names a technology for. A component that names none is built with what
+ * its app names, so it is counted only when its app names none either. A component whose app is
+ * not in the model, as when the app's file has an error, is not counted: nothing can be said of
+ * it. An app and a store are counted when they name none.
+ */
+function withNoTechnology(model: Model, parts: readonly [string, Thing][]): [string, Thing][] {
+  const appsWithNone = new Set(model.apps.filter((app) => app.technology === undefined).map((app) => app.id));
+  return parts.filter(
+    ([folder, part]) => part.technology === undefined && (folder !== 'components' || (part.in !== undefined && appsWithNone.has(part.in))),
+  );
+}
+
+/**
  * The things of the model, each with its folder: every person, system, app, store, component
  * and piece of infrastructure. They are found in order of file, since the checks report in it.
  */
@@ -183,7 +210,8 @@ function unconnected(format: Format, model: Model, things: readonly [string, Thi
 /**
  * What the note on a thing with no connection says. It names only what can be so of the thing:
  * what is inside it, for a system or an app, which hold other things; and a connection passing
- * through it, for what `via` may name. A person and a store are neither.
+ * through it, for what `via` may name, whose note then points at `via` too, since a thing that
+ * passes exchanges on gets no connection of its own for that. A person and a store are neither.
  */
 function unconnectedMessage(format: Format, folder: string): string {
   const noun = nounOf(format, folder);
@@ -191,7 +219,8 @@ function unconnectedMessage(format: Format, folder: string): string {
   const passed = referenceField(format, 'connections', 'via')?.families.includes(folder) ?? false;
   const at = holds ? `this ${noun} or at anything in it` : `this ${noun}`;
   const through = passed ? ', and none passes through it' : '';
-  return `No connection starts or ends at ${at}${through}. That may be right: add one only for an exchange that the facts name.`;
+  const add = passed ? 'add a connection, or name it in `via`,' : 'add one';
+  return `No connection starts or ends at ${at}${through}. That may be right: ${add} only for an exchange that the facts name.`;
 }
 
 /** A check that ran: how many records it looked at, and what it found, in order of file. */
@@ -214,24 +243,27 @@ const LOOKED_AT: Readonly<Record<C4Code, { title: string; one: string; many: str
   'description-missing': { title: 'A description', one: 'thing', many: 'things' },
   'technology-missing': { title: 'A technology', one: 'app, store or component', many: 'apps, stores and components' },
   'connection-unnamed': { title: 'A name for a connection', one: 'connection', many: 'connections' },
-  'connection-vague': { title: 'A name that says more than "Uses"', one: 'name', many: 'names' },
+  // The line says what is tested and no more: that a name is not that one word.
+  'connection-vague': { title: 'A name that is more than the word "Uses"', one: 'name', many: 'names' },
   'element-unconnected': { title: 'A connection', one: 'thing', many: 'things' },
 };
 
 /**
  * The line of one check of a report: how many records it looked at and how many it found, or
  * that it was not run, and why. `seefore check` and the page both write it from here, so that
- * the two read alike. The check of a connection is left out by itself when the directory was
- * not read in full; when the records were not read at all, none of the five is run.
+ * the two read alike. The check of a connection is left out by itself when part of the
+ * directory was left out, which the problems above the line say; when the records were not read
+ * at all, none of the five is run.
  */
 export function c4Line(report: C4Report, code: C4Code): string {
   const { title, one, many } = LOOKED_AT[code];
   const check = report[code];
   if (check.checked === null) {
     const recordsRead = C4_CODES.some((each) => report[each].checked !== null);
-    return `${title}: not checked, since ${recordsRead ? 'the directory was not read in full' : 'the records were not read'}.`;
+    return recordsRead ? `${title}: not checked: part of the directory was left out, as the problems above say.` : `${title}: not checked, since the records were not read.`;
   }
   const n = check.findings.length;
-  const found = code === 'connection-vague' ? `${n} that ${n === 1 ? 'does' : 'do'} not` : code === 'element-unconnected' ? `${n} with none` : `${n} without`;
+  const found =
+    code === 'connection-vague' ? `${n} that ${n === 1 ? 'is' : 'are'} only that word` : code === 'element-unconnected' ? `${n} with none` : `${n} without`;
   return `${title}: ${check.checked} ${check.checked === 1 ? one : many} checked, ${found}.`;
 }

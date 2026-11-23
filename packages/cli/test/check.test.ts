@@ -44,17 +44,17 @@ function json(args: string[], cwd = '.') {
 
 /**
  * The block of the C4 checks, with the blank line after it, for a model of this many things,
- * parts and connections, each of which lacks nothing. When the directory was not read in full,
+ * parts and connections, each of which lacks nothing. When part of the directory was left out,
  * the check of a connection says so.
  */
 function block(things = 0, parts = 0, connections = 0, complete = true): string[] {
   return [
-    'C4 checks:',
+    'C4 checks, which count what the model lacks:',
     `- A description: ${things} ${things === 1 ? 'thing' : 'things'} checked, 0 without.`,
     `- A technology: ${parts} ${parts === 1 ? 'app, store or component' : 'apps, stores and components'} checked, 0 without.`,
     `- A name for a connection: ${connections} ${connections === 1 ? 'connection' : 'connections'} checked, 0 without.`,
-    `- A name that says more than "Uses": ${connections} ${connections === 1 ? 'name' : 'names'} checked, 0 that do not.`,
-    complete ? `- A connection: ${things} ${things === 1 ? 'thing' : 'things'} checked, 0 with none.` : '- A connection: not checked, since the directory was not read in full.',
+    `- A name that is more than the word "Uses": ${connections} ${connections === 1 ? 'name' : 'names'} checked, 0 that are only that word.`,
+    complete ? `- A connection: ${things} ${things === 1 ? 'thing' : 'things'} checked, 0 with none.` : '- A connection: not checked: part of the directory was left out, as the problems above say.',
     '',
   ];
 }
@@ -434,12 +434,12 @@ describe('seefore check', () => {
         'but another store. Turn it round, so that it goes from the one that reads or writes the store, and say which in its name.',
       '',
       // The checks read the two records whose files have no error.
-      'C4 checks:',
+      'C4 checks, which count what the model lacks:',
       '- A description: 2 things checked, 2 without.',
       '- A technology: 1 app, store or component checked, 1 without.',
       '- A name for a connection: 0 connections checked, 0 without.',
-      '- A name that says more than "Uses": 0 names checked, 0 that do not.',
-      '- A connection: not checked, since the directory was not read in full.',
+      '- A name that is more than the word "Uses": 0 names checked, 0 that are only that word.',
+      '- A connection: not checked: part of the directory was left out, as the problems above say.',
       '`seefore check --full` lists each.',
       '',
       '4 records read. 3 errors, 0 warnings.',
@@ -470,12 +470,12 @@ describe('seefore check', () => {
       'systems/argue.yaml:2:8: error: `owner` holds the id of a record in `owners/`. ' +
         'If who answers takes a sentence to say, leave `owner` out and put the sentence in the description.',
       '',
-      'C4 checks:',
+      'C4 checks, which count what the model lacks:',
       '- A description: 1 thing checked, 1 without.',
       '- A technology: 0 apps, stores and components checked, 0 without.',
       '- A name for a connection: 0 connections checked, 0 without.',
-      '- A name that says more than "Uses": 0 names checked, 0 that do not.',
-      '- A connection: not checked, since the directory was not read in full.',
+      '- A name that is more than the word "Uses": 0 names checked, 0 that are only that word.',
+      '- A connection: not checked: part of the directory was left out, as the problems above say.',
       '`seefore check --full` lists each.',
       '',
       // The two files YAML cannot read whole are not read at all.
@@ -499,12 +499,12 @@ describe('seefore check', () => {
       '',
       'seefore.yaml:1:1: error: This line is a comment. The marker file holds no comments, since nothing reads them. Remove it.',
       '',
-      'C4 checks:',
+      'C4 checks, which count what the model lacks:',
       '- A description: 1 thing checked, 1 without.',
       '- A technology: 0 apps, stores and components checked, 0 without.',
       '- A name for a connection: 0 connections checked, 0 without.',
-      '- A name that says more than "Uses": 0 names checked, 0 that do not.',
-      '- A connection: not checked, since the directory was not read in full.',
+      '- A name that is more than the word "Uses": 0 names checked, 0 that are only that word.',
+      '- A connection: not checked: part of the directory was left out, as the problems above say.',
       '`seefore check --full` lists each.',
       '',
       '1 record read. 1 error, 0 warnings.',
@@ -586,10 +586,12 @@ const WHOLE: Readonly<Record<string, string>> = {
 /** What each finding in the shop with gaps says. */
 const SAID = {
   description: 'This person has no description. Say what it is for, when that is known.',
-  technology: 'This app names no technology. Name what it is built with, if the facts say.',
+  technology:
+    'This app names no technology. Name what it is built with, if the facts say: a language, a framework or a product. A protocol that it speaks belongs on its connections.',
   unnamed: 'This connection has no name. Say what the one that acts does, when that is known.',
   vague: 'This connection is named `Uses`, which says nothing of what is done. Say what the one that acts does. If nobody knows yet, leave `name` out.',
-  unconnected: 'No connection starts or ends at this app or at anything in it, and none passes through it. That may be right: add one only for an exchange that the facts name.',
+  unconnected:
+    'No connection starts or ends at this app or at anything in it, and none passes through it. That may be right: add a connection, or name it in `via`, only for an exchange that the facts name.',
 };
 
 describe('the C4 checks of seefore check', () => {
@@ -610,11 +612,11 @@ describe('the C4 checks of seefore check', () => {
       '',
       `connections/fan-uses-shop.yaml:3:7: warning: ${SAID.vague}`,
       '',
-      'C4 checks:',
+      'C4 checks, which count what the model lacks:',
       '- A description: 4 things checked, 1 without.',
       '- A technology: 2 apps, stores and components checked, 1 without.',
       '- A name for a connection: 2 connections checked, 1 without.',
-      '- A name that says more than "Uses": 1 name checked, 1 that does not.',
+      '- A name that is more than the word "Uses": 1 name checked, 1 that is only that word.',
       '- A connection: 4 things checked, 1 with none.',
       '`seefore check --full` lists each.',
       '',
@@ -628,25 +630,47 @@ describe('the C4 checks of seefore check', () => {
     expect(run(['check'], 'arch/people').out).toContain('\n`seefore check --full` lists each.\n');
   });
 
-  it('list with --full what each found beneath its line, as a problem is written, with paths from where the command was run', () => {
+  it('list with --full each note beneath its line, as a problem is written, with paths from where the command was run, and not the warning a second time', () => {
     write(under('arch', GAPS));
     const result = run(['check', '--full', '--workdir=arch']);
     expect(result.code).toBe(0);
-    expect(result.out.split('\n').slice(5)).toEqual([
-      'C4 checks:',
+    expect(result.out.split('\n').slice(3)).toEqual([
+      `arch/connections/fan-uses-shop.yaml:3:7: warning: ${SAID.vague}`,
+      '',
+      'C4 checks, which count what the model lacks:',
       '- A description: 4 things checked, 1 without.',
       `arch/people/fan.yaml:1:1: note: ${SAID.description}`,
       '- A technology: 2 apps, stores and components checked, 1 without.',
       `arch/apps/api.yaml:1:1: note: ${SAID.technology}`,
       '- A name for a connection: 2 connections checked, 1 without.',
       `arch/connections/fan-to-api.yaml:1:1: note: ${SAID.unnamed}`,
-      '- A name that says more than "Uses": 1 name checked, 1 that does not.',
-      `arch/connections/fan-uses-shop.yaml:3:7: warning: ${SAID.vague}`,
+      // The warning stands among the problems above, and only there.
+      '- A name that is more than the word "Uses": 1 name checked, 1 that is only that word.',
       '- A connection: 4 things checked, 1 with none.',
       `arch/apps/report.yaml:1:1: note: ${SAID.unconnected}`,
       '',
       '7 records read. 0 errors, 1 warning.',
     ]);
+  });
+
+  it('send nobody on to --full when what they found is only the warning, which stands among the problems', () => {
+    write({ ...WHOLE, 'connections/fan-uses-shop.yaml': 'from: fan\nto: shop\nname: Uses\n' });
+    const result = run(['check']);
+    expect(result.code).toBe(0);
+    expect(result.out.split('\n').slice(3)).toEqual([
+      `connections/fan-uses-shop.yaml:3:7: warning: ${SAID.vague}`,
+      '',
+      'C4 checks, which count what the model lacks:',
+      '- A description: 4 things checked, 0 without.',
+      '- A technology: 2 apps, stores and components checked, 0 without.',
+      '- A name for a connection: 3 connections checked, 0 without.',
+      '- A name that is more than the word "Uses": 3 names checked, 1 that is only that word.',
+      '- A connection: 4 things checked, 0 with none.',
+      '',
+      '8 records read. 0 errors, 1 warning.',
+    ]);
+    // With --full there is nothing more to list.
+    expect(run(['check', '--full']).out).toBe(result.out);
   });
 
   it('list each finding of a check in order of file', () => {
@@ -660,7 +684,7 @@ describe('the C4 checks of seefore check', () => {
     write({ 'seefore.yaml': MARKER, 'people/fan.yaml': 'name: Fan\ndescription: Watches.\n' });
     const lines = run(['check']).out.split('\n');
     expect(lines).toContain('- A name for a connection: 0 connections checked, 0 without.');
-    expect(lines).toContain('- A name that says more than "Uses": 0 names checked, 0 that do not.');
+    expect(lines).toContain('- A name that is more than the word "Uses": 0 names checked, 0 that are only that word.');
     expect(lines).toContain('- A connection: 1 thing checked, 1 with none.');
     const { c4 } = json(['check']).data;
     expect(c4['connection-unnamed']).toEqual({ severity: 'note', checked: 0, findings: [] });
@@ -684,7 +708,7 @@ describe('the C4 checks of seefore check', () => {
       mkdirSync(root);
       make();
       const lines = run(['check']).out.split('\n');
-      expect(lines, what).toContain('- A connection: not checked, since the directory was not read in full.');
+      expect(lines, what).toContain('- A connection: not checked: part of the directory was left out, as the problems above say.');
       expect(lines, what).toContain('- A description: 4 things checked, 1 without.');
       const { c4 } = json(['check']).data;
       expect(c4.complete, what).toBe(false);
@@ -698,11 +722,11 @@ describe('the C4 checks of seefore check', () => {
     const result = run(['check']);
     expect(result.code).toBe(1);
     expect(result.out.split('\n').slice(-8)).toEqual([
-      'C4 checks:',
+      'C4 checks, which count what the model lacks:',
       '- A description: not checked, since the records were not read.',
       '- A technology: not checked, since the records were not read.',
       '- A name for a connection: not checked, since the records were not read.',
-      '- A name that says more than "Uses": not checked, since the records were not read.',
+      '- A name that is more than the word "Uses": not checked, since the records were not read.',
       '- A connection: not checked, since the records were not read.',
       '',
       '0 records read. 1 error, 1 warning.',
@@ -753,59 +777,95 @@ describe('--require-names', () => {
     return files;
   };
 
-  /** The line `--require-names` adds, and the exit code, in words; and what it holds as data. */
-  const required = () => {
-    const words = run(['check', '--require-names']);
+  /** The paragraph `--require-names` adds, and the exit code, in words; and what it holds as data. */
+  const required = (...more: string[]) => {
+    const words = run(['check', '--require-names', ...more]);
     const lines = words.out.split('\n');
-    const plain = run(['check']);
-    // The line stands on its own, after the C4 checks and before the last line, which is as it was.
-    const said = lines.length === plain.out.split('\n').length ? undefined : lines.at(-3);
-    expect(lines.at(-1)).toBe(plain.out.split('\n').at(-1));
-    const data = json(['check', '--require-names']);
+    const plain = run(['check', ...more]).out.split('\n');
+    // The paragraph stands on its own, after the C4 checks and before the last line, and the rest is as it was.
+    expect(lines.slice(0, -3)).toEqual(plain.slice(0, -1));
+    expect(lines.slice(-2)).toEqual(['', plain.at(-1)]);
+    const data = json(['check', '--require-names', ...more]);
     expect(data.code).toBe(words.code);
-    return { code: words.code, said, data: data.data.requireNames, plain: plain.code };
+    expect(Object.keys(data.data.requireNames ?? {})).toEqual(['met', 'complete', 'connections', 'unnamed', 'vague']);
+    return { code: words.code, said: lines.at(-3), data: data.data.requireNames, plain: run(['check', ...more]).code };
   };
 
-  it('ends with 0 and adds nothing when every connection has a name that says more than "Uses"', () => {
-    write(named({ 'fan-buys': 'Buys', 'fan-pays': 'Pays' }));
-    expect(required()).toEqual({ code: 0, said: undefined, data: { met: true, complete: true, connections: 2, unnamed: 0, vague: 0 }, plain: 0 });
-  });
+  /** What the paragraph says when part of the directory was left out. */
+  const LEFT_OUT = 'Names are required, and part of the directory was left out, as the problems above say. This run fails.';
 
-  it('ends with 1 when the directory was not read in full, and says so', () => {
-    write({ ...named({ 'fan-buys': 'Buys' }), 'notes/plan.yaml': 'a: 1\n' });
+  it('ends with 0 and says so when every connection has a name that is more than the word "Uses"', () => {
+    write(named({ 'fan-buys': 'Buys', 'fan-pays': 'Pays' }));
     expect(required()).toEqual({
-      code: 1,
-      said: 'Names are required, and the directory was not read in full.',
-      data: { met: false, complete: false, connections: 1, unnamed: 0, vague: 0 },
+      code: 0,
+      said: 'Names are required: every connection has one, and none is only "Uses".',
+      data: { met: true, complete: true, connections: 2, unnamed: 0, vague: 0 },
       plain: 0,
     });
   });
 
-  it('ends with 1 when there is an error, which leaves the directory not read in full', () => {
+  it('ends with 1 when part of the directory was left out, and says that the run fails', () => {
+    write({ ...named({ 'fan-buys': 'Buys' }), 'notes/plan.yaml': 'a: 1\n' });
+    expect(required()).toEqual({ code: 1, said: LEFT_OUT, data: { met: false, complete: false, connections: 1, unnamed: 0, vague: 0 }, plain: 0 });
+  });
+
+  it('ends with 1 when there is an error, which leaves part of the directory out', () => {
     write({ ...named({ 'fan-buys': 'Buys' }), 'people/fan.yaml': 'name: Fan\nage: 3\n' });
     const found = required();
-    expect(found).toMatchObject({ code: 1, said: 'Names are required, and the directory was not read in full.', plain: 1 });
+    expect(found).toMatchObject({ code: 1, said: LEFT_OUT, plain: 1 });
     expect(found.data).toMatchObject({ met: false, complete: false });
+  });
+
+  it.each([
+    [{ 'fan-to-shop': null, 'fan-buys': 'Buys' }, 'Of the connections read, 1 has no name.', 1, 0],
+    [{ 'fan-to-shop': null, 'fan-to-shop-too': null, 'fan-uses-shop': 'Uses' }, 'Of the connections read, 2 have no name, and 1 is named only "Uses".', 2, 1],
+    [{ 'fan-uses-shop': 'Uses', 'fan-use-shop': 'use' }, 'Of the connections read, 2 are named only "Uses".', 0, 2],
+  ])('says, when part of the directory was left out, what was counted among the connections that were read: %j', (names, counted, unnamed, vague) => {
+    write({ ...named(names), 'notes/plan.yaml': 'a: 1\n' });
+    const connections = Object.keys(names).length;
+    expect(required()).toEqual({ code: 1, said: `${LEFT_OUT} ${counted}`, data: { met: false, complete: false, connections, unnamed, vague }, plain: 0 });
+  });
+
+  it('says that the records were not read when the marker cannot say which format they are in', () => {
+    write({ ...named({ 'fan-to-shop': null }), 'seefore.yaml': 'format: one\nname: Shop\n' });
+    expect(required()).toEqual({
+      code: 1,
+      said: 'Names are required, and the records were not read, as the problems above say. This run fails.',
+      data: { met: false, complete: false, connections: 0, unnamed: 0, vague: 0 },
+      plain: 1,
+    });
   });
 
   it('ends with 1 when there is no connection to check, and says so', () => {
     write(named({}));
     expect(required()).toEqual({
       code: 1,
-      said: 'Names are required, and there is no connection to check.',
+      said: 'Names are required, and there is no connection to check. This run fails.',
       data: { met: false, complete: true, connections: 0, unnamed: 0, vague: 0 },
       plain: 0,
     });
   });
 
   it.each([
-    [{ 'fan-to-shop': null, 'fan-uses-shop': 'Uses', 'fan-use-shop': 'use' }, 'Names are required: 1 connection has no name, and 2 are named only "Uses".', 1, 2],
-    [{ 'fan-to-shop': null, 'fan-to-shop-too': null, 'fan-buys': 'Buys' }, 'Names are required: 2 connections have no name.', 2, 0],
-    [{ 'fan-uses-shop': 'USES', 'fan-buys': 'Buys' }, 'Names are required: 1 connection is named only "Uses".', 0, 1],
-  ])('ends with 1 when a connection has no name or is named only "Uses", and says how many: %j', (names, said, unnamed, vague) => {
+    [{ 'fan-to-shop': null, 'fan-uses-shop': 'Uses', 'fan-use-shop': 'use' }, '1 connection has no name, and 2 are named only "Uses". This run fails. `seefore check --full` lists them.', 1, 2],
+    [{ 'fan-to-shop': null, 'fan-to-shop-too': null, 'fan-buys': 'Buys' }, '2 connections have no name. This run fails. `seefore check --full` lists them.', 2, 0],
+    [{ 'fan-to-shop': null, 'fan-buys': 'Buys' }, '1 connection has no name. This run fails. `seefore check --full` lists it.', 1, 0],
+    [{ 'fan-uses-shop': 'USES', 'fan-buys': 'Buys' }, '1 connection is named only "Uses". This run fails. `seefore check --full` lists it.', 0, 1],
+  ])('ends with 1 when a connection has no name or is named only "Uses", says how many, that the run fails and where to look: %j', (names, said, unnamed, vague) => {
     write(named(names));
     const connections = Object.keys(names).length;
-    expect(required()).toEqual({ code: 1, said, data: { met: false, complete: true, connections, unnamed, vague }, plain: 0 });
+    expect(required()).toEqual({ code: 1, said: `Names are required: ${said}`, data: { met: false, complete: true, connections, unnamed, vague }, plain: 0 });
+  });
+
+  it('names the directory where it says where to look, as the block does, and says it once with --full, which lists them above', () => {
+    write(under('arch', named({ 'fan-to-shop': null, 'fan-buys': 'Buys' })));
+    const given = required('--workdir=arch');
+    expect(given.said).toBe('Names are required: 1 connection has no name. This run fails. `seefore check --full --workdir=arch` lists it.');
+    const full = required('--full', '--workdir=arch');
+    expect(full.said).toBe('Names are required: 1 connection has no name. This run fails.');
+    expect(run(['check', '--require-names', '--full', '--workdir=arch']).out).toContain(
+      '\narch/connections/fan-to-shop.yaml:1:1: note: This connection has no name. Say what the one that acts does, when that is known.\n',
+    );
   });
 
   it('is an option of seefore check only, and a mistake in the options with any other command', () => {
@@ -928,11 +988,15 @@ describe('the built command', () => {
 
     const gate = runs('check', '--require-names', '--workdir=gaps');
     expect(gate.status).toBe(1);
-    expect(gate.stdout).toContain('\nNames are required: 1 connection has no name, and 1 is named only "Uses".\n\n7 records read. 0 errors, 1 warning.\n');
+    expect(gate.stdout).toContain(
+      '\n\nNames are required: 1 connection has no name, and 1 is named only "Uses". This run fails. `seefore check --full --workdir=gaps` lists them.\n\n7 records read. 0 errors, 1 warning.\n',
+    );
     const asData = runs('check', '--require-names', '--json', '--workdir=gaps');
     expect(asData.status).toBe(1);
     expect((JSON.parse(asData.stdout) as CheckResult).requireNames).toEqual({ met: false, complete: true, connections: 2, unnamed: 1, vague: 1 });
-    expect(runs('check', '--require-names', '--workdir=whole').status).toBe(0);
+    const met = runs('check', '--require-names', '--workdir=whole');
+    expect(met.status).toBe(0);
+    expect(met.stdout).toContain('\n\nNames are required: every connection has one, and none is only "Uses".\n\n8 records read. No problems.\n');
 
     const mistake = runs('list', '--require-names', '--workdir=gaps');
     expect(mistake.status).toBe(2);

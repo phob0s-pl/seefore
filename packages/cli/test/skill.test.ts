@@ -172,6 +172,64 @@ describe('the model skill', () => {
     expect(flat).toContain('- Never write a fact that nobody stated, nor a word such as "Unknown" in place of one.');
   });
 
+  it('goes through the findings that are there one check at a time when asked, and says at the end how they stand', () => {
+    const after = skill.slice(skill.indexOf('## 8.'), skill.indexOf('## 9.')).replace(/\s+/g, ' ');
+    expect(after).toContain(
+      '**When the person asks to go through the findings that are there**, take one check at a time, and each finding with the question of the table. ' +
+        'The same rules hold for what may be written. ' +
+        'Most will stay: at the end, say how many were mended, how many nobody knows, and how many are right as they stand.',
+    );
+  });
+
+  it('says what is no answer to what a part is built with, as the engine counts it', () => {
+    const after = skill.slice(skill.indexOf('## 8.'), skill.indexOf('## 9.')).replace(/\s+/g, ' ');
+    expect(after).toContain('A protocol that the part speaks is no answer: it belongs on its connections.');
+    expect(after).toContain('Nor is the technology of the app a component is in: the component has it already, and is not counted for it.');
+    expect(after).toContain(
+      '**A store of files**: its technology is the format of the files, when the facts name one. Files of no one format have none, and the note stays.',
+    );
+    // The engine says the same: an app's note sends a protocol to its connections, a store's
+    // note lets files of no one format be, and a component in an app that names one is not counted.
+    const { c4 } = load([
+      { path: 'seefore.yaml', text: 'format: 1\nname: Shop\n' },
+      { path: 'systems/shop.yaml', text: 'name: Shop\n' },
+      { path: 'apps/api.yaml', text: 'name: API\nin: shop\ntechnology: [go]\n' },
+      { path: 'apps/worker.yaml', text: 'name: Worker\nin: shop\n' },
+      { path: 'stores/exports.yaml', text: 'name: Exports\nin: shop\nkind: files\n' },
+      { path: 'components/checkout.yaml', text: 'name: Checkout\nin: api\n' },
+      { path: 'technologies/go.yaml', text: 'name: Go\n' },
+    ]);
+    const notes = c4['technology-missing'].findings;
+    expect(notes.map((finding) => finding.file)).toEqual(['apps/worker.yaml', 'stores/exports.yaml']);
+    expect(notes[0]?.message).toContain('A protocol that it speaks belongs on its connections.');
+    expect(notes[1]?.message).toContain('Files of no one format have none, and that is right.');
+  });
+
+  it('says what a thing connected to nothing is not given, by the conventions that say so', () => {
+    const after = skill.slice(skill.indexOf('## 8.'), skill.indexOf('## 9.')).replace(/\s+/g, ' ');
+    expect(after).toContain(
+      '**A thing connected to nothing**: who runs a copy or answers for a part is said in a description or by an owner, and is no connection (convention 6). ' +
+        'A thing that only passes exchanges on is named in `via` on the connections that pass through it, and gets no connection of its own for that (convention 7).',
+    );
+    // The conventions it names are those of an owner and of what a connection passes through.
+    expect(skill).toContain('6. **An owner** is the team, the role or the organisation');
+    expect(skill).toContain('7. **What a connection passes through.**');
+    // And the note on a thing that `via` may name points at `via` too.
+    const { c4 } = load([
+      { path: 'seefore.yaml', text: 'format: 1\nname: Shop\n' },
+      { path: 'infrastructure/proxy.yaml', text: 'name: Proxy\n' },
+    ]);
+    expect(c4['element-unconnected'].findings[0]?.message).toContain('add a connection, or name it in `via`, only for an exchange that the facts name.');
+  });
+
+  it('makes up no name to pass --require-names, and says which connection lacks one', () => {
+    const after = skill.slice(skill.indexOf('## 8.'), skill.indexOf('## 9.')).replace(/\s+/g, ' ');
+    expect(after).toContain(
+      '**`--require-names`**: a model with an honest gap does not pass it. Never make up a name to pass it: say which connection lacks one. ' +
+        'The person finds the fact, or publishes without the option.',
+    );
+  });
+
   it('names the kinds the engine allows, in order', () => {
     const line = skill.split('\n- ').find((item) => item.startsWith('`kind` of an app')) ?? '';
     const [ofApp, ofStore] = line.split('`kind` of a store');

@@ -103,7 +103,14 @@ describe('a description', () => {
 });
 
 describe('a technology', () => {
-  it('is asked of every app, store and component', () => {
+  /** What the note on a part that names no technology says, by its kind. */
+  const SAID = {
+    app: 'This app names no technology. Name what it is built with, if the facts say: a language, a framework or a product. A protocol that it speaks belongs on its connections.',
+    store: 'This store names no technology. Name the product that holds it or the format of its files, if the facts say. Files of no one format have none, and that is right.',
+    component: 'Neither this component nor its app names a technology. Name what it is built with, if the facts say.',
+  };
+
+  it('is asked of every app, store and component, in words for each kind', () => {
     const report = c4({
       'systems/shop.yaml': 'name: Shop\n',
       'apps/api.yaml': 'name: API\nin: shop\n',
@@ -111,11 +118,10 @@ describe('a technology', () => {
       'components/checkout.yaml': 'name: Checkout\nin: api\n',
     });
     expect(report['technology-missing'].checked).toBe(3);
-    const said = (noun: string) => `This ${noun} names no technology. Name what it is built with, if the facts say.`;
     expect(found(report, 'technology-missing')).toEqual([
-      `apps/api.yaml:1:1 ${said('app')}`,
-      `components/checkout.yaml:1:1 ${said('component')}`,
-      `stores/orders.yaml:1:1 ${said('store')}`,
+      `apps/api.yaml:1:1 ${SAID.app}`,
+      `components/checkout.yaml:1:1 ${SAID.component}`,
+      `stores/orders.yaml:1:1 ${SAID.store}`,
     ]);
   });
 
@@ -129,14 +135,45 @@ describe('a technology', () => {
     expect(report['technology-missing']).toEqual({ severity: 'note', checked: 0, findings: [] });
   });
 
-  it('is not taken from what a part is in: a component of an app that names one still names none', () => {
+  it('is had by a component from its app: one that names none is counted only when its app names none either', () => {
     const report = c4({
       'systems/shop.yaml': 'name: Shop\n',
       'apps/api.yaml': 'name: API\nin: shop\ntechnology: [go]\n',
-      'components/checkout.yaml': 'name: Checkout\nin: api\n',
+      'apps/worker.yaml': 'name: Worker\nin: shop\n',
+      // Its own technology.
+      'components/checkout.yaml': 'name: Checkout\nin: api\ntechnology: [go]\n',
+      // None of its own, in an app that names one: built with what the app names.
+      'components/basket.yaml': 'name: Basket\nin: api\n',
+      // None of its own, in an app that names none: counted, and so is the app.
+      'components/sweeper.yaml': 'name: Sweeper\nin: worker\n',
+      // A store and an app as before: a store has nothing from the app that keeps it.
+      'stores/cache.yaml': 'name: Cache\nin: api\n',
       'technologies/go.yaml': 'name: Go\n',
     });
-    expect(files(report, 'technology-missing')).toEqual(['components/checkout.yaml']);
+    // Every app, store and component is looked at, those that are not counted too.
+    expect(report['technology-missing'].checked).toBe(6);
+    expect(found(report, 'technology-missing')).toEqual([
+      `apps/worker.yaml:1:1 ${SAID.app}`,
+      `components/sweeper.yaml:1:1 ${SAID.component}`,
+      `stores/cache.yaml:1:1 ${SAID.store}`,
+    ]);
+  });
+
+  it('is not counted for a component whose app is not in the model: nothing can be said of it', () => {
+    // The app's file has an error, so the app is not in the model, and its id is still taken.
+    const loaded = load(
+      directory({
+        'systems/shop.yaml': 'name: Shop\n',
+        'apps/api.yaml': 'name: API\nin: shop\nage: 3\n',
+        'components/checkout.yaml': 'name: Checkout\nin: api\n',
+      }),
+    );
+    expect(loaded.problems.map((problem) => `${problem.file} ${problem.code}`)).toEqual(['apps/api.yaml key-unknown']);
+    expect(loaded.c4['technology-missing']).toEqual({ severity: 'note', checked: 1, findings: [] });
+    // So too in a model made by hand, whose component names an app it does not hold.
+    const model = emptyModel();
+    model.components.push({ id: 'checkout', file: 'components/checkout.yaml', name: 'Checkout', in: 'api' });
+    expect(c4Of(model, { complete: false })['technology-missing']).toEqual({ severity: 'note', checked: 1, findings: [] });
   });
 });
 
@@ -259,8 +296,11 @@ describe('a field with a wrong value', () => {
 });
 
 describe('a connection', () => {
-  /** A note on a thing that no connection reaches, by the noun of its kind and what it can hold. */
+  /** A note on a person or a store that no connection reaches, which nothing is in and `via` cannot name. */
   const alone = (what: string) => `No connection starts or ends at ${what}. That may be right: add one only for an exchange that the facts name.`;
+  /** A note on a thing that `via` may name, which points at `via` too, by the noun of its kind and what it can hold. */
+  const notPassed = (what: string) =>
+    `No connection starts or ends at ${what}, and none passes through it. That may be right: add a connection, or name it in \`via\`, only for an exchange that the facts name.`;
 
   it('reaches a thing that it starts at, ends at or names only in `via`', () => {
     const report = c4({
@@ -307,7 +347,7 @@ describe('a connection', () => {
     const toComponent = c4({ ...parts, 'connections/fan-buys.yaml': 'from: fan\nto: checkout\nname: Buys\n' });
     expect(found(toComponent, 'element-unconnected')).toEqual([`stores/cache.yaml:1:1 ${alone('this store')}`]);
     const toStore = c4({ ...parts, 'connections/fan-reads.yaml': 'from: fan\nto: cache\nname: Reads the cache\n' });
-    expect(found(toStore, 'element-unconnected')).toEqual([`components/checkout.yaml:1:1 ${alone('this component, and none passes through it')}`]);
+    expect(found(toStore, 'element-unconnected')).toEqual([`components/checkout.yaml:1:1 ${notPassed('this component')}`]);
   });
 
   it('counts a part with no connection of its own, though its system has many', () => {
@@ -320,8 +360,8 @@ describe('a connection', () => {
       'connections/fan-pays.yaml': 'from: fan\nto: shop\nname: Pays\n',
     });
     expect(found(report, 'element-unconnected')).toEqual([
-      `apps/api.yaml:1:1 ${alone('this app or at anything in it, and none passes through it')}`,
-      `infrastructure/balancer.yaml:1:1 ${alone('this piece of infrastructure, and none passes through it')}`,
+      `apps/api.yaml:1:1 ${notPassed('this app or at anything in it')}`,
+      `infrastructure/balancer.yaml:1:1 ${notPassed('this piece of infrastructure')}`,
     ]);
   });
 
@@ -332,7 +372,7 @@ describe('a connection', () => {
     });
     expect(found(report, 'element-unconnected')).toEqual([
       `people/fan.yaml:1:1 ${alone('this person')}`,
-      `systems/partner.yaml:1:1 ${alone('this system or at anything in it, and none passes through it')}`,
+      `systems/partner.yaml:1:1 ${notPassed('this system or at anything in it')}`,
     ]);
   });
 

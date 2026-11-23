@@ -515,9 +515,10 @@ the page draws it as a map; and that pointing at a box reads it. Do not propose 
 records or leaving any out to get under the limit. A system with many real parts has many
 boxes.
 
-`c4` holds what the C4 checks found: a thing with no description, an app, a store or a
-component with no technology, a connection with no name or named only "Uses", a thing that no
-connection reaches. Set its findings beside those of section 1, by code and file.
+`c4` holds what the C4 checks found: a thing with no description, an app or a store with no
+technology, a component with none whose app names none either, a connection with no name or
+named only "Uses", a thing that no connection reaches. Set its findings beside those of
+section 1, by code and file.
 
 - **A finding that your change made** is said to the person once, with its question:
 
@@ -532,8 +533,27 @@ connection reaches. Set its findings beside those of section 1, by code and file
 - **A finding that was there before** is left alone. An edit to one record is no order to
   clean the directory. Say how many there are, in one sentence, when the person asks or when
   a count rose.
+- **When the person asks to go through the findings that are there**, take one check at a
+  time, and each finding with the question of the table. The same rules hold for what may be
+  written. Most will stay: at the end, say how many were mended, how many nobody knows, and
+  how many are right as they stand.
 - `checked` is `null` when a check was not run: `element-unconnected` runs only on a
   directory read in full. Then nothing is known of what stands alone.
+
+What is no answer, and what is:
+
+- **To "What is it built with?"** A protocol that the part speaks is no answer: it belongs on
+  its connections. Nor is the technology of the app a component is in: the component has it
+  already, and is not counted for it.
+- **A store of files**: its technology is the format of the files, when the facts name one.
+  Files of no one format have none, and the note stays.
+- **A thing connected to nothing**: who runs a copy or answers for a part is said in a
+  description or by an owner, and is no connection (convention 6). A thing that only passes
+  exchanges on is named in `via` on the connections that pass through it, and gets no
+  connection of its own for that (convention 7).
+- **`--require-names`**: a model with an honest gap does not pass it. Never make up a name to
+  pass it: say which connection lacks one. The person finds the fact, or publishes without
+  the option.
 
 A field left out says "not known yet", and the count shows it. Where the facts say why
 something is not known, the description says so in ordinary words: "The sources do not name

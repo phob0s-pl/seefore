@@ -229,8 +229,8 @@ export function notStarted(json: boolean, io: Io, code: string, message: string,
 
 /**
  * The result as a person reads it: a heading, each problem on a line, what the C4 checks
- * looked at and found, what `--require-names` did not find, and a count. With `full`, what each
- * check found follows its line.
+ * looked at and found, how `--require-names` ended, and a count. With `full`, each note follows
+ * the line of its check; a warning is not written again, since it stands among the problems.
  */
 function report(result: CheckResult, here: Here, full: boolean): string {
   const lines: string[] = [];
@@ -242,18 +242,19 @@ function report(result: CheckResult, here: Here, full: boolean): string {
   for (const problem of result.problems) lines.push(`${at(problem.file, problem.line, problem.column)}: ${problem.severity}: ${problem.message}`);
   if (result.problems.length > 0) lines.push('');
 
-  lines.push('C4 checks:');
+  lines.push('C4 checks, which count what the model lacks:');
   for (const code of C4_CODES) {
     const check = result.c4[code];
     lines.push(`- ${c4Line(result.c4, code)}`);
-    if (full) for (const finding of check.findings) lines.push(`${at(finding.file, finding.line, finding.column)}: ${check.severity}: ${finding.message}`);
+    if (full && check.severity === 'note') for (const finding of check.findings) lines.push(`${at(finding.file, finding.line, finding.column)}: note: ${finding.message}`);
   }
-  // The line that sends the reader on is for a run that found something and did not list it.
-  if (!full && C4_CODES.some((code) => result.c4[code].findings.length > 0)) lines.push(`\`${seefore('check --full', here)}\` lists each.`);
+  // The line that sends the reader on is for a run that found a note and did not list it. A
+  // warning stands among the problems already, and `--full` would add nothing to it.
+  if (!full && notesIn(result.c4)) lines.push(`\`${seefore('check --full', here)}\` lists each.`);
   lines.push('');
 
   const names = result.requireNames;
-  if (names !== undefined && !names.met) lines.push(namesMissing(names), '');
+  if (names !== undefined) lines.push(namesSaid(names, result.c4, here, full), '');
 
   const read = `${count(result.records, 'record')} read.`;
   const found =
@@ -264,18 +265,44 @@ function report(result: CheckResult, here: Here, full: boolean): string {
   return lines.join('\n');
 }
 
-/** What `--require-names` says when the names are not all there: the first of its conditions that does not hold. */
-function namesMissing(names: RequireNames): string {
-  if (!names.complete) return 'Names are required, and the directory was not read in full.';
-  if (names.connections === 0) return 'Names are required, and there is no connection to check.';
-  const said: string[] = [];
-  if (names.unnamed > 0) said.push(`${count(names.unnamed, 'connection')} ${names.unnamed === 1 ? 'has' : 'have'} no name`);
-  if (names.vague > 0) {
-    // After the first count, "connection" goes without saying.
-    const which = said.length > 0 ? String(names.vague) : count(names.vague, 'connection');
-    said.push(`${which} ${names.vague === 1 ? 'is' : 'are'} named only "Uses"`);
+/** Whether a check whose findings are notes found something. */
+function notesIn(c4: C4Report): boolean {
+  return C4_CODES.some((code) => c4[code].severity === 'note' && c4[code].findings.length > 0);
+}
+
+/**
+ * How `--require-names` ended, as one paragraph: that the names are all there, or the first of
+ * its conditions that does not hold, that the run fails, and where to look. When part of the
+ * directory was left out, what was counted among the connections that were read follows.
+ */
+function namesSaid(names: RequireNames, c4: C4Report, here: Here, full: boolean): string {
+  if (names.met) return 'Names are required: every connection has one, and none is only "Uses".';
+  const fails = 'This run fails.';
+  if (!names.complete) {
+    // When the marker cannot say which format the records are in, none of them was read.
+    const recordsRead = C4_CODES.some((code) => c4[code].checked !== null);
+    const why = recordsRead ? 'part of the directory was left out, as the problems above say' : 'the records were not read, as the problems above say';
+    const counted = lacking(names, false);
+    return [`Names are required, and ${why}.`, fails, ...(counted === '' ? [] : [`Of the connections read, ${counted}.`])].join(' ');
   }
-  return `Names are required: ${said.join(', and ')}.`;
+  if (names.connections === 0) return `Names are required, and there is no connection to check. ${fails}`;
+  // With `--full` each is listed above already, as the block leaves out its line that sends the reader on.
+  const lists = full ? [] : [`\`${seefore('check --full', here)}\` ${names.unnamed + names.vague === 1 ? 'lists it' : 'lists them'}.`];
+  return [`Names are required: ${lacking(names, true)}.`, fails, ...lists].join(' ');
+}
+
+/**
+ * How many connections have no name and how many are named only "Uses", as "1 connection has no
+ * name, and 2 are named only "Uses"", or with no noun at all when the sentence names the
+ * connections already. Empty when there are none of either.
+ */
+function lacking(names: RequireNames, noun: boolean): string {
+  const said: string[] = [];
+  // After the first count, "connection" goes without saying.
+  const which = (n: number) => (noun && said.length === 0 ? count(n, 'connection') : String(n));
+  if (names.unnamed > 0) said.push(`${which(names.unnamed)} ${names.unnamed === 1 ? 'has' : 'have'} no name`);
+  if (names.vague > 0) said.push(`${which(names.vague)} ${names.vague === 1 ? 'is' : 'are'} named only "Uses"`);
+  return said.join(', and ');
 }
 
 /** Writes a path, or any word, so that a shell takes it as one word. */

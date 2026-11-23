@@ -347,7 +347,7 @@ function c4LineOf(html: string, code: string): string {
 
 describe('the C4 checks on the problems page', () => {
   const html = render({ page: 'problems' }, null, null, C4_STATE);
-  /** The shop with its error: the directory was not read in full, so the check of connections was not run. */
+  /** The shop with its error: part of the directory was left out, so the check of connections was not run. */
   const partial: C4Report = { ...C4_REPORT, complete: false, 'element-unconnected': { severity: 'note', checked: null, findings: [] } };
 
   it('has the five lines of the set, in its order, in the words `seefore check` prints', () => {
@@ -355,7 +355,7 @@ describe('the C4 checks on the problems page', () => {
       ['description-missing', 'A description: 9 things checked, 2 without.'],
       ['technology-missing', 'A technology: 3 apps, stores and components checked, 2 without.'],
       ['connection-unnamed', 'A name for a connection: 7 connections checked, 1 without.'],
-      ['connection-vague', 'A name that says more than "Uses": 6 names checked, 1 that does not.'],
+      ['connection-vague', 'A name that is more than the word "Uses": 6 names checked, 1 that is only that word.'],
       ['element-unconnected', 'A connection: 9 things checked, 1 with none.'],
     ]);
     expect(c4LinesOf(html).map(([code]) => code)).toEqual([...C4_CODES]);
@@ -378,7 +378,7 @@ describe('the C4 checks on the problems page', () => {
 
   it('shows each finding with its kind, its file, its place and its words, as a problem is shown', () => {
     expect(c4LineOf(html, 'technology-missing')).toContain(
-      '<li class="problem note"><span class="severity">Note</span> <code class="place">apps/gateway.yaml:1:1</code> <span class="message">This app names no technology. Name what it is built with, if the facts say.</span> <span class="code">(technology-missing)</span></li>',
+      '<li class="problem note"><span class="severity">Note</span> <code class="place">apps/gateway.yaml:1:1</code> <span class="message">This app names no technology. Name what it is built with, if the facts say: a language, a framework or a product. A protocol that it speaks belongs on its connections.</span> <span class="code">(technology-missing)</span></li>',
     );
     // The warning reads as it does among the problems, its quoted words set as code.
     const vague = c4LineOf(html, 'connection-vague');
@@ -390,7 +390,7 @@ describe('the C4 checks on the problems page', () => {
   it('says in the words of a line that opens how many it holds', () => {
     for (const code of C4_CODES) {
       const line = c4LineOf(html, code);
-      const said = /(\d+) (?:without|that does not|that do not|with none)\.<\/summary>/.exec(line)?.[1];
+      const said = /(\d+) (?:without|that is only that word|that are only that word|with none)\.<\/summary>/.exec(line)?.[1];
       expect(Number(said)).toBe(times(line, '<li class="problem '));
       expect(Number(said)).toBe(C4_REPORT[code].findings.length);
     }
@@ -398,7 +398,7 @@ describe('the C4 checks on the problems page', () => {
 
   it('says of a check that was not run that it was not, and why, and it does not open', () => {
     const shop = render({ page: 'problems' }, null, null, { ...STATE, c4: partial });
-    expect(c4LineOf(shop, 'element-unconnected')).toBe('<li class="c4-check" data-code="element-unconnected">A connection: not checked, since the directory was not read in full.</li>');
+    expect(c4LineOf(shop, 'element-unconnected')).toBe('<li class="c4-check" data-code="element-unconnected">A connection: not checked: part of the directory was left out, as the problems above say.</li>');
     // With the marker unreadable none of the five is run.
     const none = C4_CODES.reduce<C4Report>((report, code) => ({ ...report, [code]: { severity: report[code].severity, checked: null, findings: [] } }), partial);
     const marker = render({ page: 'problems' }, null, null, { ...STATE, available: false, name: null, format: null, views: [], c4: none });
@@ -406,7 +406,7 @@ describe('the C4 checks on the problems page', () => {
       'A description: not checked, since the records were not read.',
       'A technology: not checked, since the records were not read.',
       'A name for a connection: not checked, since the records were not read.',
-      'A name that says more than "Uses": not checked, since the records were not read.',
+      'A name that is more than the word "Uses": not checked, since the records were not read.',
       'A connection: not checked, since the records were not read.',
     ]);
     expect(marker).not.toContain('<details>');
@@ -415,7 +415,7 @@ describe('the C4 checks on the problems page', () => {
   it('says of a check that looked at nothing or found nothing that it did, and that line does not open', () => {
     const empty = C4_CODES.reduce<C4Report>((report, code) => ({ ...report, [code]: { severity: report[code].severity, checked: 0, findings: [] } }), C4_REPORT);
     expect(c4Line(empty, 'connection-unnamed')).toBe('A name for a connection: 0 connections checked, 0 without.');
-    expect(c4Line(empty, 'connection-vague')).toBe('A name that says more than "Uses": 0 names checked, 0 that do not.');
+    expect(c4Line(empty, 'connection-vague')).toBe('A name that is more than the word "Uses": 0 names checked, 0 that are only that word.');
     expect(c4Line(empty, 'technology-missing')).toBe('A technology: 0 apps, stores and components checked, 0 without.');
     const cleared: C4Report = { ...C4_REPORT, 'technology-missing': { severity: 'note', checked: 3, findings: [] } };
     expect(c4LineOf(render({ page: 'problems' }, null, null, { ...C4_STATE, c4: cleared }), 'technology-missing')).toBe(
@@ -428,7 +428,7 @@ describe('the C4 checks on the problems page', () => {
     expect(c4Line(one, 'description-missing')).toBe('A description: 1 thing checked, 1 without.');
     expect(c4Line(one, 'technology-missing')).toBe('A technology: 1 app, store or component checked, 1 without.');
     expect(c4Line(one, 'connection-unnamed')).toBe('A name for a connection: 1 connection checked, 1 without.');
-    expect(c4Line(one, 'connection-vague')).toBe('A name that says more than "Uses": 1 name checked, 1 that does not.');
+    expect(c4Line(one, 'connection-vague')).toBe('A name that is more than the word "Uses": 1 name checked, 1 that is only that word.');
     expect(c4Line(one, 'element-unconnected')).toBe('A connection: 1 thing checked, 1 with none.');
   });
 

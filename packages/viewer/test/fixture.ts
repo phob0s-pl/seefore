@@ -580,6 +580,10 @@ function noteAt(file: string, message: string): C4Finding {
   return { file, line: 1, column: 1, message };
 }
 
+/** What the note on an app that names no technology says. */
+const NO_TECHNOLOGY =
+  'This app names no technology. Name what it is built with, if the facts say: a language, a framework or a product. A protocol that it speaks belongs on its connections.';
+
 /** The warning of a connection named only "Uses", at its `name`. */
 const VAGUE: Problem = {
   file: 'connections/web-uses-events.yaml',
@@ -622,8 +626,8 @@ export const C4_REPORT: C4Report = {
     severity: 'note',
     checked: 3,
     findings: [
-      noteAt('apps/gateway.yaml', 'This app names no technology. Name what it is built with, if the facts say.'),
-      noteAt('apps/web.yaml', 'This app names no technology. Name what it is built with, if the facts say.'),
+      noteAt('apps/gateway.yaml', NO_TECHNOLOGY),
+      noteAt('apps/web.yaml', NO_TECHNOLOGY),
     ],
   },
   'connection-unnamed': {
@@ -636,10 +640,7 @@ export const C4_REPORT: C4Report = {
     severity: 'note',
     checked: 9,
     findings: [
-      noteAt(
-        'people/auditor.yaml',
-        'No connection starts or ends at this person or at anything in it, and none passes through it. That may be right: add one only for an exchange that the facts name.',
-      ),
+      noteAt('people/auditor.yaml', 'No connection starts or ends at this person. That may be right: add one only for an exchange that the facts name.'),
     ],
   },
 };
