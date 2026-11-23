@@ -136,6 +136,9 @@ Decided:
 | A crowded view | More than 40 boxes. `seefore check` warns of it, and the page draws it as a map with a note. It is never replaced by a list | 2026-11-23 |
 | Layout hints | None at stage 7, where the plan had direction, grouping and order: nothing measured asked for one. If a trial asks, a hint lives on the view record of stage 9 | 2026-11-23 |
 | The dashed outline for a thing that has `only` | Taken out. A line of the legend lights every thing that has a condition | 2026-11-23 |
+| Which order a column has | The walk, as built. Two others were measured: every start first, and by id alone. They hold better when a box that the walk passes early goes, at 28 and 44 % more crossings than the walk on every picture | 2026-11-23 |
+| The floor for the worst edit at stage 7 | 75 % of the order within a column, for an edit that adds something. An edit that takes out or moves has no floor: under the walk the worst keeps 48 %. Set again after the measurement | 2026-11-23 |
+| The split column of a context view | From 16 boxes, as stage 5 built it. Split at every size, the small context views held worse | 2026-11-23 |
 
 To settle in the stage named, with the recommendation the two proposals reached:
 
@@ -158,7 +161,7 @@ To settle in the stage named, with the recommendation the two proposals reached:
 | 5 | Automatic diagrams | built 2026-11-22; the trial with the owner is still to do |
 | 6a | Hard cases in a picture | built 2026-11-22; the trial with the owner is still to do |
 | 6b | Hard cases in a record | built 2026-11-22; the trial with the owner is still to do |
-| 7 | Layout stability (gate) | built 2026-11-23; **the gate is not passed**: one pass number of its spec is missed, and the owner's judging of the pictures is still to do |
+| 7 | Layout stability (gate) | built 2026-11-23; it passes its pass numbers, one of them set again after it was measured; the owner's judging of the pictures, which is the gate, is still to do, and stage 8 waits for it |
 | 8 | C4 checks | |
 | 9 | Focused views | |
 | 10 | Finding things | |
@@ -546,28 +549,24 @@ Open after the trial of stage 6b, for the owner:
 - **One condition in several wordings.** Nothing but the listing's "Conditions" guards against
   it. If it keeps happening, a condition needs a record.
 
-Stage 7 changed two answers that stood before it, and took back one of its own:
+Stage 7 changed two answers that stood before it, took back one of its own, and set one of
+its pass numbers again:
 
 | What changed | The earlier answer | Now | Decided |
 | --- | --- | --- | --- |
 | The dashed outline for a thing that has `only` (stage 6b) | Built and switched off, for the owner to decide | Taken out | By the owner, 2026-11-23 |
 | Layout hints (this plan, stage 7) | The skill can write direction, grouping and order | None. On the view record of stage 9, if a trial asks | By the owner, 2026-11-23 |
-| The split column of a context view (stage 5) | From 16 boxes | From 16 boxes still. The owner decided on 2026-11-23 to split at every size; built and measured, the small context views held worse, and the build took it back | In the build of stage 7. For the owner to confirm |
+| The split column of a context view (stage 5) | From 16 boxes | From 16 boxes still. The owner decided on 2026-11-23 to split at every size; built and measured, the small context views held worse, and the build took it back | In the build of stage 7; confirmed by the owner, 2026-11-23 |
+| The floor for the worst edit (stage 7, pass number 3) | 75 % of the order within a column in the worst edit of any kind | 75 % in the worst edit that adds something. Six of 316 edits that take out or move keep less, the worst 48 % | By the owner, 2026-11-23, after the measurement |
 
 Open after the trial of stage 7, for the owner:
 
-- **The gate is not passed.** One pass number is missed, the reviewer from outside said "do
-  not merge", and nobody but a program has judged a picture of this stage. The owner is to
-  find a box again and follow an exchange after one edit, on Sentry's container view and on
-  Syncthing's. `research/trial/stage-07.md` says how.
-- **Which order a column has.** After one edit to a container view, the pairs in one column
-  are to keep their order at 75 % in the worst edit. With the walk, taking out the app that
-  the first person uses keeps 48 %: the walk then reaches the rest another way. Over all
-  edits the walk keeps 98.6 %. No order taken from the arrows can promise more. Two others
-  were measured and pass every number: every start first and then the walk, at two thirds
-  more crossings than before the stage, and by id alone, which no edit can turn round, at
-  nine tenths more. The walk has a third more. The owner chooses one of the three, and what
-  the worst-edit floor then means.
+- **The gate waits for the owner's reading.** The stage passes its numbers, one of them set
+  again. Nobody but a program has judged a picture of it. Before stage 8 starts, the owner
+  does two tasks of `research/trial/stage-07.md`: Syncthing's container view as it was and as
+  it is, for the price in crossings; and Sentry's with its web app taken out, the worst edit
+  there is. If the second leaves the reader lost, the order of a column becomes "every start
+  first".
 - **More crossings where lines are followed.** A third more over the main views; a view with
   one hub and many spokes goes from 5 to 49.
 - **The long column of a context view.** Crossing 16 boxes redraws the view, and in a split

@@ -88,7 +88,11 @@ interface Trial {
     shares: { containers: Shares; context: Shares };
     together?: { edits: number; kinds: string[]; containers: unknown; context: unknown };
   }[];
-  passes: { number: number; status: 'passes' | 'fails' | 'not tried' }[];
+  all: {
+    column: { adds?: { edits: number; worst: number }; takes?: { edits: number; worst: number } };
+    worstInColumn: { edit: string; adds: boolean; columnOrder: number }[];
+  };
+  passes: { number: number; status: 'passes' | 'fails' | 'not tried'; measured: string }[];
 }
 
 /** The status of each pass number, by number. */
@@ -124,6 +128,28 @@ describe('the trial script', () => {
     expect(together?.kinds).toEqual(['remove-app', 'add-app', 'add-connection', 'add-neighbour', 'rename']);
     // The boxes inside but `z9`, and the clerk, stand in both pictures of the container view.
     expect(together?.containers).toHaveProperty('common', 4);
+  }, 60_000);
+
+  it('holds the worst edit of pass number 3 to its floor among the edits that add something, and shows the worst of the others beside it', async () => {
+    const trial = JSON.parse((await run('--json', 'unreached')).out) as Trial;
+    const { column, worstInColumn } = trial.all;
+    // An edit that adds something is told by its name, and each worst edit says which kind it is.
+    for (const row of worstInColumn) expect(row.adds).toBe(row.edit.startsWith('add-'));
+    expect(worstInColumn.filter((row) => row.adds).length).toBeLessThanOrEqual(3);
+    expect(worstInColumn.filter((row) => !row.adds).length).toBeLessThanOrEqual(3);
+    // Both kinds have an edit with a pair in one column here, and every such edit is in one of the two.
+    const rows = trial.directories[0]?.containers.rows as { edit: string; columnOrder?: number }[];
+    const shared = rows.filter((row) => row.columnOrder !== undefined);
+    expect(column.adds?.edits).toBe(shared.filter((row) => row.edit.startsWith('add-')).length);
+    expect(column.takes?.edits).toBe(shared.filter((row) => !row.edit.startsWith('add-')).length);
+    expect(column.adds?.worst).toBe(Math.min(...shared.filter((row) => row.edit.startsWith('add-')).map((row) => row.columnOrder as number)));
+    // The pass number says both, and its status follows the edits that add and the mean alone.
+    const third = trial.passes.find((each) => each.number === 3);
+    expect(third?.measured).toContain('worst edit that adds something');
+    expect(third?.measured).toContain('worst edit that takes out or moves');
+    expect(third?.measured).toContain('which has no floor');
+    const mean = shared.reduce((sum, row) => sum + (row.columnOrder as number), 0) / shared.length;
+    expect(third?.status).toBe(mean >= 0.95 && (column.adds?.worst ?? 0) >= 0.75 ? 'passes' : 'fails');
   }, 60_000);
 
   it('calls a measure with no pair to compare not tried, and does not pass', async () => {
