@@ -1,4 +1,5 @@
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { request } from 'node:http';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -39,6 +40,21 @@ test('/api/model answers for an empty folder, and reads it anew at each request'
   expect(await files()).toEqual([]);
   await writeFile(join(folder, 'new.yaml'), 'id: new\n');
   expect(await files()).toEqual(['new.yaml']);
+});
+
+test('a request sent to another name than this machine is refused', async () => {
+  const address = await serve(SMALL);
+  const status = (host: string): Promise<number> =>
+    new Promise((done, fail) => {
+      request(`${address}/api/model`, { headers: { host } }, (response) => {
+        response.resume();
+        done(response.statusCode ?? 0);
+      })
+        .on('error', fail)
+        .end();
+    });
+  expect(await status('elsewhere.example')).toBe(403);
+  expect(await status('localhost:5173')).toBe(200);
 });
 
 test("the page's files are served, and nothing outside them", async () => {

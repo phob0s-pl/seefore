@@ -25,6 +25,10 @@ async function readModel(folder: string): Promise<ModelAnswer> {
  */
 export function startServer(folder: string, page: string, port: number): Promise<Server> {
   const server = createServer((request, response) => {
+    if (!fromHere(request.headers.host)) {
+      send(response, 403, 'text/plain; charset=utf-8', 'Not from this machine.\n');
+      return;
+    }
     answer(folder, page, request.url ?? '/', response).catch(() => {
       send(response, 500, 'text/plain; charset=utf-8', 'Something went wrong.\n');
     });
@@ -36,6 +40,16 @@ export function startServer(folder: string, page: string, port: number): Promise
       done(server);
     });
   });
+}
+
+/**
+ * Whether a request was sent to a name of this machine. A page from elsewhere can point a name
+ * of its own at 127.0.0.1 and so read the model as if it were its own; its requests carry
+ * that name, and are refused.
+ */
+function fromHere(host: string | undefined): boolean {
+  const name = (host ?? '').replace(/:[0-9]+$/, '');
+  return name === HOST || name === 'localhost';
 }
 
 async function answer(folder: string, page: string, url: string, response: ServerResponse): Promise<void> {
