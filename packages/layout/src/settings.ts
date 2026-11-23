@@ -81,11 +81,7 @@ export const PERSON_OPTIONS: Readonly<LayoutOptions> = {
   'elk.layered.layering.layerConstraint': 'FIRST',
 };
 
-/**
- * What every context view adds to the root: its long column of neighbours split in two, so
- * that it fits the window. At every size: when it was done from 16 boxes, one neighbour fewer
- * at that size redrew the whole view.
- */
+/** What a large context view adds to the root: its long row of systems split in two. See `UNZIP_FROM`. */
 export const UNZIP_OPTIONS: Readonly<LayoutOptions> = {
   'elk.layered.layerUnzipping.strategy': 'ALTERNATING',
 };

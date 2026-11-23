@@ -117,3 +117,14 @@ export const TITLE_LINE_HEIGHT = 20;
 
 /** The room inside a boundary around what it holds. Measured: the title sits in the top 44 px. */
 export const BOUNDARY_PADDING = { top: 44, left: 24, bottom: 24, right: 24 } as const;
+
+/**
+ * A context view of this many boxes or more has its long row of systems split in two. Measured:
+ * it fits 28 to 88 % larger. Crossing it redraws the view: from 16 boxes to 15, 93 to 100 % of
+ * the boxes move and 68 to 73 % of the pairs keep their order. Within a split column the boxes
+ * go to one side and the other in turn, so a neighbour added or taken out before the end of
+ * the column sends every box after it to the other side; the order down each side holds. Split
+ * at every size, the smaller context views kept less of their order when a neighbour went, so
+ * the rule stays.
+ */
+export const UNZIP_FROM = 16;

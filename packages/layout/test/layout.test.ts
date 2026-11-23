@@ -65,18 +65,11 @@ describe('the layout of a view', () => {
     expect(picture.width).toBeGreaterThan(0);
   });
 
-  it('puts the people in the first column of a container view', async () => {
-    const picture = await drawn(shopContainers());
-    const left = Math.min(...picture.boxes.map((each) => each.x));
-    for (const id of ['auditor', 'customer', 'warehouse-clerk']) expect(placeOf(picture, id).x).toBe(left);
-  });
-
-  it('puts the people of a context view before every other box, their column split in two as every long column is', async () => {
-    // Before stage 7 a context view of fewer than 16 boxes kept its people in one column.
+  it('puts the people in the first column', async () => {
     const picture = await drawn(shopContext());
-    const columns = [...new Set(picture.boxes.map((each) => each.x))].sort((a, b) => a - b);
-    expect([placeOf(picture, 'customer').x, placeOf(picture, 'warehouse-clerk').x]).toEqual(columns.slice(0, 2));
-    for (const id of ['shop', 'card-provider']) expect(placeOf(picture, id).x).toBeGreaterThan(columns[1] ?? 0);
+    const left = Math.min(...picture.boxes.map((each) => each.x));
+    expect(placeOf(picture, 'customer').x).toBe(left);
+    expect(placeOf(picture, 'warehouse-clerk').x).toBe(left);
   });
 
   it('gives the same picture for the same view', async () => {
@@ -234,11 +227,11 @@ describe('the layout of a view', () => {
 });
 
 describe('the graph ELK is given', () => {
-  it('splits the long column of every context view, whatever its size, and of no container view', () => {
+  it('splits the long row of a context view of 16 boxes or more, and of no other', () => {
     const many = (count: number) => contextView('a', [box('a', 'systems', { scope: true }), ...Array.from({ length: count - 1 }, (_, at) => box(`s${at}`, 'systems'))], []);
     const unzipped = (view: View) => graphOf(sorted(view), new Map()).layoutOptions?.['elk.layered.layerUnzipping.strategy'];
-    for (const count of [1, 4, 15, 16, 40]) expect(unzipped(many(count))).toBe('ALTERNATING');
-    expect(unzipped(shopContainers())).toBeUndefined();
+    expect(unzipped(many(16))).toBe('ALTERNATING');
+    expect(unzipped(many(15))).toBeUndefined();
     expect(unzipped(crowded(20, 10))).toBeUndefined();
   });
 

@@ -1,7 +1,7 @@
 import type { Drawn, PlacedArrow, PlacedBoundary, PlacedBox, Point, Rect, View, ViewArrow, ViewBox, ViewBoundary } from '@seefore/core';
 import type { ElkEdgeSection, ElkExtendedEdge, ElkNode, ElkShape } from 'elkjs/lib/elk.bundled.js';
 import { BOUNDARY_OPTIONS, LABEL_OPTIONS, PERSON_OPTIONS, ROOT_OPTIONS, UNZIP_OPTIONS } from './settings.ts';
-import { BOUNDARY_PADDING, BOX_HEIGHT, BOX_WIDTH, TITLE_LINE_HEIGHT } from './sizes.ts';
+import { BOUNDARY_PADDING, BOX_HEIGHT, BOX_WIDTH, TITLE_LINE_HEIGHT, UNZIP_FROM } from './sizes.ts';
 import { boxText, titleText, titleWidth } from './text.ts';
 import type { LabelText } from './text.ts';
 
@@ -25,8 +25,8 @@ export function sorted(view: View): View {
  * The graph ELK lays out: the boxes outside, the boundary with the boxes inside it, and one
  * edge for each arrow with its label's room. Each box and the boundary has a made-up place
  * whose height is its turn in the walk, and ELK keeps the boxes of every column in the order
- * of those places. The long column of a context view is split, whatever its size. The view
- * must be sorted.
+ * of those places. A context view of `UNZIP_FROM` boxes or more has its long column split. The
+ * view must be sorted.
  */
 export function graphOf(view: View, labels: ReadonlyMap<string, LabelText>): ElkNode {
   const boundary = view.boundary;
@@ -42,7 +42,7 @@ export function graphOf(view: View, labels: ReadonlyMap<string, LabelText>): Elk
         ].sort(byId);
   return {
     id: ROOT,
-    layoutOptions: { ...ROOT_OPTIONS, ...(view.kind === 'context' ? UNZIP_OPTIONS : {}) },
+    layoutOptions: { ...ROOT_OPTIONS, ...(view.kind === 'context' && view.boxes.length >= UNZIP_FROM ? UNZIP_OPTIONS : {}) },
     children,
     edges: view.arrows.map((arrow) => edgeOf(arrow, labels.get(arrow.id))),
   };

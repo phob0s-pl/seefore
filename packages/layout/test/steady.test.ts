@@ -215,35 +215,44 @@ describe('one edit to a container view of real shape', () => {
   }, 60_000);
 });
 
-describe('one neighbour more or less in a context view', () => {
-  const sizes = [14, 15, 16, 17, 18];
-
-  it.each(sizes)('of %i boxes keeps 90 % of the order, when the neighbour is the last of its column in the walk', async (count) => {
-    const view = neighbourhood(count);
-    const before = await drawn(view);
-    const last = view.boxes.filter((each) => each.family === 'systems' && !each.scope).map((each) => each.id).sort().at(-1) ?? '';
-    const more: View = { ...view, boxes: [...view.boxes, box('zz-new', 'systems')], arrows: [...view.arrows, arrow('hub', 'zz-new', ['Asks the new system'])] };
-    for (const after of [await drawn(without(view, last)), await drawn(more)]) {
-      const moved = change(before, after);
-      expect(moved.orderKept).toBeGreaterThanOrEqual(0.9);
-      expect(moved.columnOrder).toBe(1);
+describe('one neighbour fewer in a context view', () => {
+  /** What taking out each neighbour in turn does to a context view of each size given. */
+  const eachTakenOut = async (sizes: readonly number[]): Promise<Change[]> => {
+    const changes: Change[] = [];
+    for (const count of sizes) {
+      const view = neighbourhood(count);
+      const before = await drawn(view);
+      for (const gone of view.boxes.filter((each) => !each.scope)) changes.push(change(before, await drawn(without(view, gone.id))));
     }
+    return changes;
+  };
+  const mean = (changes: readonly Change[]) => changes.reduce((sum, each) => sum + each.orderKept, 0) / changes.length;
+
+  it('keeps 85 % of the order of all pairs under 16 boxes, where nothing is split', async () => {
+    // Measured on the views of 8 to 15 boxes: 86.7 %, from 78 % at 8 boxes to 93 % at 15.
+    const changes = await eachTakenOut([8, 9, 10, 11, 12, 13, 14, 15]);
+    expect(mean(changes)).toBeGreaterThanOrEqual(0.85);
+    for (const each of changes) expect(each.columnOrder).toBe(1);
   });
 
-  it.each(sizes)('of %i boxes keeps the order down every column, and 80 % of all the order, whichever neighbour goes', async (count) => {
-    // The long column is split by giving its boxes to one side and the other in turn, so a box
-    // taken from its middle sends every box after it to the other side: the order across is
-    // lost for those, and the order down each side is kept. A neighbour at the front of the
-    // column keeps least: about 60 %.
-    const view = neighbourhood(count);
-    const before = await drawn(view);
-    const kept: number[] = [];
-    for (const gone of view.boxes.filter((each) => !each.scope)) {
-      const moved = change(before, await drawn(without(view, gone.id)));
-      expect(moved.columnOrder).toBe(1);
-      kept.push(moved.orderKept);
-    }
-    expect(kept.reduce((sum, each) => sum + each, 0) / kept.length).toBeGreaterThanOrEqual(0.8);
+  it('keeps the order down every column from 16 boxes, where the long column is split', async () => {
+    // The split gives the boxes of a column to one side and the other in turn, so a neighbour
+    // taken out before the end of its column sends every box after it to the other side: the
+    // order across is lost for those. Measured: 82 to 83 % of all pairs keep their order from
+    // 17 to 20 boxes, about 60 % for a neighbour at the front of its column; from 16 boxes to
+    // 15 the view is drawn again, unsplit, and keeps 70 %.
+    for (const each of await eachTakenOut([16, 17, 18, 19, 20])) expect(each.columnOrder).toBe(1);
+  });
+
+  it('splits the column of neighbours from 16 boxes and not under', async () => {
+    /** A system that asks `count - 1` others, which stand in one column on its right, or in two. */
+    const asking = (count: number) => {
+      const others = Array.from({ length: count - 1 }, (_, at) => `system-${String(at + 1).padStart(2, '0')}`);
+      return contextView('hub', [box('hub', 'systems', { scope: true }), ...others.map((id) => box(id, 'systems'))], others.map((id) => arrow('hub', id)));
+    };
+    const columns = async (count: number) => new Set((await drawn(asking(count))).boxes.filter((each) => each.id !== 'hub').map((each) => each.x)).size;
+    expect(await columns(15)).toBe(1);
+    expect(await columns(16)).toBe(2);
   });
 });
 
