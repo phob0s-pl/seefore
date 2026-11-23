@@ -2,10 +2,35 @@ import type { Drawn, PlacedLabel, View, ViewArrow } from '@seefore/core';
 import { describe, expect, it } from 'vitest';
 import { sorted, turnsOf } from '../src/graph.ts';
 import { layOut } from '../src/index.ts';
-import { change, placesOf } from './change.ts';
+import { againstWalk, change, columnPairs, placesOf } from './change.ts';
 import type { Change } from './change.ts';
 import { troubles } from './geometry.ts';
-import { arrow, box, containerView, contextView, grown, inside, movedOut, neighbourhood, route, shopContainers, tiered, withApp, withArrow, withNeighbour, without } from './views.ts';
+import {
+  arrow,
+  box,
+  containerView,
+  contextView,
+  crowded,
+  fan,
+  grown,
+  inside,
+  movedOut,
+  neighbourhood,
+  route,
+  shopContainers,
+  shopContext,
+  tiered,
+  withApp,
+  withArrow,
+  withNeighbour,
+  without,
+} from './views.ts';
+
+/** The mean of the shares that there are; none when there is none. */
+function meanOf(shares: readonly (number | undefined)[]): number | undefined {
+  const there = shares.filter((share) => share !== undefined);
+  return there.length === 0 ? undefined : there.reduce((sum, share) => sum + share, 0) / there.length;
+}
 
 /**
  * What holds a picture still when the model changes, as `docs/layout.md` says under "What
@@ -67,10 +92,50 @@ describe('the order of a walk', () => {
     expect(turns.get('shop')).toBe(turns.get('order-api'));
   });
 
-  it('takes the people before the other boxes that nothing acts on, each in order of id', () => {
+  it('starts at the first person by id, and takes the other starts where the walk comes to them, in order of id', () => {
+    // `ken`, `zed` and `able` are all starts, people first. But the walk from `ken` reaches
+    // `mid` and then every box joined to it, in order of id, before it looks at the next start:
+    // `able` comes before `zed`, though `zed` is a person.
     const view = contextView('mid', [box('mid', 'systems', { scope: true }), box('zed', 'people'), box('able', 'systems'), box('ken', 'people')], [arrow('able', 'mid'), arrow('zed', 'mid'), arrow('ken', 'mid')]);
     const turns = turnsOf(sorted(view));
     expect([...turns.entries()].sort((a, b) => a[1] - b[1]).map(([id]) => id)).toEqual(['ken', 'mid', 'able', 'zed']);
+  });
+
+  describe('a new box that nothing acts on, joined to one of two groups', () => {
+    // Two fans of five inside one boundary that nothing joins: `n002` and `n004` each call five.
+    const ids = Array.from({ length: 12 }, (_, at) => `n${String(2 * at + 2).padStart(3, '0')}`);
+    const view = containerView('sys', ids.map((id) => inside(id, 'apps')), ids.slice(2).map((id, at) => arrow(ids[at % 2] ?? '', id)));
+    const withCaller = (id: string) => ({ ...view, boxes: [...view.boxes, inside(id, 'apps')], arrows: [...view.arrows, arrow(id, 'n024')] });
+    const order = (of: View) => [...turnsOf(sorted(of)).entries()].filter(([id]) => ids.includes(id)).sort((a, b) => a[1] - b[1]).map(([id]) => id);
+
+    it('leads the walk when its id sorts first, and puts its group before the other, which may move every box', async () => {
+      // The new box calls `n024`, of the second fan, and is the first start by id.
+      const turned = order(withCaller('aaa'));
+      expect(turned.slice(0, 6).sort()).toEqual(['n004', 'n008', 'n012', 'n016', 'n020', 'n024']);
+      const moved = change(await drawn(view), await drawn(withCaller('aaa')));
+      expect(moved.moved).toBeGreaterThan(0.5);
+      expect(moved.orderKept).toBeLessThan(0.5);
+    });
+
+    it('moves nothing when its id sorts last', async () => {
+      expect(order(withCaller('zzz'))).toEqual(order(view));
+      const moved = change(await drawn(view), await drawn(withCaller('zzz')));
+      expect(moved.moved).toBe(0);
+      expect(moved.orderKept).toBe(1);
+    });
+  });
+
+  it('finds the circles that no start reaches in one pass, however long the line of boxes that leads into one', () => {
+    // A circle late in the order of id, and a line of 8,000 boxes before it in that order that
+    // it leads into. A search from each box of the line took 2.4 s.
+    const line = Array.from({ length: 8000 }, (_, at) => `a-${String(at).padStart(5, '0')}`);
+    const view = containerView('ring', [...line, 'z1', 'z2'].map((id) => inside(id, 'apps')), [arrow('z1', 'z2'), arrow('z2', 'z1'), arrow('z1', line[0] ?? ''), ...line.slice(1).map((id, at) => arrow(line[at] ?? '', id))]);
+    const started = performance.now();
+    const turns = turnsOf(sorted(view));
+    expect(performance.now() - started).toBeLessThan(500);
+    // The boundary starts it, alone; then the circle, at its first box by id, and the line.
+    expect([...turns.entries()].filter(([id]) => id !== 'ring').sort((a, b) => a[1] - b[1]).slice(0, 4).map(([id]) => id)).toEqual(['z1', 'a-00000', 'z2', 'a-00001']);
+    expect(turns.size).toBe(8003);
   });
 
   it('starts at a box of a circle that no start reaches, the first of the circle by id', () => {
@@ -112,26 +177,56 @@ describe('the order of a walk', () => {
     }
   });
 
-  it.each([
-    ['a container view', () => shopContainers()],
-    ['a container view of real shape', () => grown(45)],
+  it.each<[string, () => View]>([
+    ['the shop seen from outside', shopContext],
+    ['the shop seen from inside', shopContainers],
+    ['a fan of stores', fan],
+    ['a crowded system', () => crowded(20, 10)],
+    ['a larger crowded system', () => crowded(40, 12)],
+    ...[20, 30, 40, 45, 60].map((parts): [string, () => View] => [`a container view of real shape, ${parts} parts`, () => grown(parts)]),
     ['another of real shape', () => grown(30, 2)],
-    ['a context view of 16 boxes', () => neighbourhood(16)],
+    ['a third of real shape', () => grown(40, 3)],
+    ...[[30, 1], [45, 1], [55, 2]].map(([parts, seed]): [string, () => View] => [`a container view in tiers, ${parts} parts`, () => tiered(parts ?? 0, seed)]),
+    ...[4, 8, 12, 15, 16, 20, 30].map((count): [string, () => View] => [`a context view of ${count} boxes`, () => neighbourhood(count)]),
   ])('is the order of every column, top to bottom, in %s', async (_, make) => {
     const view = make();
-    const turns = turnsOf(sorted(view));
     const picture = await drawn(view);
-    const inside = new Set(view.boxes.filter((each) => each.inside).map((each) => each.id));
-    // The boxes inside and those outside stand in columns of their own.
-    for (const group of [true, false]) {
-      const boxes = picture.boxes.filter((each) => inside.has(each.id) === group);
-      for (const x of new Set(boxes.map((each) => each.x))) {
-        const column = boxes.filter((each) => each.x === x).sort((a, b) => a.y - b.y);
-        const order = column.map((each) => turns.get(each.id) ?? -1);
-        expect(order).toEqual([...order].sort((a, b) => a - b));
-      }
-    }
+    expect(againstWalk(view, picture)).toEqual([]);
     expect(troubles(picture)).toEqual([]);
+  }, 20_000);
+
+  /**
+   * The two views in which ELK stood a pair of one column the other way round from the walk,
+   * while it broke ties by the order the boxes came in: a person who uses a system that has
+   * arrows both ways with another, and a box with no arrow inside a boundary. In each, the walk
+   * and the order of id disagree on the pair.
+   */
+  const turnedRound: [string, View, [string, string]][] = [
+    [
+      'a context view of three boxes',
+      contextView('bank', [box('bank', 'systems', { scope: true }), box('boxes', 'systems'), box('fan', 'people')], [arrow('bank', 'boxes'), arrow('boxes', 'bank'), arrow('fan', 'bank')]),
+      ['fan', 'boxes'],
+    ],
+    [
+      'a container view of four boxes',
+      containerView('sys', [inside('a', 'apps'), inside('b', 'apps'), inside('c', 'apps'), box('d', 'systems')], [arrow('a', 'sys'), arrow('d', 'c'), arrow('d', 'a')]),
+      ['b', 'a'],
+    ],
+  ];
+
+  it.each(turnedRound)('keeps the order of the walk in %s, whichever way round the input comes', async (_, view, pair) => {
+    const turned = { ...view, boxes: [...view.boxes].reverse(), arrows: [...view.arrows].reverse() };
+    const picture = await drawn(view);
+    // The pair stands in one column, in the order of the walk, which is not that of id.
+    expect(columnPairs(view, picture).map((each) => each.byWalk)).toContainEqual(pair);
+    expect(pair[0] > pair[1]).toBe(true);
+    for (const each of [view, turned]) {
+      const laid = await drawn(each);
+      expect(laid).toEqual(picture);
+      expect(againstWalk(each, laid)).toEqual([]);
+      // Every arrow starts and ends at its two ends, and no label lies over anything.
+      expect(troubles(laid)).toEqual([]);
+    }
   });
 });
 
@@ -208,10 +303,12 @@ describe('one edit to a container view of real shape', () => {
       const before = await drawn(view);
       for (const target of targetsOf(view)) changes.push(change(before, await drawn(edit(view, target))));
     }
-    const mean = (key: 'columnOrder' | 'orderKept') => changes.reduce((sum, each) => sum + each[key], 0) / changes.length;
-    expect(mean('columnOrder')).toBeGreaterThanOrEqual(0.95);
-    expect(Math.min(...changes.map((each) => each.columnOrder))).toBeGreaterThanOrEqual(0.75);
-    expect(mean('orderKept')).toBeGreaterThanOrEqual(0.75);
+    // An edit with no pair in one column, before and after, is in no share of the order in a column.
+    const inColumns = changes.filter((each) => each.columnOrder !== undefined);
+    expect(inColumns.length).toBeGreaterThanOrEqual(changes.length / 2);
+    expect(meanOf(inColumns.map((each) => each.columnOrder))).toBeGreaterThanOrEqual(0.95);
+    expect(Math.min(...inColumns.map((each) => each.columnOrder ?? 0))).toBeGreaterThanOrEqual(0.75);
+    expect(meanOf(changes.map((each) => each.orderKept))).toBeGreaterThanOrEqual(0.75);
   }, 60_000);
 });
 
@@ -226,13 +323,13 @@ describe('one neighbour fewer in a context view', () => {
     }
     return changes;
   };
-  const mean = (changes: readonly Change[]) => changes.reduce((sum, each) => sum + each.orderKept, 0) / changes.length;
+  const mean = (changes: readonly Change[]) => meanOf(changes.map((each) => each.orderKept));
 
   it('keeps 85 % of the order of all pairs under 16 boxes, where nothing is split', async () => {
     // Measured on the views of 8 to 15 boxes: 86.7 %, from 78 % at 8 boxes to 93 % at 15.
     const changes = await eachTakenOut([8, 9, 10, 11, 12, 13, 14, 15]);
     expect(mean(changes)).toBeGreaterThanOrEqual(0.85);
-    for (const each of changes) expect(each.columnOrder).toBe(1);
+    for (const each of changes) expect(each.columnTurned).toBe(0);
   });
 
   it('keeps the order down every column from 16 boxes, where the long column is split', async () => {
@@ -241,7 +338,9 @@ describe('one neighbour fewer in a context view', () => {
     // order across is lost for those. Measured: 82 to 83 % of all pairs keep their order from
     // 17 to 20 boxes, about 60 % for a neighbour at the front of its column; from 16 boxes to
     // 15 the view is drawn again, unsplit, and keeps 70 %.
-    for (const each of await eachTakenOut([16, 17, 18, 19, 20])) expect(each.columnOrder).toBe(1);
+    const changes = await eachTakenOut([16, 17, 18, 19, 20]);
+    for (const each of changes) expect(each.columnTurned).toBe(0);
+    expect(changes.filter((each) => each.columnPairs > 0).length).toBeGreaterThan(changes.length / 2);
   });
 
   it('splits the column of neighbours from 16 boxes and not under', async () => {

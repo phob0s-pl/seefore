@@ -96,7 +96,8 @@ export function turnsOf(view: View): Map<string, number> {
     }
   };
   for (const start of starts) if (!taken.has(start)) walkFrom(start);
-  for (const id of ids) if (!taken.has(id) && inCircle(id, onward)) walkFrom(id);
+  const circled = inCircles(ids, onward);
+  for (const id of ids) if (!taken.has(id) && circled.has(id)) walkFrom(id);
   const turns = new Map(order.map((id, turn) => [id, turn]));
   const boundary = view.boundary;
   if (boundary !== undefined) {
@@ -106,17 +107,53 @@ export function turnsOf(view: View): Map<string, number> {
   return turns;
 }
 
-/** True when the arrows lead from a box back to it. */
-function inCircle(start: string, onward: ReadonlyMap<string, ReadonlySet<string>>): boolean {
-  const seen = new Set<string>();
-  const ahead = [...(onward.get(start) ?? [])];
-  for (let next = ahead.pop(); next !== undefined; next = ahead.pop()) {
-    if (next === start) return true;
-    if (seen.has(next)) continue;
-    seen.add(next);
-    ahead.push(...(onward.get(next) ?? []));
+/**
+ * The boxes whose arrows lead from them back to them: those of each strongly connected group of
+ * more than one box, found in one pass over the arrows (Tarjan's way). An arrow from a box to
+ * itself is not in `onward`, so no box is in a circle of its own. One pass, and not a search
+ * from each box, since a long line of boxes that leads into a circle late in the order of id
+ * was searched again from each of its boxes.
+ */
+function inCircles(ids: readonly string[], onward: ReadonlyMap<string, ReadonlySet<string>>): Set<string> {
+  const index = new Map<string, number>();
+  const low = new Map<string, number>();
+  const open: string[] = [];
+  const isOpen = new Set<string>();
+  const circled = new Set<string>();
+  for (const root of ids) {
+    if (index.has(root)) continue;
+    // The path of the search, each box with the boxes after it still to look at: a stack, so
+    // that a long line of boxes does not run out of the call stack.
+    const path: { id: string; ahead: string[] }[] = [];
+    const enter = (id: string) => {
+      index.set(id, index.size);
+      low.set(id, index.get(id) ?? 0);
+      open.push(id);
+      isOpen.add(id);
+      path.push({ id, ahead: [...(onward.get(id) ?? [])] });
+    };
+    enter(root);
+    for (let step = path.at(-1); step !== undefined; step = path.at(-1)) {
+      const next = step.ahead.pop();
+      if (next !== undefined) {
+        if (!index.has(next)) enter(next);
+        else if (isOpen.has(next)) low.set(step.id, Math.min(low.get(step.id) ?? 0, index.get(next) ?? 0));
+        continue;
+      }
+      path.pop();
+      const before = path.at(-1);
+      if (before !== undefined) low.set(before.id, Math.min(low.get(before.id) ?? 0, low.get(step.id) ?? 0));
+      if (low.get(step.id) !== index.get(step.id)) continue;
+      // The box is the first of its group the search reached: the group is every box opened since.
+      const group: string[] = [];
+      for (let member = open.pop(); member !== undefined; member = member === step.id ? undefined : open.pop()) {
+        isOpen.delete(member);
+        group.push(member);
+      }
+      if (group.length > 1) for (const member of group) circled.add(member);
+    }
   }
-  return false;
+  return circled;
 }
 
 /** The made-up place of a turn of the walk, which ELK keeps the order of. */

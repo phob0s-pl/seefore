@@ -6,14 +6,24 @@ import { BOUNDARY_PADDING, BOX_HEIGHT, BOX_WIDTH } from './sizes.ts';
  * section 4, and 2.6 for what to leave out). Never set: model order on the boundary, which
  * crashes ELK; the layering strategies `STRETCH_WIDTH` and `MIN_WIDTH`, which hang, and
  * `BF_MODEL_ORDER` and `DF_MODEL_ORDER`, which crash.
+ *
+ * Model order is not set on the root either. ELK then breaks a tie between two boxes of a
+ * column by the order they are handed over in, which is the order of id, and not by their
+ * places. Where the walk and the ids disagree, a box with an arrow both ways, or with none,
+ * stood the other way round from the walk: 12 pairs in 8 of the 127 trial views, all context
+ * views, and a pair inside a boundary in a view made for the test. Without it no pair does,
+ * for 16 more crossings on the 16 main views (2,902 to 2,918) and 0.3 % more area.
  */
 
 /**
  * What makes ELK keep the boxes of a column in the order of the places they are given, which
- * is the order of the walk in `graph.ts`. It is set on the root and on the boundary, where
- * model order crashes ELK. Measured on the trial models: after one edit 84 % of the pairs of
- * boxes keep their order, where 51 % did when ELK chose the order, for 1.8 times the
- * crossings. Without places to keep, the setting does nothing.
+ * is the order of the walk in `graph.ts`. It is set on the root and on the boundary. Measured
+ * on the trial models when it was built: after one edit 84 % of the pairs of boxes kept their
+ * order, where 51 % did when ELK chose the order. It costs crossings, counted two ways: an
+ * edited picture had on average 1.8 times the crossings of the same picture with ELK choosing
+ * the order, which is the mean of each picture's own rise over 208 edited pictures; summed
+ * over the 16 main views as they are, crossings rose by 32 %, and by 33 % with model order
+ * taken off the root (2,198 to 2,918). Without places to keep, the setting does nothing.
  */
 export const ORDER_OPTIONS: Readonly<LayoutOptions> = {
   'elk.layered.crossingMinimization.semiInteractive': 'true',
@@ -32,8 +42,6 @@ export const ROOT_OPTIONS: Readonly<LayoutOptions> = {
   'elk.layered.nodePlacement.strategy': 'NETWORK_SIMPLEX',
   // 9 % fewer crossings than the default, for a third more time.
   'elk.layered.thoroughness': '20',
-  // On the root only: on the boundary it crashes ELK. Without it, 4 % more crossings.
-  'elk.layered.considerModelOrder.strategy': 'NODES_AND_EDGES',
   // Another seed changed 14 of 22 views: the same model must give the same picture.
   'elk.randomSeed': '1',
   'elk.spacing.nodeNode': '40',

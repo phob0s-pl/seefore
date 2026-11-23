@@ -1,4 +1,5 @@
-import type { Drawn, Point } from '@seefore/core';
+import type { Drawn, Point, View } from '@seefore/core';
+import { sorted, turnsOf } from '../src/graph.ts';
 import { BOX_HEIGHT, BOX_WIDTH } from '../src/sizes.ts';
 
 /**
@@ -7,29 +8,41 @@ import { BOX_HEIGHT, BOX_WIDTH } from '../src/sizes.ts';
  * number in a test and a number in the trial mean the same.
  */
 
-/** What one picture moved against another, over the boxes in both. Each share is from 0 to 1. */
+/**
+ * What one picture moved against another, over the boxes in both. Each share is from 0 to 1,
+ * and is missing when there is nothing to share out: a share of no pairs would read as all of
+ * them kept, and a measure must not pass on what it never saw.
+ */
 export interface Change {
   /** How many boxes stand in both. */
   common: number;
-  /** The share of those whose centre moved by more than half a box, after the shift that all boxes share is taken away. */
-  moved: number;
+  /** How many pairs of those boxes there are. */
+  pairs: number;
+  /** The share of those whose centre moved by more than half a box, after the shift that all boxes share is taken away. Missing under two boxes, where nothing can move against the rest. */
+  moved: number | undefined;
   /** The share of pairs that stand the same way round both across and down. */
-  orderKept: number;
+  orderKept: number | undefined;
   /** The share of pairs that stand the same way round across. */
-  orderX: number;
+  orderX: number | undefined;
   /** The share of pairs that stand the same way round down. */
-  orderY: number;
+  orderY: number | undefined;
   /** The share of boxes that keep their column, after the shift that all columns share. */
-  columnKept: number;
+  columnKept: number | undefined;
   /** How far a box moved on average, after the shift, in diagonals of a box. */
-  meanMove: number;
-  /** Of the pairs that stand in one column before and after, the share that keep their order top to bottom. All of them when there are none. */
-  columnOrder: number;
+  meanMove: number | undefined;
+  /** How many pairs stand in one column before and after. */
+  columnPairs: number;
+  /** How many of those stand the other way round after. */
+  columnTurned: number;
+  /** Of the pairs that stand in one column before and after, the share that keep their order top to bottom. */
+  columnOrder: number | undefined;
 }
 
 /**
  * What a picture moved against the one before it, over the boxes in both. Two boxes thrown
- * down at random keep their order both ways one time in four.
+ * down at random keep their order both ways one time in four. Two boxes at the same height, or
+ * in the same column, stand neither way round; a pair keeps its order across when it does so
+ * before and after, and loses it when one picture ties them and the other does not.
  */
 export function change(before: Drawn, after: Drawn): Change {
   const was = new Map(before.boxes.map((box) => [box.id, box]));
@@ -74,16 +87,20 @@ export function change(before: Drawn, after: Drawn): Change {
   const step = (id: string) => (afterColumns.get(id) ?? 0) - (beforeColumns.get(id) ?? 0);
   const shift = Math.round(median(common.map((box) => step(box.id))));
   const columnKept = common.filter((box) => step(box.id) === shift).length;
-  const n = Math.max(pairs.length, 1);
+  const n = pairs.length;
+  const share = (part: number, whole: number) => (whole === 0 ? undefined : part / whole);
   return {
-    common: pairs.length,
-    moved: moved / n,
-    orderKept: count === 0 ? 1 : kept / count,
-    orderX: count === 0 ? 1 : keptX / count,
-    orderY: count === 0 ? 1 : keptY / count,
-    columnKept: columnKept / n,
-    meanMove: total / n / Math.hypot(BOX_WIDTH, BOX_HEIGHT),
-    columnOrder: sameColumn === 0 ? 1 : sameColumnKept / sameColumn,
+    common: n,
+    pairs: count,
+    moved: n < 2 ? undefined : moved / n,
+    orderKept: share(kept, count),
+    orderX: share(keptX, count),
+    orderY: share(keptY, count),
+    columnKept: n < 2 ? undefined : columnKept / n,
+    meanMove: n < 2 ? undefined : total / n / Math.hypot(BOX_WIDTH, BOX_HEIGHT),
+    columnPairs: sameColumn,
+    columnTurned: sameColumn - sameColumnKept,
+    columnOrder: share(sameColumnKept, sameColumn),
   };
 }
 
@@ -123,9 +140,10 @@ function runsOf(sections: readonly Point[][]): [Point, Point][] {
 }
 
 /**
- * Where a picture stands without its words: every box, the boundary, the points of every line
- * and the size of the picture, as one text. A new name or a new description must leave it as
- * it was. The labels are not in it: a label is where its words are, and the words change.
+ * Where a picture stands without its words: every box, the boundary, the points of every line,
+ * the middle of every label and the size of the picture, as one text. A new name or a new
+ * description must leave it as it was. A label's own size is not in it: a label is where its
+ * words are, and the words change, but they stand in the middle of a room that does not.
  */
 export function placesOf(drawn: Drawn): string {
   return JSON.stringify({
@@ -133,5 +151,48 @@ export function placesOf(drawn: Drawn): string {
     boxes: drawn.boxes.map((box) => [box.id, box.x, box.y, box.width, box.height]),
     boundary: drawn.boundary === undefined ? null : [drawn.boundary.x, drawn.boundary.y, drawn.boundary.width, drawn.boundary.height],
     lines: drawn.arrows.map((arrow) => [arrow.id, arrow.sections]),
+    labels: drawn.arrows.map((arrow) => [arrow.id, arrow.label === undefined ? null : middle(arrow.label)]),
   });
+}
+
+/**
+ * The middle of a label, to a thousandth of a pixel. The words of a label stand in the middle
+ * of their room, so their middle is a half of a pixel count away from the room's: rounding
+ * keeps a sum of halves from reading as a move.
+ */
+function middle(label: { x: number; y: number; width: number; height: number }): [number, number] {
+  return [Math.round((label.x + label.width / 2) * 1000) / 1000, Math.round((label.y + label.height / 2) * 1000) / 1000];
+}
+
+/** Two boxes with the same parent that stand in one column of a picture, and which way round the walk and the picture have them. */
+export interface ColumnPair {
+  /** The pair in the order of the walk: the one with the earlier turn first. */
+  byWalk: [string, string];
+  /** The pair in the order of the picture: the one above first. */
+  byPicture: [string, string];
+}
+
+/**
+ * Every pair of boxes of a picture that have the same parent, the boundary or the whole
+ * picture, and stand in one column: their left edges less than a pixel apart. The walk of
+ * `graph.ts` says which should stand above; the picture says which does. A pair disagrees when
+ * the two orders differ, and `docs/layout.md` says none does.
+ */
+export function columnPairs(view: View, drawn: Drawn): ColumnPair[] {
+  const turns = turnsOf(sorted(view));
+  const inside = new Set(view.boundary === undefined ? [] : view.boxes.filter((box) => box.inside).map((box) => box.id));
+  const pairs: ColumnPair[] = [];
+  for (const [at, a] of drawn.boxes.entries()) {
+    for (const b of drawn.boxes.slice(at + 1)) {
+      if (inside.has(a.id) !== inside.has(b.id) || Math.abs(a.x - b.x) >= 1) continue;
+      const first = (turns.get(a.id) ?? 0) <= (turns.get(b.id) ?? 0);
+      pairs.push({ byWalk: first ? [a.id, b.id] : [b.id, a.id], byPicture: a.y <= b.y ? [a.id, b.id] : [b.id, a.id] });
+    }
+  }
+  return pairs;
+}
+
+/** The pairs of `columnPairs` that stand the other way round from the walk. */
+export function againstWalk(view: View, drawn: Drawn): ColumnPair[] {
+  return columnPairs(view, drawn).filter((pair) => pair.byWalk[0] !== pair.byPicture[0]);
 }

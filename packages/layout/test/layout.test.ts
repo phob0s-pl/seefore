@@ -273,9 +273,9 @@ describe('the graph ELK is given', () => {
     });
   });
 
-  it('sets model order on the root only, and the spacing and node placement on the boundary too', () => {
+  it('sets no model order, which would break ties against the walk, and the spacing and node placement on the boundary too', () => {
     const graph = graphOf(sorted(shopContainers()), new Map());
-    expect(graph.layoutOptions?.['elk.layered.considerModelOrder.strategy']).toBe('NODES_AND_EDGES');
+    expect(graph.layoutOptions).not.toHaveProperty('elk.layered.considerModelOrder.strategy');
     const boundary = graph.children?.find((child) => child.id === 'shop');
     expect(boundary?.layoutOptions).not.toHaveProperty('elk.layered.considerModelOrder.strategy');
     for (const key of ['elk.spacing.nodeNode', 'elk.layered.spacing.nodeNodeBetweenLayers', 'elk.spacing.edgeLabel', 'elk.layered.nodePlacement.strategy', 'elk.layered.thoroughness']) {
