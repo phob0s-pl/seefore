@@ -67,6 +67,29 @@
 .brand-dot {
   color: var(--accent);
 }
+/* The tool's name with the project's beside it, on one line. */
+.brand-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  padding: 4px 12px 20px;
+}
+.brand-row .brand {
+  flex: none;
+  padding: 0;
+}
+.brand-project {
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .sidebar-navigation {
   display: flex;
   flex-direction: column;
