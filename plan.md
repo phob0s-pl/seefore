@@ -149,6 +149,11 @@ Decided:
 | The whole model in one picture | Drawn at every depth, however large | 2026-11-23 |
 | The crowded check | Taken out at stage 9: the `view-crowded` warning, the limit of 40 boxes and pass number 7 of stage 7. Nobody can act on it: the model is right and the picture is large. The page says when a picture opens too small to read its names. Making a large picture read better is stage 28, the last | 2026-11-23 |
 | A flow as a picture | A flow has a picture of its own, of only the parts it touches. It takes the place of a view picked by hand. Stage 11 | 2026-11-23 |
+| A box chosen at a depth above its own | The depths on offer start at the level of what is chosen: choosing an app at System depth sets the depth to Container | 2026-11-23 |
+| The page's list of views by system, of stage 5 | The two controls take its place, Depth before Scope. The listing of the model and the problems of the check stay | 2026-11-23 |
+| The pass numbers of stage 9 | Sixteen new ones, 8 to 23, set in the spec before the build from the planner's trial on seven models; stage 7's six stay, and three of them now hold for every setting | 2026-11-23 |
+| The order when a box opens | A picture takes its turns from the picture one depth up. Not one system at Container depth, whose picture must not change: from a context view to its container view the order does not hold | 2026-11-23 |
+| After a change of depth | A picture the reader has not moved is fitted anew. One the reader has moved keeps one box in place, at the same zoom. The first build kept a box in place every time, and the trial found most of the larger picture off the screen | 2026-11-23 |
 
 To settle in the stage named, with the recommendation the two proposals reached:
 
@@ -158,10 +163,7 @@ To settle in the stage named, with the recommendation the two proposals reached:
 | Groups, code that several apps share, one program that runs as several apps | A stage of its own, before 9 | Moved out of stage 6b, and still to be planned. Tools differ on whether a thing is in one group or in several |
 | A condition as a record | When free words prove too loose | Open. At stage 6b nothing ties two records with one condition together but their spelling |
 | Callers on the left and callees on the right in a context view | When a context view does not hold in the owner's reading | Not at stage 7. A first arrow back from a neighbour is the weak edit of a context view; sides by rule lift it and cost two views 9 to 22 % of their fit |
-| A split of a context view's long column whose sides do not depend on a box's place | 9, or when a context view does not hold | Open. Today a neighbour added or taken out sends the boxes after it to the other side, and crossing 16 boxes redraws the view |
-| A box chosen at a depth above its own, as an app at system depth | 9 | The depths on offer start at the level of what is chosen |
-| The page's list of views by system, of stage 5 | 9 | The two controls take its place. The listing of the model and the problems of the check stay |
-| The pass numbers for the new pictures | 9, in the spec, before the build | The slowest layout, with the whole model at component depth. The order after an edit, where a picture has several boundaries or a boundary inside a boundary. A change of depth opens a box in place |
+| A split of a context view's long column whose sides do not depend on a box's place | 28, or when a context view does not hold | Open. Today a neighbour added or taken out sends the boxes after it to the other side, and crossing 16 boxes redraws the view. Not built at stage 9, whose trial asks for a split of the long column in every picture |
 
 ## Status
 
@@ -176,7 +178,7 @@ To settle in the stage named, with the recommendation the two proposals reached:
 | 6b | Hard cases in a record | built 2026-11-22; the trial with the owner is still to do |
 | 7 | Layout stability (gate) | built 2026-11-23; it passes its pass numbers, one of them set again after it was measured; the owner's judging of the pictures, which is the gate, is still to do, and stage 8 waits for it |
 | 8 | C4 checks | built 2026-11-23, on the owner's word, before the two picture tasks of stage 7 were done; the trial with the owner is still to do |
-| 9 | Depth and scope | planned anew 2026-11-23, where the plan had "Focused views"; its spec is still to write |
+| 9 | Depth and scope | built 2026-11-23, before the two picture tasks of stage 7 were done; it passes its pass numbers but one, number 20, the order kept when the chosen app opens; the trial with the owner is still to do |
 | 10 | Flows | |
 | 11 | Flow walkthrough | |
 | 12 | Features | |
@@ -330,8 +332,9 @@ To settle in the stage named, with the recommendation the two proposals reached:
   names, and how to read it then.
 - **Measured:** the pass numbers are set in the spec, before the build. The slowest layout,
   with the whole model at component depth. The order that holds after an edit, where a
-  picture has several boundaries or a boundary inside a boundary. A change of depth opens a
-  box in place and keeps the order of the rest.
+  picture has several boundaries or a boundary inside a boundary. A change of depth keeps
+  the order of the rest. The page then fits a picture that stood fitted, and keeps one box in
+  place in a picture the reader has moved: the trial changed the first of these.
 - **Trial:** on every trial system: the whole model at each depth, and the app that holds
   components with its inside. On the five whose container view has more than 40 boxes: one
   app with its neighbours, by the task of stage 7, which is to find a box again and to follow
@@ -633,7 +636,7 @@ Open after the trial of stage 8, for the owner:
 - **Ten mends that agents made with nobody to ask**, listed in `research/trial/stage-08.md`.
 
 The plan of stage 9 was changed on 2026-11-23, before its spec was written. It was "Focused
-views", with a view as a record. The change touches two answers of stage 7 and one of
+views", with a view as a record. The change touches two answers of stage 7 and two of
 stage 5:
 
 | What changed | The earlier answer | Now | Decided |
@@ -641,25 +644,42 @@ stage 5:
 | What a view is (this plan, stage 9) | A record in a file: a name, a purpose, a scope and a rule for what it includes. Component views, a landscape, a box with its neighbours | One view with two controls and no record: a depth and a scope. The record waits past this list | By the owner, 2026-11-23 |
 | A crowded view (stage 7) | More than 40 boxes: `seefore check` warns of it and the page has a note for it. It is pass number 7 | No check, no limit and no pass number 7, once stage 9 is built: six pass numbers stay. The page says when a picture opens too small to read its names | By the owner, 2026-11-23 |
 | Layout hints (stage 7) | On the view record of stage 9, if a trial asks | No home: there is no view record. If a trial asks for one, the question is open again | Follows from the first row. For the owner to confirm |
-| The page's list of views by system (stage 5) | The sidebar lists a context view and a container view for each system | The two controls take its place | To settle in the spec of stage 9 |
+| The page's list of views by system (stage 5) | The sidebar lists a context view and a container view for each system | The two controls take its place | In the spec of stage 9, as the plan recommended. For the owner to confirm |
+| The mark ↻ on a boundary (stage 5) | A system with a connection from itself to itself had the mark on its box in its context view, and none in its container view | The mark stands on its boundary in its container view too, as on every open box. It moves nothing | In the build of stage 9. For the owner to confirm |
 
-Open before the spec of stage 9, for the owner:
+Open after the trial of stage 9, for the owner:
 
+- **Pass number 20 is not met.** When the chosen app opens, 88.0 % of the pairs of boxes keep
+  their order, against 90 %, and 58.1 % in the worst, against a floor of 80 %. The worst is
+  the private model's app: two of its neighbours have arrows both ways with it and change
+  side when it opens. The seven public models alone pass. What a picture takes from the one
+  above holds the order down a column and not the side. To hold the side needs more; or the
+  number is set again; or it stays failed.
+- **The whole model opens too small to read, and so do the busiest boxes.** Everything at
+  System depth, which is the start page, opens at 21 to 42 % on the eight models, with 15 to
+  30 boxes, and deeper at 6 to 32 %. One box with its neighbours opens with names that can
+  be read in about 1,077 of 1,144 pictures, and not for the largest system, its main app and
+  the hubs, whose neighbours stand in one tall column. Seven of the eight readers of the
+  trial asked first for a split of the long column in every picture. That is stage 28's
+  work, and can be brought forward.
+- **From a system's context view to its container view the order does not hold**: 54 % of
+  the pairs on the eight models, 12 % in the worst. Both pictures are kept as stage 5 drew
+  them. A container view that took its order from its context view would hold it, would
+  change every container view, and would ask for stage 7's numbers again.
+- **A neighbour's own mark ↻**, for a connection from itself to itself, does not touch the
+  chosen box. Stage 5 draws it, so it stays. To drop it in every picture changes the pictures
+  of stage 5 by a mark.
+- **Choices made in the build.** The page opens with everything at System depth. The
+  addresses of stage 5 are gone. A box becomes the scope from its panel, and a click still
+  only reads it. A chosen box that is not a system has its kind in the title.
 - **Against the research.** `research/synthesis.md` has views as selections over the model,
-  each with an identity, a purpose, a scope and a rule for what it includes. Stage 9 now
-  keeps none. The spec says so and gives the reason: a flow picks its parts for a reason a
-  reader has, and a rule for what a view includes pulls towards a query language.
+  each with an identity, a purpose, a scope and a rule for what it includes. Stage 9 keeps
+  none, and its spec says what is lost by that.
 - **A picture picked by hand for one audience**, such as all that one team owns, has no place
   until a view is a record. Search by owner, at stage 25, answers part of it.
-- **The whole model below system depth is large.** On the trial models it has about 25 to
-  105 boxes at container depth and 37 to 119 at component depth: more than 40 on seven of
-  the eight. At system depth it has 15 to 30. It is drawn all the same. Whether it lays out
-  in time and holds after an edit is measured at stage 9.
+- **A route as a picture of its own, with every hop as a box.** The spec of stage 6b left it
+  to stage 9, which did not build it. It is asked again with a flow's picture, at stage 11.
 - **Where the last stage stands.** Stage 28 is after installation, as the last of all. It
   can stand before the release instead.
-- **A route as a picture of its own, with every hop as a box.** The spec of stage 6b left it
-  to stage 9, and stage 9 now has no place for it. A flow's picture, at stage 11, may be
-  where it goes.
-- **The specs still say what stood before.** `docs/layout.md`, `docs/diagrams.md` and
-  `docs/hard-cases.md` name the view record and the focused views of stage 9, and the
-  warning's own words do. They are mended with the spec of stage 9.
+- **Nobody from outside reviewed the build of stage 9**, and no person has read a picture of
+  it.

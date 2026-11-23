@@ -142,14 +142,18 @@ ELK lays a picture out as before: layered, left to right, in one run. What is ne
   pictures keeps its turn, also a box that is now open. What is newly shown takes its turns
   from the walk of the deeper picture. Nothing is taken from the picture that was on the
   screen: an address opened afresh and a change of depth by hand give the same picture.
-  - With it, 83 % of the pairs of boxes keep their order both ways when the whole model is
-    opened one depth, 86 % when an app is opened inside its system, and 94 % when the chosen
-    app is opened. With the walk of the deeper picture alone: 71 %, 76 % and 66 %.
+  - With it, in Astra's trial, 83 % of the pairs of boxes keep their order both ways when the
+    whole model is opened one depth, 86 % when an app is opened inside its system, and 94 %
+    when the chosen app is opened. With the walk of the deeper picture alone: 71 %, 76 % and
+    66 %. The build, on eight models, is under "What must be true".
+  - **It holds the order down a column, and not the side.** A neighbour with arrows both
+    ways may change side when a box opens, since its arrows then end at other boxes and ELK
+    breaks the circle the other way. Pass number 20 fails on that.
   - **One system at Container depth does not do this.** It keeps the turns of its own walk,
     since that picture must not change. So from the context view of a system to its
-    container view the order of the neighbours does not hold: 56 % of the pairs over nine
-    such changes, and 24 % in the worst. One system at Component depth takes the turns of
-    its container view.
+    container view the order of the neighbours does not hold: 54 % of the pairs over
+    fourteen such changes on the eight models, and 12 % in the worst. One system at
+    Component depth takes the turns of its container view.
 - **Two people, one acting on the other.** A person stands in the first column. With
   everything as the scope an arrow can join two people, and ELK fails when both must be
   first. The person acted on is let go of the first column.
@@ -277,45 +281,56 @@ choose Component to see inside an app." The skill writes nothing for a view.
 
 The numbers were set before the build, from Astra's trial on seven models: the same bars as
 stage 7 where a measure is of the same kind, and a little under what was measured where it is
-new. `scripts/steady.mjs` measures them on all eight. A measure with nothing to measure does
-not pass.
+new. `scripts/steady.mjs` measures them on all eight, over 1,292 settings and some 12,000
+layouts. A measure with nothing to measure does not pass.
+
+**One number is not met: number 20.** Every other passes.
 
 Stage 7's six stay. Numbers 1, 2 and 6 now hold for every setting:
 
-| # | What is measured | It passes at | Astra's trial |
-| --- | --- | --- | --- |
-| 1 | The same model, laid out again and in another order: every setting | No picture differs, and none fails | 0 of 1,160 |
-| 2 | A new name or a new description: every setting | Nothing moves in any try | 0 |
-| 3 | One edit, one system at Container depth: pairs in one column that keep their order | 95 % over all edits; 75 % in the worst edit that adds something | 98.4 %; 80.1 % |
-| 4 | One edit, one system at Container depth: pairs that keep their order both ways | 80 % over all models; 65 % in each model | 88.3 %; 79.8 % |
-| 5 | One edit, one system at System depth: pairs that keep their order both ways | 80 % over all models | 84.4 % |
-| 6 | The slowest layout of any setting | 2 seconds | 1.42 s |
+| # | What is measured | It passes at | Astra's trial, seven models | The build, eight models |
+| --- | --- | --- | --- | --- |
+| 1 | The same model, laid out again and in another order: every setting | No picture differs, and none fails | 0 of 1,160 | 0 of 1,292 |
+| 2 | A new name or a new description: every setting | Nothing moves in any try | 0 | 0 of 6,120 tries |
+| 3 | One edit, one system at Container depth: pairs in one column that keep their order | 95 % over all edits; 75 % in the worst edit that adds something | 98.4 %; 80.1 % | 98.6 %; 80.1 % |
+| 4 | One edit, one system at Container depth: pairs that keep their order both ways | 80 % over all models; 65 % in each model | 88.3 %; 79.8 % | 88.8 %; 79.7 % |
+| 5 | One edit, one system at System depth: pairs that keep their order both ways | 80 % over all models | 84.4 % | 84.6 % |
+| 6 | The slowest layout of any setting | 2 seconds | 1.42 s | 1.03 s |
 
 The new ones. "The bars of 3 and 4" are 95 % in one column, 75 % in the worst edit that adds
 something, and 80 % both ways:
 
-| # | What is measured | It passes at | Astra's trial |
-| --- | --- | --- | --- |
-| 8 | One edit, everything at System depth: both ways | 80 % | 90.6 % |
-| 9 | One edit, everything at Container depth | The bars of 3 and 4 | 99.2 %; 86.5 %; 84.1 % |
-| 10 | One edit, everything at Component depth | The bars of 3 and 4 | 99.2 %; 85.4 %; 86.8 % |
-| 11 | Of 9, the pictures with more than one boundary, alone | The bars of 3 and 4 | 99.3 %; 86.5 %; 80.2 % |
-| 12 | Of 10, the pictures with a boundary inside a boundary, alone | The bars of 3 and 4 | 99.4 %; 85.4 %; 87.0 % |
-| 13 | One edit, the largest system at Component depth: both ways | 80 % | 88.0 % |
-| 14 | One edit, the app that has components, chosen, at Component depth: both ways | 80 % | 91.8 % |
-| 15 | A component added, taken out or moved: everything, its system and its app, at Component depth | The bars of 3 and 4 | 99.0 %; 100 %; 86.1 % |
-| 16 | One edit: pairs of boxes inside one boundary before and after, both ways | 80 % at Container depth and at Component depth | 84.6 %; 83.8 % |
-| 17 | A change of depth, everything, System to Container: pairs in both pictures that keep their order both ways | 75 % over all; 50 % in the worst | 79.7 %; 52.6 % |
-| 18 | The same, everything, Container to Component | 80 %; 75 % in the worst | 86.3 %; 78.1 % |
-| 19 | The same, one system, Container to Component | 80 %; 60 % in the worst | 85.7 %; 63.5 % |
-| 20 | The same, the chosen app, Container to Component | 90 %; 80 % in the worst | 93.7 %; 81.2 % |
-| 21 | The box kept in place at a change of depth of a picture the reader has moved, opening and closing | Within 1 pixel of the screen each way, at the same zoom | By arithmetic only |
-| 22 | The two pictures of stage 5, against the code of stage 8; and a change of depth that opens nothing | No picture differs | 0 of 111; 0 of 568 |
-| 23 | Every setting: pairs of boxes in one column of one boundary that stand against their turns | None | 0 of 16,361 |
+| # | What is measured | It passes at | Astra's trial, seven models | The build, eight models |
+| --- | --- | --- | --- | --- |
+| 8 | One edit, everything at System depth: both ways | 80 % | 90.6 % | 90.7 % |
+| 9 | One edit, everything at Container depth | The bars of 3 and 4 | 99.2 %; 86.5 %; 84.1 % | 99.2 %; 86.4 %; 85.3 % |
+| 10 | One edit, everything at Component depth | The bars of 3 and 4 | 99.2 %; 85.4 %; 86.8 % | 99.3 %; 85.4 %; 87.5 % |
+| 11 | Of 9, the pictures with more than one boundary, alone | The bars of 3 and 4 | 99.3 %; 86.5 %; 80.2 % | 99.4 %; 86.4 %; 83.7 % |
+| 12 | Of 10, the pictures with a boundary inside a boundary, alone | The bars of 3 and 4 | 99.4 %; 85.4 %; 87.0 % | 99.4 %; 85.4 %; 87.6 % |
+| 13 | One edit, the largest system at Component depth: both ways | 80 % | 88.0 % | 88.3 % |
+| 14 | One edit, the app that has components, chosen, at Component depth: both ways | 80 % | 91.8 % | 91.3 % |
+| 15 | A component added, taken out or moved: everything, its system and its app, at Component depth | The bars of 3 and 4 | 99.0 %; 100 %; 86.1 % | 99.0 %; 100 %; 87.8 % |
+| 16 | One edit: pairs of boxes inside one boundary before and after, both ways | 80 % at Container depth and at Component depth | 84.6 %; 83.8 % | 86.2 %; 87.8 % |
+| 17 | A change of depth, everything, System to Container: pairs in both pictures that keep their order both ways | 75 % over all; 50 % in the worst | 79.7 %; 52.6 % | 78.9 %; 52.3 % |
+| 18 | The same, everything, Container to Component | 80 %; 75 % in the worst | 86.3 %; 78.1 % | 85.8 %; 78.0 % |
+| 19 | The same, one system, Container to Component | 80 %; 60 % in the worst | 85.7 %; 63.5 % | 83.8 %; 63.5 % |
+| 20 | The same, the chosen app, Container to Component | 90 %; 80 % in the worst | 93.7 %; 81.2 % | **88.0 %; 58.1 %: fails** |
+| 21 | The box kept in place at a change of depth of a picture the reader has moved, opening and closing | Within 1 pixel of the screen each way, at the same zoom | By arithmetic only | 0 pixels, in the browser, on Sentry |
+| 22 | The two pictures of stage 5, against the code of stage 8; and a change of depth that opens nothing | No picture differs | 0 of 111; 0 of 568 | 0 of 127; 0 of 629 |
+| 23 | Every setting: pairs of boxes in one column of one boundary that stand against their turns | None | 0 of 16,361 | 0 of 1,237,261 |
 
-- **Number 11 passes by a hair in the trial**: 80.2 % against 80 %. The eighth model, and
-  the build in place of the trial code, may put it under. Then it is said, and not set again
-  without the owner.
+- **Number 20 fails.** When the chosen app opens, 88.0 % of the pairs keep their order over
+  the eight models, against 90 %, and 58.1 % in the worst, against 80 %. The worst is the
+  app of the private model: three of its ten neighbours have arrows both ways with it, and
+  two of them change side when it opens. The seven public models alone pass, at 92.3 % and
+  81.5 %. The number is not set again: it stands as failed until the owner decides.
+- **Number 11 passed by a hair in Astra's trial**, at 80.2 % against 80 %. The build measures
+  83.7 %.
+- **Number 6 was measured three times**: 1.03 seconds with the machine quiet, and 1.59 and
+  2.09 seconds while nine agents shared it. With a machine to itself the largest picture
+  takes about 0.75 seconds.
+- **In numbers 17 to 20 a box that opens is taken at its boundary.** Astra's trial left it
+  out of the pairs. Number 16 takes every edit, and number 15 four components of each model.
 - **From a system's context view to its container view no number holds the order**: both
   pictures are kept as they were, and number 22 holds that.
 - The numbers are this project's own, as stage 7's are. The owner's reading of the pictures

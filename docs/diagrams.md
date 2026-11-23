@@ -98,8 +98,8 @@ model changes.
   boxes and arrows it has, and from which zoom names can be read. Since stage 7 whatever is
   pointed at says its words on a line under the counts at any zoom, a line of the legend
   lights what it explains, and a view of more than 40 boxes says that it is a map
-  (`layout.md`). Stage 9 took the last out: no box is counted, and the one note is decided
-  by the zoom.
+  (`layout.md`). Stage 9 took the last out: no box is counted, the one note is decided by
+  the zoom, and it leaves the numbers of boxes and arrows to the line above it.
 - **Model** is the listing of `seefore list`, in the same order, from the same code. A click on
   a record opens the same panel. **Problems** lists what the check found, each with its file,
   line and column. Since stage 8 it also shows, under them, the five lines of the C4 checks
