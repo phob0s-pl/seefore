@@ -1,3 +1,4 @@
+import type { C4Report } from './c4.ts';
 import type { Condition } from './conditions.ts';
 import type { Model, Ownership } from './model.ts';
 import type { Problem } from './problem.ts';
@@ -450,6 +451,8 @@ export interface ViewerState {
   warnings: number;
   /** Every problem `seefore check` reports, in its order. */
   problems: Problem[];
+  /** What the C4 checks found on this reading. Missing when the directory is gone. */
+  c4?: C4Report;
   model: Model;
   /**
    * For each part that has an owner: the owner and the record it comes from. Keyed by id, and

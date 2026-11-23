@@ -5,6 +5,8 @@
  * Nothing here touches disk or network. It takes the text of the files and returns records
  * and problems, so it runs the same in Node and in the browser.
  */
+export { C4_CODES } from './c4.ts';
+export type { C4Check, C4Code, C4Finding, C4Report, C4Severity } from './c4.ts';
 export { conditionsOf, keeperOf, systemOf } from './conditions.ts';
 export type { Condition } from './conditions.ts';
 export { CURRENT_FORMAT, FORMAT_1, READABLE_VERSIONS, familyIn, nounOf, oneOf, referenceField } from './format.ts';
