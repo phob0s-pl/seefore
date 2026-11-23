@@ -354,9 +354,10 @@ no check reads who may reach whose store. That is a team's rule, for stage 25; `
 - **A thing on a route that has a condition stands in brackets**, whether the condition is its
   own or from what it is in: `via (Office proxy), HTTPS proxy`. So it stands in the list under
   the legend, and the panel gives each thing on a route its condition.
-- **A dashed outline for a thing that has `only` is built and switched off.** The boundary is
-  dashed already. Tried on two models, the dash can be told from it at a third of full size
-  and is not seen at an eighth, where the largest views open.
+- **A dashed outline for a thing that has `only`** was built and switched off, since the
+  boundary is dashed already. Tried on two models, the dash could be told from it at a third
+  of full size and was not seen at an eighth, where the largest views open. Stage 7 took it
+  out: the legend's line for `only` now lights every thing that has one (`layout.md`).
 - Each of these is in the legend where the view draws it, and none is told by colour alone.
   A legend taller than a quarter of the window scrolls.
 - **A piece that is in a system is inside that system's box on its context view.** So a route
@@ -485,7 +486,7 @@ one recommendation, but as one stage where it asked for three:
 | Code that several apps share | Never a component in several apps: tried on the trial models, it states calls that do not happen. It waits for groups |
 | Groups, and one program that runs as several apps | Not at this stage. A stage of their own, before focused views |
 | An app kind `library` | No |
-| A dashed outline for a thing that has `only` | Built and switched off: the boundary is dashed already. The owner decides after seeing both |
+| A dashed outline for a thing that has `only` | Built and switched off: the boundary is dashed already. Taken out at stage 7 (the owner) |
 | The format's number | Stays 1 |
 
 ## Names these stages add

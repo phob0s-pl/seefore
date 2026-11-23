@@ -68,17 +68,26 @@ What still changes the room is an edit to the model and not a rename: a connecti
 `via`, `only` or technology; a second connection between the same two boxes; the words of a
 condition that grow from one line to two.
 
-## Every context view alike
+## The long column of a context view
 
-A context view with a long column of neighbours has that column split in two, so that it fits
-the window. Stage 5 did this from 16 boxes. One neighbour fewer at that size redrew the whole
-view. The column is now split in a context view of any size, and no rule looks at how large a
-view is.
+A context view of 16 boxes or more has its long column of neighbours split in two, so that it
+fits the window. Stage 5 built this and the stage leaves it. Two things about it do not hold:
+
+- **Crossing the size redraws the view.** One neighbour fewer at 16 boxes moves 93 to 100 %
+  of the boxes, and 68 to 73 % of the pairs keep their order.
+- **In a split column, a neighbour added or taken out sends the boxes after it to the other
+  side.** Their order down the column holds.
+
+Splitting at every size was decided, built and measured, and then withdrawn. With each
+neighbour taken out in turn, a context view of 4 to 7 boxes kept 66 % of its order where it
+keeps 81 %, and one of 8 to 15 boxes 81 % where it keeps 90 %. A split whose sides do not
+depend on a box's place in its column would mend both faults. It is not built.
 
 ## A crowded view
 
-A view of **more than 40 boxes** is crowded. The boxes of the view are counted: the system in
-scope, each box inside its boundary and each box outside.
+A view of **more than 40 boxes** is crowded. The boxes the page draws are counted: in a
+context view the system itself and each box around it; in a container view each box inside
+the boundary and each box outside, and not the boundary.
 
 - **`seefore check` warns**, at the file of the view's system, with the code `view-crowded`:
   "The container view of Sentry has 101 boxes. A view of more than 40 cannot be read as one
@@ -176,7 +185,7 @@ owner's reading of the pictures decides that.
 | What "recognisably in place" means | The order, not the place. Nothing found holds the place without five times the crossings |
 | How the order is held | The engine's own walk, which ELK keeps in every column. ELK's model order crashes inside a boundary in the pinned version |
 | What counts as a rename | Every name: of a box, a thing on a route, a connection and a technology |
-| The split column of a context view | At every size. The rule of 16 boxes redrew a view when it was crossed |
+| The split column of a context view | As stage 5 built it, from 16 boxes. Splitting at every size was decided and then withdrawn: on the trial models the small context views held worse |
 | A crowded view | Drawn as a map with a note, and reported. Not replaced by a list |
 | The limit | More than 40 boxes, counted on the view, so that the check needs no layout |
 | Layout hints | None. The plan listed direction, grouping and order. Nothing measured asks for one, and a hint belongs on the view record of stage 9 |
@@ -187,7 +196,7 @@ owner's reading of the pictures decides that.
 
 One problem code, `view-crowded`. One limit, 40 boxes. One script for the trial,
 `scripts/steady.mjs`. Nothing in the format, no command and no option. Taken out: the dashed
-outline, and the rule of 16 boxes.
+outline.
 
 ## Skips
 
@@ -210,8 +219,6 @@ Follows it:
 - **Stable placement is the first pain it names** (synthesis, 1.2). The stage holds the order.
 - **A fresh layout from the model on each change**, and no half-kept places. Nothing is
   stored, and a layout between the two ends measured worse than either.
-- **One rule for every view.** The rule of 16 boxes goes, for the reason stage 5 gave for one
-  direction.
 - **Draw, count and warn.** No tool refuses to draw a view. The limit is taken from real dense
   views, and the split is left to focused views.
 - **Detail on demand**, and following one thing by its light.
@@ -231,6 +238,8 @@ Risks it takes on:
 
 - **More crossings where lines are followed.** The small views pay most, and there a reader
   does follow lines.
+- **One rule still looks at the size of a view:** the split of a context view's long column
+  from 16 boxes. The research warns that such a rule flips on a small edit, and it does.
 - **The pass numbers are the project's own.** The research has none, and no measure of
   "recognisably".
 - **ELK's setting for keeping an order** is less trodden than its defaults.

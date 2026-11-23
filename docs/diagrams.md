@@ -64,7 +64,9 @@ own (`hard-cases.md`). A view is worked out from the model and is not stored.
 ## The layout
 
 The engine lays out each view with ELK: layered, left to right, the boundary and its inside in
-one run, each label placed by ELK at its measured size.
+one run, each label placed by ELK. Since stage 7 the order of each column is the engine's
+own and a label's room does not follow its words: `layout.md` says what then holds when the
+model changes.
 
 - **The same model gives the same picture.** What goes in is sorted by id, the seed is fixed
   and the version of ELK is pinned.
@@ -88,13 +90,17 @@ one run, each label placed by ELK at its measured size.
   from, its whole description and its file.
 - **Detail follows the zoom.** Zoomed out, the description goes first, then the kind line and
   the words on arrows, then the names. A fitted picture too small to read says so: how many
-  boxes and arrows it has, and from which zoom names can be read.
+  boxes and arrows it has, and from which zoom names can be read. Since stage 7 whatever is
+  pointed at says its words on a line under the counts at any zoom, a line of the legend
+  lights what it explains, and a view of more than 40 boxes says that it is a map
+  (`layout.md`).
 - **Model** is the listing of `seefore list`, in the same order, from the same code. A click on
   a record opens the same panel. **Problems** lists what the check found, each with its file,
   line and column.
 - **Following the files.** When a file changes the page takes the new model in place. It keeps
-  the zoom and the selection, and fits again only when the reader has not moved. A selection
-  that is gone is cleared; when the view itself is gone the page opens the first one.
+  the zoom and the selection, and fits again only when the reader has not moved. Since stage
+  7 a chosen box stays where it is on the screen. A selection that is gone is cleared; when
+  the view itself is gone the page opens the first one.
 - The address reopens the view it names.
 
 ## The command
@@ -126,7 +132,7 @@ seefore --server [--workdir=<directory>] [--port=<number>] [--no-open]
 | Arrows | One for each pair of boxes and direction |
 | Labels | Placed by ELK. Placed after the layout, a line ran through half of them |
 | The font | Arial and the fonts made to its measure, so that the engine can measure text |
-| A view too large to read | Drawn, with its counts and a note. The limit is stage 7's to set |
+| A view too large to read | Drawn, with its counts and a note. The limit is stage 7's to set: it is more than 40 boxes (`layout.md`) |
 | The sidebar | The views by system, the model's listing, and the problems (the owner) |
 | ELK in the package | A dependency at a pinned version, under its licence EPL-2.0. Not copied into the command's file |
 
