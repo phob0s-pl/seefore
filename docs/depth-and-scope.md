@@ -108,7 +108,11 @@ that is not on the path of the chosen box:
   picture once**: as an arrow, as a mark or in a box's panel. An arrow may then join two
   people.
 - **With one box as the scope, a connection that neither starts nor ends in it is not
-  drawn.** One between two boxes of the picture is counted under the title, as before.
+  drawn.** One between two boxes of the picture is counted under the title, as before, with
+  each end taken at the deepest thing on its path that the picture draws.
+- **A neighbour still has the mark ↻** for a connection from itself to itself, as in the
+  pictures of stage 5, though that connection does not touch the chosen box. Nothing else of
+  a neighbour's own is drawn.
 - **A record whose file has an error** is not drawn, and nothing inside it is. A connection
   with an end in such a record is counted under the title when its other end is in the scope.
 
@@ -160,17 +164,24 @@ before the fewest crossings, as stage 7 decided.
 
 ## A change of depth
 
-A change of depth opens or closes boxes. The page keeps one of them in place: its top left
-corner stays at the same point of the screen, at the same zoom.
+A change of depth opens or closes boxes. What the page then shows depends on what the reader
+had done with the picture before, as it does since stage 7 when the files change.
 
-- **Which one.** The chosen box, when it opens or closes. Else the box that opens or closes
-  nearest the middle of the canvas, and of two as near, the first by id.
+- **A picture the reader has not moved is fitted anew.** It stood fitted to its room, and the
+  new one does. The reader finds the boxes again by their order, which the layout holds.
+- **A picture the reader has moved or zoomed keeps one box in place**: its top left corner
+  stays at the same point of the screen, at the same zoom.
+  - Which one: the box in scope, when it opens or closes. Else the box that opens or closes
+    nearest the middle of the canvas, and of two as near, the first by id.
 - **A change of depth that opens nothing** gives the same picture, and the page does not
   move.
 - **A change of scope** fits the new picture to its room.
-- No layout is asked to keep a box where it was: in the trial none of 41 opened boxes kept
-  its place by itself, and one moved 4,528 pixels. The page moves the canvas, as it does
-  since stage 7 when the files change under a chosen box.
+- No layout is asked to keep a box where it was: in Astra's trial none of 41 opened boxes
+  kept its place by itself, and one moved 4,528 pixels. The page moves the canvas.
+- **The first build kept a box in place after every change of depth.** The trial on the
+  eight models found that wrong for a picture that stood fitted: the new picture is several
+  times larger, and at the old zoom most of it was off the screen. Seven of the eight readers
+  lost the whole and had to press "Fit diagram".
 
 ## The crowded check goes
 
@@ -182,9 +193,12 @@ the whole model in one picture it would fire on nearly every model.
   zoom the picture is shown at, which is below 60 %, the page says, for Sentry's whole model
   at Component depth in a room of 1,000 by 700:
 
-  > Too small to read at 7 %: 118 boxes and 193 arrows. Names can be read from 60 %. Zoom in,
-  > or point at a box or an arrow, or move the keyboard's focus to it, to read it here. To see
-  > one box with its neighbours, choose it as the scope.
+  > Too small to read at 7 %. Names can be read from 60 %. Zoom in, or point at a box or an
+  > arrow, or move the keyboard's focus to it, to read it here. To see one box with its
+  > neighbours, choose it as the scope.
+
+  The last sentence is said only with everything as the scope. The numbers of boxes and
+  arrows stand on the line above the note, and are not said again in it.
 
 - It is said of the zoom the picture is shown at, also after a change of depth that kept a
   box in place, and never of a zoom it would have opened at.
@@ -198,8 +212,9 @@ the whole model in one picture it would fire on nearly every model.
   - **Depth** shows its three choices at once: System, Container, Component. One that the
     scope does not have cannot be chosen.
   - **Scope** is a list: "Everything", then every box that can be the scope, grouped and
-    ordered as the listing under "Model" is. Two boxes of one name are told apart by their
-    ids.
+    ordered as the listing under "Model" is. A component is listed by its own name, with its
+    app after it in brackets, so that the control shows the name when it is closed. Two boxes
+    of one name, not counting capitals, are told apart by their ids.
   - **View** leads back to the picture last shown, from "Model" and from "Problems".
 - **The page opens with everything at System depth.** On a model with nothing to draw it
   says "No boxes to draw."
@@ -207,8 +222,11 @@ the whole model in one picture it would fire on nearly every model.
   the button "Show with its neighbours": on a box, on a boundary and from the listing. It is
   not shown for the present scope. A click on a box opens its panel, as before, and changes
   no setting.
-- **The title** names the depth and the scope: "System view: Everything", "Container view:
-  Relay", "Component view: Shop". One system at System depth keeps "Context view: Shop".
+- **The title** names the depth and the scope: "System view: Everything", "Component view:
+  Shop". One system at System depth keeps "Context view: Shop". A chosen box that is not a
+  system has its kind after its name: "Container view: Relay [App]", "System view: Clerk
+  [Person]". So a system and an app of one name have two titles, and a reader sees whether
+  the picture opens the box or stands it among its neighbours.
 - **The chosen box has the thicker line** that the system in scope has since stage 5, as a
   box and as a boundary. With everything as the scope no box has it.
 - **The counts and notes under the title** are as before, over what the picture draws. For a
@@ -217,8 +235,8 @@ the whole model in one picture it would fire on nearly every model.
 - **The legend** shows what the picture draws, as before. It gains "Component: a part of an
   app"; "This box: what the view is about", for a chosen box that is not a system; and a
   line for the boundary of an open app, "Boundary: an app, with its components inside". With
-  everything as the scope a system is "System: software seen as one thing, ours or somebody
-  else's".
+  everything as the scope, or a box that is not a system, a system is "System: software seen
+  as one thing, ours or somebody else's": "Other system" is said only beside a chosen system.
 - **The reading line** says the words of a boundary as it says those of a box.
 - **The address** holds the depth and the scope: `#/view/system` for everything,
   `#/view/component~relay` for one box. An id cannot hold `~`. An address with a depth that
@@ -291,7 +309,7 @@ something, and 80 % both ways:
 | 18 | The same, everything, Container to Component | 80 %; 75 % in the worst | 86.3 %; 78.1 % |
 | 19 | The same, one system, Container to Component | 80 %; 60 % in the worst | 85.7 %; 63.5 % |
 | 20 | The same, the chosen app, Container to Component | 90 %; 80 % in the worst | 93.7 %; 81.2 % |
-| 21 | The box kept in place at a change of depth, opening and closing | Within 1 pixel of the screen each way, at the same zoom | By arithmetic only |
+| 21 | The box kept in place at a change of depth of a picture the reader has moved, opening and closing | Within 1 pixel of the screen each way, at the same zoom | By arithmetic only |
 | 22 | The two pictures of stage 5, against the code of stage 8; and a change of depth that opens nothing | No picture differs | 0 of 111; 0 of 568 |
 | 23 | Every setting: pairs of boxes in one column of one boundary that stand against their turns | None | 0 of 16,361 |
 
@@ -318,10 +336,11 @@ something, and 80 % both ways:
 | How a box becomes the scope | From its panel, with a button. A click on a box still only reads it |
 | The start | Everything at System depth. Astra kept the context view of the first system, for a reader used to it; nobody is yet |
 | The addresses of stage 5 | Gone. Astra kept them readable. The tool is not released, and two forms are one name too many |
-| The title | The depth and the scope, as the controls say them. "Context view" stays for one system at System depth |
+| The title | The depth and the scope, as the controls say them. "Context view" stays for one system at System depth. A chosen box that is not a system has its kind after its name, since the trial found two pictures under one title |
 | A frame around a chosen app | None |
 | The order when a box opens | Taken from the picture one depth up. Not for one system at Container depth, whose picture must not change |
-| Keeping a box in place | The page moves the canvas. No layout holds a place |
+| Keeping a box in place | The page moves the canvas. No layout holds a place. Only for a picture the reader has moved: one that stood fitted is fitted anew, since the trial found the rest of it off the screen |
+| A neighbour's own mark ↻ | Kept, as stage 5 draws it. Four readers of the trial held it against the rule that nothing of a neighbour's own is drawn. Dropping it would change the pictures of stage 5 by a mark |
 | A route as a picture of its own | Not here. It was left to this stage by stage 6b. A flow's picture, at stage 11, is where it is asked again |
 
 ## Names this stage adds, and takes away
