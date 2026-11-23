@@ -1,12 +1,11 @@
-import { CROWDED_FROM } from '@seefore/core';
-import type { Drawn, Rect, View } from '@seefore/core';
+import type { Drawn, Rect } from '@seefore/core';
 import type { Lit, Target } from './light.ts';
 
 /**
  * What the zoom decides: how much text a picture shows, how it is fitted to the room it has,
- * where it stands when a new picture of it comes, and the note under the counts: that it is too
- * small to read, or that the view is crowded. The numbers are those of
- * `research/diagrams/recommendations.md`, section 4: names stay at 9 pixels or more.
+ * where it stands when a new picture of it comes, and the note under the counts, that it is too
+ * small to read at the zoom it is shown at. Nothing counts boxes to decide a note. The numbers
+ * are those of `research/diagrams/recommendations.md`, section 4: names stay at 9 pixels or more.
  */
 
 /** Under this zoom a box shows no description: its 12 pixels would be under 9. */
@@ -124,10 +123,9 @@ export function boundsOf(rects: readonly Rect[]): Rect | undefined {
   return { x: left, y: top, width: right - left, height: bottom - top };
 }
 
-/** The rectangle that holds what is lit: its boxes, the boundary when lit, and every point and label of its arrows. */
+/** The rectangle that holds what is lit: its boxes, each boundary that is lit, and every point and label of its arrows. */
 export function litBounds(drawn: Drawn, lit: Lit): Rect | undefined {
-  const rects: Rect[] = drawn.boxes.filter((box) => lit.boxes.has(box.id));
-  if (drawn.boundary !== undefined && lit.boxes.has(drawn.boundary.id)) rects.push(drawn.boundary);
+  const rects: Rect[] = [...drawn.boxes, ...drawn.boundaries].filter((box) => lit.boxes.has(box.id));
   for (const arrow of drawn.arrows) {
     if (!lit.arrows.has(arrow.id)) continue;
     for (const point of arrow.sections.flat()) rects.push({ x: point.x, y: point.y, width: 0, height: 0 });
@@ -147,47 +145,25 @@ function count(n: number, one: string, many: string): string {
 }
 
 /**
- * The note for a picture too small to read at the zoom it is shown at: how many boxes and
- * arrows it has, and from which zoom names can be read. Missing when names can be read.
+ * The one note under the counts of a picture: that it is too small to read at `zoom`, the zoom
+ * it is shown at, which is under the zoom from which names can be read. It says how many boxes
+ * and arrows the picture has, from which zoom names can be read, how to read a box or an arrow
+ * here, and how to see one box with its neighbours. It is never said of a zoom the picture
+ * would have opened at, and nothing but the zoom decides it. Missing when names can be read.
  */
 export function smallNote(drawn: Drawn, zoom: number): string | undefined {
   if (zoom >= READABLE_FROM) return undefined;
   const boxes = count(drawn.boxes.length, 'box', 'boxes');
   const arrows = count(drawn.arrows.length, 'arrow', 'arrows');
-  return `Too small to read at ${percent(zoom)}: ${boxes} and ${arrows}. Names can be read from ${percent(READABLE_FROM)}. Zoom in, or point at a box to follow it.`;
+  return (
+    `Too small to read at ${percent(zoom)}: ${boxes} and ${arrows}. Names can be read from ${percent(READABLE_FROM)}. ` +
+    "Zoom in, or point at a box or an arrow, or move the keyboard's focus to it, to read it here. To see one box with its neighbours, choose it as the scope."
+  );
 }
 
-/** What a picture shows at the zoom it opens at, in the words of the crowded note. */
-const OPENS: Readonly<Record<Detail, string>> = {
-  shapes: 'It opens as a map, with no words.',
-  names: 'It opens with the names of its boxes and no other words.',
-  'names-lines': 'It opens with names and kind lines, and no descriptions.',
-  all: 'It opens with all its words.',
-};
-
-/**
- * The note for a crowded view, one of more boxes than `CROWDED_FROM`, at any zoom: what it shows
- * at `opened`, the zoom it opens at, which fits it to its room, and how to read it. Missing for
- * a view under the limit.
- */
-export function crowdedNote(view: View, opened: number): string | undefined {
-  if (view.boxes.length <= CROWDED_FROM) return undefined;
-  return `A crowded view: more than ${CROWDED_FROM} boxes. ${OPENS[detailAt(opened)]} Point at a box or an arrow, or move the keyboard's focus to it, to read it here. A click, a tap or Enter keeps it lit.`;
-}
-
-/**
- * The note under the counts of a view: for a crowded view the crowded note, which says how to
- * read it and so stands in place of the note that it is too small; for a view under the limit,
- * the note that it is too small to read at this zoom, when it is. `opened` is the zoom the view
- * opens at in its room.
- */
-export function noteFor(view: View, drawn: Drawn, zoom: number, opened: number): string | undefined {
-  return crowdedNote(view, opened) ?? smallNote(drawn, zoom);
-}
-
-/** The place of a box, or of the boundary, in a picture. Missing when the picture does not draw it. */
+/** The place of a box, or of a boundary, in a picture. Missing when the picture does not draw it. */
 function placeOf(drawn: Drawn, id: string): Rect | undefined {
-  return drawn.boxes.find((box) => box.id === id) ?? (drawn.boundary?.id === id ? drawn.boundary : undefined);
+  return drawn.boxes.find((box) => box.id === id) ?? drawn.boundaries.find((boundary) => boundary.id === id);
 }
 
 /** A point on the screen, in the client pixels of the browser's window. */
@@ -211,7 +187,7 @@ export interface OnScreen {
 
 /**
  * Where the canvas looks when a new picture of the same view comes, the one before shown at
- * `viewport`. A chosen box, or the boundary, that both pictures draw keeps its top left where it
+ * `viewport`. A chosen box, or a boundary, that both pictures draw keeps its top left where it
  * stood on the screen, at the same zoom, so that a reader who watches the page while the files
  * change keeps the place: that wins over fitting again. Else a picture the reader has not moved
  * is fitted again to the room. Else it stays where it is on the screen, though the canvas moved.

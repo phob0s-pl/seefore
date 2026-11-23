@@ -23,11 +23,12 @@ export interface RunnerOptions {
 /** Lays out views one at a time, in the order asked, each under the limit. */
 export interface Runner {
   /**
-   * The picture of a view, once every view asked for before it is done. A layout past the
-   * limit, one that throws and one whose thread fails each give a `Failed` with words to show.
-   * It never rejects.
+   * The picture of a view, once every view asked for before it is done. `above` holds the views
+   * it takes its turns from, nearest first, as `layOut` takes them. A layout past the limit, one
+   * that throws and one whose thread fails each give a `Failed` with words to show. It never
+   * rejects.
    */
-  layOut(view: View): Promise<Picture>;
+  layOut(view: View, above?: readonly View[]): Promise<Picture>;
   /** Ends the worker thread. A view still waiting, or asked for after, gives a `Failed`. */
   close(): Promise<void>;
 }
@@ -37,9 +38,10 @@ export function startRunner(options: RunnerOptions): Runner {
   return new LayoutRunner(options.worker, options.limit ?? LAYOUT_LIMIT);
 }
 
-/** A view waiting for its picture, and how to give it. */
+/** A view waiting for its picture, with the views above it, and how to give it. */
 interface Waiting {
   view: View;
+  above: readonly View[];
   give: (picture: Picture) => void;
 }
 
@@ -66,10 +68,10 @@ class LayoutRunner implements Runner {
     this.#limit = limit;
   }
 
-  layOut(view: View): Promise<Picture> {
+  layOut(view: View, above: readonly View[] = []): Promise<Picture> {
     if (this.#closed) return Promise.resolve(failed(view.id, 'crash', closed()));
     return new Promise((give) => {
-      this.#queue.push({ view, give });
+      this.#queue.push({ view, above, give });
       this.#next();
     });
   }
@@ -90,7 +92,7 @@ class LayoutRunner implements Runner {
     const waiting = this.#queue.shift();
     if (waiting === undefined) return;
     this.#jobs += 1;
-    const job: Job = { job: this.#jobs, view: waiting.view };
+    const job: Job = { job: this.#jobs, view: waiting.view, above: [...waiting.above] };
     try {
       const worker = (this.#worker ??= this.#start());
       const timer = setTimeout(() => this.#stop(), this.#limit);

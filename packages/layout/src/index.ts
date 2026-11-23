@@ -1,7 +1,7 @@
 import type { Picture, View } from '@seefore/core';
 import ELK from 'elkjs/lib/elk.bundled.js';
 import type { ELK as Engine } from 'elkjs/lib/elk.bundled.js';
-import { drawnOf, graphOf, sorted } from './graph.ts';
+import { drawnOf, graphOf, sorted, turnsFrom } from './graph.ts';
 import { labelText } from './text.ts';
 import type { LabelText } from './text.ts';
 import { failed, threw } from './words.ts';
@@ -12,6 +12,7 @@ import { failed, threw } from './words.ts';
  * that keeps it apart from the server, under a time limit, is in `@seefore/layout/node`.
  */
 
+export { turnsFrom, turnsOf, unzips } from './graph.ts';
 export { flat, linesOf, oneLine } from './lines.ts';
 export { ELLIPSIS, graphemesOf, widthOf } from './measure.ts';
 export type { Font } from './measure.ts';
@@ -23,13 +24,15 @@ export type { BoxText, LabelText } from './text.ts';
 let engine: Engine | undefined;
 
 /**
- * Lays out a view: a place for every box and for the boundary, a route for every arrow, a
- * place for every label, and every text broken into the lines to draw. The same view gives the
- * same picture, whatever the order of its boxes and arrows. When ELK throws, the picture says
- * so in words a reader can use. A layout that never ends cannot be stopped from here: the
- * runner stops it.
+ * Lays out a view: a place for every box and every boundary, a route for every arrow, a place
+ * for every label, and every text broken into the lines to draw. `above` holds the views of the
+ * settings it takes its turns from, nearest first, as `Views.above` names them in
+ * `@seefore/core`: the order of its columns then keeps that of the picture one depth up. The
+ * same view and the same views above give the same picture, whatever the order of their boxes,
+ * boundaries and arrows. When ELK throws, the picture says so in words a reader can use. A
+ * layout that never ends cannot be stopped from here: the runner stops it.
  */
-export async function layOut(view: View): Promise<Picture> {
+export async function layOut(view: View, above: readonly View[] = []): Promise<Picture> {
   try {
     const input = sorted(view);
     const labels = new Map<string, LabelText>();
@@ -38,7 +41,7 @@ export async function layOut(view: View): Promise<Picture> {
       if (label !== undefined) labels.set(arrow.id, label);
     }
     engine ??= new ELK();
-    const laid = await engine.layout(graphOf(input, labels));
+    const laid = await engine.layout(graphOf(input, labels, turnsFrom(input, above)));
     return drawnOf(input, laid, labels);
   } catch (error) {
     return failed(view.id, 'crash', threw(error));

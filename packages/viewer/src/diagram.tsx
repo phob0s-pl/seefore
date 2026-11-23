@@ -11,7 +11,7 @@ import { passingWords } from './records.ts';
 import type { Lit, Pointed, Target } from './light.ts';
 import { LOOP_MARK, PASSING_MARK, Sample, Shape, StoreSign } from './shapes.tsx';
 import { TEXT_SLACK } from './theme.ts';
-import { MAX_ZOOM, MOVE_MS, detailAt, fitViewport, litBounds, litScale, minZoomFor, noteFor, percent, reachAt, viewportAfter, whole } from './zoom.ts';
+import { MAX_ZOOM, MOVE_MS, detailAt, fitViewport, litBounds, litScale, minZoomFor, percent, reachAt, smallNote, viewportAfter, whole } from './zoom.ts';
 import type { ClientPoint, Room, Viewport } from './zoom.ts';
 
 /**
@@ -309,17 +309,15 @@ function Counts({ view, drawn }: { view: View; drawn: Drawn }) {
 }
 
 /**
- * The note under the counts: that a view is crowded, or that its picture is too small to read at
- * the zoom it is shown at. A crowded view says what it shows at the zoom it opens at, the fit of
- * its room. Its line is there when empty too, so that the canvas does not move when the note
- * comes and goes, and so that a screen reader hears it come.
+ * The note under the counts: that the picture is too small to read at the zoom it is shown at,
+ * and never at one it would have opened at. Its line is there when empty too, so that the canvas
+ * does not move when the note comes and goes, and so that a screen reader hears it come.
  */
-function Note({ view, drawn, room }: { view: View; drawn: Drawn; room: Room | null }) {
+function Note({ drawn }: { drawn: Drawn }) {
   const zoom = useViewportStore((state) => state.transform[2]);
-  const opened = room === null ? zoom : fitViewport(whole(drawn), room).zoom;
   return (
     <p className="small-note" role="status">
-      {noteFor(view, drawn, zoom, opened) ?? ''}
+      {smallNote(drawn, zoom) ?? ''}
     </p>
   );
 }
@@ -553,7 +551,7 @@ function Inside({ view, drawn, room: given, chosen, speaking, reading, onPoint, 
           </div>
         </div>
         <Counts view={view} drawn={drawn} />
-        <Note view={view} drawn={drawn} room={room} />
+        <Note drawn={drawn} />
         <ReadingLine {...reading} />
       </header>
       <div className="canvas" ref={canvas}>
@@ -718,7 +716,7 @@ function useMore(): { ref: (element: HTMLElement | null) => void; measure: () =>
 function PassesThrough({ view, chosen, onPoint, onFocusTarget, onChoose }: { view: View; chosen: Target | null } & Omit<DiagramActions, 'onClear' | 'onTap'>) {
   const light = useContext(LightContext);
   if (view.passed.length === 0) return null;
-  const system = view.boundary?.name ?? view.boxes.find((box) => box.scope)?.name ?? view.scope;
+  const system = view.boundaries.find((boundary) => boundary.scope)?.name ?? view.boxes.find((box) => box.scope)?.name ?? view.scope ?? '';
   const own = view.passed.filter((each) => each.own);
   const others = view.passed.filter((each) => !each.own);
   const list = (passed: readonly ViewPassed[], label: string) => (

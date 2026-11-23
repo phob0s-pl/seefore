@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { load } from '../src/load.ts';
 import type { SourceFile } from '../src/load.ts';
 import { ownership } from '../src/model.ts';
-import { CROWDED_FROM, viewsOf } from '../src/views.ts';
+import { viewsOf } from '../src/views.ts';
 
 /** A small shop: one system with an app and its component, a store, a person, a proxy and the rest. */
 const SHOP: Record<string, string> = {
@@ -1374,42 +1374,11 @@ function crowd(apps: number, people = 0, changes: Record<string, string> = {}): 
   return Object.entries({ ...files, ...changes }).map(([path, text]) => ({ path, text }));
 }
 
-/** What the warning says of a view of the shop with this many boxes. */
-function crowdedMessage(kind: 'context' | 'container', boxes: number): string {
-  return (
-    `The ${kind} view of Shop has ${boxes} boxes. A view of more than ${CROWDED_FROM} cannot be read as one picture: ` +
-    'the page draws it as a map. Until focused views exist, read it by pointing at a box.'
-  );
-}
-
-describe('a crowded view', () => {
-  it('is not one at the limit, and is one with a box more, at the start of the file of its system', () => {
-    expect(found(crowd(CROWDED_FROM))).toEqual([]);
-    expect(load(crowd(CROWDED_FROM + 1)).problems).toEqual([
-      { file: 'systems/shop.yaml', line: 1, column: 1, severity: 'warning', code: 'view-crowded', message: crowdedMessage('container', CROWDED_FROM + 1) },
-    ]);
-  });
-
-  it('may be a context view, whose system in scope is one of its boxes', () => {
-    expect(found(crowd(0, CROWDED_FROM - 1))).toEqual([]);
-    expect(load(crowd(0, CROWDED_FROM)).problems).toEqual([
-      { file: 'systems/shop.yaml', line: 1, column: 1, severity: 'warning', code: 'view-crowded', message: crowdedMessage('context', CROWDED_FROM + 1) },
-    ]);
-  });
-
-  it('gives a system with both views crowded two warnings, the context view first', () => {
-    const files = crowd(CROWDED_FROM, CROWDED_FROM);
-    expect(found(files)).toEqual(['systems/shop.yaml:1:1 warning view-crowded', 'systems/shop.yaml:1:1 warning view-crowded']);
-    expect(messages(files)).toEqual([crowdedMessage('context', CROWDED_FROM + 1), crowdedMessage('container', 2 * CROWDED_FROM)]);
-  });
-
-  it('counts what the page draws, so not a record whose file has an error', () => {
-    const app = crowd(CROWDED_FROM + 1, 0, { 'apps/app-1.yaml': 'name: App 1\nin: shop\nkind: server\n' });
-    expect(found(app)).toEqual(['apps/app-1.yaml:3:7 error value-not-allowed']);
-    expect(viewsOf(load(app).model).find((view) => view.kind === 'containers')?.boxes).toHaveLength(CROWDED_FROM);
-    // A person whose one connection has an error is no neighbour of the system.
-    const connection = crowd(0, CROWDED_FROM, { 'connections/person-1-signs-in.yaml': 'from: person-1\nto: shop\nname: Signs in\nvia: []\n' });
-    expect(found(connection)).toEqual(['connections/person-1-signs-in.yaml:4:6 error value-too-small']);
-    expect(viewsOf(load(connection).model).find((view) => view.kind === 'context')?.boxes).toHaveLength(CROWDED_FROM);
+describe('a large view', () => {
+  it('is no problem, however many boxes it has: the check for a crowded view is gone, and nothing counts boxes', () => {
+    // Stage 7 warned of a view of more than 40 boxes. These views have 81 and 161.
+    const files = crowd(80, 80);
+    expect(found(files)).toEqual([]);
+    expect(viewsOf(load(files).model).map((view) => view.boxes.length)).toEqual([81, 160]);
   });
 });

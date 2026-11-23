@@ -2,7 +2,7 @@
 // browser: node packages/viewer/look.mjs [port]. Without a port the system picks one; the
 // address is printed. Not part of the command, and not run by `npm run check`.
 //
-// Besides the fixture's three views it serves a crowded one, "grid.containers", with many
+// Besides the fixture's three views it serves a large one, "container~grid", with many
 // boxes and arrows, to see that every arrow is drawn and what a picture too small to read says:
 // its view is worked out by the engine from a grid of records, and its places are made by hand.
 // It serves too the views of a help desk with the hard cases of stage 6a, worked out and laid
@@ -17,7 +17,7 @@ import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { conditionsOf, connectionsInNoView, emptyModel, load, outlineOf, ownership, viewsOf } from '../core/src/index.ts';
+import { conditionsOf, connectionsInNoView, emptyModel, load, outlineOf, ownership, viewsFor, viewsOf } from '../core/src/index.ts';
 import { boxText, layOut } from '../layout/src/index.ts';
 import { toFlow } from './src/flow.ts';
 import { PICTURES, STATE } from './test/fixture.ts';
@@ -56,7 +56,7 @@ function grid(columns, rows) {
     }
   }
   const { model } = load(Object.entries(files).map(([path, text]) => ({ path, text })));
-  const view = viewsOf(model).find((each) => each.id === 'grid.containers');
+  const view = viewsOf(model).find((each) => each.id === 'container~grid');
   const right = left + (columns - 1) * across + 240 + 24;
   const bottom = top + (rows - 1) * down + 150 + 24;
   /** The line between two boxes side by side, or one above the other, from the edge of one to the facing edge of the other. */
@@ -72,7 +72,7 @@ function grid(columns, rows) {
     view: view.id,
     width: right + 40,
     height: bottom + 40,
-    boundary: { id: 'grid', x: 40, y: 40, width: right - 40, height: bottom - 40, title: 'Grid [System]', titleAt: { x: 64, y: 52, width: 120, height: 20 } },
+    boundaries: [{ id: 'grid', x: 40, y: 40, width: right - 40, height: bottom - 40, title: 'Grid [System]', titleAt: { x: 64, y: 52, width: 120, height: 20 } }],
     boxes: view.boxes.map((each) => ({ id: each.id, ...places.get(each.id), width: 240, height: 150, ...boxText(each) })),
     arrows: view.arrows.map((arrow) => {
       const [from, to] = [places.get(arrow.from), places.get(arrow.to)];
@@ -143,7 +143,7 @@ const desk = load(Object.entries(DESK).map(([path, text]) => ({ path, text })));
 const deskViews = viewsOf(desk.model);
 const deskPictures = Object.fromEntries(await Promise.all(deskViews.map(async (view) => [view.id, await layOut(view)])));
 
-const crowded = grid(9, 8);
+const large = grid(9, 8);
 let revision = 1;
 /** How many records a model holds. */
 const size = (one) => Object.values(one).reduce((sum, family) => sum + family.length, 0);
@@ -155,10 +155,10 @@ const merged = (...models) =>
       return [family, [...byId.values()].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))];
     }),
   );
-const model = merged(STATE.model, desk.model, crowded.model);
-const views = [...STATE.views, ...deskViews, crowded.view];
+const model = merged(STATE.model, desk.model, large.model);
+const views = [...STATE.views, ...deskViews, large.view];
 /**
- * The state of the latest reading: the fixture's, with the crowded view and the help desk's.
+ * The state of the latest reading: the fixture's, with the large view and the help desk's.
  * Its tally is the merged model's, and the records with an error that the fixture counts.
  */
 const state = () => ({
@@ -167,7 +167,7 @@ const state = () => ({
   records: size(model) + STATE.records - size(STATE.model),
   views,
   model,
-  ownership: { ...STATE.ownership, ...Object.fromEntries(ownership(desk.model)), ...Object.fromEntries(ownership(crowded.model)) },
+  ownership: { ...STATE.ownership, ...Object.fromEntries(ownership(desk.model)), ...Object.fromEntries(ownership(large.model)) },
   conditions: Object.fromEntries(
     [desk.model.people, desk.model.systems, desk.model.apps, desk.model.stores, desk.model.components, desk.model.infrastructure, desk.model.connections]
       .flat()
@@ -175,9 +175,10 @@ const state = () => ({
       .filter(([, found]) => found.length > 0),
   ),
   outline: outlineOf(model),
-  inNoView: connectionsInNoView(model, views),
+  scopes: [...viewsFor(model).scopes],
+  inNoView: connectionsInNoView(model),
 });
-const pictures = { ...PICTURES, ...deskPictures, [crowded.view.id]: crowded.drawn };
+const pictures = { ...PICTURES, ...deskPictures, [large.view.id]: large.drawn };
 // Every picture as the page draws it: a view the page cannot draw stops the preview here.
 for (const view of views) {
   const picture = pictures[view.id];

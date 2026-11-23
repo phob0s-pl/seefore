@@ -12,7 +12,7 @@ const port = parentPort;
 if (port === null) throw new Error('The layout worker runs only as a worker thread, started by the runner.');
 
 port.on('message', (job: Job) => {
-  void layOut(job.view).then((picture) => {
+  void layOut(job.view, job.above).then((picture) => {
     const answer: Answer = { job: job.job, picture };
     port.postMessage(answer);
   });

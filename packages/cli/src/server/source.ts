@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { statSync, watch } from 'node:fs';
 import type { FSWatcher } from 'node:fs';
-import { conditionsOf, connectionsInNoView, emptyModel, outlineOf, ownership, viewsOf } from '@seefore/core';
+import { conditionsOf, connectionsInNoView, emptyModel, outlineOf, ownership, viewsFor, viewsOf } from '@seefore/core';
 import type { Condition, Model, Problem, View, ViewerState } from '@seefore/core';
 import { readSource } from '../check.ts';
 
@@ -21,10 +21,10 @@ const FORMAT_UNKNOWN = new Set(['marker-missing', 'format-unknown', 'format-not-
 
 /**
  * Reads the source directory as `seefore check` does, with the same problems, and works out
- * the model's views, its listing, the conditions each record is under and the connections that
- * no view holds. When the directory is gone, or its marker cannot say which format it is in,
- * there is no model and there are no views. The views are made here, once for each reading:
- * the check counts their boxes and makes none.
+ * the model's views of stage 5, what can be the scope, its listing, the conditions each record
+ * is under and the connections that no view holds. When the directory is gone, or its marker
+ * cannot say which format it is in, there is no model and there are no views. The views are
+ * made here, once for each reading: the check makes none.
  */
 export function readingOf(directory: string, views: (model: Model) => View[] = viewsOf): Reading {
   if (identityOf(directory) === undefined) {
@@ -58,7 +58,8 @@ export function readingOf(directory: string, views: (model: Model) => View[] = v
     conditions: conditionsByRecord(model),
     outline: outlineOf(model),
     views: drawn,
-    inNoView: connectionsInNoView(model, drawn),
+    scopes: available ? [...viewsFor(model).scopes] : [],
+    inNoView: connectionsInNoView(model),
   };
 }
 
@@ -86,6 +87,7 @@ function unavailable(directory: string, problem: Problem): Reading {
     conditions: {},
     outline: outlineOf(model),
     views: [],
+    scopes: [],
     inNoView: [],
   };
 }

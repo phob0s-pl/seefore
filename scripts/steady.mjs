@@ -65,7 +65,7 @@
 // directory cannot be tried; 3 when the script made an edited model that is not sound.
 import { basename, resolve, sep } from 'node:path';
 import { parseArgs } from 'node:util';
-import { CROWDED_FROM, MARKER_FILE, NAME_MAX, load, viewsOf } from '../packages/core/src/index.ts';
+import { MARKER_FILE, NAME_MAX, load, viewsOf } from '../packages/core/src/index.ts';
 import { isDirectory, readSourceFiles } from '../packages/cli/src/directory.ts';
 import { graphOf, sorted } from '../packages/layout/src/graph.ts';
 import { LAYOUT_LIMIT, startRunner } from '../packages/layout/src/node.ts';
@@ -80,12 +80,6 @@ const TARGETS = 4;
 const SOME = 12;
 /** The pass numbers of `docs/layout.md`, "What must be true". */
 const PASS = { column: 0.95, columnWorst: 0.75, pairs: 0.8, pairsEachModel: 0.65, context: 0.8, slowest: 2000 };
-/**
- * The boxes a view may have before it is crowded: `docs/layout.md` says "more than 40". The
- * script holds its own number, so that a change to the check's `CROWDED_FROM` shows here as a
- * miss and not as a new limit.
- */
-const CROWDED = 40;
 /** The exit codes. */
 const EXIT = { passes: 0, misses: 1, cannot: 2, fault: 3 };
 
@@ -137,7 +131,7 @@ async function main() {
   const results = [];
   try {
     // A thread starts and loads ELK with its first layout: that time is not the layout's.
-    const warm = { id: 'warm.context', kind: 'context', scope: 'warm', title: '', boxes: [], arrows: [], left: { outside: [], broken: [] }, legend: [], passed: [] };
+    const warm = { id: 'system~warm', depth: 'system', scope: 'warm', title: '', boxes: [], boundaries: [], arrows: [], left: { outside: [], broken: [] }, legend: [], passed: [] };
     await runners.first.layOut(warm);
     await runners.other.layOut(warm);
     for (const source of sources) {
@@ -155,9 +149,8 @@ async function main() {
   }
   const all = summaryOf(results);
   const passes = passesOf(results, all);
-  const limit = CROWDED === CROWDED_FROM ? undefined : `The check counts a view as crowded from more than ${CROWDED_FROM} boxes, and the spec from more than ${CROWDED}: the script counts with the spec's.`;
   // Written, and the exit code set, without ending the process: a pipe takes its time to drain.
-  const text = values.json ? JSON.stringify({ directories: results, all, passes, ...(limit === undefined ? {} : { limit }) }, null, 1) : printed(results, all, passes, limit);
+  const text = values.json ? JSON.stringify({ directories: results, all, passes }, null, 1) : printed(results, all, passes);
   process.stdout.write(`${text}\n`);
   process.exitCode = passes.every((each) => each.status === 'passes') ? EXIT.passes : EXIT.misses;
 }
@@ -221,8 +214,8 @@ function inputOf(view) {
     const label = labelText(arrow);
     if (label !== undefined) labels.set(arrow.id, label);
   }
-  const boundary = input.boundary === undefined ? null : [input.boundary.name, input.boundary.line, input.boundary.title, input.boundary.only];
-  return JSON.stringify({ graph: graphOf(input, labels), boxes: input.boxes.map(boxText), boundary, labels: [...labels] });
+  const boundaries = input.boundaries.map((boundary) => [boundary.name, boundary.line, boundary.title, boundary.only]);
+  return JSON.stringify({ graph: graphOf(input, labels), boxes: input.boxes.map(boxText), boundaries, labels: [...labels] });
 }
 
 /** The items in a fixed shuffle, so that a run can be made again. */
@@ -304,7 +297,6 @@ async function tryDirectory(source, runners) {
     views: views.length,
     differAgain: 0,
     differInOrder: 0,
-    crowded: crowdedOf(model, loaded.problems, views),
     renames: { tried: 0, notReached: 0, moved: 0 },
     descriptions: { tried: 0, notReached: 0, moved: 0 },
     main: undefined,
@@ -325,7 +317,7 @@ async function tryDirectory(source, runners) {
     const once = await layOutOn(tally, view, runners.first);
     const again = await layOutOn(tally, view, runners.first);
     const turned = reversed.get(view.id);
-    const mixed = turned === undefined ? undefined : await layOutOn(tally, { ...turned, boxes: shuffled(turned.boxes, 7), arrows: shuffled(turned.arrows, 11) }, runners.other);
+    const mixed = turned === undefined ? undefined : await layOutOn(tally, { ...turned, boxes: shuffled(turned.boxes, 7), boundaries: shuffled(turned.boundaries, 13), arrows: shuffled(turned.arrows, 11) }, runners.other);
     if (once.drawn === undefined) continue;
     first.set(view.id, once.drawn);
     firstMs.set(view.id, once.ms);
@@ -333,13 +325,13 @@ async function tryDirectory(source, runners) {
     if (JSON.stringify(mixed?.drawn) !== JSON.stringify(once.drawn)) result.differInOrder += 1;
   }
 
-  const containerView = views.filter((view) => view.kind === 'containers').sort((a, b) => b.boxes.length - a.boxes.length || byText(a.id, b.id))[0];
+  const containerView = views.filter((view) => view.depth === 'container').sort((a, b) => b.boxes.length - a.boxes.length || byText(a.id, b.id))[0];
   if (containerView === undefined) {
     result.notes.push('it has no container view, so no edit is tried');
     return result;
   }
   const scope = containerView.scope;
-  const contextView = byId.get(`${scope}.context`);
+  const contextView = byId.get(`system~${scope}`);
   const containers = first.get(containerView.id);
   const context = contextView === undefined ? undefined : first.get(contextView.id);
   if (containers === undefined || context === undefined) {
@@ -454,30 +446,6 @@ async function triedOn(tally, runners, tries, before, view) {
   return change(before.drawn, after);
 }
 
-/**
- * The views over `CROWDED` boxes, and the warnings `seefore check` gives for them, as one line
- * each: the file of the view's system, the kind of view, its boxes and the severity. Every view
- * over the limit must have its warning, and no other view one.
- */
-function crowdedOf(model, problems, views) {
-  const files = new Map(model.systems.map((system) => [system.id, system.file]));
-  const expected = views.filter((view) => view.boxes.length > CROWDED).map((view) => `${files.get(view.scope) ?? '?'} ${view.kind === 'context' ? 'context' : 'container'} ${view.boxes.length} warning`).sort();
-  const reported = problems
-    .filter((problem) => problem.code === 'view-crowded')
-    .map((problem) => `${problem.file} ${/\bcontext view\b/.test(problem.message) ? 'context' : /\bcontainer view\b/.test(problem.message) ? 'container' : '?'} ${/ has (\d+) boxes/.exec(problem.message)?.[1] ?? '?'} ${problem.severity}`)
-    .sort();
-  const left = [...reported];
-  let matched = 0;
-  for (const each of expected) {
-    const at = left.indexOf(each);
-    if (at < 0) continue;
-    left.splice(at, 1);
-    matched += 1;
-  }
-  // The lines name files, which are ids: only their counts leave the script.
-  return { expected: expected.length, reported: reported.length, matched, missing: expected.length - matched, extra: left.length };
-}
-
 // The edits. Each takes a model, the system in scope and which of the four targets, and gives
 // an edited copy with the target it took, or undefined when the view has none for it. None
 // changes the model it is given, and each picks its target from that model alone.
@@ -497,10 +465,13 @@ function viewsFor(model) {
   return viewsCache.get(model);
 }
 
-/** The view of a kind of the system in scope, in a model. */
+/** The view of a kind of the system in scope, in a model: the context view at System depth, the container view at Container depth. */
 function viewOf(model, scope, kind) {
-  return viewsFor(model).find((view) => view.id === `${scope}.${kind}`);
+  return viewsFor(model).find((view) => view.id === `${kind === 'context' ? 'system' : 'container'}~${scope}`);
 }
+
+/** True for a box that stands inside the boundary of a container view. */
+const isInside = (box) => box.boundary !== undefined;
 
 /** The record of an element by its id, in any family that has a name. */
 function recordOf(model, id) {
@@ -586,8 +557,8 @@ const EDITS = {
   'add-app': (model, scope, at) => {
     const view = viewOf(model, scope, 'containers');
     if (view === undefined) return undefined;
-    const inside = idsOf(view.boxes.filter((box) => box.inside));
-    const outside = idsOf(view.boxes.filter((box) => !box.inside));
+    const inside = idsOf(view.boxes.filter(isInside));
+    const outside = idsOf(view.boxes.filter((box) => !isInside(box)));
     const a = pick(inside, at);
     const b = at === TARGETS - 1 && outside.length > 0 ? outside.at(-1) : (afterIn(inside, a)[0] ?? outside.at(-1));
     if (a === undefined || b === undefined) return undefined;
@@ -601,7 +572,7 @@ const EDITS = {
   /** An app inside taken out, with what is in it, the stores it keeps and every connection at any of them. */
   'remove-app': (model, scope, at) => {
     const view = viewOf(model, scope, 'containers');
-    const app = view === undefined ? undefined : pick(idsOf(view.boxes.filter((box) => box.inside && isApp(model, box.id))), at);
+    const app = view === undefined ? undefined : pick(idsOf(view.boxes.filter((box) => isInside(box) && isApp(model, box.id))), at);
     if (app === undefined) return undefined;
     const held = [...model.components, ...model.stores].filter((record) => record.in === app).map((record) => record.id);
     return { target: app, model: tidy(withoutRecords(model, [app, ...held])) };
@@ -609,9 +580,9 @@ const EDITS = {
   /** An app inside moved to another system: the first by id of those the view draws that are ours, else of those it draws, else of any. */
   'move-app': (model, scope, at) => {
     const view = viewOf(model, scope, 'containers');
-    const app = view === undefined ? undefined : pick(idsOf(view.boxes.filter((box) => box.inside && isApp(model, box.id))), at);
+    const app = view === undefined ? undefined : pick(idsOf(view.boxes.filter((box) => isInside(box) && isApp(model, box.id))), at);
     if (app === undefined) return undefined;
-    const drawn = idsOf(view.boxes.filter((box) => !box.inside && box.family === 'systems'));
+    const drawn = idsOf(view.boxes.filter((box) => !isInside(box) && box.family === 'systems'));
     const ours = drawn.filter((id) => model.systems.find((system) => system.id === id)?.external !== true);
     const destination = ours[0] ?? drawn[0] ?? model.systems.map((system) => system.id).filter((id) => id !== scope).sort(byText)[0];
     if (destination === undefined) return undefined;
@@ -623,7 +594,7 @@ const EDITS = {
   /** A new store in the system, which an app inside writes. */
   'add-store': (model, scope, at) => {
     const view = viewOf(model, scope, 'containers');
-    const app = view === undefined ? undefined : pick(idsOf(view.boxes.filter((box) => box.inside && isApp(model, box.id))), at);
+    const app = view === undefined ? undefined : pick(idsOf(view.boxes.filter((box) => isInside(box) && isApp(model, box.id))), at);
     if (app === undefined) return undefined;
     const next = clone(model);
     const id = freeId(next, 'new-store');
@@ -634,7 +605,7 @@ const EDITS = {
   /** A store inside taken out, with every connection at it. */
   'remove-store': (model, scope, at) => {
     const view = viewOf(model, scope, 'containers');
-    const store = view === undefined ? undefined : pick(idsOf(view.boxes.filter((box) => box.inside && isStore(model, box.id))), at);
+    const store = view === undefined ? undefined : pick(idsOf(view.boxes.filter((box) => isInside(box) && isStore(model, box.id))), at);
     if (store === undefined) return undefined;
     return { target: store, model: tidy(withoutRecords(model, [store])) };
   },
@@ -642,7 +613,7 @@ const EDITS = {
   'add-connection': (model, scope, at) => {
     const view = viewOf(model, scope, 'containers');
     if (view === undefined) return undefined;
-    const inside = idsOf(view.boxes.filter((box) => box.inside));
+    const inside = idsOf(view.boxes.filter(isInside));
     const a = pick(inside, at);
     const b = a === undefined ? undefined : afterIn(inside, a).find((id) => !joined(view, a, id) && !(isStore(model, a) && isStore(model, id)));
     if (b === undefined) return undefined;
@@ -658,7 +629,7 @@ const EDITS = {
   /** A new system outside, which a box inside that is not a store acts on. */
   'add-neighbour': (model, scope, at) => {
     const view = viewOf(model, scope, 'containers');
-    const a = view === undefined ? undefined : pick(idsOf(view.boxes.filter((box) => box.inside && !isStore(model, box.id))), at);
+    const a = view === undefined ? undefined : pick(idsOf(view.boxes.filter((box) => isInside(box) && !isStore(model, box.id))), at);
     if (a === undefined) return undefined;
     const next = clone(model);
     const id = freeId(next, 'new-system');
@@ -687,7 +658,7 @@ const EDITS = {
   /** A box inside given a name as long as a name may be: the last of the edits made together. */
   rename: (model, scope, at) => {
     const view = viewOf(model, scope, 'containers');
-    const id = view === undefined ? undefined : pick(idsOf(view.boxes.filter((box) => box.inside && recordOf(model, box.id) !== undefined)), at);
+    const id = view === undefined ? undefined : pick(idsOf(view.boxes.filter((box) => isInside(box) && recordOf(model, box.id) !== undefined)), at);
     if (id === undefined) return undefined;
     const next = clone(model);
     recordOf(next, id).name = LONG_NAME;
@@ -844,7 +815,6 @@ function summaryOf(results) {
     slowestMs: Math.max(0, ...results.map((each) => each.tally.slowestMs)),
     walk: { pairs: sum((each) => each.tally.walk.pairs), against: sum((each) => each.tally.walk.against), views: sum((each) => each.tally.walk.views) },
     geometry: { pictures: sum((each) => each.tally.geometry.pictures), withTroubles: sum((each) => each.tally.geometry.withTroubles), troubles: sum((each) => each.tally.geometry.troubles) },
-    crowded: { expected: sum((each) => each.crowded.expected), reported: sum((each) => each.crowded.reported), matched: sum((each) => each.crowded.matched), missing: sum((each) => each.crowded.missing), extra: sum((each) => each.crowded.extra) },
     renames: { tried: sum((each) => each.renames.tried), notReached: sum((each) => each.renames.notReached), moved: sum((each) => each.renames.moved) },
     descriptions: { tried: sum((each) => each.descriptions.tried), notReached: sum((each) => each.descriptions.notReached), moved: sum((each) => each.descriptions.moved) },
     shares: { containers: containers.shares, context: context.shares, others: shareOf(others, 'orderKept', 'pairs') },
@@ -911,19 +881,12 @@ function passesOf(results, all) {
   const context = all.shares.context?.orderKept;
   add(5, 'One edit, context view: pairs that keep their order both ways: 80 % over all models', context !== undefined, context !== undefined && context.mean >= PASS.context, context === undefined ? 'no edit with a pair' : restsOn(context));
   add(6, 'The slowest layout: 2 seconds', all.layouts > 0, all.slowestMs <= PASS.slowest, `${(all.slowestMs / 1000).toFixed(2)} s, of ${count(all.layouts, 'layout')}`);
-  const crowded = all.crowded;
-  add(
-    7,
-    `A view of more than ${CROWDED} boxes: each is reported by the check, at its system's file, with its kind and its boxes, and no other`,
-    crowded.expected + crowded.reported > 0,
-    crowded.missing === 0 && crowded.extra === 0,
-    `${crowded.matched} of ${count(crowded.expected, 'view')} reported as they should be, ${crowded.missing} missing, ${crowded.extra} other warnings`,
-  );
+  // Number 7, a view of more than 40 boxes reported by the check, went with the check at stage 9.
   return list;
 }
 
 /** The tables, for a person. */
-function printed(results, all, passes, limit) {
+function printed(results, all, passes) {
   const per = (share) => (share === undefined ? '-' : String(Math.floor(share * 100)));
   const rows = [...results.map((each) => ({ ...each, name: each.label })), { ...all, name: 'All', tally: all, notes: [] }];
   const lines = [];
@@ -931,7 +894,6 @@ function printed(results, all, passes, limit) {
     `The layout tried on ${results.length} source ${results.length === 1 ? 'directory' : 'directories'}. Shares are in per cent, rounded down. A box has moved when its centre is more than half a box (${BOX_WIDTH / 2} by ${BOX_HEIGHT / 2} px) from where it stood, after the shift all boxes share. A share is the mean of each edit's own; an edit that does not reach a view, or leaves no pair, is in none.`,
     '',
   );
-  if (limit !== undefined) lines.push(limit, '');
 
   lines.push(
     'The same picture, and new names',
@@ -1004,9 +966,9 @@ function printed(results, all, passes, limit) {
   );
 
   lines.push(
-    'The two main views as they are, every layout made, and the views over the limit',
+    'The two main views as they are, and every layout made',
     ...table(
-      ['', 'Crossings', 'Area, million px²', 'Slowest main, s', 'Layouts', 'Slowest of all, s', `Views over ${CROWDED} boxes`, 'Warnings', 'As they should be'],
+      ['', 'Crossings', 'Area, million px²', 'Slowest main, s', 'Layouts', 'Slowest of all, s'],
       rows.map((row) => [
         row.name,
         row.main?.crossings ?? '-',
@@ -1014,9 +976,6 @@ function printed(results, all, passes, limit) {
         row.main === undefined ? '-' : (row.main.slowestMs / 1000).toFixed(2),
         row.tally.layouts,
         (row.tally.slowestMs / 1000).toFixed(2),
-        row.crowded.expected,
-        row.crowded.reported,
-        row.crowded.matched,
       ]),
     ),
     '',

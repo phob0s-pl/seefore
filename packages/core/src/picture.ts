@@ -4,26 +4,52 @@ import type { Model, Ownership } from './model.ts';
 import type { Problem } from './problem.ts';
 
 /**
- * What the viewer is given: the views of a model, the place of everything in a view, and the
- * state the server hands to the page. Types only. The views are worked out in `views.ts`, the
- * places by the layout package, and the page draws them without working anything out again.
+ * What the viewer is given: the view of a setting of a model, the place of everything in a view,
+ * and the state the server hands to the page. Types only. The views are worked out in
+ * `views.ts`, the places by the layout package, and the page draws them without working anything
+ * out again.
  *
  * Every place is in CSS pixels, from the top left corner of the whole picture, x to the right
  * and y down. Nothing is given relative to a boundary.
  */
 
 /** The families whose records can stand as a box in a view. */
-export type BoxFamily = 'people' | 'systems' | 'apps' | 'stores' | 'infrastructure';
+export type BoxFamily = 'people' | 'systems' | 'apps' | 'stores' | 'components' | 'infrastructure';
 
 /**
  * How a box looks: a person, the system the view is about, another system, an external system,
- * an app, a store, a queue or a topic, a piece of infrastructure. The legend's key for each look
- * has the same name. An external system is drawn as one also when the view is about it.
+ * an app, a store, a queue or a topic, a component, a piece of infrastructure. The legend's key
+ * for each look has the same name. An external system is drawn as one also when the view is
+ * about it.
  */
-export type BoxLook = 'person' | 'system-scope' | 'system' | 'system-external' | 'app' | 'store' | 'queue-or-topic' | 'infrastructure';
+export type BoxLook = 'person' | 'system-scope' | 'system' | 'system-external' | 'app' | 'store' | 'queue-or-topic' | 'component' | 'infrastructure';
 
-/** A context view shows a system as one box; a container view shows what is inside it. */
-export type ViewKind = 'context' | 'containers';
+/**
+ * How far a view opens its boxes. At `system` nothing is open; at `container` each system that
+ * has parts to show; at `component` also each app that has components.
+ */
+export type Depth = 'system' | 'container' | 'component';
+
+/**
+ * What a view shows: how far it opens its boxes, and what it is about. A setting is worked out
+ * from the model and never stored.
+ */
+export interface Setting {
+  depth: Depth;
+  /** The id of the chosen box, which the view shows with its neighbours; null for everything. */
+  scope: string | null;
+}
+
+/**
+ * Something that can be chosen as the scope: a person, a system, an app, a store in a system, a
+ * component, or a piece of infrastructure that has a box.
+ */
+export interface Scope {
+  id: string;
+  family: BoxFamily;
+  /** The shallowest depth it has: that of its own level. Every deeper one can be chosen too. */
+  depth: Depth;
+}
 
 /** A box of a view, before it has a place. */
 export interface ViewBox {
@@ -34,7 +60,10 @@ export interface ViewBox {
   look: BoxLook;
   /** The record's name, whole. */
   name: string;
-  /** The line that says its kind and its technologies, whole: `[App: service · Go, PostgreSQL]`, `[System: external]`. */
+  /**
+   * The line that says its kind and its technologies, whole: `[App: service · Go, PostgreSQL]`,
+   * `[System: external]`, `[Component · Rust]`.
+   */
   line: string;
   /**
    * The words of the record's own `only`, whole: when it is there at all. Missing when it has
@@ -43,17 +72,17 @@ export interface ViewBox {
   only?: string;
   /** The first sentence of its description, whole. Missing when it has no description. */
   sentence?: string;
-  /** True for the system the view is about, where that system is drawn as a box. */
+  /** True for the chosen box, where it is drawn as a box. It has the thicker line. */
   scope: boolean;
-  /** True when it stands inside the boundary. */
-  inside: boolean;
+  /** The id of the boundary it stands in. Missing when it stands in none. */
+  boundary?: string;
   /**
    * Connections from a record to itself, one copy acting on another, where that record is drawn
-   * as this box: their ids, in order of id. A box outside the system in scope has only those
-   * that name the box's own record: what goes on inside it is not the view's to tell.
+   * as this box: their ids, in order of id. A neighbour of the chosen box has only those that
+   * name its own record: what goes on inside it is not the view's to tell.
    */
   loops: string[];
-  /** Connections between two different records that are both drawn as this box: their ids, in order of id. Only on a box of the system in scope. */
+  /** Connections between two different records that are both drawn as this box: their ids, in order of id. Never on a neighbour. */
   within: string[];
   /**
    * Connections the view holds that pass through this box: that name in `via` its record, or
@@ -69,29 +98,46 @@ export interface ViewBox {
   kept: string[];
 }
 
-/** The boundary of a container view: the system in scope. An arrow may start or end at it. */
+/**
+ * A box that is open: a system or an app drawn with what it holds inside. An arrow may start or
+ * end at it: one to the record itself, or to a store an app keeps. It carries the marks a closed
+ * box carries, since what was said on the box is said on it.
+ */
 export interface ViewBoundary {
-  /** The id of the system. */
+  /** The id of the system or the app. */
   id: string;
+  family: 'systems' | 'apps';
   name: string;
-  /** The system's kind line: `[System]`, or `[System: external]` for somebody else's. */
+  /** Its kind line: `[System]`, `[System: external]`, `[App: service · Rust]`. */
   line: string;
-  /** The words of the system's own `only`, whole. Missing when it has none of its own. */
+  /** The words of its own `only`, whole. Missing when it has none of its own. */
   only?: string;
   /**
    * What is written at its top left, whole: its name, then its kind line, then its own `only`
    * when it has one, as in `Shop [System]` or `Shop [System] only in production`.
    */
   title: string;
+  /** The id of the boundary it stands in: an app's is its system's, when that is open. Missing when it stands in none. */
+  boundary?: string;
+  /** True for the chosen box, where it is drawn open. It has the thicker line. */
+  scope: boolean;
+  /** As on a box: connections from the record to itself, in order of id. */
+  loops: string[];
+  /** As on a box: connections between two records both drawn at the boundary, such as an app and a store it keeps, in order of id. */
+  within: string[];
+  /** As on a box: connections the view holds that pass through the record, in order of id. */
+  passing: string[];
+  /** As on a box: the stores an app keeps, drawn at its boundary, in order of id. Empty for a system. */
+  kept: string[];
 }
 
 /** One arrow: every connection from one box of the view to another. */
 export interface ViewArrow {
   /** `<from>~<to>`. Unique in its view. */
   id: string;
-  /** The id of the box it starts at, or of the boundary. */
+  /** The id of the box or the boundary it starts at. */
   from: string;
-  /** The id of the box it ends at, or of the boundary. */
+  /** The id of the box or the boundary it ends at. */
   to: string;
   /**
    * The connections it stands for. First those written between the two drawn records
@@ -187,7 +233,7 @@ export interface ViewPassed {
    * stands in brackets when it has any. Empty when it has none.
    */
   conditions: string[];
-  /** True for a piece of infrastructure that is part of the system the view is about: the system's own. */
+  /** True for a piece of infrastructure that is part of the system the view is about, when the chosen box is a system: the system's own. */
   own: boolean;
   /**
    * The connections the view holds that name it in `via`, in order of id: on its arrows, and
@@ -200,24 +246,27 @@ export interface ViewPassed {
 
 /** The connections a view does not draw, by the reason. Each list is in order of id. */
 export interface ViewLeft {
-  /** Both ends stand outside the system in scope. */
+  /** Both ends stand outside the chosen box, and each is drawn as a box of the view. Always empty with everything as the scope. */
   outside: string[];
-  /** One end is the system in scope or inside it; the other is a record with an error in its file, or inside one. */
+  /** One end is in the scope; the other is a record with an error in its file, or inside one. */
   broken: string[];
 }
 
 /**
  * What a legend can explain: each look of a box, the thicker line of an external system the
- * view is about, the boundary, an arrow, an arrow for several connections, the route on an
- * arrow and the brackets on a thing of a route that has `only`, the ring of a channel the far
- * side opened and the line that says it of some connections, the `only` line of a box or an
- * arrow, and the marks for copies, for what passes through a box and for the stores an app
- * keeps. A view lists only what it draws.
+ * view is about, the thicker line of a chosen box that is not a system, the boundary of a system
+ * and that of an app, an arrow, an arrow for several connections, the route on an arrow and the
+ * brackets on a thing of a route that has `only`, the ring of a channel the far side opened and
+ * the line that says it of some connections, the `only` line of a box or an arrow, and the marks
+ * for copies, for what passes through a box and for the stores an app keeps. A view lists only
+ * what it draws.
  */
 export type LegendKey =
   | BoxLook
   | 'system-scope-external'
+  | 'scope'
   | 'boundary'
+  | 'boundary-app'
   | 'arrow'
   | 'arrow-many'
   | 'route'
@@ -236,19 +285,22 @@ export interface LegendEntry {
   text: string;
 }
 
-/** A view of one system, worked out from the model. */
+/**
+ * The view of one setting, worked out from the model. One system at System depth is the context
+ * view of stage 5, and one system at Container depth its container view.
+ */
 export interface View {
-  /** `<system id>.context` or `<system id>.containers`. */
+  /** The key of its setting: `system`, `container~shop`, `component~relay`. */
   id: string;
-  kind: ViewKind;
-  /** The id of the system it is about. */
-  scope: string;
-  /** `Context view: Shop` or `Container view: Shop`. */
+  depth: Depth;
+  /** The id of the chosen box, or null for everything. */
+  scope: string | null;
+  /** `System view: Everything`, `Container view: Relay`; `Context view: Shop` for one system at System depth. */
   title: string;
   /** In order of id. */
   boxes: ViewBox[];
-  /** In a container view only. */
-  boundary?: ViewBoundary;
+  /** Each open box, in order of id. An app's stands in its system's, when that is open too. */
+  boundaries: ViewBoundary[];
   /** In order of id. */
   arrows: ViewArrow[];
   left: ViewLeft;
@@ -287,7 +339,7 @@ export interface PlacedBox extends Rect {
   inset: { left: number; right: number };
 }
 
-/** The boundary with its place and the place of its title. */
+/** A boundary with its place and the place of its title. */
 export interface PlacedBoundary extends Rect {
   id: string;
   /**
@@ -330,11 +382,13 @@ export interface PlacedArrow {
 
 /** A view that has been laid out. */
 export interface Drawn {
+  /** The id of the view. */
   view: string;
   width: number;
   height: number;
   boxes: PlacedBox[];
-  boundary?: PlacedBoundary;
+  /** Each boundary, in the order of the view's. */
+  boundaries: PlacedBoundary[];
   arrows: PlacedArrow[];
 }
 
@@ -467,11 +521,16 @@ export interface ViewerState {
    */
   conditions: Record<string, Condition[]>;
   outline: Outline;
-  /** Every view, in the order the sidebar lists them: the systems with parts first. */
-  views: View[];
   /**
-   * The connections that no view draws, in order of id: not as an arrow, not inside a box, and
-   * not between its copies. They are in no picture.
+   * The views of stage 5, in the order the sidebar lists them: for each system with parts its
+   * view at System depth and at Container depth, then each other system's at System depth.
+   */
+  views: View[];
+  /** What can be the scope, each with the shallowest depth it has, in the order of the listing. */
+  scopes: Scope[];
+  /**
+   * The connections that no view draws, in order of id: those with an end that cannot be
+   * followed, since everything as the scope draws every other. They are in no picture.
    */
   inNoView: string[];
 }

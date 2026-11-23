@@ -361,6 +361,11 @@ summary:focus-visible,
   --line-colour: var(--app);
 }
 
+/* A component is a part of an app, and has the app's colour: its shape tells it apart. */
+.family-components {
+  --line-colour: var(--app);
+}
+
 .family-stores {
   --line-colour: var(--store);
 }

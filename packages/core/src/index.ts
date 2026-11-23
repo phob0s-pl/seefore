@@ -1,6 +1,6 @@
 /**
  * The seefore format: reading a source directory, saying what is wrong with it, and working out
- * the listing and the views of its model.
+ * the listing of its model and the view of each setting of depth and scope.
  *
  * Nothing here touches disk or network. It takes the text of the files and returns records
  * and problems, so it runs the same in Node and in the browser.
@@ -21,6 +21,7 @@ export type { Model, ModelRecord, Ownership } from './model.ts';
 export type {
   BoxFamily,
   BoxLook,
+  Depth,
   Drawn,
   Failed,
   LegendEntry,
@@ -39,13 +40,16 @@ export type {
   PlacedLabel,
   Point,
   Rect,
+  Scope,
+  Setting,
   View,
   ViewArrow,
   ViewBoundary,
   ViewBox,
   ViewHop,
-  ViewKind,
   ViewLeft,
+  ViewOnly,
+  ViewOpened,
   ViewPassed,
   ViewRoute,
   ViewerState,
@@ -72,4 +76,5 @@ export type { App, Component, Connection, Infrastructure, Owner, Person, Store, 
 export { DESCRIPTION_MAX, NAME_MAX, ONLY_MAX, firstSentence } from './text.ts';
 export { isShort, readInFull, recordsWithId, removalOf, usesOf, wordsFor } from './uses.ts';
 export type { Change, Conditioned, Left, Mention, Removal, RemovalOptions, UsedRecord, Uses } from './uses.ts';
-export { CROWDED_FROM, UNNAMED_CONNECTION, connectionsInNoView, viewsOf } from './views.ts';
+export { DEPTHS, EVERYTHING, UNNAMED_CONNECTION, connectionsInNoView, keyOf, leftOutWords, settingOf, viewOf, viewsFor, viewsOf } from './views.ts';
+export type { Views } from './views.ts';

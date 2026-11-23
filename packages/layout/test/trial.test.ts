@@ -114,9 +114,9 @@ describe('the trial script', () => {
     // A connection between two apps inside never reaches the context view; in the container view it is measured.
     expect(directory?.context.rows.map((row) => row.edit)).not.toContain('add-connection');
     expect(directory?.containers.rows.map((row) => row.edit)).toContain('add-connection');
-    // No view of more than 40 boxes: the pass number of crowded views is not tried, and the run does not pass.
-    expect(statuses(trial)[7]).toBe('not tried');
-    expect(result.code).toBe(1);
+    // Pass number 7, of a crowded view, went with the check: six are tried, and the exit code follows them.
+    expect(Object.keys(statuses(trial))).toEqual(['1', '2', '3', '4', '5', '6']);
+    expect(result.code).toBe(trial.passes.every((each) => each.status === 'passes') ? 0 : 1);
   }, 60_000);
 
   it('works out each of the edits made together on the model the one before left', async () => {
@@ -160,7 +160,7 @@ describe('the trial script', () => {
     expect(shares?.containers.orderKept).toBeUndefined();
     expect(shares?.containers.columnOrder).toBeUndefined();
     expect(shares?.context.orderKept).toBeUndefined();
-    expect(statuses(trial)).toEqual({ 1: 'passes', 2: 'passes', 3: 'not tried', 4: 'not tried', 5: 'not tried', 6: 'passes', 7: 'not tried' });
+    expect(statuses(trial)).toEqual({ 1: 'passes', 2: 'passes', 3: 'not tried', 4: 'not tried', 5: 'not tried', 6: 'passes' });
     expect(result.code).toBe(1);
   }, 60_000);
 

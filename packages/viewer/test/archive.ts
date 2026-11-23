@@ -1,4 +1,4 @@
-import { conditionsOf, connectionsInNoView, load, outlineOf, ownership, viewsOf } from '@seefore/core';
+import { conditionsOf, connectionsInNoView, load, outlineOf, ownership, viewsFor, viewsOf } from '@seefore/core';
 import type { Condition, Drawn, PlacedArrow, PlacedBox, View, ViewerState } from '@seefore/core';
 
 /**
@@ -55,7 +55,8 @@ export function stateOf(files: Readonly<Record<string, string>>): ViewerState {
     conditions: Object.fromEntries(records.map((record): [string, Condition[]] => [record.id, conditionsOf(model, record.id)]).filter(([, found]) => found.length > 0)),
     outline: outlineOf(model),
     views,
-    inNoView: connectionsInNoView(model, views),
+    scopes: [...viewsFor(model).scopes],
+    inNoView: connectionsInNoView(model),
   };
 }
 
@@ -77,8 +78,8 @@ export function archiveView(id: string, state: ViewerState = ARCHIVE_STATE): Vie
  */
 export function archivePicture(view: View): Drawn {
   const places = new Map<string, { x: number; y: number }>();
-  const insideBoxes = view.boxes.filter((box) => box.inside);
-  const outside = view.boxes.filter((box) => !box.inside);
+  const insideBoxes = view.boxes.filter((box) => box.boundary !== undefined);
+  const outside = view.boxes.filter((box) => box.boundary === undefined);
   insideBoxes.forEach((box, at) => places.set(box.id, { x: 64 + at * 320, y: 104 }));
   outside.forEach((box, at) => places.set(box.id, { x: 40 + at * 320, y: 440 }));
   const boxes: PlacedBox[] = view.boxes.map((box) => {
@@ -96,7 +97,7 @@ export function archivePicture(view: View): Drawn {
     };
   });
   const width = 40 + Math.max(insideBoxes.length * 320 + 24, outside.length * 320) + 40;
-  const boundary = view.boundary;
+  const [boundary] = view.boundaries;
   const arrows: PlacedArrow[] = view.arrows.map((arrow) => {
     const [from, to] = [places.get(arrow.from) ?? { x: 40, y: 80 }, places.get(arrow.to) ?? { x: 40, y: 80 }];
     const start = { x: from.x + 240, y: from.y + 75 };
@@ -120,11 +121,8 @@ export function archivePicture(view: View): Drawn {
     width,
     height: 640,
     boxes,
-    ...(boundary === undefined
-      ? {}
-      : {
-          boundary: { id: boundary.id, x: 40, y: 40, width: insideBoxes.length * 320 + 24, height: 260, title: boundary.title, titleAt: { x: 64, y: 52, width: 140, height: 20 } },
-        }),
+    boundaries:
+      boundary === undefined ? [] : [{ id: boundary.id, x: 40, y: 40, width: insideBoxes.length * 320 + 24, height: 260, title: boundary.title, titleAt: { x: 64, y: 52, width: 140, height: 20 } }],
     arrows,
   };
 }

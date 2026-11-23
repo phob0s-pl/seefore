@@ -1,13 +1,31 @@
 import type { BoxFamily, BoxLook, LegendKey } from '@seefore/core';
 import { RING_GAP, RING_RADIUS } from './flow.ts';
-import { APP_RADIUS, EXTERNAL_TAB, INFRASTRUCTURE_POINT, OUTLINE, PERSON_RADIUS, QUEUE_LID, SCOPE_OUTLINE, STORE_LID, SYSTEM_GAP, SYSTEM_INNER, cylinder, hexagon, pipe, tab } from './geometry.ts';
+import {
+  APP_RADIUS,
+  COMPONENT_SIGN,
+  EXTERNAL_TAB,
+  INFRASTRUCTURE_POINT,
+  OUTLINE,
+  PERSON_RADIUS,
+  QUEUE_LID,
+  SCOPE_OUTLINE,
+  STORE_LID,
+  SYSTEM_GAP,
+  SYSTEM_INNER,
+  componentSign,
+  cylinder,
+  hexagon,
+  pipe,
+  tab,
+} from './geometry.ts';
 
 /**
  * The shape of each look of a box, so that each is told apart with no colour at all: a person
  * very round, a system with a double line, an external system as a system with a solid tab in
  * its top left corner, an app with small round corners, a store an upright cylinder, a queue or
- * a topic a cylinder on its side, a piece of infrastructure pointed at both ends. Colour comes
- * from the style sheet, by family.
+ * a topic a cylinder on its side, a component with square corners and a component's sign in its
+ * top right corner, a piece of infrastructure pointed at both ends. Colour comes from the style
+ * sheet, by family.
  */
 
 /** A rectangle whose line has its middle this far in from the edge of the box. */
@@ -40,6 +58,15 @@ export function Shape({ look, scope, width, height }: { look: BoxLook; scope: bo
         </>
       );
     }
+    case 'component': {
+      const line = scope ? SCOPE_OUTLINE : OUTLINE;
+      return (
+        <>
+          <rect className="outline" {...inset(width, height, line / 2)} strokeWidth={line} />
+          <path className="outline rim" d={componentSign(width, COMPONENT_SIGN.size, COMPONENT_SIGN.inset)} strokeWidth={SYSTEM_INNER} />
+        </>
+      );
+    }
     case 'infrastructure':
       return <polygon className="outline" points={hexagon(width, height, INFRASTRUCTURE_POINT, OUTLINE)} strokeWidth={OUTLINE} strokeLinejoin="round" />;
     case 'system':
@@ -69,6 +96,7 @@ const SAMPLE_FAMILY: Readonly<Record<BoxLook, BoxFamily>> = {
   app: 'apps',
   store: 'stores',
   'queue-or-topic': 'stores',
+  component: 'components',
   infrastructure: 'infrastructure',
 };
 
@@ -115,7 +143,8 @@ function SampleWords({ words }: { words: string }) {
 
 /**
  * The sample the legend draws for a key, at the sample's size: the shape of a look of a box, an
- * external system as the view about it draws it, the boundary's dashed line, an arrow, an arrow
+ * external system as the view about it draws it, the thicker line of a chosen box that is no
+ * system, the dashed line of a boundary, a system's or an app's, an arrow, an arrow
  * for several connections, an arrow with its route, a name in brackets on a route, an arrow with
  * the ring of a channel the far side opened, a line of words of a label, or the mark of a box
  * whose copies act on each other, that connections pass through, or that keeps stores.
@@ -136,7 +165,13 @@ export function Sample({ name }: { name: LegendKey }) {
         <SampleShape look="system-external" scope />
       </g>
     );
-  } else if (name === 'boundary') {
+  } else if (name === 'scope') {
+    drawn = (
+      <g className="sample-box family-apps">
+        <rect className="outline" x={SCOPE_OUTLINE / 2} y={SCOPE_OUTLINE / 2} width={width - SCOPE_OUTLINE} height={height - SCOPE_OUTLINE} rx={4} strokeWidth={SCOPE_OUTLINE - 1} />
+      </g>
+    );
+  } else if (name === 'boundary' || name === 'boundary-app') {
     drawn = <rect className="sample-boundary" x={1} y={1} width={width - 2} height={height - 2} rx={4} />;
   } else if (name === 'arrow' || name === 'arrow-many') {
     drawn = (
@@ -231,6 +266,13 @@ function SampleShape({ look, scope = false }: { look: BoxLook; scope?: boolean }
         </>
       );
     }
+    case 'component':
+      return (
+        <>
+          <rect className="outline" x={1} y={1} width={width - 2} height={height - 2} strokeWidth={OUTLINE} />
+          <path className="outline rim" d={componentSign(width, 10, 4)} strokeWidth={1} />
+        </>
+      );
     case 'infrastructure':
       return <polygon className="outline" points={hexagon(width, height, 8, OUTLINE)} strokeWidth={OUTLINE} strokeLinejoin="round" />;
     case 'system':

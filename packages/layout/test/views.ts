@@ -1,23 +1,32 @@
 import type { BoxFamily, BoxLook, View, ViewArrow, ViewBox, ViewRoute } from '@seefore/core';
 
 /**
- * Views made by hand for the tests, as `viewsOf` gives them: a shop seen from outside and from
- * inside, a fan of stores, a crowded system, views of any size, and views of the shape real
- * models have, with the edits a model goes through.
+ * Views made by hand for the tests, as `viewOf` gives them for one system at System depth and
+ * at Container depth: a shop seen from outside and from inside, a fan of stores, a crowded
+ * system, views of any size, and views of the shape real models have, with the edits a model
+ * goes through.
  */
 
 /** The word of a kind line for each family. */
-const KINDS: Record<BoxFamily, string> = { people: 'Person', systems: 'System', apps: 'App', stores: 'Store', infrastructure: 'Infrastructure' };
+const KINDS: Record<BoxFamily, string> = { people: 'Person', systems: 'System', apps: 'App', stores: 'Store', components: 'Component', infrastructure: 'Infrastructure' };
 
 /** The look of a box of each family, but for the system in scope and the hard cases. */
-const LOOKS: Record<BoxFamily, BoxLook> = { people: 'person', systems: 'system', apps: 'app', stores: 'store', infrastructure: 'infrastructure' };
+const LOOKS: Record<BoxFamily, BoxLook> = { people: 'person', systems: 'system', apps: 'app', stores: 'store', components: 'component', infrastructure: 'infrastructure' };
+
+/** What a box made by `inside` stands in until a container view puts it in its boundary. */
+const IN_BOUNDARY = '~boundary';
 
 /** A box of a view. The name is the id as words, `Card provider`, unless given; the kind line and the look say the family. */
 export function box(id: string, family: BoxFamily, more: Partial<ViewBox> = {}): ViewBox {
   const words = id.replaceAll('-', ' ');
   const name = words.charAt(0).toUpperCase() + words.slice(1);
   const look = more.scope === true ? 'system-scope' : LOOKS[family];
-  return { id, family, look, name, line: `[${KINDS[family]}]`, scope: false, inside: false, loops: [], within: [], passing: [], kept: [], ...more };
+  return { id, family, look, name, line: `[${KINDS[family]}]`, scope: false, loops: [], within: [], passing: [], kept: [], ...more };
+}
+
+/** The boxes with each made by `inside` put in the boundary of the system `scope`. */
+function placed(boxes: readonly ViewBox[], scope: string): ViewBox[] {
+  return boxes.map((each) => (each.boundary === IN_BOUNDARY ? { ...each, boundary: scope } : each));
 }
 
 /**
@@ -30,9 +39,9 @@ export function route(names: string[], count = 1, of = count): ViewRoute {
   return { count, hops, bracketed: hops.some((hop) => hop.bracketed), line: names.length > 0 ? `via ${names.join(', ')}` : `via on ${count} of ${of}` };
 }
 
-/** A box inside the boundary. */
+/** A box inside the boundary of the container view it is put in. */
 export function inside(id: string, family: 'apps' | 'stores', more: Partial<ViewBox> = {}): ViewBox {
-  return box(id, family, { inside: true, ...more });
+  return box(id, family, { boundary: IN_BOUNDARY, ...more });
 }
 
 /** An arrow, with one connection for each name. */
@@ -40,20 +49,20 @@ export function arrow(from: string, to: string, names: string[] = ['Uses'], tech
   return { id: `${from}~${to}`, from, to, connections: names.map((_, at) => `${from}-to-${to}-${at + 1}`), names, technology };
 }
 
-/** A context view of a system. */
+/** A context view of a system: the system at System depth. */
 export function contextView(scope: string, boxes: ViewBox[], arrows: ViewArrow[]): View {
-  return { id: `${scope}.context`, kind: 'context', scope, title: `Context view: ${scope}`, boxes, arrows, left: { outside: [], broken: [] }, legend: [], passed: [] };
+  return { id: `system~${scope}`, depth: 'system', scope, title: `Context view: ${scope}`, boxes, boundaries: [], arrows, left: { outside: [], broken: [] }, legend: [], passed: [] };
 }
 
-/** A container view of a system, with its boundary, which says the system's name and its kind line. */
+/** A container view of a system, at Container depth, with its boundary, which says the system's name and its kind line. */
 export function containerView(scope: string, boxes: ViewBox[], arrows: ViewArrow[], name = scope, line = '[System]'): View {
   return {
-    id: `${scope}.containers`,
-    kind: 'containers',
+    id: `container~${scope}`,
+    depth: 'container',
     scope,
     title: `Container view: ${name}`,
-    boxes,
-    boundary: { id: scope, name, line, title: `${name} ${line}` },
+    boxes: placed(boxes, scope),
+    boundaries: [{ id: scope, family: 'systems', name, line, title: `${name} ${line}`, scope: true, loops: [], within: [], passing: [], kept: [] }],
     arrows,
     left: { outside: [], broken: [] },
     legend: [],
@@ -292,7 +301,8 @@ export function withArrow(view: View, from: string, to: string): View {
 
 /** The view with a new app inside, which a box calls and which calls another box or writes a store. */
 export function withApp(view: View, id: string, from: string, to: string): View {
-  return { ...view, boxes: [...view.boxes, inside(id, 'apps', { sentence: 'A new app.' })], arrows: [...view.arrows, arrow(from, id, ['Asks the new app']), arrow(id, to, ['Tells of a result'])] };
+  const boxes = placed([...view.boxes, inside(id, 'apps', { sentence: 'A new app.' })], view.scope ?? '');
+  return { ...view, boxes, arrows: [...view.arrows, arrow(from, id, ['Asks the new app']), arrow(id, to, ['Tells of a result'])] };
 }
 
 /** The view less a box and every arrow at it. */

@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { C4_CODES, c4Line, CROWDED_FROM } from '@seefore/core';
+import { C4_CODES, c4Line } from '@seefore/core';
 import type { C4Report, Drawn, View, ViewerState } from '@seefore/core';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
@@ -12,7 +12,7 @@ import { holdersWords } from '../src/listing.tsx';
 import type { Shown } from '../src/live.ts';
 import { Page, pageTitle } from '../src/page.tsx';
 import { legendWords } from '../src/reading.ts';
-import { crowdedNote, fitViewport, whole } from '../src/zoom.ts';
+import { fitViewport, smallNote, whole } from '../src/zoom.ts';
 import { ARCHIVE_FILES, ARCHIVE_STATE, archivePicture, archiveView, stateOf } from './archive.ts';
 import { STUDIO_STATE, studioView } from './studio.ts';
 import {
@@ -59,7 +59,7 @@ function linesOf(drawn: Drawn): string[] {
   return [
     ...drawn.boxes.flatMap((box) => [...box.name, box.line, ...box.sentence]),
     ...drawn.arrows.flatMap((arrow) => (arrow.label === undefined ? [] : [...arrow.label.lines, ...(arrow.label.technology === undefined ? [] : [arrow.label.technology])])),
-    ...(drawn.boundary === undefined ? [] : [drawn.boundary.title]),
+    ...drawn.boundaries.map((boundary) => boundary.title),
   ];
 }
 
@@ -711,21 +711,21 @@ describe('the listing, for what passes through and what is in no picture', () =>
     const html = render({ page: 'model' }, null, null, { ...HARD_STATE, inNoView: ['proxy-checks-web', 'web-asks-cards'] });
     const listing = html.slice(html.indexOf('<article class="listing"'));
     const notice =
-      '<p class="in-no-picture" role="note">2 connections are in no picture: no view draws them. A view is about a system, and draws a connection only where an end of it is in that system and neither end is a record with an error. Each is marked “in no picture” under Connections.</p>';
+      '<p class="in-no-picture" role="note">2 connections are in no picture: no view draws them, since each has an end that cannot be followed: a record with an error, or a part of one. Everything as the scope draws every other connection. Each is marked “in no picture” under Connections.</p>';
     expect(listing).toContain(notice);
     // Under the name of the model and where it is, before every section.
     expect(listing.indexOf(notice)).toBeLessThan(listing.indexOf('<section'));
     expect(times(listing, '(in no picture)')).toBe(2);
     expect(listing).toMatch(/<code>proxy-checks-web<\/code><\/span><span class="entry-facts"> \(in no picture\)<\/span>/);
     expect(render({ page: 'model' }, null, null, { ...HARD_STATE, inNoView: ['proxy-checks-web'] })).toContain(
-      '1 connection is in no picture: no view draws it. A view is about a system, and draws a connection only where an end of it is in that system and neither end is a record with an error. It is marked “in no picture” under Connections.',
+      '1 connection is in no picture: no view draws it, since an end of it cannot be followed: a record with an error, or a part of one. Everything as the scope draws every other connection. It is marked “in no picture” under Connections.',
     );
     expect(render({ page: 'model' }, null, null, HARD_STATE)).not.toContain('in no picture');
   });
 });
 
 /** The page of the archive of stage 6b, on a route, with something chosen when given. */
-function archive(route: Route = { page: 'view', view: 'archive.containers' }, selection: Selection | null = null): string {
+function archive(route: Route = { page: 'view', view: 'container~archive' }, selection: Selection | null = null): string {
   const view = route.page === 'view' ? archiveView(route.view) : undefined;
   return render(route, view === undefined ? null : archivePicture(view), selection, ARCHIVE_STATE);
 }
@@ -857,7 +857,7 @@ describe('a channel that the far side opened, in the picture and the panel', () 
 
   it('says it in a line of the label when only some connections say so, and in the legend', () => {
     const state = stateOf({ ...ARCHIVE_FILES, 'connections/desk-pings-browser.yaml': 'from: desk\nto: browser\nname: Pings it\n' });
-    const view = archiveView('archive.containers', state);
+    const view = archiveView('container~archive', state);
     const html = render({ page: 'view', view: view.id }, archivePicture(view), null, state);
     expect(html).not.toContain('<circle class="arrow-ring"');
     expect(html).toContain('<text class="label-opened"');
@@ -951,7 +951,7 @@ describe('a record whose id every object has a property of', () => {
   });
 
   it('is drawn in a view, its panel opened there too', () => {
-    const view = archiveView('shelf.context', state);
+    const view = archiveView('system~shelf', state);
     const html = render({ page: 'view', view: view.id }, archivePicture(view), { kind: 'box', id: 'constructor' }, state);
     expect(html).toContain('data-id="constructor"');
     expect(panelOf(html)).toContain('<dt>Kind</dt><dd>Person</dd>');
@@ -974,7 +974,7 @@ const EDGED: Readonly<Record<string, string>> = {
 const EDGED_STATE = stateOf(EDGED);
 
 /** The page of the edged archive on a route, with something chosen when given. */
-function edged(route: Route = { page: 'view', view: 'archive.containers' }, selection: Selection | null = null): string {
+function edged(route: Route = { page: 'view', view: 'container~archive' }, selection: Selection | null = null): string {
   const view = route.page === 'view' ? archiveView(route.view, EDGED_STATE) : undefined;
   return render(route, view === undefined ? null : archivePicture(view), selection, EDGED_STATE);
 }
@@ -1005,13 +1005,13 @@ describe('a thing on a route whose condition comes from what it is in', () => {
 
 describe('a system that holds only pieces of infrastructure', () => {
   it('has a container view when a connection ends at its piece, and none when its piece is only passed through', () => {
-    expect(EDGED_STATE.views.map((view) => view.id)).toEqual(['archive.context', 'archive.containers', 'vault.context', 'vault.containers', 'edge.context']);
+    expect(EDGED_STATE.views.map((view) => view.id)).toEqual(['system~archive', 'container~archive', 'system~vault', 'container~vault', 'system~edge']);
   });
 
   it('stands with the systems with parts in the sidebar and the listing alike, or with the others in both', () => {
     const html = edged();
     const sidebar = html.slice(0, html.indexOf('</nav>'));
-    const order = ['>Archive</span>', '>Vault</span>', '#/view/vault.containers', '<details class="others"', '#/view/edge.context'].map((piece) => sidebar.indexOf(piece));
+    const order = ['>Archive</span>', '>Vault</span>', '#/view/container~vault', '<details class="others"', '#/view/system~edge'].map((piece) => sidebar.indexOf(piece));
     expect(order.every((place) => place >= 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
     const whole = edged({ page: 'model' });
@@ -1041,7 +1041,7 @@ describe('a store that an app keeps, chosen while the view is shown', () => {
     expect(panel).toContain('Desk keeps it, and this view draws it at Desk: 1 of its connections is inside Desk, and so not drawn. 2 are on the arrows that light with it.');
     expect(panel).toContain('>Keeps edits that are not yet saved</p>');
     // Not where the app has no box.
-    expect(panelOf(archive({ page: 'view', view: 'archive.context' }, { kind: 'record', id: 'drafts' }))).not.toContain('Inside Desk');
+    expect(panelOf(archive({ page: 'view', view: 'system~archive' }, { kind: 'record', id: 'drafts' }))).not.toContain('Inside Desk');
   });
 });
 
@@ -1049,7 +1049,7 @@ describe('the line under the title of a view that draws stores at their apps', (
   it('says how many', () => {
     expect(archive()).toMatch(/<p class="view-counts">[^<]*2 stores are drawn at the apps that keep them\./);
     const one = stateOf({ ...ARCHIVE_FILES, 'stores/cache.yaml': 'name: Cache\nin: archive\nkind: cache\n' });
-    const view = archiveView('archive.containers', one);
+    const view = archiveView('container~archive', one);
     expect(render({ page: 'view', view: view.id }, archivePicture(view), null, one)).toContain('1 store is drawn at the app that keeps it.');
     expect(render(containers, CONTAINER_PICTURE)).not.toContain('drawn at the app');
   });
@@ -1058,7 +1058,7 @@ describe('the line under the title of a view that draws stores at their apps', (
 describe('the boundary of a system that has a condition', () => {
   it('says it after the kind line, whole for a screen reader', () => {
     const state = stateOf({ ...ARCHIVE_FILES, 'systems/archive.yaml': 'name: Archive\nonly: in production\n' });
-    const view = archiveView('archive.containers', state);
+    const view = archiveView('container~archive', state);
     const html = render({ page: 'view', view: view.id }, archivePicture(view), null, state);
     expect(html).toContain('>Archive [System] only in production<');
     expect(html).toContain('aria-label="Archive [System] only in production, the boundary of the system"');
@@ -1083,7 +1083,7 @@ describe('the legend, with every mark of the stage', () => {
   });
 
   it('tells a screen reader, as the description of each line, what it lights and how much', () => {
-    const view = studioView('studio.containers');
+    const view = studioView('container~studio');
     const html = render({ page: 'view', view: view.id }, archivePicture(view), null, STUDIO_STATE);
     for (const entry of view.legend) {
       const described = new RegExp(`<li data-key="${entry.key}" tabindex="0" aria-describedby="([^"]+)">`).exec(html)?.[1] ?? 'none';
@@ -1093,7 +1093,7 @@ describe('the legend, with every mark of the stage', () => {
   });
 
   it('marks the line that speaks and lights, as a tap leaves it, and no other', () => {
-    const view = studioView('studio.containers');
+    const view = studioView('container~studio');
     const none = () => undefined;
     const html = renderToStaticMarkup(<Legend view={view} speaking={{ kind: 'legend', id: 'route-only' }} onPoint={none} onFocusTarget={none} onTap={none} />);
     expect(times(html, 'class="lit"')).toBe(1);
@@ -1176,7 +1176,7 @@ describe('the reading line', () => {
     const html = archive(undefined, { kind: 'record', id: 'drafts' });
     expect(html).toContain('<p class="reading-line" title="Drafts [Store: files], kept by Desk"><span>Drafts [Store: files], kept by Desk</span></p>');
     // Nothing where the view does not draw its app, as nothing lights there.
-    expect(archive({ page: 'view', view: 'archive.context' }, { kind: 'record', id: 'drafts' })).toContain('<p class="reading-line"><span></span></p>');
+    expect(archive({ page: 'view', view: 'system~archive' }, { kind: 'record', id: 'drafts' })).toContain('<p class="reading-line"><span></span></p>');
   });
 
   it('says for an arrow of more connections than it names how many of how many', () => {
@@ -1186,22 +1186,14 @@ describe('the reading line', () => {
   });
 });
 
-describe('the note of a crowded view on the page', () => {
-  /** The page of a grid of so many apps, and the note for the zoom it opens at in the room. */
-  const page = (apps: number) => {
-    const { state, view, drawn } = grid(apps);
-    return { html: render({ page: 'view', view: view.id }, drawn, null, state), note: crowdedNote(view, fitViewport(whole(drawn), ROOM).zoom) };
-  };
-
-  it('says it under the counts for a view of more boxes than the limit, with what it shows at the zoom it opens at', () => {
-    const { html, note } = page(CROWDED_FROM + 1);
-    expect(note).toContain('It opens with the names of its boxes and no other words.');
-    expect(html).toContain(`<p class="small-note" role="status">${escaped(note ?? '')}</p>`);
-    expect(html).not.toContain('Too small to read');
-  });
-
-  it('is not there for a view at the limit', () => {
-    expect(page(CROWDED_FROM).html).not.toContain('A crowded view');
+describe('the note of a large picture on the page', () => {
+  it('is said of the zoom the picture is shown at, and never of the zoom it would open at: drawn without a browser it stands at full size, and says nothing', () => {
+    const { state, view, drawn } = grid(81);
+    // Fitted to its room, this picture would be too small to read, and the stage 7 page said so before it was shown.
+    expect(smallNote(drawn, fitViewport(whole(drawn), ROOM).zoom)).toContain('Too small to read at');
+    const html = render({ page: 'view', view: view.id }, drawn, null, state);
+    expect(html).toContain('<p class="small-note" role="status"></p>');
+    expect(html).not.toContain('crowded');
   });
 });
 

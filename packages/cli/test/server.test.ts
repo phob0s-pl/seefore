@@ -68,12 +68,12 @@ async function waitFor<T>(what: () => T | undefined | false, ms = 10_000): Promi
 
 /** A view made up for a test, with nothing in it. */
 function view(id: string): View {
-  return { id, kind: 'context', scope: id.split('.')[0] ?? id, title: `Context view: ${id}`, boxes: [], arrows: [], left: { outside: [], broken: [] }, legend: [], passed: [] };
+  return { id, depth: 'system', scope: id.split('.')[0] ?? id, title: `Context view: ${id}`, boxes: [], boundaries: [], arrows: [], left: { outside: [], broken: [] }, legend: [], passed: [] };
 }
 
 /** The picture a made-up layout gives for a view. */
 function drawn(of: View): Drawn {
-  return { view: of.id, width: 100, height: 50, boxes: [], arrows: [] };
+  return { view: of.id, width: 100, height: 50, boxes: [], boundaries: [], arrows: [] };
 }
 
 /** Layouts that answer at once, and count what they ran. */
@@ -316,12 +316,15 @@ describe('a reading of the source directory', () => {
     expect(reading.problems.map((problem) => problem.code)).toContain('format-not-readable');
   });
 
-  it('gives the connections that no view holds, which the listing of the model still has', () => {
-    // A person reloads a proxy, the proxy checks a peer and itself, and none of it touches the one system.
+  it('gives the connections that no view holds, those with an end that cannot be followed, which the listing of the model still has', () => {
+    // A person reloads a proxy, the proxy checks a peer and itself, and none of it touches the one
+    // system: no view of the system draws it, and everything as the scope does. The person also
+    // asks an app whose `in` names nothing, which is not in the model.
     write({
       'seefore.yaml': 'format: 1\nname: Desk\n',
       'systems/desk.yaml': 'name: Desk\n',
       'apps/api.yaml': 'name: API\nin: desk\n',
+      'apps/lost.yaml': 'name: Lost\nin: nowhere\n',
       'people/operator.yaml': 'name: Operator\n',
       'infrastructure/proxy.yaml': 'name: Proxy\n',
       'infrastructure/peer.yaml': 'name: Peer proxy\n',
@@ -329,18 +332,16 @@ describe('a reading of the source directory', () => {
       'connections/proxy-checks-peer.yaml': 'from: proxy\nto: peer\n',
       'connections/proxy-syncs-proxy.yaml': 'from: proxy\nto: proxy\n',
       'connections/operator-uses-api.yaml': 'from: operator\nto: api\n',
+      'connections/operator-asks-lost.yaml': 'from: operator\nto: lost\n',
     });
     const reading = readingOf(join(root, 'arch'));
-    const unseen = ['operator-reloads-proxy', 'proxy-checks-peer', 'proxy-syncs-proxy'];
-    expect(reading.problems).toEqual([]);
-    expect(reading.inNoView).toEqual(unseen);
-    // No view draws them, leaves them out or marks them, and the listing of the model has each under where it starts.
+    expect(reading.problems.map((problem) => problem.code)).toEqual(['reference-unknown']);
+    expect(reading.inNoView).toEqual(['operator-asks-lost']);
     expect(JSON.stringify(reading.views)).not.toMatch(/operator-reloads-proxy|proxy-checks-peer|proxy-syncs-proxy/);
-    expect(reading.outline.connections.flatMap((group) => group.connections)).toEqual(expect.arrayContaining(unseen));
-    expect(reading.model.connections.map((one) => one.id)).toEqual(expect.arrayContaining(unseen));
-    // Once the proxy stands beside the system, its copies are its mark; what it does with the operator is left out there, and still in no picture.
-    write({ 'connections/proxy-checks-api.yaml': 'from: proxy\nto: api\n' });
-    expect(readingOf(join(root, 'arch')).inNoView).toEqual(['operator-reloads-proxy', 'proxy-checks-peer']);
+    // The listing of the model has each under where it starts.
+    expect(reading.outline.connections.flatMap((group) => group.connections)).toEqual(expect.arrayContaining(['operator-asks-lost', 'operator-reloads-proxy']));
+    // What can be the scope, for the page: the proxy and its peer have boxes.
+    expect(reading.scopes.map((scope) => scope.id)).toEqual(['operator', 'desk', 'api', 'peer', 'proxy']);
     // With no model there is nothing in no view.
     expect(readingOf(join(root, 'gone')).inNoView).toEqual([]);
   });

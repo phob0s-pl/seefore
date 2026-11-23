@@ -19,20 +19,22 @@ export function viewsBySystem(state: ViewerState): { withParts: SystemViews[]; o
   const names = new Map(state.model.systems.map((system) => [system.id, system.name]));
   const systems: SystemViews[] = [];
   for (const view of state.views) {
-    let system = systems.find((each) => each.id === view.scope);
+    const scope = view.scope;
+    if (scope === null) continue;
+    let system = systems.find((each) => each.id === scope);
     if (system === undefined) {
-      system = { id: view.scope, name: names.get(view.scope) ?? view.scope, views: [] };
+      system = { id: scope, name: names.get(scope) ?? scope, views: [] };
       systems.push(system);
     }
     system.views.push(view);
   }
-  const hasParts = (system: SystemViews) => system.views.some((view) => view.kind === 'containers');
+  const hasParts = (system: SystemViews) => system.views.some((view) => view.depth === 'container');
   return { withParts: systems.filter(hasParts), others: systems.filter((system) => !hasParts(system)) };
 }
 
 /** What a link to a view says in the sidebar: its kind, since the system is above it. */
 function viewWords(view: View): string {
-  return view.kind === 'context' ? 'Context view' : 'Container view';
+  return view.depth === 'system' ? 'Context view' : 'Container view';
 }
 
 /** A link in the sidebar, marked when it is what the page shows. */

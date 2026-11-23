@@ -2,7 +2,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseDocument } from 'yaml';
-import { APP_KINDS, C4_CODES, CROWDED_FROM, CURRENT_FORMAT, STORE_KINDS, load } from '@seefore/core';
+import { APP_KINDS, C4_CODES, CURRENT_FORMAT, STORE_KINDS, load } from '@seefore/core';
 import type { SourceFile } from '@seefore/core';
 import { describe, expect, it } from 'vitest';
 import type { z } from 'zod';
@@ -105,25 +105,20 @@ describe('the model skill', () => {
     }
   });
 
-  it('knows the warning of a crowded view by the code the engine gives it, and asks for no record less', () => {
-    const apps = Array.from({ length: CROWDED_FROM + 1 }, (_, n): SourceFile => ({ path: `apps/app-${n + 1}.yaml`, text: `name: App ${n + 1}\nin: shop\n` }));
+  it('says nothing of a crowded view, whose check is gone, and tells the person where to look on the page', () => {
+    // Stage 7 warned of a view of more than 40 boxes; the engine warns of none now.
+    const apps = Array.from({ length: 41 }, (_, n): SourceFile => ({ path: `apps/app-${n + 1}.yaml`, text: `name: App ${n + 1}\nin: shop\n` }));
     const shop: SourceFile[] = [
       { path: 'seefore.yaml', text: 'format: 1\nname: Shop\n' },
       { path: 'systems/shop.yaml', text: 'name: Shop\n' },
     ];
-    const [crowded] = load([...shop, ...apps]).problems;
-    expect(crowded?.code).toBe('view-crowded');
+    expect(load([...shop, ...apps]).problems).toEqual([]);
+    expect(skill).not.toContain('view-crowded');
     const paragraphs = skill.split('\n\n').map((paragraph) => paragraph.replace(/\s+/g, ' '));
-    // The rule for every warning says, where it stands, that this one asks nothing.
     const rule = paragraphs.find((paragraph) => paragraph.startsWith('Run `seefore check --json --workdir=<folder>`.')) ?? '';
-    expect(rule).toContain('For a warning, say what it is and ask, except for `view-crowded`, which asks nothing,');
-    const said = paragraphs.find((paragraph) => paragraph.startsWith('`view-crowded`')) ?? '';
-    // What the skill quotes is how the warning begins, so that the view and its boxes are read from it.
-    const quoted = /"(The container view of Shop has \d+ boxes\.)"/.exec(said)?.[1] ?? '';
-    expect(quoted).not.toBe('');
-    expect(crowded?.message.startsWith(quoted.replace(/\d+/, String(CROWDED_FROM + 1)))).toBe(true);
-    expect(said).toContain('Set these warnings beside those of the check of section 1, made before your change.');
-    expect(said).toContain('Do not propose merging records or leaving any out to get under the limit.');
+    expect(rule).toContain('For a warning, say what it is and ask, except for `connection-vague`, which is a finding of the C4 checks below.');
+    // The one sentence the spec gives it, word for word.
+    expect(skill.replace(/\s+/g, ' ')).toContain('"To read one part, choose it as the scope on the page; choose Component to see inside an app."');
   });
 
   it('reads what the C4 checks found before a change and after it, and sets the two beside each other', () => {
@@ -135,7 +130,7 @@ describe('the model skill', () => {
     expect(after).toContain('Run `seefore check --json --workdir=<folder>`.');
     expect(after).toContain('Set its findings beside those of section 1, by code and file.');
     // The warning of the set is one of its findings, and not asked about as other warnings are.
-    expect(after).toContain('and `connection-vague`, which is a finding of the C4 checks below.');
+    expect(after).toContain('except for `connection-vague`, which is a finding of the C4 checks below.');
   });
 
   it('asks of a finding its change made the question of the spec, names every check by its code, and leaves a finding that was there before alone', () => {

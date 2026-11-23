@@ -299,7 +299,19 @@ describe('the lines of a label that say when its connections are there, and who 
 });
 
 describe('the title of a boundary', () => {
-  const boundary = (name: string, only?: string): ViewBoundary => ({ id: 'shop', name, line: '[System]', ...(only === undefined ? {} : { only }), title: `${name} [System]${only === undefined ? '' : ` only ${only}`}` });
+  const boundary = (name: string, only?: string): ViewBoundary => ({
+    id: 'shop',
+    family: 'systems',
+    name,
+    line: '[System]',
+    ...(only === undefined ? {} : { only }),
+    title: `${name} [System]${only === undefined ? '' : ` only ${only}`}`,
+    scope: true,
+    loops: [],
+    within: [],
+    passing: [],
+    kept: [],
+  });
 
   it('says the system’s own `only` after its kind line, whole when it fits', () => {
     expect(titleText(boundary('Shop', 'in production'), 1000)).toBe('Shop [System] only in production');

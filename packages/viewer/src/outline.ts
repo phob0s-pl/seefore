@@ -50,6 +50,10 @@ export function outlineOf(look: BoxLook, scope: boolean, width: number, height: 
       return { points: roundRect(width, height, line / 2, Math.min(PERSON_RADIUS, height / 3)), line };
     case 'app':
       return { points: roundRect(width, height, line / 2, APP_RADIUS), line };
+    case 'component': {
+      const thick = scope ? SCOPE_OUTLINE : OUTLINE;
+      return { points: roundRect(width, height, thick / 2, 0), line: thick };
+    }
     case 'store': {
       const [left, right, top, bottom] = [line / 2, width - line / 2, STORE_LID + line / 2, height - STORE_LID - line / 2];
       const radius = (right - left) / 2;

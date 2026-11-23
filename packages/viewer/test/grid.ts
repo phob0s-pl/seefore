@@ -14,7 +14,7 @@ export function grid(apps: number): { state: ViewerState; view: View; drawn: Dra
     if (at > 0) files[`connections/${id(at - 1)}-calls-${id(at)}.yaml`] = `from: ${id(at - 1)}\nto: ${id(at)}\nname: Calls the next\n`;
   }
   const state = stateOf(files);
-  const view = state.views.find((each) => each.id === 'grid.containers');
+  const view = state.views.find((each) => each.id === 'container~grid');
   if (view === undefined) throw new Error('The grid has no container view.');
   const place = (box: string) => {
     const at = Number(box.slice('part-'.length));
@@ -27,7 +27,7 @@ export function grid(apps: number): { state: ViewerState; view: View; drawn: Dra
     view: view.id,
     width,
     height,
-    boundary: { id: 'grid', x: 40, y: 40, width: width - 80, height: height - 80, title: 'Grid [System]', titleAt: { x: 64, y: 52, width: 120, height: 20 } },
+    boundaries: [{ id: 'grid', x: 40, y: 40, width: width - 80, height: height - 80, title: 'Grid [System]', titleAt: { x: 64, y: 52, width: 120, height: 20 } }],
     boxes: view.boxes.map((box) => ({ id: box.id, ...place(box.id), width: 240, height: 150, name: [box.name], line: box.line, sentence: [], inset: { left: 12, right: 12 } })),
     arrows: view.arrows.map((arrow) => {
       const [from, to] = [place(arrow.from), place(arrow.to)];

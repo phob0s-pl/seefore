@@ -4,17 +4,17 @@ import type { Answer, Job } from '../../src/job.ts';
 
 /**
  * A worker thread for the tests of the runner. It lays out as the real one does, except three
- * views: `hangs.context`, which it never finishes; `throws.context`, at which its thread throws;
- * and `exits.context`, at which its thread ends.
+ * views: `system~hangs`, which it never finishes; `system~throws`, at which its thread throws;
+ * and `system~exits`, at which its thread ends.
  */
 
 const port = parentPort;
 if (port === null) throw new Error('This runs only as a worker thread.');
 
 port.on('message', (job: Job) => {
-  if (job.view.id === 'hangs.context') hang();
-  if (job.view.id === 'throws.context') throw new Error('The thread broke on purpose.');
-  if (job.view.id === 'exits.context') process.exit(3);
+  if (job.view.id === 'system~hangs') hang();
+  if (job.view.id === 'system~throws') throw new Error('The thread broke on purpose.');
+  if (job.view.id === 'system~exits') process.exit(3);
   void layOut(job.view).then((picture) => {
     const answer: Answer = { job: job.job, picture };
     port.postMessage(answer);

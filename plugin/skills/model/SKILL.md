@@ -502,18 +502,11 @@ When several kinds of fact are lifted, go in this order:
 ## 8. Check it
 
 Run `seefore check --json --workdir=<folder>`. Mend every error it reports in a file you
-wrote, and run it again. For a warning, say what it is and ask, except for `view-crowded`,
-which asks nothing, and `connection-vague`, which is a finding of the C4 checks below. Do not
-change a file you did not mean to change.
+wrote, and run it again. For a warning, say what it is and ask, except for `connection-vague`,
+which is a finding of the C4 checks below. Do not change a file you did not mean to change.
 
-`view-crowded` names a view and how many boxes it has: "The container view of Shop has 41
-boxes." Set these warnings beside those of the check of section 1, made before your change. A
-view that this check names and that one did not went over the limit with your change. A view
-that both name, with more boxes now, had boxes added. For each, say so in one sentence: which
-view, how many boxes it has now and, if it was over the limit before, how many it had; that
-the page draws it as a map; and that pointing at a box reads it. Do not propose merging
-records or leaving any out to get under the limit. A system with many real parts has many
-boxes.
+When the person asks where to look on the page, tell them: "To read one part, choose it as the
+scope on the page; choose Component to see inside an app."
 
 `c4` holds what the C4 checks found: a thing with no description, an app or a store with no
 technology, a component with none whose app names none either, a connection with no name or

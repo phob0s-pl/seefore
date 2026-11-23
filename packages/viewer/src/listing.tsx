@@ -240,17 +240,16 @@ export function Listing({ state, onOpen }: ListingProps) {
 }
 
 /**
- * The line at the top of the listing that says how many connections no view draws, and why: a
- * view is about a system, and draws a connection only where an end of it is in that system and
- * neither end is a record with an error. Two things in no system, such as a person and a piece
- * of infrastructure in none, may both stand in a view, and the connection between them is still
- * not drawn.
+ * The line at the top of the listing that says how many connections no view draws, and why: an
+ * end of each cannot be followed, since it is a record with an error, or is in one. Everything
+ * as the scope draws every other connection.
  */
 export function inNoPictureWords(n: number): string {
   const which = n === 1 ? '1 connection is' : `${n} connections are`;
   const marked = n === 1 ? 'It is' : 'Each is';
   const them = n === 1 ? 'it' : 'them';
-  return `${which} in no picture: no view draws ${them}. A view is about a system, and draws a connection only where an end of it is in that system and neither end is a record with an error. ${marked} marked “${IN_NO_PICTURE}” under Connections.`;
+  const ends = n === 1 ? 'an end of it' : 'each has an end that';
+  return `${which} in no picture: no view draws ${them}, since ${ends} cannot be followed: a record with an error, or a part of one. Everything as the scope draws every other connection. ${marked} marked “${IN_NO_PICTURE}” under Connections.`;
 }
 
 /**

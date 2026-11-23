@@ -42,6 +42,24 @@ export function tab(size: number): string {
   return `M0,0 L${size},0 L0,${size} Z`;
 }
 
+/**
+ * The sign in the top right corner of a component's box, a box with two tabs on its left side,
+ * `size` high and `inset` in from the corner, so that a component is told from an app, whose
+ * corners are round, by its shape. It stands clear of the text, which keeps its own room.
+ */
+export function componentSign(width: number, size: number, inset: number): string {
+  const right = width - inset;
+  const left = right - size * 0.8;
+  const top = inset;
+  const tabWidth = size * 0.4;
+  const tabHeight = size * 0.2;
+  const tabAt = (y: number) => `M${left - tabWidth / 2},${y} h${tabWidth} v${tabHeight} h${-tabWidth} Z`;
+  return `M${left},${top} H${right} V${top + size} H${left} Z ${tabAt(top + size * 0.2)} ${tabAt(top + size * 0.6)}`;
+}
+
+/** How high the sign of a component is in its box, and how far it stands in from the corner. */
+export const COMPONENT_SIGN = { size: 14, inset: 8 } as const;
+
 /** The path of a store's cylinder: the outline, and the near half of its lid. */
 export function cylinder(width: number, height: number, lid: number, line: number): { outline: string; rim: string } {
   const left = line / 2;

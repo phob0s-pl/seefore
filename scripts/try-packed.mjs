@@ -112,8 +112,8 @@ async function tryPacked(folder) {
       const what = 'failed' in picture ? `failed (${picture.failed.reason}): ${picture.failed.message}` : `${picture.width} x ${picture.height}, ${picture.boxes.length} boxes, ${picture.arrows.length} arrows`;
       expect(pictureAnswer.status === 200, `GET /api/pictures/${state.revision}/${shown} answers ${pictureAnswer.status}: ${what}`);
     } else {
-      const none = await fetch(new URL(`api/pictures/${state.revision}/shop.context`, address));
-      console.log(`  the state has no views yet, so there is no picture to ask for: GET /api/pictures/${state.revision}/shop.context answers ${none.status}`);
+      const none = await fetch(new URL(`api/pictures/${state.revision}/system~shop`, address));
+      console.log(`  the state has no views yet, so there is no picture to ask for: GET /api/pictures/${state.revision}/system~shop answers ${none.status}`);
     }
   } finally {
     server.kill('SIGTERM');

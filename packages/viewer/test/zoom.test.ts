@@ -1,6 +1,5 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { CROWDED_FROM } from '@seefore/core';
 import type { Drawn } from '@seefore/core';
 import { describe, expect, it } from 'vitest';
 import { litBy } from '../src/light.ts';
@@ -12,13 +11,11 @@ import {
   REACH_LEAST,
   REACH_MOST,
   boundsOf,
-  crowdedNote,
   detailAt,
   fitViewport,
   litBounds,
   litScale,
   minZoomFor,
-  noteFor,
   percent,
   reachAt,
   smallNote,
@@ -134,16 +131,34 @@ describe('the bounds of what is lit', () => {
   });
 });
 
-describe('the note for a picture too small to read', () => {
-  it('says how many boxes and arrows it has, and from which zoom names can be read', () => {
-    expect(smallNote(CONTAINER_PICTURE, 0.2)).toBe(
-      'Too small to read at 20 %: 4 boxes and 3 arrows. Names can be read from 60 %. Zoom in, or point at a box to follow it.',
+describe('the one note under the counts', () => {
+  /** A picture of so many boxes and arrows, wherever they stand. */
+  const counted = (boxes: number, arrows: number): Drawn => ({
+    ...CONTAINER_PICTURE,
+    boxes: Array.from({ length: boxes }, (_, at) => ({ ...(CONTAINER_PICTURE.boxes[0] as Drawn['boxes'][number]), id: `box-${at}` })),
+    arrows: Array.from({ length: arrows }, (_, at) => ({ ...(CONTAINER_PICTURE.arrows[0] as Drawn['arrows'][number]), id: `arrow-${at}` })),
+  });
+
+  it('says, as the spec words it, what is too small to read at the zoom it is shown at, and how to read it', () => {
+    expect(smallNote(counted(118, 193), 0.07)).toBe(
+      "Too small to read at 7 %: 118 boxes and 193 arrows. Names can be read from 60 %. Zoom in, or point at a box or an arrow, or move the keyboard's focus to it, to read it here. To see one box with its neighbours, choose it as the scope.",
     );
   });
 
-  it('is not there once names can be read', () => {
+  it('is there under the zoom from which names can be read, and not from it', () => {
+    expect(smallNote(CONTAINER_PICTURE, 0.5999)).toContain('Too small to read at 60 %: 4 boxes and 3 arrows.');
     expect(smallNote(CONTAINER_PICTURE, 0.6)).toBeUndefined();
     expect(smallNote(CONTAINER_PICTURE, 1)).toBeUndefined();
+  });
+
+  it('is decided by the zoom alone, and counts no box to decide it', () => {
+    // Stage 7 had a note of its own for a view of more than 40 boxes, at any zoom.
+    const { drawn } = grid(41);
+    expect(smallNote(drawn, 0.75)).toBeUndefined();
+    expect(smallNote(drawn, 0.2)).toBe(smallNote({ ...drawn, boxes: drawn.boxes.slice(0, 40) }, 0.2)?.replace('40 boxes', '41 boxes'));
+    const large = fitViewport(whole(drawn), { width: 1920, height: 1080 }).zoom;
+    expect(large).toBeGreaterThanOrEqual(0.6);
+    expect(smallNote(drawn, large)).toBeUndefined();
   });
 
   it('counts one box and one arrow in the singular', () => {
@@ -153,53 +168,6 @@ describe('the note for a picture too small to read', () => {
 
   it('writes a zoom as a share', () => {
     expect(percent(0.134)).toBe('13 %');
-  });
-});
-
-describe('the note of a crowded view', () => {
-  const how = "Point at a box or an arrow, or move the keyboard's focus to it, to read it here. A click, a tap or Enter keeps it lit.";
-  const map = `A crowded view: more than ${CROWDED_FROM} boxes. It opens as a map, with no words. ${how}`;
-
-  it('is there for a view of one box more than the limit, at any zoom', () => {
-    const { view, drawn } = grid(CROWDED_FROM + 1);
-    expect(view.boxes).toHaveLength(CROWDED_FROM + 1);
-    expect(crowdedNote(view, 0.1)).toBe(map);
-    expect(noteFor(view, drawn, 1, 0.1)).toBe(map);
-  });
-
-  it('says what the view shows at the zoom it opens at, which may draw names, and how to read it by pointer, keyboard and finger', () => {
-    const { view } = grid(CROWDED_FROM + 1);
-    const opens = (zoom: number) => crowdedNote(view, zoom)?.split('. ').slice(1, -2).join('. ');
-    expect(opens(0.39)).toBe('It opens as a map, with no words');
-    expect(opens(0.5147)).toBe('It opens with the names of its boxes and no other words');
-    expect(opens(0.6)).toBe('It opens with names and kind lines, and no descriptions');
-    expect(opens(0.75)).toBe('It opens with all its words');
-    expect(crowdedNote(view, 0.5147)?.endsWith(how)).toBe(true);
-  });
-
-  it('takes the zoom a view of 42 boxes opens at in its room: in a large window it opens where names are drawn', () => {
-    const { view, drawn } = grid(42);
-    const large = fitViewport(whole(drawn), { width: 1920, height: 1080 }).zoom;
-    expect(detailAt(large)).not.toBe('shapes');
-    expect(noteFor(view, drawn, large, large)).not.toContain('with no words');
-    const small = fitViewport(whole(drawn), { width: 800, height: 500 }).zoom;
-    expect(detailAt(small)).toBe('shapes');
-    expect(noteFor(view, drawn, small, small)).toContain('It opens as a map, with no words.');
-  });
-
-  it('is not there for a view at the limit, which keeps the note that it is too small', () => {
-    const { view, drawn } = grid(CROWDED_FROM);
-    expect(view.boxes).toHaveLength(CROWDED_FROM);
-    expect(crowdedNote(view, 0.2)).toBeUndefined();
-    expect(noteFor(view, drawn, 0.2, 0.2)).toBe(smallNote(drawn, 0.2));
-    expect(noteFor(view, drawn, 0.2, 0.2)).toContain('Too small to read at 20 %');
-    expect(noteFor(view, drawn, 1, 1)).toBeUndefined();
-  });
-
-  it('stands in place of the note that a crowded view is too small, and does not join it', () => {
-    const { view, drawn } = grid(CROWDED_FROM + 1);
-    expect(noteFor(view, drawn, 0.1, 0.1)).toBe(map);
-    expect(noteFor(view, drawn, 0.1, 0.1)).not.toContain('Too small');
   });
 });
 
@@ -240,7 +208,7 @@ describe('where the picture stands when a new one comes', () => {
   });
   /** Where the top left of a box, or of the boundary, stands on the screen at a viewport. */
   const onScreen = (drawn: Drawn, id: string, at: Viewport) => {
-    const place = drawn.boxes.find((box) => box.id === id) ?? drawn.boundary;
+    const place = drawn.boxes.find((box) => box.id === id) ?? drawn.boundaries.find((boundary) => boundary.id === id);
     return { x: (place?.x ?? 0) * at.zoom + at.x, y: (place?.y ?? 0) * at.zoom + at.y };
   };
 
@@ -258,9 +226,9 @@ describe('where the picture stands when a new one comes', () => {
   });
 
   it('holds the boundary when it is what is chosen', () => {
-    const boundary = CONTAINER_PICTURE.boundary;
+    const [boundary] = CONTAINER_PICTURE.boundaries;
     if (boundary === undefined) throw new Error('The container picture has a boundary.');
-    const after: Drawn = { ...CONTAINER_PICTURE, boundary: { ...boundary, x: 500, y: 90 } };
+    const after: Drawn = { ...CONTAINER_PICTURE, boundaries: [{ ...boundary, x: 500, y: 90 }] };
     const next = viewportAfter(CONTAINER_PICTURE, after, { kind: 'box', id: 'shop' }, viewport, false, room);
     expect(onScreen(after, 'shop', next ?? viewport)).toEqual(onScreen(CONTAINER_PICTURE, 'shop', viewport));
   });

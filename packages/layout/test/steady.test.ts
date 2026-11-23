@@ -47,7 +47,7 @@ async function drawn(view: View): Promise<Drawn> {
 
 /** The view with its boxes and arrows handed over in another order: the inside first, each group turned round. */
 function reordered(view: View): View {
-  return { ...view, boxes: [...view.boxes].reverse().sort((a, b) => Number(b.inside) - Number(a.inside)), arrows: [...view.arrows].reverse() };
+  return { ...view, boxes: [...view.boxes].reverse().sort((a, b) => Number(b.boundary !== undefined) - Number(a.boundary !== undefined)), boundaries: [...view.boundaries].reverse(), arrows: [...view.arrows].reverse() };
 }
 
 /** The view with one arrow changed. */
@@ -105,7 +105,7 @@ describe('the order of a walk', () => {
     // Two fans of five inside one boundary that nothing joins: `n002` and `n004` each call five.
     const ids = Array.from({ length: 12 }, (_, at) => `n${String(2 * at + 2).padStart(3, '0')}`);
     const view = containerView('sys', ids.map((id) => inside(id, 'apps')), ids.slice(2).map((id, at) => arrow(ids[at % 2] ?? '', id)));
-    const withCaller = (id: string) => ({ ...view, boxes: [...view.boxes, inside(id, 'apps')], arrows: [...view.arrows, arrow(id, 'n024')] });
+    const withCaller = (id: string) => ({ ...view, boxes: [...view.boxes, inside(id, 'apps', { boundary: 'sys' })], arrows: [...view.arrows, arrow(id, 'n024')] });
     const order = (of: View) => [...turnsOf(sorted(of)).entries()].filter(([id]) => ids.includes(id)).sort((a, b) => a[1] - b[1]).map(([id]) => id);
 
     it('leads the walk when its id sorts first, and puts its group before the other, which may move every box', async () => {
@@ -242,7 +242,11 @@ describe('a new name', () => {
     ['a person', (v) => v, (v) => withBoxName(v, 'person-02', 'A person with a name long enough for two lines')],
     ['a system outside', (v) => v, (v) => withBoxName(v, 'system-04', 'S4')],
     ['a piece of infrastructure', (v) => withGateway(v, 'Gateway'), (v) => withGateway(v, 'The gateway in front of every service of the system')],
-    ['the system in scope', (v) => v, (v) => ({ ...v, boundary: { id: 'estate', name: 'The estate of every service the company runs', line: '[System]', title: 'The estate of every service the company runs [System]' } })],
+    [
+      'the system in scope',
+      (v) => v,
+      (v) => ({ ...v, boundaries: v.boundaries.map((each) => ({ ...each, name: 'The estate of every service the company runs', title: 'The estate of every service the company runs [System]' })) }),
+    ],
     ['a thing on a route', (v) => v, (v) => withArrowAs(v, routed.id, (each) => ({ ...each, route: route(['The gateway in front of every service of the system']) }))],
     ['a single connection, from one word to three lines', (v) => withArrowAs(v, single.id, (each) => ({ ...each, names: ['Uses'] })), (v) => withArrowAs(v, single.id, (each) => ({ ...each, names: [LONG] }))],
     ['a connection in an arrow of several', (v) => v, (v) => withArrowAs(v, several.id, (each) => ({ ...each, names: [...each.names.slice(0, -1), LONG] }))],
@@ -286,7 +290,7 @@ describe('one edit to a container view of real shape', () => {
 
   /** Four apps spread over the view by id, and never the hub: when the hub goes, the picture is rebuilt. */
   const targetsOf = (view: View) => {
-    const apps = view.boxes.filter((each) => each.inside && each.family === 'apps' && each.id !== 'core').map((each) => each.id).sort();
+    const apps = view.boxes.filter((each) => each.boundary !== undefined && each.family === 'apps' && each.id !== 'core').map((each) => each.id).sort();
     return [0, 1, 2, 3].map((at) => apps[Math.round((at * (apps.length - 1)) / 3)] ?? '');
   };
   const storeOf = (view: View, at: number) => view.boxes.filter((each) => each.family === 'stores').map((each) => each.id).sort()[at] ?? '';
