@@ -1,5 +1,5 @@
 import type { Drawn, View, ViewerState } from '@seefore/core';
-import { stateOf } from './archive.ts';
+import { archiveView, stateOf } from './archive.ts';
 
 /**
  * A system of so many apps, each joined to the next by a connection, worked out by the engine:
@@ -14,8 +14,7 @@ export function grid(apps: number): { state: ViewerState; view: View; drawn: Dra
     if (at > 0) files[`connections/${id(at - 1)}-calls-${id(at)}.yaml`] = `from: ${id(at - 1)}\nto: ${id(at)}\nname: Calls the next\n`;
   }
   const state = stateOf(files);
-  const view = state.views.find((each) => each.id === 'container~grid');
-  if (view === undefined) throw new Error('The grid has no container view.');
+  const view = archiveView('container~grid', state);
   const place = (box: string) => {
     const at = Number(box.slice('part-'.length));
     return { x: 64 + (at % 8) * 320, y: 104 + Math.floor(at / 8) * 240 };

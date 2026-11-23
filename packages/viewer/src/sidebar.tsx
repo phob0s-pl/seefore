@@ -1,45 +1,81 @@
-import type { View, ViewerState } from '@seefore/core';
+import { DEPTHS, DEPTH_WORDS, EVERYTHING } from '@seefore/core';
+import type { Depth, Scope, Setting, ViewerState } from '@seefore/core';
+import { useId, useMemo } from 'react';
 import { addressOf } from './address.ts';
 import type { Route } from './address.ts';
+import { scopeOf, settingFor } from './follow.ts';
+import { indexOf, nameOf } from './records.ts';
 
 /**
- * The sidebar: the systems that have parts, each with its views; then the other systems,
- * folded; then the model's listing; then the problems with their number.
+ * The sidebar: the model's name; the two controls, Depth and then Scope, which together are the
+ * setting the picture shows; then "View", which leads back to the picture, "Model" and
+ * "Problems" with their number. The controls are what the browser gives, a group of radio
+ * buttons and a list, so that a keyboard and a screen reader work them as they are.
  */
 
-/** The views of one system, in the order the state lists them. */
-export interface SystemViews {
+/** One box in the list of what can be the scope: its id, and the words it is listed by. */
+export interface ScopeOption {
   id: string;
-  name: string;
-  views: View[];
+  label: string;
 }
 
-/** The views by system, in the state's order: the systems with a container view, and the others. */
-export function viewsBySystem(state: ViewerState): { withParts: SystemViews[]; others: SystemViews[] } {
-  const names = new Map(state.model.systems.map((system) => [system.id, system.name]));
-  const systems: SystemViews[] = [];
-  for (const view of state.views) {
-    const scope = view.scope;
-    if (scope === null) continue;
-    let system = systems.find((each) => each.id === scope);
-    if (system === undefined) {
-      system = { id: scope, name: names.get(scope) ?? scope, views: [] };
-      systems.push(system);
-    }
-    system.views.push(view);
-  }
-  const hasParts = (system: SystemViews) => system.views.some((view) => view.depth === 'container');
-  return { withParts: systems.filter(hasParts), others: systems.filter((system) => !hasParts(system)) };
+/** A group of the list of what can be the scope, as the listing under "Model" groups them. */
+export interface ScopeGroup {
+  label: string;
+  options: ScopeOption[];
 }
 
-/** What a link to a view says in the sidebar: its kind, since the system is above it. */
-function viewWords(view: View): string {
-  return view.depth === 'system' ? 'Context view' : 'Container view';
+/**
+ * The groups of what can be the scope, in the order and the groups of the listing: the people;
+ * each system that has parts, in a group named for it, with its apps, each followed by its
+ * components, then its stores and its pieces of infrastructure; the other systems; the pieces of
+ * infrastructure in no system. A box is listed by its name, and a component with its app's, as
+ * the panel names an end: `Relay / Store service`. Two boxes of one name, and one named as
+ * "Everything" is, are told apart by their ids.
+ */
+export function scopeGroups(state: ViewerState): ScopeGroup[] {
+  const index = indexOf(state.model);
+  const withParts = new Set(state.outline.withParts.map((system) => system.id));
+  const names = state.scopes.map((scope) => nameOf(index, scope.id));
+  const counted = new Map<string, number>();
+  for (const name of names) counted.set(name, (counted.get(name) ?? 0) + 1);
+  const label = (scope: Scope, at: number) => {
+    const name = names[at] ?? scope.id;
+    const told = (counted.get(name) ?? 0) > 1 || name === EVERYTHING ? `${name} (${scope.id})` : name;
+    // A component stands after its app, and is named with it.
+    const found = index.get(scope.id);
+    return found?.family === 'components' ? `${nameOf(index, found.record.in)} / ${told}` : told;
+  };
+  // Each group with its kind: a system with parts has a group of its own, named for it.
+  const groups: (ScopeGroup & { kind: 'people' | 'system' | 'others' | 'infrastructure' })[] = [];
+  const into = (kind: (typeof groups)[number]['kind'], title: string) => {
+    const last = groups[groups.length - 1];
+    if (last !== undefined && last.kind === kind && kind !== 'system') return last;
+    const group = { kind, label: title, options: [] };
+    groups.push(group);
+    return group;
+  };
+  let current: ScopeGroup | undefined;
+  const others = state.outline.withParts.length > 0 ? 'Other systems' : 'Systems';
+  state.scopes.forEach((scope, at) => {
+    const option = { id: scope.id, label: label(scope, at) };
+    if (scope.family === 'people') current = into('people', 'People');
+    else if (scope.family === 'systems') current = withParts.has(scope.id) ? into('system', option.label) : into('others', others);
+    // A piece of infrastructure in no system has the shallowest depth; one in a system stands with it.
+    else if (scope.family === 'infrastructure' && scope.depth === 'system') current = into('infrastructure', 'Infrastructure');
+    // A part stands in the group of its system, which comes just before it.
+    current?.options.push(option);
+  });
+  return groups.map(({ label: title, options }) => ({ label: title, options }));
+}
+
+/** True when a depth is shallower than another. */
+function shallower(depth: Depth, than: Depth): boolean {
+  return DEPTHS.indexOf(depth) < DEPTHS.indexOf(than);
 }
 
 /** A link in the sidebar, marked when it is what the page shows. */
-function Link({ route, current, children }: { route: Route; current: Route; children: string }) {
-  const here = addressOf(route) === addressOf(current);
+function Link({ route, here, children }: { route: Route; here: boolean; children: string }) {
   return (
     <a href={addressOf(route)} {...(here ? { 'aria-current': 'page' as const } : {})}>
       {children}
@@ -47,55 +83,72 @@ function Link({ route, current, children }: { route: Route; current: Route; chil
   );
 }
 
-export function Sidebar({ state, route }: { state: ViewerState | null; route: Route }) {
-  const { withParts, others } = state === null ? { withParts: [], others: [] } : viewsBySystem(state);
+export interface SidebarProps {
+  state: ViewerState | null;
+  route: Route;
+  /** The setting the controls show: the one drawn or laid out, or on the model and the problems the last one shown. */
+  setting: Setting;
+  /** Opens a setting the reader chose. */
+  onGo(route: Route): void;
+}
+
+export function Sidebar({ state, route, setting, onGo }: SidebarProps) {
   const problems = state?.problems.length ?? 0;
-  const othersOpen = route.page === 'view' && others.some((system) => system.views.some((view) => view.id === route.view));
+  const ids = useId();
+  const groups = useMemo(() => (state === null ? [] : scopeGroups(state)), [state]);
+  // With no model there is nothing to choose.
+  const off = state === null || !state.available;
+  const scope = state === null || setting.scope === null ? undefined : scopeOf(state, setting.scope);
+  const floor = scope?.depth ?? 'system';
+  const open = (next: Setting) => onGo({ page: 'view', setting: next });
   return (
     <nav className="sidebar" aria-label="Views">
       <p className="model-name">{state?.name ?? 'seefore'}</p>
-      {withParts.length > 0 && (
-        <ul className="systems">
-          {withParts.map((system) => (
-            <li key={system.id}>
-              <span className="system-name">{system.name}</span>
-              <ul>
-                {system.views.map((view) => (
-                  <li key={view.id}>
-                    <Link route={{ page: 'view', view: view.id }} current={route}>
-                      {viewWords(view)}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </li>
+      <fieldset className="depth" disabled={off}>
+        <legend>Depth</legend>
+        {DEPTHS.map((depth) => (
+          <label key={depth}>
+            <input type="radio" name={`${ids}-depth`} value={depth} checked={setting.depth === depth} disabled={shallower(depth, floor)} onChange={() => open({ depth, scope: setting.scope })} />
+            {DEPTH_WORDS[depth]}
+          </label>
+        ))}
+      </fieldset>
+      <div className="scope">
+        <label htmlFor={`${ids}-scope`}>Scope</label>
+        <select
+          id={`${ids}-scope`}
+          value={setting.scope ?? ''}
+          disabled={off}
+          onChange={(event) => {
+            const next = state === null ? undefined : settingFor(state, event.target.value === '' ? null : event.target.value, setting.depth);
+            if (next !== undefined) open(next);
+          }}
+        >
+          <option value="">{EVERYTHING}</option>
+          {groups.map((group, at) => (
+            <optgroup key={`${at}-${group.label}`} label={group.label}>
+              {group.options.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.label}
+                </option>
+              ))}
+            </optgroup>
           ))}
-        </ul>
-      )}
-      {others.length > 0 && (
-        <details className="others" open={othersOpen}>
-          <summary>{`${withParts.length > 0 ? 'Other systems' : 'Systems'} (${others.length})`}</summary>
-          <ul>
-            {others.map((system) => (
-              <li key={system.id}>
-                {system.views.map((view) => (
-                  <Link key={view.id} route={{ page: 'view', view: view.id }} current={route}>
-                    {system.name}
-                  </Link>
-                ))}
-              </li>
-            ))}
-          </ul>
-        </details>
-      )}
+        </select>
+      </div>
       <ul className="pages">
         <li>
-          <Link route={{ page: 'model' }} current={route}>
+          <Link route={{ page: 'view', setting }} here={route.page === 'view'}>
+            View
+          </Link>
+        </li>
+        <li>
+          <Link route={{ page: 'model' }} here={route.page === 'model'}>
             Model
           </Link>
         </li>
         <li>
-          <Link route={{ page: 'problems' }} current={route}>
+          <Link route={{ page: 'problems' }} here={route.page === 'problems'}>
             {`Problems (${problems})`}
           </Link>
         </li>

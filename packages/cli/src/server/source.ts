@@ -1,14 +1,14 @@
 import { randomBytes } from 'node:crypto';
 import { statSync, watch } from 'node:fs';
 import type { FSWatcher } from 'node:fs';
-import { conditionsOf, connectionsInNoView, emptyModel, outlineOf, ownership, viewsFor, viewsOf } from '@seefore/core';
-import type { Condition, Model, Problem, View, ViewerState } from '@seefore/core';
+import { conditionsOf, connectionsInNoView, emptyModel, outlineOf, ownership, viewsFor } from '@seefore/core';
+import type { Condition, Model, Problem, ViewerState } from '@seefore/core';
 import { readSource } from '../check.ts';
 
 /** What one reading of the source directory found: the state, before it is given a revision. */
 export type Reading = Omit<ViewerState, 'revision'>;
 
-/** How a reading is made. Tests give their own, to count readings or to make up views. */
+/** How a reading is made. Tests give their own, to count readings. */
 export type Read = (directory: string) => Reading;
 
 /** How long to wait after a file event for more, so that a burst of them is read once. */
@@ -21,12 +21,12 @@ const FORMAT_UNKNOWN = new Set(['marker-missing', 'format-unknown', 'format-not-
 
 /**
  * Reads the source directory as `seefore check` does, with the same problems, and works out
- * the model's views of stage 5, what can be the scope, its listing, the conditions each record
- * is under and the connections that no view holds. When the directory is gone, or its marker
- * cannot say which format it is in, there is no model and there are no views. The views are
- * made here, once for each reading: the check makes none.
+ * what can be the scope, the model's listing, the conditions each record is under and the
+ * connections that no view holds. When the directory is gone, or its marker cannot say which
+ * format it is in, there is no model and nothing can be the scope. No view is made here: the
+ * pictures make the view of a setting when the page asks for it, and the check makes none.
  */
-export function readingOf(directory: string, views: (model: Model) => View[] = viewsOf): Reading {
+export function readingOf(directory: string): Reading {
   if (identityOf(directory) === undefined) {
     return unavailable(directory, {
       file: '.',
@@ -40,7 +40,6 @@ export function readingOf(directory: string, views: (model: Model) => View[] = v
   const { loaded, problems, errors, warnings } = readSource(directory);
   const available = !problems.some((problem) => FORMAT_UNKNOWN.has(problem.code));
   const model = available ? loaded.model : emptyModel();
-  const drawn = available ? views(model) : [];
   return {
     directory,
     available,
@@ -57,7 +56,6 @@ export function readingOf(directory: string, views: (model: Model) => View[] = v
     ownership: Object.fromEntries(ownership(model)),
     conditions: conditionsByRecord(model),
     outline: outlineOf(model),
-    views: drawn,
     scopes: available ? [...viewsFor(model).scopes] : [],
     inNoView: connectionsInNoView(model),
   };
@@ -86,7 +84,6 @@ function unavailable(directory: string, problem: Problem): Reading {
     ownership: {},
     conditions: {},
     outline: outlineOf(model),
-    views: [],
     scopes: [],
     inNoView: [],
   };

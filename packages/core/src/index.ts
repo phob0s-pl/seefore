@@ -76,5 +76,5 @@ export type { App, Component, Connection, Infrastructure, Owner, Person, Store, 
 export { DESCRIPTION_MAX, NAME_MAX, ONLY_MAX, firstSentence } from './text.ts';
 export { isShort, readInFull, recordsWithId, removalOf, usesOf, wordsFor } from './uses.ts';
 export type { Change, Conditioned, Left, Mention, Removal, RemovalOptions, UsedRecord, Uses } from './uses.ts';
-export { DEPTHS, EVERYTHING, UNNAMED_CONNECTION, connectionsInNoView, keyOf, leftOutWords, settingOf, viewOf, viewsFor, viewsOf } from './views.ts';
+export { DEPTHS, DEPTH_WORDS, EVERYTHING, UNNAMED_CONNECTION, connectionsInNoView, keyOf, leftOutWords, settingOf, viewOf, viewsFor, viewsOf } from './views.ts';
 export type { Views } from './views.ts';

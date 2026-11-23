@@ -1,11 +1,12 @@
-import type { Drawn, Rect } from '@seefore/core';
+import type { Drawn, Rect, View } from '@seefore/core';
 import type { Lit, Target } from './light.ts';
 
 /**
  * What the zoom decides: how much text a picture shows, how it is fitted to the room it has,
- * where it stands when a new picture of it comes, and the note under the counts, that it is too
- * small to read at the zoom it is shown at. Nothing counts boxes to decide a note. The numbers
- * are those of `research/diagrams/recommendations.md`, section 4: names stay at 9 pixels or more.
+ * where it stands when a new picture comes in its place, of a new reading, another depth or
+ * another scope, and the note under the counts, that it is too small to read at the zoom it is
+ * shown at. Nothing counts boxes to decide a note. The numbers are those of
+ * `research/diagrams/recommendations.md`, section 4: names stay at 9 pixels or more.
  */
 
 /** Under this zoom a box shows no description: its 12 pixels would be under 9. */
@@ -211,4 +212,114 @@ export function viewportAfter(before: Drawn, after: Drawn, chosen: Target | null
   if (!moved && room !== null) return fitViewport(whole(after), room);
   if (shift.x === 0 && shift.y === 0) return undefined;
   return { x: viewport.x + shift.x, y: viewport.y + shift.y, zoom };
+}
+
+/**
+ * How the picture drawn and the next differ: `reading`, the same setting of a new reading of the
+ * files; `depth`, the same scope at another depth; `scope`, another scope.
+ */
+export type Change = 'reading' | 'depth' | 'scope';
+
+/** How two views of the page differ. */
+export function changeOf(before: View, after: View): Change {
+  if (before.id === after.id) return 'reading';
+  return before.scope === after.scope ? 'depth' : 'scope';
+}
+
+/** Order of two ids, character by character, as the core orders them. */
+function byText(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+/**
+ * The box a change of depth keeps in place: one that opens or closes, a box in one picture and
+ * a boundary in the other. The chosen box, when it opens or closes. Else the one nearest the
+ * middle of the canvas, from its own middle in the picture before, as that was shown at
+ * `viewport` in `room`; and of two as near, the first by id. Nothing when nothing opens or
+ * closes: the picture is then the same, and the page does not move.
+ */
+export function keptAtDepth(before: View, drawn: Drawn, after: View, viewport: Viewport, room: Room): string | undefined {
+  const boxes = new Set(before.boxes.map((box) => box.id));
+  const boundaries = new Set(before.boundaries.map((boundary) => boundary.id));
+  const opening = after.boundaries.filter((boundary) => boxes.has(boundary.id)).map((boundary) => boundary.id);
+  const closing = after.boxes.filter((box) => boundaries.has(box.id)).map((box) => box.id);
+  const changing = [...opening, ...closing].sort(byText);
+  if (after.scope !== null && changing.includes(after.scope)) return after.scope;
+  const middle = { x: (room.width / 2 - viewport.x) / viewport.zoom, y: (room.height / 2 - viewport.y) / viewport.zoom };
+  let kept: string | undefined;
+  let nearest = Number.POSITIVE_INFINITY;
+  for (const id of changing) {
+    const place = placeOf(drawn, id);
+    if (place === undefined) continue;
+    const distance = Math.hypot(place.x + place.width / 2 - middle.x, place.y + place.height / 2 - middle.y);
+    if (distance < nearest) {
+      kept = id;
+      nearest = distance;
+    }
+  }
+  return kept;
+}
+
+/** A picture with its view, as the page draws it. */
+export interface Pictured {
+  view: View;
+  drawn: Drawn;
+}
+
+/** What the page knows when a new picture comes in place of the one drawn. */
+export interface PictureChange {
+  before: Pictured;
+  after: Pictured;
+  /** What the panel shows, when it is in the picture before. */
+  chosen: Target | null;
+  /** True when the box in scope is gone from the files, and everything is drawn in its place. */
+  gone: boolean;
+  /** Where the canvas looked at the picture before. */
+  viewport: Viewport;
+  /** Whether the reader has moved the picture since it was last fitted. */
+  moved: boolean;
+  /** The room the picture before was shown in, whose middle a change of depth measures from. */
+  room: Room | null;
+}
+
+/**
+ * The box a new picture holds where it stood on the screen, and why. For a new reading of the
+ * same setting, as for the box in scope gone from the files, that is the chosen box, as stage 7
+ * has it. For a change of depth, the box that opens or closes, as `keptAtDepth` says. For a
+ * change of scope by the reader, none: the new picture is fitted to its room.
+ */
+export function holdOf(change: PictureChange): { change: Change; box?: string } {
+  const kind = changeOf(change.before.view, change.after.view);
+  if (kind === 'depth') {
+    const box = change.room === null ? undefined : keptAtDepth(change.before.view, change.before.drawn, change.after.view, change.viewport, change.room);
+    return box === undefined ? { change: kind } : { change: kind, box };
+  }
+  if (kind === 'scope' && !change.gone) return { change: kind };
+  return change.chosen?.kind === 'box' ? { change: kind, box: change.chosen.id } : { change: kind };
+}
+
+/**
+ * Where the canvas looks when a new picture comes in place of the one drawn, `room` now being
+ * the room it is drawn in, and `screen` where the page measured things to stand. A change of
+ * depth keeps the box `holdOf` names with its top left at the same point of the screen, at the
+ * same zoom, and with none the picture stays where it stood on the screen. A change of scope by
+ * the reader fits the new picture to its room. A new reading, or the box in scope gone, does as
+ * stage 7 does: see `viewportAfter`. Missing when the viewport stays as it is. `fitted` says
+ * whether the new picture is fitted to its room, so that the page knows the reader has not moved it.
+ */
+export function viewportOnChange(change: PictureChange, room: Room | null, screen?: OnScreen): { viewport: Viewport | undefined; fitted: boolean; kept?: string } {
+  const hold = holdOf(change);
+  const { before, after, viewport, moved } = change;
+  if (hold.change === 'scope' && !change.gone) {
+    return room === null ? { viewport: undefined, fitted: false } : { viewport: fitViewport(whole(after.drawn), room), fitted: true };
+  }
+  const target: Target | null = hold.box === undefined ? null : { kind: 'box', id: hold.box };
+  if (hold.change === 'depth') {
+    const next = viewportAfter(before.drawn, after.drawn, target, viewport, true, room, screen);
+    return { viewport: next, fitted: false, ...(hold.box === undefined ? {} : { kept: hold.box }) };
+  }
+  const next = viewportAfter(before.drawn, after.drawn, target, viewport, moved, room, screen);
+  // A picture with no box to hold, which the reader has not moved, is fitted again.
+  const held = target !== null && placeOf(before.drawn, target.id) !== undefined && placeOf(after.drawn, target.id) !== undefined;
+  return { viewport: next, fitted: !held && !moved && room !== null };
 }

@@ -8,6 +8,7 @@ import {
   RING_GAP,
   RING_RADIUS,
   arrowSaid,
+  boundarySaid,
   boxSaid,
   distanceTo,
   headOf,
@@ -21,7 +22,7 @@ import {
   toFlow,
 } from '../src/flow.ts';
 import { LINE_HEIGHT } from '../src/theme.ts';
-import { CONTAINERS, CONTAINER_PICTURE, CONTEXT, CONTEXT_PICTURE, HARD_CONTAINERS, HARD_PICTURE } from './fixture.ts';
+import { COMPONENTS, COMPONENT_PICTURE, CONTAINERS, CONTAINER_PICTURE, CONTEXT, CONTEXT_PICTURE, HARD_CONTAINERS, HARD_PICTURE } from './fixture.ts';
 
 /** A picture as React Flow's nodes and edges: parents first, children from their parent, the routes as they are. */
 
@@ -67,6 +68,45 @@ describe('places relative to the parent', () => {
   it('draws an arrow that ends at the boundary from and to the nodes it names', () => {
     const { edges } = toFlow(CONTAINERS, CONTAINER_PICTURE);
     expect(edges.find((edge) => edge.id === 'customer~shop')).toMatchObject({ source: 'customer', target: 'shop' });
+  });
+
+  it('puts a boundary inside a boundary after it, from its top left, and each box from the top left of the boundary it stands in', () => {
+    const { nodes, edges } = toFlow(COMPONENTS, COMPONENT_PICTURE);
+    const place = (id: string) => COMPONENT_PICTURE.boxes.find((box) => box.id === id) ?? COMPONENT_PICTURE.boundaries.find((boundary) => boundary.id === id) ?? { x: Number.NaN, y: Number.NaN };
+    const [shop, app] = [place('shop'), place('order-api')];
+    expect(nodes.slice(0, 2).map((node) => [node.id, node.type, node.parentId])).toEqual([
+      ['shop', 'boundary', undefined],
+      ['order-api', 'boundary', 'shop'],
+    ]);
+    expect(nodes[0]?.position).toEqual({ x: shop.x, y: shop.y });
+    expect(nodes[1]?.position).toEqual({ x: app.x - shop.x, y: app.y - shop.y });
+    for (const id of ['checkout', 'order-status']) {
+      expect(nodes.find((node) => node.id === id)).toMatchObject({ parentId: 'order-api', position: { x: place(id).x - app.x, y: place(id).y - app.y } });
+    }
+    expect(nodes.find((node) => node.id === 'orders-database')).toMatchObject({ parentId: 'shop', position: { x: place('orders-database').x - shop.x, y: place('orders-database').y - shop.y } });
+    expect(nodes.find((node) => node.id === 'customer')?.parentId).toBeUndefined();
+    // An arrow keeps its route from the top left of the picture: it starts at the boundary of the app, where the picture starts it.
+    const placed = COMPONENT_PICTURE.arrows.find((arrow) => arrow.id === 'order-api~card-provider');
+    const edge = edges.find((each) => each.id === 'order-api~card-provider');
+    expect(edge).toMatchObject({ source: 'order-api', target: 'card-provider' });
+    expect(edge?.data?.placed.sections[0]?.[0]).toEqual(placed?.sections[0]?.[0]);
+  });
+
+  it('puts every parent before its children, however the view orders its boundaries', () => {
+    const reversed = { ...COMPONENTS, boundaries: [...COMPONENTS.boundaries].reverse() };
+    expect(COMPONENTS.boundaries.map((boundary) => boundary.id)).toEqual(['order-api', 'shop']);
+    expect(toFlow(COMPONENTS, COMPONENT_PICTURE).nodes.slice(0, 2).map((node) => node.id)).toEqual(['shop', 'order-api']);
+    expect(toFlow(reversed, COMPONENT_PICTURE).nodes.slice(0, 2).map((node) => node.id)).toEqual(['shop', 'order-api']);
+  });
+
+  it('names a boundary for a screen reader by its whole title, whose it is, and its marks', () => {
+    const app = COMPONENTS.boundaries.find((boundary) => boundary.id === 'order-api');
+    if (app === undefined) throw new Error('The shop at Component depth opens its app.');
+    expect(boundarySaid(app)).toBe('Order API [App: service · Go], the boundary of the app. 1 connection between its copies.');
+    expect(boundarySaid({ ...app, loops: [], kept: ['a', 'b'], passing: ['c'] })).toBe(
+      'Order API [App: service · Go], the boundary of the app. It keeps 2 stores, drawn at it. 1 connection of this view passes through it.',
+    );
+    expect(boundarySaid({ ...app, loops: [] })).toBe('Order API [App: service · Go], the boundary of the app');
   });
 
   it('leaves out a box or an arrow that the view does not hold', () => {

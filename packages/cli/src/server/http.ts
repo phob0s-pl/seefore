@@ -49,9 +49,11 @@ export interface Viewer {
 export function startViewer(options: ViewerOptions): Viewer {
   const source = new Source(options.directory, options.read);
   const pictures = new Pictures(options.layouts);
-  // The pictures follow first, so that a page told of a revision can ask for its pictures.
-  pictures.update(source.state.revision, source.state.views);
-  source.follow((state) => pictures.update(state.revision, state.views));
+  // The pictures follow first, so that a page told of a revision can ask for its pictures. A
+  // reading with no model, as when the directory is gone, has no setting to draw.
+  const model = (state: ViewerState) => (state.available ? state.model : undefined);
+  pictures.update(source.state.revision, model(source.state));
+  source.follow((state) => pictures.update(state.revision, model(state)));
 
   const streams = new Set<ServerResponse>();
   const server = createServer((request, response) => {
@@ -140,17 +142,18 @@ async function api(request: IncomingMessage, response: ServerResponse, path: str
     events(response, parts);
     return;
   }
+  // The setting is named as the page's address names it: `system`, `component~relay`.
   const asked = /^\/api\/pictures\/([^/]+)\/([^/]+)$/.exec(path);
   const revision = asked ? decoded(asked[1]) : undefined;
-  const view = asked ? decoded(asked[2]) : undefined;
-  if (revision === undefined || view === undefined) {
+  const setting = asked ? decoded(asked[2]) : undefined;
+  if (revision === undefined || setting === undefined) {
     failure(response, 404, 'not-found', 'There is nothing at this address.');
     return;
   }
-  const result = await parts.pictures.ask(revision, view);
+  const result = await parts.pictures.ask(revision, setting);
   if ('answer' in result) json(response, 200, result.answer);
   else if ('old' in result) failure(response, 409, 'revision-old', 'This reading of the files is no longer the latest. Ask for the state again.');
-  else failure(response, 404, 'no-such-view', `The latest reading has no view \`${view}\`.`);
+  else failure(response, 404, 'no-such-view', `The latest reading has no view \`${setting}\`.`);
 }
 
 /**

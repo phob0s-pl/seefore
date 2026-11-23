@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readSource } from '../src/check.ts';
+import { Pictures } from '../src/server/pictures.ts';
 import { readingOf } from '../src/server/source.ts';
 
 /**
@@ -58,21 +59,24 @@ describe('the views of a reading', () => {
     expect([made.views, made.looked]).toEqual([0, 0]);
   });
 
-  it('are made once for each reading of the server, and the model is looked up once more for what can be the scope', () => {
+  it('are not made by a reading of the server, which looks the model up once for what can be the scope', () => {
     const reading = readingOf(shop(41));
-    expect(reading.views.map((view) => [view.id, view.boxes.length])).toEqual([
-      ['system~shop', 1],
-      ['container~shop', 41],
-    ]);
     expect(reading.scopes).toHaveLength(42);
     expect(reading.problems).toEqual([]);
-    expect([made.views, made.looked]).toEqual([1, 1]);
+    expect([made.views, made.looked]).toEqual([0, 1]);
+  });
+
+  it('are made by the pictures as the page asks for them, from the model looked up once more for each reading', async () => {
+    const reading = readingOf(shop(41));
+    const pictures = new Pictures({ run: async (view) => ({ view: view.id, width: 0, height: 0, boxes: [], boundaries: [], arrows: [] }), close: () => {} });
+    pictures.update('r1', reading.model);
+    for (const key of ['system', 'container', 'system~shop', 'container~shop', 'component~app-7']) expect('answer' in (await pictures.ask('r1', key)), key).toBe(true);
+    expect([made.views, made.looked]).toEqual([0, 2]);
   });
 
   it('are none, and not made, when the marker cannot be read', () => {
     const reading = readingOf(shop(41, { 'seefore.yaml': 'format: [1\n' }));
     expect(reading.available).toBe(false);
-    expect(reading.views).toEqual([]);
     expect(reading.scopes).toEqual([]);
     expect([made.views, made.looked]).toEqual([0, 0]);
   });

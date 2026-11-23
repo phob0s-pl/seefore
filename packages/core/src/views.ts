@@ -49,7 +49,7 @@ export const UNNAMED_CONNECTION = 'Unnamed connection';
 export const DEPTHS: readonly Depth[] = ['system', 'container', 'component'];
 
 /** The word for each depth, as a title and the control say it. */
-const DEPTH_WORDS: Readonly<Record<Depth, string>> = { system: 'System', container: 'Container', component: 'Component' };
+export const DEPTH_WORDS: Readonly<Record<Depth, string>> = { system: 'System', container: 'Container', component: 'Component' };
 
 /** What the title calls the scope when it is everything. */
 export const EVERYTHING = 'Everything';

@@ -2,6 +2,7 @@ import type { Condition, View, ViewArrow, ViewBox, ViewerState } from '@seefore/
 import { Fragment, useEffect, useMemo, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { namesIn } from './flow.ts';
+import { scopeOf } from './follow.ts';
 import type { Selection } from './follow.ts';
 import {
   ACCESS_WORDS,
@@ -38,10 +39,20 @@ export interface PanelProps {
   selection: Selection;
   /** True when the panel was opened from the keyboard, so that the focus moves to it. */
   focus: boolean;
+  /** The id of the box in scope, which has no button to become it; null for everything. */
+  present: string | null;
   onClose(): void;
   /** A record was chosen in the panel, as a step of a route: `byKeyboard` when Enter or Space chose it. */
   onOpen(id: string, byKeyboard: boolean): void;
+  /** The button "Show with its neighbours" was pressed: the record is to be the scope. */
+  onScope(id: string): void;
 }
+
+/** The button of a record that can be the scope, and is not. */
+export const SHOW_WITH_NEIGHBOURS = 'Show with its neighbours';
+
+/** What a box carries that the panel lists, as a box and as a boundary. */
+type Marked = Pick<ViewBox, 'name' | 'loops' | 'within' | 'passing'>;
 
 /** One fact of a record: what it is, and its value. */
 function Fact({ term, children }: { term: string; children: ReactNode }) {
@@ -54,7 +65,7 @@ function Fact({ term, children }: { term: string; children: ReactNode }) {
 }
 
 /** The panel of details. */
-export function Panel({ state, view, selection, focus, onClose, onOpen }: PanelProps) {
+export function Panel({ state, view, selection, focus, present, onClose, onOpen, onScope }: PanelProps) {
   const index = useMemo(() => indexOf(state.model), [state.model]);
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
@@ -62,11 +73,14 @@ export function Panel({ state, view, selection, focus, onClose, onOpen }: PanelP
   }, [focus, selection]);
 
   const arrow = selection.kind === 'arrow' ? view?.arrows.find((each) => each.id === selection.id) : undefined;
-  const box = selection.kind === 'box' ? view?.boxes.find((each) => each.id === selection.id) : undefined;
+  // A box chosen in the picture, drawn as a box or open as a boundary.
+  const box: Marked | undefined = selection.kind === 'box' ? (view?.boxes.find((each) => each.id === selection.id) ?? view?.boundaries.find((each) => each.id === selection.id)) : undefined;
   const passed = selection.kind === 'passed' ? view?.passed.find((each) => each.id === selection.id) : undefined;
   const title = arrow !== undefined ? arrowTitle(arrow, view) : selection.kind === 'arrow' ? selection.id : (box?.name ?? passed?.name ?? nameOf(index, selection.id));
   // What passes through the record in the view shown, when the reader chose it there; otherwise in the whole model.
   const inView = box?.passing ?? passed?.connections;
+  // A box, a boundary or a record of the listing that can be the scope, and is not, has the button.
+  const scopeable = (selection.kind === 'box' || selection.kind === 'record') && selection.id !== present && scopeOf(state, selection.id) !== undefined;
 
   return (
     <aside className="panel" aria-label="Details">
@@ -78,6 +92,20 @@ export function Panel({ state, view, selection, focus, onClose, onOpen }: PanelP
           Close
         </button>
       </div>
+      {scopeable && (
+        <p className="panel-scope">
+          <button
+            type="button"
+            onClick={() => {
+              onScope(selection.id);
+              // The button goes once the box is the scope: the focus stays in the panel, on its title.
+              heading.current?.focus();
+            }}
+          >
+            {SHOW_WITH_NEIGHBOURS}
+          </button>
+        </p>
+      )}
       {arrow !== undefined ? (
         <ArrowDetails state={state} arrow={arrow} index={index} onOpen={onOpen} />
       ) : selection.kind === 'arrow' ? (
@@ -110,7 +138,8 @@ interface RecordDetailsProps {
   state: ViewerState;
   index: Index;
   id: string;
-  box: ViewBox | undefined;
+  /** The box or the boundary chosen in the picture, with what it carries. */
+  box: Marked | undefined;
   /** The view shown, when the page shows one. */
   view: View | undefined;
   scope: boolean;
@@ -160,7 +189,7 @@ function RecordDetails({ state, index, id, box, view, scope, passing, onOpen }: 
   const kept = found.family === 'apps' ? keptBy(state.outline, id) : [];
   const keeper = keepersOf(state.outline).get(id);
   // A store that an app keeps is drawn at its app: what the view holds of it inside that app's box is not drawn.
-  const keeperBox = keeper === undefined ? undefined : view?.boxes.find((each) => each.id === keeper);
+  const keeperBox: Marked | undefined = keeper === undefined ? undefined : (view?.boxes.find((each) => each.id === keeper) ?? view?.boundaries.find((each) => each.id === keeper));
   const ownConnection = (connection: string) => {
     const at = index.get(connection);
     return at?.family === 'connections' && (at.record.from === id || at.record.to === id);

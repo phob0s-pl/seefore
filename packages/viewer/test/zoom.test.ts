@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import type { Drawn } from '@seefore/core';
+import type { Drawn, View } from '@seefore/core';
 import { describe, expect, it } from 'vitest';
 import { litBy } from '../src/light.ts';
 import type { Target } from '../src/light.ts';
@@ -11,8 +11,11 @@ import {
   REACH_LEAST,
   REACH_MOST,
   boundsOf,
+  changeOf,
   detailAt,
   fitViewport,
+  holdOf,
+  keptAtDepth,
   litBounds,
   litScale,
   minZoomFor,
@@ -20,11 +23,14 @@ import {
   reachAt,
   smallNote,
   viewportAfter,
+  viewportOnChange,
   whole,
 } from '../src/zoom.ts';
-import type { Viewport } from '../src/zoom.ts';
-import { CONTAINERS, CONTAINER_PICTURE } from './fixture.ts';
+import type { PictureChange, Room, Viewport } from '../src/zoom.ts';
+import { archiveView, stateOf } from './archive.ts';
+import { CARD_CONTEXT, COMPONENTS, COMPONENT_PICTURE, CONTAINERS, CONTAINER_PICTURE, CONTEXT, CONTEXT_PICTURE, STATE } from './fixture.ts';
 import { grid } from './grid.ts';
+import { placedPicture } from './placed.ts';
 
 /** What the zoom hides, how a picture is fitted, and when it says it is too small to read. */
 
@@ -319,5 +325,183 @@ describe('where the picture stands when a new one comes and the words above the 
     }
     // With the canvas where it stood, it does not move at all.
     expect(viewportAfter(CONTAINER_PICTURE, CONTAINER_PICTURE, null, viewport, true, room, { canvasBefore, canvasAfter: canvasBefore })).toBeUndefined();
+  });
+});
+
+/**
+ * Pass number 21 by arithmetic: at a change of depth one box keeps its top left at the same point
+ * of the screen, at the same zoom, opening and closing. Where a box stands on the screen is
+ * worked out here as React Flow puts it, from the viewport and the place of the canvas; the
+ * browser measures the same, and the trial measured it there.
+ */
+describe('a change of depth', () => {
+  const room: Room = { width: 1200, height: 800 };
+  /** The top left of a box, or of a boundary, on the screen: in a canvas at a place, shown at a viewport. */
+  const onScreen = (drawn: Drawn, id: string, at: Viewport, canvas = { x: 0, y: 0 }) => {
+    const place = drawn.boxes.find((box) => box.id === id) ?? drawn.boundaries.find((boundary) => boundary.id === id);
+    if (place === undefined) throw new Error(`The picture draws no ${id}.`);
+    return { x: canvas.x + at.x + place.x * at.zoom, y: canvas.y + at.y + place.y * at.zoom };
+  };
+  /** A change from one picture to another, the one before shown at a viewport. */
+  const change = (before: [View, Drawn], after: [View, Drawn], viewport: Viewport, more: Partial<PictureChange> = {}): PictureChange => ({
+    before: { view: before[0], drawn: before[1] },
+    after: { view: after[0], drawn: after[1] },
+    chosen: null,
+    gone: false,
+    viewport,
+    moved: false,
+    room,
+    ...more,
+  });
+  const containers: [View, Drawn] = [CONTAINERS, CONTAINER_PICTURE];
+  const components: [View, Drawn] = [COMPONENTS, COMPONENT_PICTURE];
+  const viewports: Viewport[] = [
+    { x: 0, y: 0, zoom: 1 },
+    { x: -320, y: 75.5, zoom: 0.43 },
+    { x: 640.25, y: -12, zoom: 0.071 },
+    { x: 12, y: 30, zoom: 1.7 },
+  ];
+
+  it('is told from a new reading and from a change of scope', () => {
+    expect(changeOf(CONTAINERS, COMPONENTS)).toBe('depth');
+    expect(changeOf(CONTAINERS, CONTAINERS)).toBe('reading');
+    expect(changeOf(CONTEXT, CARD_CONTEXT)).toBe('scope');
+  });
+
+  it('keeps the box that opens with its top left at the same point of the screen, at the same zoom', () => {
+    for (const viewport of viewports) {
+      const { viewport: next, kept } = viewportOnChange(change(containers, components, viewport), room);
+      expect(kept).toBe('order-api');
+      expect(next?.zoom).toBe(viewport.zoom);
+      const [was, is] = [onScreen(CONTAINER_PICTURE, 'order-api', viewport), onScreen(COMPONENT_PICTURE, 'order-api', next ?? viewport)];
+      expect(Math.abs(is.x - was.x)).toBeLessThan(1e-6);
+      expect(Math.abs(is.y - was.y)).toBeLessThan(1e-6);
+    }
+  });
+
+  it('keeps the boundary that closes, its top left where the box now stands', () => {
+    for (const viewport of viewports) {
+      const { viewport: next, kept } = viewportOnChange(change(components, containers, viewport), room);
+      expect(kept).toBe('order-api');
+      expect(next?.zoom).toBe(viewport.zoom);
+      const [was, is] = [onScreen(COMPONENT_PICTURE, 'order-api', viewport), onScreen(CONTAINER_PICTURE, 'order-api', next ?? viewport)];
+      expect(Math.abs(is.x - was.x)).toBeLessThan(1e-6);
+      expect(Math.abs(is.y - was.y)).toBeLessThan(1e-6);
+    }
+  });
+
+  it('keeps it there with a line above the canvas that grows by a line as the depth changes, and shrinks again', () => {
+    const canvasBefore = { x: 240, y: 112 };
+    const canvasAfter = { x: 240, y: 130 };
+    for (const viewport of viewports) {
+      const opening = viewportOnChange(change(containers, components, viewport), room, { canvasBefore, canvasAfter });
+      const was = onScreen(CONTAINER_PICTURE, 'order-api', viewport, canvasBefore);
+      const is = onScreen(COMPONENT_PICTURE, 'order-api', opening.viewport ?? viewport, canvasAfter);
+      expect(Math.abs(is.x - was.x)).toBeLessThan(1e-6);
+      expect(Math.abs(is.y - was.y)).toBeLessThan(1e-6);
+      // Closing again, the line gone.
+      const shown = opening.viewport ?? viewport;
+      const closing = viewportOnChange(change(components, containers, shown), room, { canvasBefore: canvasAfter, canvasAfter: canvasBefore });
+      const back = onScreen(CONTAINER_PICTURE, 'order-api', closing.viewport ?? shown, canvasBefore);
+      expect(Math.abs(back.x - was.x)).toBeLessThan(1e-6);
+      expect(Math.abs(back.y - was.y)).toBeLessThan(1e-6);
+      expect(closing.viewport?.zoom).toBe(viewport.zoom);
+    }
+  });
+
+  it('keeps it where the page measured its element to stand, when it did', () => {
+    const viewport = viewports[1] as Viewport;
+    const box = { x: 512.5, y: 300.25 };
+    const { viewport: next } = viewportOnChange(change(containers, components, viewport), room, { canvasBefore: { x: 240, y: 112 }, canvasAfter: { x: 240, y: 112 }, box });
+    expect(onScreen(COMPONENT_PICTURE, 'order-api', next ?? viewport, { x: 240, y: 112 })).toEqual(box);
+  });
+
+  it('keeps the chosen box when it opens or closes, before any nearer the middle', () => {
+    const app = (depth: 'container' | 'component'): [View, Drawn] => {
+      const view = archiveView(`${depth}~order-api`, STATE);
+      return [view, placedPicture(view)];
+    };
+    const [closed, open] = [app('container'), app('component')];
+    expect(open[0].boundaries.map((boundary) => boundary.id)).toEqual(['order-api']);
+    // The middle of the canvas over a neighbour far from the app: the app is kept all the same.
+    const card = closed[1].boxes.find((box) => box.id === 'card-provider');
+    const viewport: Viewport = { x: room.width / 2 - ((card?.x ?? 0) + 120), y: room.height / 2 - ((card?.y ?? 0) + 75), zoom: 1 };
+    expect(holdOf(change(closed, open, viewport))).toEqual({ change: 'depth', box: 'order-api' });
+    expect(holdOf(change(open, closed, viewport))).toEqual({ change: 'depth', box: 'order-api' });
+  });
+
+  it('else keeps the one nearest the middle of the canvas, and of two as near, the first by id', () => {
+    const state = stateOf({
+      'seefore.yaml': 'format: 1\nname: Pair\n',
+      'systems/east.yaml': 'name: East\n',
+      'systems/west.yaml': 'name: West\n',
+      'apps/east-app.yaml': 'name: East app\nin: east\n',
+      'apps/west-app.yaml': 'name: West app\nin: west\n',
+    });
+    const [system, container] = ['system', 'container'].map((key): [View, Drawn] => {
+      const view = archiveView(key, state);
+      return [view, placedPicture(view)];
+    }) as [[View, Drawn], [View, Drawn]];
+    const middle = (id: string) => {
+      const place = system[1].boxes.find((box) => box.id === id);
+      return { x: (place?.x ?? 0) + 120, y: (place?.y ?? 0) + 75 };
+    };
+    // The canvas's middle over the middle of a box, or half way between the two.
+    const over = (point: { x: number; y: number }): Viewport => ({ x: room.width / 2 - point.x, y: room.height / 2 - point.y, zoom: 1 });
+    const [east, west] = [middle('east'), middle('west')];
+    expect(keptAtDepth(system[0], system[1], container[0], over(west), room)).toBe('west');
+    expect(keptAtDepth(system[0], system[1], container[0], over(east), room)).toBe('east');
+    expect(keptAtDepth(system[0], system[1], container[0], over({ x: (east.x + west.x) / 2, y: east.y }), room)).toBe('east');
+    // Closing, from where each boundary stands.
+    const boundary = container[1].boundaries.find((each) => each.id === 'west');
+    const westOpen = { x: (boundary?.x ?? 0) + (boundary?.width ?? 0) / 2, y: (boundary?.y ?? 0) + (boundary?.height ?? 0) / 2 };
+    expect(keptAtDepth(container[0], container[1], system[0], over(westOpen), room)).toBe('west');
+  });
+
+  it('that opens nothing gives the same picture, and the page does not move', () => {
+    const person = (depth: 'system' | 'container' | 'component'): [View, Drawn] => {
+      const view = archiveView(`${depth}~customer`, STATE);
+      return [view, placedPicture(view)];
+    };
+    const [system, container] = [person('system'), person('container')];
+    expect(container[1].boxes).toEqual(system[1].boxes);
+    for (const viewport of viewports) {
+      expect(viewportOnChange(change(system, container, viewport), room)).toEqual({ viewport: undefined, fitted: false });
+      // When the words above the canvas change, the picture stays where it stood on the screen.
+      const moved = viewportOnChange(change(system, container, viewport), room, { canvasBefore: { x: 240, y: 112 }, canvasAfter: { x: 240, y: 130 } });
+      expect(moved.viewport).toEqual({ x: viewport.x, y: viewport.y - 18, zoom: viewport.zoom });
+    }
+  });
+
+  it('is said of the zoom it is shown at by the note, which the change keeps', () => {
+    const viewport = viewports[2] as Viewport;
+    const { viewport: next } = viewportOnChange(change(containers, components, viewport), room);
+    expect(smallNote(COMPONENT_PICTURE, next?.zoom ?? 1)).toContain(`Too small to read at ${percent(viewport.zoom)}:`);
+  });
+});
+
+describe('a change of scope', () => {
+  const room: Room = { width: 1200, height: 800 };
+  const viewport: Viewport = { x: -100, y: 40, zoom: 0.4 };
+  const change = (more: Partial<PictureChange> = {}): PictureChange => ({
+    before: { view: CONTEXT, drawn: CONTEXT_PICTURE },
+    after: { view: CARD_CONTEXT, drawn: CONTEXT_PICTURE },
+    chosen: null,
+    gone: false,
+    viewport,
+    moved: true,
+    room,
+    ...more,
+  });
+
+  it('fits the new picture to its room, though the reader had moved the one before or chose a box in both', () => {
+    expect(viewportOnChange(change(), room)).toEqual({ viewport: fitViewport(whole(CONTEXT_PICTURE), room), fitted: true });
+    expect(viewportOnChange(change({ chosen: { kind: 'box', id: 'customer' } }), room).fitted).toBe(true);
+  });
+
+  it('holds the chosen box in place, as a new reading does, when the box in scope is gone from the files', () => {
+    const gone = change({ gone: true, chosen: { kind: 'box', id: 'customer' } });
+    expect(holdOf(gone)).toEqual({ change: 'scope', box: 'customer' });
+    expect(viewportOnChange(gone, room)).toEqual({ viewport, fitted: false });
   });
 });

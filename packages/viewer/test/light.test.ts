@@ -3,8 +3,8 @@ import { holds, litBy, litByKept, litByLegend, speakingOf } from '../src/light.t
 import type { Act } from '../src/light.ts';
 import { legendWords } from '../src/reading.ts';
 import type { LegendKey, View, ViewBox } from '@seefore/core';
-import { ARCHIVE_FILES, ARCHIVE_STATE, archiveView, stateOf } from './archive.ts';
-import { CONTAINERS, CONTEXT, HARD_CONTAINERS, STATE } from './fixture.ts';
+import { ARCHIVE_FILES, ARCHIVE_STATE, archiveView, everyView, stateOf } from './archive.ts';
+import { COMPONENTS, CONTAINERS, CONTEXT, HARD_CONTAINERS, STATE } from './fixture.ts';
 import { STUDIO_STATE, studioView } from './studio.ts';
 
 /** Which boxes and arrows a hover, the focus or a choice lights. */
@@ -33,6 +33,20 @@ describe('what a hover lights', () => {
 
   it('lights an arrow and its two ends', () => {
     expect(lit({ kind: 'arrow', id: 'order-api~card-provider' })).toEqual({ boxes: ['card-provider', 'order-api'], arrows: ['order-api~card-provider'] });
+  });
+
+  it('lights a boundary inside a boundary as a box: itself, the arrows at its edge and their other ends, and not what it holds', () => {
+    expect(lit({ kind: 'box', id: 'order-api' }, COMPONENTS)).toEqual({ boxes: ['card-provider', 'order-api'], arrows: ['order-api~card-provider'] });
+    expect(lit({ kind: 'box', id: 'checkout' }, COMPONENTS)).toEqual({
+      boxes: ['card-provider', 'checkout', 'order-status', 'orders-database'],
+      arrows: ['checkout~card-provider', 'checkout~order-status', 'checkout~orders-database'],
+    });
+  });
+
+  it('lights, with a boundary that connections pass through, their arrows, and the boundary with an arrow that passes through it', () => {
+    const view = { ...COMPONENTS, boundaries: COMPONENTS.boundaries.map((boundary) => (boundary.id === 'order-api' ? { ...boundary, passing: ['checkout-takes-payment'] } : boundary)) };
+    expect(lit({ kind: 'box', id: 'order-api' }, view)).toEqual({ boxes: ['card-provider', 'checkout', 'order-api'], arrows: ['checkout~card-provider', 'order-api~card-provider'] });
+    expect(lit({ kind: 'arrow', id: 'checkout~card-provider' }, view)).toEqual({ boxes: ['card-provider', 'checkout', 'order-api'], arrows: ['checkout~card-provider'] });
   });
 
   it('lights a box with no arrow alone', () => {
@@ -216,7 +230,7 @@ describe('what a line of the legend lights', () => {
   it('lights something for every line of every view of every reading the tests make', () => {
     const states = [STUDIO_STATE, ARCHIVE_STATE, HELD_STATE, STATE, stateOf({ ...ARCHIVE_FILES, 'systems/edge.yaml': 'name: Edge\nonly: in production\n', 'infrastructure/edge-gate.yaml': 'name: Edge gate\nin: edge\n' })];
     for (const state of states) {
-      for (const view of state.views) {
+      for (const view of everyView(state)) {
         for (const { key } of view.legend) {
           const { boxes, arrows, passed } = litByLegend(view, key);
           expect(boxes.size + arrows.size + passed.size, `${key} in ${view.id}`).toBeGreaterThan(0);
@@ -250,8 +264,7 @@ const HELD_STATE = stateOf({
 });
 
 describe('the line for a thing in brackets on a route, when its connection is held in a box', () => {
-  const view = HELD_STATE.views.find((each) => each.id === 'system~ferry');
-  if (view === undefined) throw new Error('The ferry has a context view.');
+  const view = archiveView('system~ferry', HELD_STATE);
 
   it('is in the legend though no arrow passes through the thing, which only the list under the legend shows', () => {
     expect(view.legend.map((entry) => entry.key)).toContain('route-only');

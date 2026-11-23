@@ -522,11 +522,9 @@ export interface ViewerState {
   conditions: Record<string, Condition[]>;
   outline: Outline;
   /**
-   * The views of stage 5, in the order the sidebar lists them: for each system with parts its
-   * view at System depth and at Container depth, then each other system's at System depth.
+   * What can be the scope, each with the shallowest depth it has, in the order of the listing.
+   * No view is sent with the state: the page asks for the view of a setting with its picture.
    */
-  views: View[];
-  /** What can be the scope, each with the shallowest depth it has, in the order of the listing. */
   scopes: Scope[];
   /**
    * The connections that no view draws, in order of id: those with an end that cannot be
@@ -535,8 +533,9 @@ export interface ViewerState {
   inNoView: string[];
 }
 
-/** The server's answer when asked for the picture of a view at a revision. */
+/** The server's answer when asked for the picture of a setting at a revision: the view of that setting, and its picture. */
 export interface PictureAnswer {
   revision: string;
+  view: View;
   picture: Picture;
 }

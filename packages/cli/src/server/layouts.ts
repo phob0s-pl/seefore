@@ -9,8 +9,12 @@ import { startRunner } from '@seefore/layout/node';
  * answers itself. Tests give it one of their own.
  */
 export interface Layouts {
-  /** Lays a view out. A layout that throws, or runs past its limit, gives a `Failed` picture. */
-  run(view: View): Promise<Picture>;
+  /**
+   * Lays a view out, given the views of the settings it takes its turns from, nearest first, as
+   * `Views.above` names them. A layout that throws, or runs past its limit, gives a `Failed`
+   * picture.
+   */
+  run(view: View, above: readonly View[]): Promise<Picture>;
   /** Stops a layout that is running, and lets go of what runs them. */
   close(): void;
 }
@@ -32,7 +36,7 @@ export function startLayouts(home: string): Layouts {
   if (!existsSync(worker)) return inThisThread();
   const runner = startRunner({ worker });
   return {
-    run: (view) => runner.layOut(view),
+    run: (view, above) => runner.layOut(view, above),
     close: () => void runner.close(),
   };
 }
@@ -45,7 +49,7 @@ export function hasWorker(home: string): boolean {
 /** Layouts that run in this thread, one after another as the server asks. */
 export function inThisThread(): Layouts {
   return {
-    run: (view) => layOut(view),
+    run: (view, above) => layOut(view, above),
     close: () => {},
   };
 }

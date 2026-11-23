@@ -8,7 +8,7 @@ import { APP_RADIUS, INFRASTRUCTURE_POINT, OUTLINE, PERSON_RADIUS, QUEUE_LID, SC
  * of an arrow along its last stretch until it touches the outline drawn.
  */
 
-/** A box as the page draws it: its look, whether it is the system in scope, and its place. */
+/** A box as the page draws it: its look, whether it is the chosen box, which has the thicker line, and its place. */
 export interface Outlined extends Rect {
   look: BoxLook;
   scope: boolean;
@@ -44,16 +44,15 @@ function roundRect(width: number, height: number, at: number, radius: number): P
  * line as a closed run of points, and the width of that line. The same as `Shape` draws.
  */
 export function outlineOf(look: BoxLook, scope: boolean, width: number, height: number): { points: Point[]; line: number } {
-  const line = OUTLINE;
+  // The chosen box has the thicker line, whatever its look.
+  const line = scope ? SCOPE_OUTLINE : OUTLINE;
   switch (look) {
     case 'person':
       return { points: roundRect(width, height, line / 2, Math.min(PERSON_RADIUS, height / 3)), line };
     case 'app':
       return { points: roundRect(width, height, line / 2, APP_RADIUS), line };
-    case 'component': {
-      const thick = scope ? SCOPE_OUTLINE : OUTLINE;
-      return { points: roundRect(width, height, thick / 2, 0), line: thick };
-    }
+    case 'component':
+      return { points: roundRect(width, height, line / 2, 0), line };
     case 'store': {
       const [left, right, top, bottom] = [line / 2, width - line / 2, STORE_LID + line / 2, height - STORE_LID - line / 2];
       const radius = (right - left) / 2;
@@ -73,10 +72,8 @@ export function outlineOf(look: BoxLook, scope: boolean, width: number, height: 
     }
     case 'system':
     case 'system-scope':
-    case 'system-external': {
-      const thick = scope ? SCOPE_OUTLINE : OUTLINE;
-      return { points: roundRect(width, height, thick / 2, 0), line: thick };
-    }
+    case 'system-external':
+      return { points: roundRect(width, height, line / 2, 0), line };
   }
 }
 

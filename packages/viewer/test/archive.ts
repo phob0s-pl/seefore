@@ -1,4 +1,4 @@
-import { conditionsOf, connectionsInNoView, load, outlineOf, ownership, viewsFor, viewsOf } from '@seefore/core';
+import { conditionsOf, connectionsInNoView, load, outlineOf, ownership, settingOf, viewsFor } from '@seefore/core';
 import type { Condition, Drawn, PlacedArrow, PlacedBox, View, ViewerState } from '@seefore/core';
 
 /**
@@ -38,8 +38,7 @@ export const ARCHIVE_FILES: Readonly<Record<string, string>> = {
 export function stateOf(files: Readonly<Record<string, string>>): ViewerState {
   const loaded = load(Object.entries(files).map(([path, text]) => ({ path, text })));
   const { model } = loaded;
-  const views = viewsOf(model);
-  const records = [model.people, model.systems, model.apps, model.stores, model.components, model.infrastructure, model.connections].flat();
+  const records =[model.people, model.systems, model.apps, model.stores, model.components, model.infrastructure, model.connections].flat();
   return {
     revision: 'a1',
     directory: '/work/archive/architecture',
@@ -54,7 +53,6 @@ export function stateOf(files: Readonly<Record<string, string>>): ViewerState {
     ownership: Object.fromEntries(ownership(model)),
     conditions: Object.fromEntries(records.map((record): [string, Condition[]] => [record.id, conditionsOf(model, record.id)]).filter(([, found]) => found.length > 0)),
     outline: outlineOf(model),
-    views,
     scopes: [...viewsFor(model).scopes],
     inNoView: connectionsInNoView(model),
   };
@@ -63,11 +61,18 @@ export function stateOf(files: Readonly<Record<string, string>>): ViewerState {
 /** The reading of the archive. */
 export const ARCHIVE_STATE: ViewerState = stateOf(ARCHIVE_FILES);
 
-/** The view with this id of a reading, the archive's unless another is given. */
-export function archiveView(id: string, state: ViewerState = ARCHIVE_STATE): View {
-  const found = state.views.find((view) => view.id === id);
-  if (found === undefined) throw new Error(`The reading has no view ${id}.`);
+/** The view of the setting with this key in a reading, as the server works it out: the archive's unless another reading is given. */
+export function archiveView(key: string, state: ViewerState = ARCHIVE_STATE): View {
+  const setting = settingOf(key);
+  const found = setting === undefined ? undefined : viewsFor(state.model).viewOf(setting);
+  if (found === undefined) throw new Error(`The reading has no setting ${key}.`);
   return found;
+}
+
+/** The view of every setting a reading has, as the server works each out. */
+export function everyView(state: ViewerState): View[] {
+  const views = viewsFor(state.model);
+  return views.settings().flatMap((setting) => views.viewOf(setting) ?? []);
 }
 
 /**

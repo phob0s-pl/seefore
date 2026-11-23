@@ -27,17 +27,18 @@ function none(): Lit {
 }
 
 /**
- * The boxes of a view that hold, inside them or between their copies, one of these connections.
- * Such a connection has no arrow, so the box that holds it lights in its place.
+ * The boxes and boundaries of a view that hold, inside them or between their copies, one of these
+ * connections. Such a connection has no arrow, so what holds it lights in its place.
  */
 function holdersOf(view: View, connections: ReadonlySet<string>): string[] {
-  return view.boxes.filter((box) => [...box.within, ...box.loops].some((id) => connections.has(id))).map((box) => box.id);
+  return [...view.boxes, ...view.boundaries].filter((box) => [...box.within, ...box.loops].some((id) => connections.has(id))).map((box) => box.id);
 }
 
 /**
  * What lights when the reader points at a target. A box lights itself, every arrow that starts
  * or ends at it or passes through it, and the boxes at the ends of each, and every box that
- * holds, inside it or between its copies, a connection that passes through it. An arrow lights
+ * holds, inside it or between its copies, a connection that passes through it. A boundary
+ * lights as a box does: what it holds is not its own light. An arrow lights
  * itself, its two ends and the boxes it passes through, and in the list under the legend what
  * it passes through that has no box. Something with no box lights itself in that list, the
  * arrows that pass through it and their ends, and the boxes that hold a connection that passes
@@ -62,7 +63,7 @@ export function litBy(view: View, target: Pointed): Lit {
     if (!holds(view, target)) return lit;
     light(new Set([target.id]));
     const connections = new Set(view.arrows.find((arrow) => arrow.id === target.id)?.connections ?? []);
-    for (const box of view.boxes) if (box.passing.some((id) => connections.has(id))) lit.boxes.add(box.id);
+    for (const box of [...view.boxes, ...view.boundaries]) if (box.passing.some((id) => connections.has(id))) lit.boxes.add(box.id);
     for (const each of view.passed) if (each.arrows.includes(target.id)) lit.passed.add(each.id);
     return lit;
   }
@@ -76,7 +77,7 @@ export function litBy(view: View, target: Pointed): Lit {
   }
   if (!holdsBox(view, target.id)) return lit;
   lit.boxes.add(target.id);
-  const passing = new Set(view.boxes.find((box) => box.id === target.id)?.passing ?? []);
+  const passing = new Set([...view.boxes, ...view.boundaries].find((box) => box.id === target.id)?.passing ?? []);
   const arrows = view.arrows.filter((arrow) => arrow.from === target.id || arrow.to === target.id || arrow.connections.some((id) => passing.has(id)));
   light(new Set(arrows.map((arrow) => arrow.id)));
   lightHolders(passing);
@@ -100,7 +101,7 @@ export function litByKept(view: View, keeper: string, connections: ReadonlySet<s
     lit.boxes.add(arrow.from);
     lit.boxes.add(arrow.to);
   }
-  for (const box of view.boxes) if (box.passing.some((id) => connections.has(id))) lit.boxes.add(box.id);
+  for (const box of [...view.boxes, ...view.boundaries]) if (box.passing.some((id) => connections.has(id))) lit.boxes.add(box.id);
   return lit;
 }
 

@@ -1,5 +1,5 @@
 import type { View } from '@seefore/core';
-import { stateOf } from './archive.ts';
+import { archiveView, stateOf } from './archive.ts';
 
 /**
  * A studio whose views hold every line a legend can have, worked out by the engine as the server
@@ -48,9 +48,7 @@ export const STUDIO_FILES: Readonly<Record<string, string>> = {
 /** The reading of the studio. */
 export const STUDIO_STATE = stateOf(STUDIO_FILES);
 
-/** The view of the studio's reading with this id. */
-export function studioView(id: string): View {
-  const found = STUDIO_STATE.views.find((view) => view.id === id);
-  if (found === undefined) throw new Error(`The studio has no view ${id}.`);
-  return found;
+/** The view of the studio's reading of the setting with this key. */
+export function studioView(key: string): View {
+  return archiveView(key, STUDIO_STATE);
 }

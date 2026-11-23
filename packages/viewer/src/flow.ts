@@ -81,15 +81,28 @@ function connections(count: number): string {
   return `${count} ${count === 1 ? 'connection' : 'connections'}`;
 }
 
+/** What a screen reader says of the marks a box or a boundary carries: the stores it keeps, the connections between its copies, and those that pass through it. */
+function marksSaid(box: Pick<ViewBox, 'kept' | 'loops' | 'passing'>): string[] {
+  const parts: string[] = [];
+  if (box.kept.length > 0) parts.push(`It keeps ${box.kept.length} ${box.kept.length === 1 ? 'store' : 'stores'}, drawn at it`);
+  if (box.loops.length > 0) parts.push(`${connections(box.loops.length)} between its copies`);
+  if (box.passing.length > 0) parts.push(`${connections(box.passing.length)} of this view ${box.passing.length === 1 ? 'passes' : 'pass'} through it`);
+  return parts;
+}
+
 /** What a screen reader says for a box: its whole name, kind line, own `only` and first sentence, and its marks. */
 export function boxSaid(box: ViewBox): string {
   const parts = [`${box.name}, ${box.line}`];
   if (box.only !== undefined) parts.push(`Only ${box.only}`);
   if (box.sentence !== undefined) parts.push(box.sentence);
-  if (box.kept.length > 0) parts.push(`It keeps ${box.kept.length} ${box.kept.length === 1 ? 'store' : 'stores'}, drawn at it`);
-  if (box.loops.length > 0) parts.push(`${connections(box.loops.length)} between its copies`);
-  if (box.passing.length > 0) parts.push(`${connections(box.passing.length)} of this view ${box.passing.length === 1 ? 'passes' : 'pass'} through it`);
-  return parts.map(sentence).join(' ');
+  return [...parts, ...marksSaid(box)].map(sentence).join(' ');
+}
+
+/** What a screen reader says for a boundary: its whole title, which the picture may have cut to its width, whose boundary it is, and its marks. */
+export function boundarySaid(boundary: ViewBoundary): string {
+  const head = `${boundary.title}, the boundary of the ${boundary.family === 'apps' ? 'app' : 'system'}`;
+  const marks = marksSaid(boundary);
+  return marks.length === 0 ? head : [head, ...marks].map(sentence).join(' ');
 }
 
 /**
@@ -146,8 +159,7 @@ export function toFlow(view: View, drawn: Drawn): { nodes: PictureNode[]; edges:
       height: placed.height,
       data: { boundary, placed, titleAt: relativeTo(placed.titleAt, placed) },
       handles: handlesOf(placed.width, placed.height),
-      // The whole title, which the picture may have cut to the boundary's width.
-      ariaLabel: `${boundary.title}, the boundary of the ${boundary.family === 'apps' ? 'app' : 'system'}`,
+      ariaLabel: boundarySaid(boundary),
       draggable: false,
       connectable: false,
       selectable: false,
