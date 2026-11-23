@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { c4Of } from '../src/c4.ts';
 import type { Format } from '../src/format.ts';
 import { load, loadAs } from '../src/load.ts';
 import type { SourceFile } from '../src/load.ts';
@@ -27,6 +28,8 @@ describe('a source directory with only its marker', () => {
       texts: [],
       model: emptyModel(),
       problems: [],
+      // The C4 checks ran on a model with nothing in it, and so looked at nothing.
+      c4: c4Of(emptyModel(), { complete: true }),
     });
   });
 

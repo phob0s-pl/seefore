@@ -308,7 +308,7 @@ are the same too, so two ways of one exchange are two connections.
 What these cannot find: a wrong `access`, a missing `opens`, two wordings of one condition, a
 store that one app keeps written in its system. No check asks for `access`: a third of all
 connections end at a store, and a missing one is "not said", as a missing technology is. And
-no check reads who may reach whose store. That is a team's rule, for stage 25; `access` and
+no check reads who may reach whose store. That is a team's rule, for stage 24; `access` and
 `in` give it what it needs.
 
 ## What the picture shows
@@ -479,7 +479,7 @@ one recommendation, but as one stage where it asked for three:
 | May a piece of infrastructure be in a system | Yes, and `in` may be left out |
 | Reads and writes | `access`, on a connection that ends at a store. It may always be left out: no check reports one that is missing |
 | Who opens a channel | `opens: to`. It names a side, not a record |
-| A call that does not wait | No field. A queue or a topic says it, and else the name. Asked again with flows, at stage 11 |
+| A call that does not wait | No field. A queue or a topic says it, and else the name. Asked again with flows, at stage 10 |
 | A condition | `only`, in free words. It may name an environment |
 | A condition and `via` | A thing that has `only` may be named in `via`. This changes stage 6a's "a thing that is on the way only sometimes is not in `via`": then nothing could say when a thing was there |
 | What a connection has from what it passes through | Nothing |
@@ -505,7 +505,7 @@ The format now has nine folders, thirteen field names and thirteen kinds.
 
 ## Leaves out
 
-- **A field for a call that does not wait:** with flows, at stage 11, which has asynchronous
+- **A field for a call that does not wait:** with flows, at stage 10, which has asynchronous
   sends.
 - **Groups, code that several apps share, and one program that runs as several apps:** a stage
   of their own, before focused views.
@@ -514,7 +514,7 @@ The format now has nine folders, thirteen field names and thirteen kinds.
 - **A route as a view of its own,** with every hop as a box: stage 9.
 - **A check for a system nobody has spoken for:** stage 8, which also settles whether a
   connection to a store that does not say `access` is counted. **The team's rule on who may
-  reach whose store:** stage 25.
+  reach whose store:** stage 24.
 
 ## Against the research
 

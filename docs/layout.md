@@ -172,7 +172,8 @@ No mark is added, and the zooms at which detail comes and goes are those of stag
 
 ## The commands
 
-- **`seefore check`** gives the warning above. Nothing about how it is called changes.
+- **`seefore check`** gives the warning above. Nothing about how it is called changes at
+  this stage.
 - **`seefore list`** and **`seefore uses`** are called as before and end with the same exit
   codes. The number of problems each prints, in words and under `--json`, is that of `seefore
   check`, so a crowded view adds a warning to it. How **`seefore --server`** is called: no
@@ -278,7 +279,7 @@ each names.
 
 Stored coordinates, places set by hand, and a promise that nothing moves. Layout hints. A
 picture of one box with its neighbours, and splitting a view: stage 9. A mark for what
-changed since the last picture: stages 14 and 16. A limit that looks at arrows or at the size
+changed since the last picture: stages 13 and 15. A limit that looks at arrows or at the size
 of the window.
 
 ## Against the research
@@ -302,7 +303,7 @@ Departs from it, with the reason:
   imposed, and crossings are given up for it. The research ranks crossings first among what
   makes a picture hard to read.
 - **No layout hints**, which two of the tools offer.
-- **No mark for what changed after a reload.** Left to stages 14 and 16, which know what
+- **No mark for what changed after a reload.** Left to stages 13 and 15, which know what
   changed.
 
 Risks it takes on:

@@ -127,6 +127,7 @@ and asks for no record less (`layout.md`).
 | Two connections have the same ends and the same name | `connection-twice` |
 | A connection says higher up, in the same words, what another says beneath it | `connection-repeated-above` |
 | A view has more than 40 boxes (stage 7) | `view-crowded` |
+| A connection is named only "Uses" (stage 8) | `connection-vague` |
 
 ## The conventions
 
@@ -213,7 +214,8 @@ are said in words:
 ## The commands
 
 `seefore check` reads the nine folders and reports the problems above, each with its
-file, line and column. Nothing about how it is called has changed.
+file, line and column. Nothing about how it is called changed at this stage. Stage 8 gave it
+two options, `--full` and `--require-names`, and the counts of the C4 checks (`c4-checks.md`).
 
 ```
 seefore list [--workdir=<directory>] [--full] [--json]
@@ -401,7 +403,7 @@ Departs from it, with the reason:
   at the lowest level known". A picture needs words for an arrow that stands for several, and
   the research says to summarise.
 - **No tags and no links** (section 4, stage 2 lists both). A free tag is a kind of the user's
-  own by another door. Links come with decisions and evidence, at stages 20 and 22.
+  own by another door. Links come with decisions and evidence, at stages 19 and 21.
 - **An unknown key is an error**, where the research prefers "a few typed records and open
   properties" (section 4, stage 6). Every later change to the format is then a known one.
 - **No comments in a record.** The research does not speak of them. A comment is read by no

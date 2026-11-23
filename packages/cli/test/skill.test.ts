@@ -2,7 +2,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseDocument } from 'yaml';
-import { APP_KINDS, CROWDED_FROM, CURRENT_FORMAT, STORE_KINDS, load } from '@seefore/core';
+import { APP_KINDS, C4_CODES, CROWDED_FROM, CURRENT_FORMAT, STORE_KINDS, load } from '@seefore/core';
 import type { SourceFile } from '@seefore/core';
 import { describe, expect, it } from 'vitest';
 import type { z } from 'zod';
@@ -115,8 +115,8 @@ describe('the model skill', () => {
     expect(crowded?.code).toBe('view-crowded');
     const paragraphs = skill.split('\n\n').map((paragraph) => paragraph.replace(/\s+/g, ' '));
     // The rule for every warning says, where it stands, that this one asks nothing.
-    const rule = paragraphs.find((paragraph) => paragraph.startsWith('Run `seefore check --workdir=<folder>`.')) ?? '';
-    expect(rule).toContain('For a warning, say what it is and ask, except for `view-crowded`, which asks nothing.');
+    const rule = paragraphs.find((paragraph) => paragraph.startsWith('Run `seefore check --json --workdir=<folder>`.')) ?? '';
+    expect(rule).toContain('For a warning, say what it is and ask, except for `view-crowded`, which asks nothing,');
     const said = paragraphs.find((paragraph) => paragraph.startsWith('`view-crowded`')) ?? '';
     // What the skill quotes is how the warning begins, so that the view and its boxes are read from it.
     const quoted = /"(The container view of Shop has \d+ boxes\.)"/.exec(said)?.[1] ?? '';
@@ -124,6 +124,110 @@ describe('the model skill', () => {
     expect(crowded?.message.startsWith(quoted.replace(/\d+/, String(CROWDED_FROM + 1)))).toBe(true);
     expect(said).toContain('Set these warnings beside those of the check of section 1, made before your change.');
     expect(said).toContain('Do not propose merging records or leaving any out to get under the limit.');
+  });
+
+  it('reads what the C4 checks found before a change and after it, and sets the two beside each other', () => {
+    const flat = skill.replace(/\s+/g, ' ');
+    const before = flat.slice(flat.indexOf('## 1.'), flat.indexOf('## 2.'));
+    const after = flat.slice(flat.indexOf('## 8.'), flat.indexOf('## 9.'));
+    expect(before).toContain('Run `seefore check --json --workdir=<folder>`.');
+    expect(before).toContain('Keep its `problems` and its `c4`, what the C4 checks found before your change.');
+    expect(after).toContain('Run `seefore check --json --workdir=<folder>`.');
+    expect(after).toContain('Set its findings beside those of section 1, by code and file.');
+    // The warning of the set is one of its findings, and not asked about as other warnings are.
+    expect(after).toContain('and `connection-vague`, which is a finding of the C4 checks below.');
+  });
+
+  it('asks of a finding its change made the question of the spec, names every check by its code, and leaves a finding that was there before alone', () => {
+    const c4Spec = readFileSync(join(root, 'docs/c4-checks.md'), 'utf8');
+    const said = c4Spec.slice(c4Spec.indexOf('## The skill'), c4Spec.indexOf('## The page'));
+    const rows = said.split('\n').filter((line) => /^\s*\| [A-Z]/.test(line) && !line.includes('| Finding |'));
+    expect(rows).toHaveLength(4);
+    const table = skill
+      .slice(skill.indexOf('## 8.'), skill.indexOf('## 9.'))
+      .split('\n')
+      .filter((line) => /^\s*\| `/.test(line));
+    expect(table).toHaveLength(4);
+    rows.forEach((line, n) => {
+      const [, asks, proposes] = line.split('|').slice(1, -1).map((cell) => cell.trim());
+      const cells = (table[n] as string).split('|').slice(1, -1).map((cell) => cell.trim());
+      expect(cells.slice(1), line).toEqual([asks, proposes]);
+    });
+    // Each code once, in the order the checks are reported.
+    expect(table.flatMap((line) => inBackticks(line.split('|')[1] as string))).toEqual([...C4_CODES]);
+    const flat = skill.replace(/\s+/g, ' ');
+    expect(flat).toContain('**A finding that your change made** is said to the person once, with its question');
+    expect(flat).toContain('**A finding that was there before** is left alone. An edit to one record is no order to clean the directory.');
+  });
+
+  it('never writes to make a finding go away, nor a word in place of a fact, as the spec lists it', () => {
+    const c4Spec = readFileSync(join(root, 'docs/c4-checks.md'), 'utf8').replace(/\s+/g, ' ');
+    const never = /\*\*It never writes to make a finding go away\*\*: ([^.]*)\./.exec(c4Spec)?.[1] ?? '';
+    const items = never.split(/, (?:and )?/).map((item) => item.replace(/ in a field$/, ''));
+    expect(items.length).toBe(8);
+    const flat = skill.replace(/\s+/g, ' ');
+    for (const item of items) expect(flat, item).toContain(item);
+    expect(flat).toContain('Never write to make a finding go away:');
+    expect(flat).toContain('A field left out says "not known yet", and the count shows it.');
+    expect(flat).toContain('- Never write a fact that nobody stated, nor a word such as "Unknown" in place of one.');
+  });
+
+  it('goes through the findings that are there one check at a time when asked, and says at the end how they stand', () => {
+    const after = skill.slice(skill.indexOf('## 8.'), skill.indexOf('## 9.')).replace(/\s+/g, ' ');
+    expect(after).toContain(
+      '**When the person asks to go through the findings that are there**, take one check at a time, and each finding with the question of the table. ' +
+        'The same rules hold for what may be written. ' +
+        'Most will stay: at the end, say how many were mended, how many nobody knows, and how many are right as they stand.',
+    );
+  });
+
+  it('says what is no answer to what a part is built with, as the engine counts it', () => {
+    const after = skill.slice(skill.indexOf('## 8.'), skill.indexOf('## 9.')).replace(/\s+/g, ' ');
+    expect(after).toContain('A protocol that the part speaks is no answer: it belongs on its connections.');
+    expect(after).toContain('Nor is the technology of the app a component is in: the component has it already, and is not counted for it.');
+    expect(after).toContain(
+      '**A store of files**: its technology is the format of the files, when the facts name one. Files of no one format have none, and the note stays.',
+    );
+    // The engine says the same: an app's note sends a protocol to its connections, a store's
+    // note lets files of no one format be, and a component in an app that names one is not counted.
+    const { c4 } = load([
+      { path: 'seefore.yaml', text: 'format: 1\nname: Shop\n' },
+      { path: 'systems/shop.yaml', text: 'name: Shop\n' },
+      { path: 'apps/api.yaml', text: 'name: API\nin: shop\ntechnology: [go]\n' },
+      { path: 'apps/worker.yaml', text: 'name: Worker\nin: shop\n' },
+      { path: 'stores/exports.yaml', text: 'name: Exports\nin: shop\nkind: files\n' },
+      { path: 'components/checkout.yaml', text: 'name: Checkout\nin: api\n' },
+      { path: 'technologies/go.yaml', text: 'name: Go\n' },
+    ]);
+    const notes = c4['technology-missing'].findings;
+    expect(notes.map((finding) => finding.file)).toEqual(['apps/worker.yaml', 'stores/exports.yaml']);
+    expect(notes[0]?.message).toContain('A protocol that it speaks belongs on its connections.');
+    expect(notes[1]?.message).toContain('Files of no one format have none, and that is right.');
+  });
+
+  it('says what a thing connected to nothing is not given, by the conventions that say so', () => {
+    const after = skill.slice(skill.indexOf('## 8.'), skill.indexOf('## 9.')).replace(/\s+/g, ' ');
+    expect(after).toContain(
+      '**A thing connected to nothing**: who runs a copy or answers for a part is said in a description or by an owner, and is no connection (convention 6). ' +
+        'A thing that only passes exchanges on is named in `via` on the connections that pass through it, and gets no connection of its own for that (convention 7).',
+    );
+    // The conventions it names are those of an owner and of what a connection passes through.
+    expect(skill).toContain('6. **An owner** is the team, the role or the organisation');
+    expect(skill).toContain('7. **What a connection passes through.**');
+    // And the note on a thing that `via` may name points at `via` too.
+    const { c4 } = load([
+      { path: 'seefore.yaml', text: 'format: 1\nname: Shop\n' },
+      { path: 'infrastructure/proxy.yaml', text: 'name: Proxy\n' },
+    ]);
+    expect(c4['element-unconnected'].findings[0]?.message).toContain('add a connection, or name it in `via`, only for an exchange that the facts name.');
+  });
+
+  it('makes up no name to pass --require-names, and says which connection lacks one', () => {
+    const after = skill.slice(skill.indexOf('## 8.'), skill.indexOf('## 9.')).replace(/\s+/g, ' ');
+    expect(after).toContain(
+      '**`--require-names`**: a model with an honest gap does not pass it. Never make up a name to pass it: say which connection lacks one. ' +
+        'The person finds the fact, or publishes without the option.',
+    );
   });
 
   it('names the kinds the engine allows, in order', () => {

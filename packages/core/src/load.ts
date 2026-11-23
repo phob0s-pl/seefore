@@ -1,4 +1,6 @@
 import { isNode, isScalar, isSeq } from 'yaml';
+import { c4NotRun, c4Of, c4Warnings } from './c4.ts';
+import type { C4Report } from './c4.ts';
 import { CURRENT_FORMAT } from './format.ts';
 import type { Family, Format, ReferenceField } from './format.ts';
 import { idProblem, isId } from './id.ts';
@@ -24,6 +26,7 @@ import {
 } from './rules.ts';
 import type { PlaceOf } from './rules.ts';
 import { checkShape } from './shape.ts';
+import { readInFull } from './uses.ts';
 import { readYaml } from './yaml.ts';
 import type { YamlFile } from './yaml.ts';
 
@@ -93,9 +96,10 @@ const TEXT_FIELDS = ['name', 'only', 'description'];
 
 /**
  * The keys whose values the checks across records point at, where the value names no record: a
- * reference has its own place, and these are told where theirs is.
+ * reference has its own place, and these are told where theirs is. The C4 check of a name that
+ * is the bare "Uses" stands at the name.
  */
-const VALUE_FIELDS = ['opens', 'access', 'only'];
+const VALUE_FIELDS = ['opens', 'access', 'only', 'name'];
 
 /** A source directory after reading: what could be read, and everything that is wrong. */
 export interface Loaded {
@@ -119,6 +123,22 @@ export interface Loaded {
   model: Model;
   /** Everything that is wrong, in order of file and place. */
   problems: Problem[];
+  /**
+   * What the C4 checks found in the model. Its warnings are among the problems too; its notes
+   * are here alone, since a note is no problem.
+   */
+  c4: C4Report;
+}
+
+/** What reading a source directory needs besides its files. */
+export interface LoadOptions {
+  /**
+   * More problems of the directory, found by whoever read the disk: a folder or a file that
+   * could not be read, a link that was not followed. They are not among the problems this
+   * returns. They can only make the directory less than read in full: what the core library
+   * found itself still counts.
+   */
+  problems?: readonly Problem[];
 }
 
 /**
@@ -139,8 +159,8 @@ export function isMarkerName(name: string): boolean {
  * marker says, once, that they are in a format this seefore reads: else there is no telling
  * which rules they follow.
  */
-export function load(files: readonly SourceFile[]): Loaded {
-  return loadAs(CURRENT_FORMAT, files);
+export function load(files: readonly SourceFile[], options: LoadOptions = {}): Loaded {
+  return loadAs(CURRENT_FORMAT, files, options);
 }
 
 /** A record read from a sound YAML file, with what it takes to check it further. */
@@ -154,7 +174,7 @@ interface ReadRecord {
  * Reads a source directory under a given format. `load` is this with the current format;
  * tests use it to try the rules for records with families made up for the test.
  */
-export function loadAs(format: Format, files: readonly SourceFile[]): Loaded {
+export function loadAs(format: Format, files: readonly SourceFile[], options: LoadOptions = {}): Loaded {
   const problems: Problem[] = [];
   const records: SourceRecord[] = [];
   const unread: RecordFile[] = [];
@@ -306,6 +326,11 @@ export function loadAs(format: Format, files: readonly SourceFile[]): Loaded {
   // It counts the boxes and makes no view: those are made once, by whoever draws them. Its two
   // warnings on one system stand at one place, and the sort below keeps their order.
   problems.push(...crowdedProblems(model));
+  // The C4 checks read the model too, and run last: whether the directory was read in full
+  // takes every problem found before, and theirs are warnings, which leave that as it is.
+  const complete = readInFull(problems) && readInFull(options.problems ?? []);
+  const c4 = c4Of(model, { complete, placeOf, format });
+  problems.push(...c4Warnings(c4));
 
   records.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : a.file < b.file ? -1 : 1));
   unread.sort((a, b) => (a.file < b.file ? -1 : 1));
@@ -317,12 +342,22 @@ export function loadAs(format: Format, files: readonly SourceFile[]): Loaded {
     texts,
     model,
     problems: problems.sort(compareProblems),
+    c4,
   };
 }
 
-/** A source directory of which nothing but the marker was read. */
+/** A source directory of which nothing but the marker was read. None of the C4 checks is run. */
 function nothingRead(marker: Marker | undefined, problems: Problem[]): Loaded {
-  return { ...(marker ? { marker } : {}), records: [], unread: [], references: [], texts: [], model: emptyModel(), problems: problems.sort(compareProblems) };
+  return {
+    ...(marker ? { marker } : {}),
+    records: [],
+    unread: [],
+    references: [],
+    texts: [],
+    model: emptyModel(),
+    problems: problems.sort(compareProblems),
+    c4: c4NotRun(),
+  };
 }
 
 /**

@@ -1037,6 +1037,55 @@ summary:focus-visible,
   font-size: 13px;
 }
 
+/* A note is told by its word, and is quieter than a warning. */
+.problem.note .severity {
+  color: var(--quiet);
+}
+
+/* What the C4 checks counted, under the problems and set apart from them by a rule. */
+.c4 {
+  margin-top: 24px;
+  padding-top: 4px;
+  border-top: 1px solid var(--rule);
+}
+
+.problems-page h2 {
+  font-size: 16px;
+  margin: 14px 0 4px;
+}
+
+.c4 .note {
+  color: var(--quiet);
+  margin: 4px 0 8px;
+}
+
+.c4-checks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* Every line starts at one place; the triangle of a line that opens stands in the room before it. */
+.c4-check {
+  margin: 4px 0;
+  padding-left: 18px;
+  overflow-wrap: anywhere;
+}
+
+.c4-check summary {
+  cursor: pointer;
+  list-style-position: outside;
+  width: fit-content;
+}
+
+.c4-check summary:hover {
+  text-decoration: underline;
+}
+
+.c4-check .problems {
+  margin: 4px 0 12px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     transition: none !important;

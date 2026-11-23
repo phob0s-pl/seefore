@@ -566,6 +566,40 @@ describe('the problems that list and uses count', () => {
   });
 });
 
+describe('the C4 checks in list and uses', () => {
+  // A connection named only "Uses" is a warning of the check, so the two commands count it. The
+  // notes are no problems, and neither command shows them, nor anything else of the checks.
+  it('change nothing but the count of warnings, which a connection named only "Uses" adds to', () => {
+    const shop = (name: string) => ({ ...EXAMPLE, 'connections/clerk-packs.yaml': `from: warehouse-clerk\nto: shipping\nname: ${name}\n` });
+    write(shop('Sees what to pack and marks it sent'), 'dir-one');
+    write(shop('Uses'), 'dir-two');
+
+    const lastLine = (args: string[], folder: string) => run([...args, `--workdir=${folder}`]).out.split('\n').at(-1);
+    expect(lastLine(['list'], 'dir-one')).toBe('27 records read. No problems.');
+    expect(lastLine(['list'], 'dir-two')).toBe('27 records read. 0 errors, 1 warning: run `seefore check --workdir=dir-two` to see them.');
+    expect(lastLine(['uses', 'shipping'], 'dir-one')).not.toContain('warning');
+    expect(lastLine(['uses', 'shipping'], 'dir-two')).toBe('0 errors, 1 warning: run `seefore check --workdir=dir-two` to see them.');
+
+    for (const args of [['list'], ['uses', 'shipping']]) {
+      // In words, nothing differs but the name, the folder and the sentence on the problems.
+      const said = (folder: string, name: string) =>
+        run([...args, `--workdir=${folder}`])
+          .out.replaceAll(folder, 'FOLDER')
+          .replaceAll(name, 'NAME')
+          .replace(/\n*(No problems\.|0 errors, 1 warning: run `seefore check --workdir=FOLDER` to see them\.)$/, '');
+      expect(said('dir-two', 'Uses'), args[0]).toBe(said('dir-one', 'Sees what to pack and marks it sent'));
+      expect(run([...args, '--workdir=dir-two']).out, args[0]).not.toContain('C4');
+      // As data, the counts are those of the check, the exit code is as before, and no key is new.
+      const checked = json<{ errors: number; warnings: number }>(['check', '--workdir=dir-two']).data;
+      const result = json<{ errors: number; warnings: number }>([...args, '--workdir=dir-two']);
+      expect(result.code, args[0]).toBe(0);
+      expect({ errors: result.data.errors, warnings: result.data.warnings }, args[0]).toEqual({ errors: checked.errors, warnings: 1 });
+      expect(Object.keys(result.data), args[0]).toEqual(Object.keys(json<object>([...args, '--workdir=dir-one']).data));
+      expect(Object.keys(result.data), args[0]).not.toContain('c4');
+    }
+  });
+});
+
 describe('the built command', () => {
   const built = join(dirname(fileURLToPath(import.meta.url)), '..', 'dist', 'seefore.cjs');
 
