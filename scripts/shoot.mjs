@@ -9,11 +9,15 @@
 // `component~relay`. Without one it takes everything at each depth, and each system that has
 // parts to show at Container depth. Each setting is opened afresh at its address, and so fitted
 // to its room. With --by-depth it goes from one setting to the next as a reader does: a change
-// of depth alone by the Depth control, any other by the address; for each change of depth it
-// prints which box the page kept in place and how far its top left moved on the screen, with the
-// zoom before and after: pass number 21. For each setting it prints the boxes, boundaries and
-// arrows of the view, the arrows the page drew and the zoom it shows. The browser is found at
-// CHROME, or where macOS keeps it.
+// of depth alone by the Depth control, any other by the address. It makes each change of depth
+// twice. First on the picture as it stands fitted, after "Fit diagram", which the reader has not
+// moved: it prints whether the page fitted the new picture to its room, with the zoom before and
+// after and the zoom of the fit, and takes that picture as `-fitted`. Then, back at the depth
+// before, it moves the picture by one "Zoom in" before it changes the depth, and prints which box
+// the page kept in place and how far its top left moved on the screen, with the zoom before and
+// after: pass number 21. For each setting it prints the boxes, boundaries and arrows of the
+// view, the arrows the page drew and the zoom it shows. The browser is found at CHROME, or where
+// macOS keeps it.
 import { spawn } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
@@ -129,12 +133,13 @@ try {
 
   /**
    * What the page has drawn: the address, whether a picture is still laid out, its boxes and
-   * arrows, the zoom of the canvas, the box a change of depth kept, and where each box and
-   * boundary stands on the screen.
+   * arrows, the zoom of the canvas, where the canvas looks and the room it has, the box a change
+   * of depth kept, and where each box and boundary stands on the screen.
    */
   const drawn = `(() => {
     const pane = document.querySelector('.react-flow__viewport');
-    const zoom = pane ? new DOMMatrix(getComputedStyle(pane).transform).a : null;
+    const matrix = pane ? new DOMMatrix(getComputedStyle(pane).transform) : null;
+    const canvas = document.querySelector('.canvas')?.getBoundingClientRect();
     const places = {};
     for (const node of document.querySelectorAll('.react-flow__node')) {
       const { left, top } = node.getBoundingClientRect();
@@ -146,11 +151,64 @@ try {
       done: document.querySelector('.react-flow__node, .nothing, .failed') !== null,
       boxes: document.querySelectorAll('.react-flow__node').length,
       arrows: document.querySelectorAll('.react-flow__edge').length,
-      zoom,
+      zoom: matrix ? matrix.a : null,
+      viewport: matrix ? { x: matrix.e, y: matrix.f, zoom: matrix.a } : null,
+      room: canvas ? { width: canvas.width, height: canvas.height } : null,
       kept: document.querySelector('.diagram')?.dataset.kept ?? null,
       places,
     };
   })()`;
+
+  /** Clicks the button of the toolbar above the canvas with these words. */
+  const press = (words) => evaluate(`[...document.querySelectorAll('.diagram-head .buttons button')].find((button) => button.textContent === ${JSON.stringify(words)})?.click()`);
+  /** Chooses a depth by the Depth control, as a reader does. */
+  const chooseDepth = (depth) => evaluate(`document.querySelector('.sidebar .depth input[value="${depth}"]').click()`);
+  /** Waits until a move made by a button has ended: the canvas looks at the same place twice running. */
+  const stillAgain = async () => {
+    let seen = null;
+    for (let tries = 0; tries < 40; tries++) {
+      await pause(150);
+      const now = JSON.stringify((await evaluate(drawn))?.viewport ?? null);
+      if (now === seen) return;
+      seen = now;
+    }
+  };
+
+  /**
+   * Where the canvas looks when a picture of this size is fitted to the room it has, as the page
+   * fits it: whole, in the middle, with 4 % of the room on each side, and never larger than full size.
+   */
+  const fitOf = (picture, room) => {
+    const width = Math.max(picture.width, 1);
+    const height = Math.max(picture.height, 1);
+    const zoom = Math.min(1, (room.width * 0.92) / width, (room.height * 0.92) / height);
+    return { x: (room.width - width * zoom) / 2, y: (room.height - height * zoom) / 2, zoom };
+  };
+  /** The picture of a setting, as the server answers for it. */
+  const pictureOf = async (key) => (await (await fetch(`${address}/api/pictures/${state.revision}/${encodeURIComponent(key)}`)).json()).picture;
+
+  /**
+   * A change of depth on the picture as it stands fitted, which the reader has not moved: whether
+   * the page fitted the new one to its room, or, when nothing opened or closed, left it where it was.
+   */
+  const unmovedChange = async (from, key) => {
+    await press('Fit diagram');
+    await stillAgain();
+    const was = await evaluate(drawn);
+    await chooseDepth(settingOf(key).depth);
+    const now = await settled(key);
+    await pause(300);
+    const picture = await pictureOf(key);
+    const fit = picture && now.room ? fitOf(picture, now.room) : null;
+    const off = fit && now.viewport ? { x: now.viewport.x - fit.x, y: now.viewport.y - fit.y } : null;
+    const fitted = off !== null && Math.abs(off.x) <= 1 && Math.abs(off.y) <= 1 && Math.abs(now.viewport.zoom - fit.zoom) < 1e-6;
+    const still = was.viewport && now.viewport && was.viewport.x === now.viewport.x && was.viewport.y === now.viewport.y && was.viewport.zoom === now.viewport.zoom;
+    const result = { from, moved: false, kept: now.kept, fitted, still, zoomBefore: was.zoom, zoomAfter: now.zoom, zoomOfFit: fit?.zoom ?? null, off };
+    const words = fitted
+      ? `the page fitted it: zoom ${was.zoom} to ${now.zoom}, the fit ${fit.zoom}, off by ${off.x.toFixed(3)}, ${off.y.toFixed(3)} px${still ? ' (nothing opened or closed: the page did not move)' : ''}`
+      : `the page did NOT fit it: zoom ${was.zoom} to ${now.zoom}, the fit ${fit?.zoom}, kept ${now.kept}`;
+    return { result, said: `; from ${from}, not moved: ${words}` };
+  };
 
   /** Waits until the page shows the setting with this key, laid out, and what it draws stops changing. */
   const settled = async (key) => {
@@ -179,8 +237,19 @@ try {
     const shown = shownKey === undefined ? undefined : settingOf(shownKey);
     // A change of depth alone is made as a reader makes it, by the Depth control.
     const byDepth = values['by-depth'] && shown !== undefined && shown.scope === setting.scope && shown.depth !== setting.depth;
-    if (byDepth) await evaluate(`document.querySelector('.sidebar .depth input[value="${setting.depth}"]').click()`);
-    else if (values['by-depth'] && shownKey !== undefined) await evaluate(`location.hash = ${JSON.stringify(`#/view/${key}`)}`);
+    let unmoved;
+    if (byDepth) {
+      // First on the picture fitted, which the reader has not moved; then back, and moved.
+      unmoved = await unmovedChange(shownKey, key);
+      await shot(fileOf(key, at).replace('.png', '-fitted.png'));
+      await chooseDepth(shown.depth);
+      await settled(shownKey);
+      await pause(300);
+      await press('Zoom in');
+      await stillAgain();
+      before = await evaluate(drawn);
+      await chooseDepth(setting.depth);
+    } else if (values['by-depth'] && shownKey !== undefined) await evaluate(`location.hash = ${JSON.stringify(`#/view/${key}`)}`);
     else await open(`#/view/${key}`);
     const now = await settled(key);
     await pause(300);
@@ -199,12 +268,17 @@ try {
     };
     let said = `${key}: ${line.boxes} boxes, ${line.boundaries} boundaries, ${line.arrows} arrows, ${line.drawnArrows} drawn, zoom ${line.zoom}`;
     if (byDepth) {
-      // Pass number 21: the box kept stands where it stood on the screen, at the same zoom.
+      line.unmoved = unmoved.result;
+      said += unmoved.said;
+      // Pass number 21: on the picture moved by one "Zoom in", the box kept stands where it stood on the screen, at the same zoom.
       const kept = now.kept;
       const was = kept === null ? undefined : before.places[kept];
       const is = kept === null ? undefined : now.places[kept];
-      line.change = { from: shownKey, kept, moved: was && is ? { x: is.x - was.x, y: is.y - was.y } : null, zoomBefore: before.zoom, zoomAfter: now.zoom };
-      said += kept === null ? `; from ${shownKey}, nothing opened or closed` : `; from ${shownKey}, kept ${kept}: moved ${line.change.moved?.x.toFixed(3)}, ${line.change.moved?.y.toFixed(3)} px, zoom ${before.zoom} to ${now.zoom}`;
+      line.change = { from: shownKey, moved: true, kept, shift: was && is ? { x: is.x - was.x, y: is.y - was.y } : null, zoomBefore: before.zoom, zoomAfter: now.zoom };
+      said +=
+        kept === null
+          ? `; from ${shownKey}, moved by one Zoom in: nothing opened or closed, zoom ${before.zoom} to ${now.zoom}`
+          : `; from ${shownKey}, moved by one Zoom in: kept ${kept}, its top left moved ${line.change.shift?.x.toFixed(3)}, ${line.change.shift?.y.toFixed(3)} px, zoom ${before.zoom} to ${now.zoom}`;
     }
     summary.push(line);
     console.log(said);

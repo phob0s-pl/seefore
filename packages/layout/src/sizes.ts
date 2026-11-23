@@ -27,8 +27,10 @@ export interface Inset {
 /**
  * How far the text stands in from the edges of a box of each look. Most shapes fill their
  * rectangle, and their text has the box's padding. A queue or a topic keeps its text clear of
- * the near end drawn on its right, and a piece of infrastructure of the points at its sides.
- * The layout breaks the text for the room between, and the page draws it there.
+ * the near end drawn on its right, a component of the sign in its top right corner, which
+ * stands 8 in from the edge and is 14 wide, and a piece of infrastructure of the points at its
+ * sides. The layout breaks the text for the room between, and the page draws it there. No box
+ * changes its size for it.
  */
 export const TEXT_INSET: Readonly<Record<BoxLook, Inset>> = {
   person: { left: BOX_PADDING, right: BOX_PADDING },
@@ -38,7 +40,7 @@ export const TEXT_INSET: Readonly<Record<BoxLook, Inset>> = {
   app: { left: BOX_PADDING, right: BOX_PADDING },
   store: { left: BOX_PADDING, right: BOX_PADDING },
   'queue-or-topic': { left: BOX_PADDING, right: BOX_PADDING + 8 },
-  component: { left: BOX_PADDING, right: BOX_PADDING },
+  component: { left: BOX_PADDING, right: BOX_PADDING + 16 },
   infrastructure: { left: BOX_PADDING + 4, right: BOX_PADDING + 4 },
 };
 

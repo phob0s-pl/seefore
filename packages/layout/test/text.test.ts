@@ -54,6 +54,17 @@ describe('the text of a box', () => {
     expect(TEXT_INSET.infrastructure).toEqual({ left: BOX_PADDING + 4, right: BOX_PADDING + 4 });
   });
 
+  it('keeps a component’s name clear of the sign in its top right corner, which a long name ran under', () => {
+    // 216 px wide in bold, as above: one line in an app, two in a component.
+    const name = 'Payment reconciliation events';
+    const text = boxText(box('a', 'components', { look: 'component', name, line: '[Component · Rust]' }));
+    expect(TEXT_INSET.component).toEqual({ left: BOX_PADDING, right: BOX_PADDING + 16 });
+    expect(text.inset).toEqual(TEXT_INSET.component);
+    expect(text.name).toEqual(['Payment reconciliation', 'events']);
+    expect(fit(text.name, NAME_FONT, BOX_WIDTH - text.inset.left - text.inset.right)).toBe(true);
+    expect(fit([text.line], KIND_FONT, BOX_WIDTH - text.inset.left - text.inset.right)).toBe(true);
+  });
+
   it('has the name in at most two lines', () => {
     const text = boxText(box('a', 'systems', { name: 'The system that keeps every record of every customer and every order they ever placed' }));
     expect(text.name).toHaveLength(2);

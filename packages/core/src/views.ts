@@ -87,8 +87,11 @@ const LEGEND: readonly LegendEntry[] = [
   { key: 'kept', text: 'Kept stores: how many stores this app keeps, drawn at it; its panel lists them' },
 ];
 
-/** What the legend says of a system with everything as the scope, where no system is the other one. */
-const SYSTEM_IN_EVERYTHING = "System: software seen as one thing, ours or somebody else's";
+/**
+ * What the legend says of a system where no system is the other one: with everything as the
+ * scope, and with a chosen box that is not a system.
+ */
+const SYSTEM_ANY = "System: software seen as one thing, ours or somebody else's";
 
 /** What the legend says of the boundary of an external system the view is about, in place of what it says of the boundary of another. */
 const BOUNDARY_EXTERNAL = "Boundary: this system, which is external: somebody else's, used as it is given, with its apps and stores inside";
@@ -430,6 +433,18 @@ function placeOf(drawing: Drawing, path: readonly string[]): string | undefined 
   return path[at];
 }
 
+/**
+ * Where a drawing counts the end of a connection that neither starts nor ends in the scope: at
+ * the deepest thing on its path that the drawing draws. That is where `placeOf` puts it when it
+ * is a neighbour; else it may be a neighbour it is in, as the system of the chosen app is when a
+ * connection is written from that system to the app. Nothing when nothing on its path is drawn.
+ */
+function countedAt(drawing: Drawing, path: readonly string[]): string | undefined {
+  const place = placeOf(drawing, path);
+  if (draws(drawing, place)) return place;
+  return [...path].reverse().find((id) => draws(drawing, id));
+}
+
 /** What a setting draws: the chosen box or everything, each open as the depth says, and the chosen box's neighbours, closed. */
 function drawingOf(index: Index, setting: Setting): Drawing {
   const level = DEPTHS.indexOf(setting.depth);
@@ -532,14 +547,11 @@ function viewIn(index: Index, setting: Setting): View {
     };
   });
   const arrows = [...sorted.bundles.entries()].sort(([a], [b]) => byText(a, b)).map(([id, bundle]) => arrowOf(id, bundle, drawing, index));
-  const name = scope === null ? EVERYTHING : (index.names.get(scope) ?? scope);
-  // One system at System depth is the context view of stage 5, and keeps its title.
-  const title = scope !== null && index.systems.has(scope) && setting.depth === 'system' ? `Context view: ${name}` : `${DEPTH_WORDS[setting.depth]} view: ${name}`;
   return {
     id: keyOf(setting),
     depth: setting.depth,
     scope,
-    title,
+    title: titleOf(setting, index),
     boxes,
     boundaries,
     arrows,
@@ -547,6 +559,32 @@ function viewIn(index: Index, setting: Setting): View {
     legend: legendOf(boxes, boundaries, arrows, passing.passed, setting, index),
     passed: passing.passed,
   };
+}
+
+/** The word in the brackets of a kind line for each family: what the title says after the name of a chosen box that is not a system. */
+const KIND_WORDS: Readonly<Record<BoxFamily, string>> = {
+  people: 'Person',
+  systems: 'System',
+  apps: 'App',
+  stores: 'Store',
+  components: 'Component',
+  infrastructure: 'Infrastructure',
+};
+
+/**
+ * The title of a setting: the depth and the scope, as the controls say them, `Component view:
+ * Everything`. One system at System depth is the context view of stage 5, and keeps its title,
+ * `Context view: Shop`. A chosen box that is not a system has its kind after its name, in the
+ * brackets a kind line has, `Container view: Order API [App]`: so a system and an app of one name
+ * have two titles, and the title says whether the picture opens the box or stands it among its
+ * neighbours.
+ */
+function titleOf(setting: Setting, index: Index): string {
+  const { scope, depth } = setting;
+  if (scope === null) return `${DEPTH_WORDS[depth]} view: ${EVERYTHING}`;
+  const name = index.names.get(scope) ?? scope;
+  if (index.systems.has(scope)) return depth === 'system' ? `Context view: ${name}` : `${DEPTH_WORDS[depth]} view: ${name}`;
+  return `${DEPTH_WORDS[depth]} view: ${name} [${KIND_WORDS[recordOf(scope, scope, index).family]}]`;
 }
 
 /**
@@ -567,9 +605,10 @@ function sortedFor(index: Index, drawing: Drawing): Sorted {
       continue;
     }
     const ours = inScope(drawing, from) || inScope(drawing, to);
-    const start = placeOf(drawing, from);
-    const end = placeOf(drawing, to);
-    // An end in the scope is always drawn, and so is its neighbour; two ends outside it may not be.
+    // An end in the scope is always drawn, and so is its neighbour. Two ends outside it are each
+    // taken at the deepest thing on its path that the view draws, which there may not be.
+    const start = ours ? placeOf(drawing, from) : countedAt(drawing, from);
+    const end = ours ? placeOf(drawing, to) : countedAt(drawing, to);
     if (!draws(drawing, start) || !draws(drawing, end)) continue;
     if (start === end) {
       if (!ours && !(connection.from === start && connection.to === start)) continue;
@@ -879,10 +918,11 @@ function recordOf(id: string, scope: string | null, index: Index): Described {
  * The boundary of the chosen system says when it is an external system's, that it holds pieces
  * of infrastructure when one stands inside it, and what an arrow at its edge means when the
  * view draws one; that of another system, as each is with everything as the scope, says the
- * same of a system. The boundary of an app has its own line. With everything as the scope, no
- * system is the other one. A thing in brackets is explained where a route line names one, or
- * the list of what is passed through. The `only` line is explained where a box, a boundary or
- * an arrow has one, and each mark where a box or a boundary carries it.
+ * same of a system. The boundary of an app has its own line. A system is the other one only
+ * beside a chosen system: not with everything as the scope, nor beside a chosen box that is not
+ * a system. A thing in brackets is explained where a route line names one, or the list of what
+ * is passed through. The `only` line is explained where a box, a boundary or an arrow has one,
+ * and each mark where a box or a boundary carries it.
  */
 function legendOf(
   boxes: readonly ViewBox[],
@@ -924,7 +964,8 @@ function legendOf(
   const said = (text: string) => `${text.replace(INSIDE, pieces ? INSIDE_WITH_PIECES : INSIDE)}${atEdge ? BOUNDARY_ARROWS : ''}`;
   const textOf = ({ key, text }: LegendEntry): string => {
     if (key === 'boundary') return said(chosen === undefined ? BOUNDARY_ANY : chosen.external === true ? BOUNDARY_EXTERNAL : text);
-    if (key === 'system' && setting.scope === null) return SYSTEM_IN_EVERYTHING;
+    // "Other system" is said only beside a chosen system.
+    if (key === 'system' && chosen === undefined) return SYSTEM_ANY;
     return text;
   };
   return LEGEND.filter((entry) => drawn.has(entry.key)).map((entry) => ({ key: entry.key, text: textOf(entry) }));

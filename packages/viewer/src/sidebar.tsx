@@ -29,22 +29,25 @@ export interface ScopeGroup {
  * The groups of what can be the scope, in the order and the groups of the listing: the people;
  * each system that has parts, in a group named for it, with its apps, each followed by its
  * components, then its stores and its pieces of infrastructure; the other systems; the pieces of
- * infrastructure in no system. A box is listed by its name, and a component with its app's, as
- * the panel names an end: `Relay / Store service`. Two boxes of one name, and one named as
- * "Everything" is, are told apart by their ids.
+ * infrastructure in no system. A box is listed by its own name, and a component with its app's
+ * after it in brackets, `Checkout (Order API)`, so that the closed control shows the name. Two
+ * boxes of one name, not counting capitals, and one named as "Everything" is, are told apart by
+ * their ids: `Shop (shop-old)`, `Worker (api-worker) (Order API)`.
  */
 export function scopeGroups(state: ViewerState): ScopeGroup[] {
   const index = indexOf(state.model);
   const withParts = new Set(state.outline.withParts.map((system) => system.id));
   const names = state.scopes.map((scope) => nameOf(index, scope.id));
+  // Names are compared as a reader tells them apart: `Shop` and `shop` are one name.
+  const same = (name: string) => name.toLocaleLowerCase('en');
   const counted = new Map<string, number>();
-  for (const name of names) counted.set(name, (counted.get(name) ?? 0) + 1);
+  for (const name of names) counted.set(same(name), (counted.get(same(name)) ?? 0) + 1);
   const label = (scope: Scope, at: number) => {
     const name = names[at] ?? scope.id;
-    const told = (counted.get(name) ?? 0) > 1 || name === EVERYTHING ? `${name} (${scope.id})` : name;
-    // A component stands after its app, and is named with it.
+    const told = (counted.get(same(name)) ?? 0) > 1 || same(name) === same(EVERYTHING) ? `${name} (${scope.id})` : name;
+    // A component stands after its app, and has the app's name after its own.
     const found = index.get(scope.id);
-    return found?.family === 'components' ? `${nameOf(index, found.record.in)} / ${told}` : told;
+    return found?.family === 'components' ? `${told} (${nameOf(index, found.record.in)})` : told;
   };
   // Each group with its kind: a system with parts has a group of its own, named for it.
   const groups: (ScopeGroup & { kind: 'people' | 'system' | 'others' | 'infrastructure' })[] = [];

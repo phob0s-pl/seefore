@@ -383,6 +383,40 @@ describe('two neighbours that act on each other', () => {
     expect(drawn(everything).arrows).toMatchObject({ 'bank~clerk': ['bank-tells-clerk'], 'clerk~bank': ['clerk-calls-bank'] });
     expect(everything.left).toEqual({ outside: [], broken: [] });
   });
+
+  it('are counted also when one is in the other: an end that is not drawn is taken at the deepest thing on its path that the picture draws', () => {
+    // The API is chosen. Its shop is a neighbour, since a connection is written from the shop to
+    // it; the web app and the clerk are neighbours too. The orders and the admin app are not drawn.
+    const files = {
+      'people/clerk.yaml': 'name: Clerk\n',
+      'systems/shop.yaml': 'name: Shop\n',
+      'apps/api.yaml': 'name: API\nin: shop\n',
+      'apps/web.yaml': 'name: Web\nin: shop\n',
+      'apps/admin.yaml': 'name: Admin\nin: shop\n',
+      'stores/orders.yaml': 'name: Orders\nin: shop\n',
+      'connections/shop-wakes-api.yaml': 'from: shop\nto: api\n',
+      'connections/api-calls-web.yaml': 'from: api\nto: web\n',
+      'connections/clerk-uses-api.yaml': 'from: clerk\nto: api\n',
+      // From a neighbour to a part of the shop: between the web app and the shop, and the clerk and the shop.
+      'connections/web-writes-orders.yaml': 'from: web\nto: orders\n',
+      'connections/clerk-reads-orders.yaml': 'from: clerk\nto: orders\n',
+      // Between two parts of the shop that are not drawn: both are taken at the shop, and what goes on inside a neighbour is not counted.
+      'connections/admin-reads-orders.yaml': 'from: admin\nto: orders\n',
+    };
+    for (const key of ['container~api', 'component~api']) {
+      const api = view(files, key);
+      expect(drawn(api), key).toEqual({
+        boxes: { api: null, clerk: null, shop: null, web: null },
+        boundaries: {},
+        arrows: { 'api~web': ['api-calls-web'], 'clerk~api': ['clerk-uses-api'], 'shop~api': ['shop-wakes-api'] },
+      });
+      expect(api.left.outside, key).toEqual(['clerk-reads-orders', 'web-writes-orders']);
+      expect(leftOutWords(api), key).toBe('2 connections between two of its neighbours are not drawn:');
+    }
+    // Without the connection from the shop, the shop is no neighbour, and nothing on the orders' path is drawn.
+    const { 'connections/shop-wakes-api.yaml': _, ...alone } = files;
+    expect(view(alone, 'container~api').left.outside).toEqual([]);
+  });
 });
 
 /**
@@ -547,11 +581,31 @@ describe('the title', () => {
   it('names the depth and the scope, and keeps the context view of one system', () => {
     expect(view(KINDS, 'system').title).toBe('System view: Everything');
     expect(view(KINDS, 'component').title).toBe('Component view: Everything');
-    expect(view(KINDS, 'container~api').title).toBe('Container view: API');
+    expect(view(KINDS, 'container').title).toBe('Container view: Everything');
     expect(view(KINDS, 'component~shop').title).toBe('Component view: Shop');
     expect(view(KINDS, 'container~shop').title).toBe('Container view: Shop');
     expect(view(KINDS, 'system~shop').title).toBe('Context view: Shop');
-    expect(view(KINDS, 'system~clerk').title).toBe('System view: Clerk');
+    expect(view(KINDS, 'system~mail').title).toBe('Context view: Mail');
+    expect(view(KINDS, 'container~mail').title).toBe('Container view: Mail');
+  });
+
+  it('has the kind of a chosen box that is not a system after its name, in the brackets a kind line has', () => {
+    expect(view(KINDS, 'container~api').title).toBe('Container view: API [App]');
+    expect(view(KINDS, 'component~api').title).toBe('Component view: API [App]');
+    expect(view(KINDS, 'system~clerk').title).toBe('System view: Clerk [Person]');
+    expect(view(KINDS, 'component~clerk').title).toBe('Component view: Clerk [Person]');
+    expect(view(KINDS, 'container~orders').title).toBe('Container view: Orders [Store]');
+    expect(view(KINDS, 'component~checkout').title).toBe('Component view: Checkout [Component]');
+    expect(view(KINDS, 'system~proxy').title).toBe('System view: Proxy [Infrastructure]');
+    expect(view(KINDS, 'container~gate').title).toBe('Container view: Gate [Infrastructure]');
+    // A queue is a store, whatever its look; the kind of the store is not said.
+    expect(view({ ...KINDS, 'stores/orders.yaml': 'name: Orders\nin: shop\nkind: queue\n' }, 'container~orders').title).toBe('Container view: Orders [Store]');
+  });
+
+  it('tells a system and an app of one name apart', () => {
+    const files = { 'systems/post.yaml': 'name: Courier\n', 'apps/courier.yaml': 'name: Courier\nin: post\n' };
+    expect(view(files, 'container~post').title).toBe('Container view: Courier');
+    expect(view(files, 'container~courier').title).toBe('Container view: Courier [App]');
   });
 });
 
@@ -584,6 +638,21 @@ describe('the legend', () => {
   it('says of a system, with everything as the scope, what it is with no other one to stand beside', () => {
     expect(view(TWO, 'system').legend.find((entry) => entry.key === 'system')?.text).toBe("System: software seen as one thing, ours or somebody else's");
     expect(view(TWO, 'system~shop').legend.find((entry) => entry.key === 'system')?.text).toBe("Other system: software seen as one thing, ours or somebody else's");
+  });
+
+  it('says "Other system" only beside a chosen system, and "System" beside a chosen person, app, store, piece of infrastructure or component', () => {
+    // The mail system reaches the store, the gate and the component too, so that a system stands beside each.
+    const files = {
+      ...KINDS,
+      'connections/mail-reads-orders.yaml': 'from: mail\nto: orders\n',
+      'connections/mail-asks-gate.yaml': 'from: mail\nto: gate\n',
+      'connections/mail-asks-checkout.yaml': 'from: mail\nto: checkout\n',
+    };
+    const system = (key: string) => view(files, key).legend.find((entry) => entry.key === 'system')?.text;
+    for (const key of ['system~shop', 'container~shop', 'component~shop', 'system~mail']) expect(system(key), key).toBe("Other system: software seen as one thing, ours or somebody else's");
+    for (const key of ['system', 'container', 'component', 'system~clerk', 'container~api', 'component~api', 'container~orders', 'container~gate', 'system~proxy', 'component~checkout']) {
+      expect(system(key), key).toBe("System: software seen as one thing, ours or somebody else's");
+    }
   });
 
   it('says of the boundary of a system that is not the chosen box that it is a system, with what it holds and what an arrow at its edge means', () => {

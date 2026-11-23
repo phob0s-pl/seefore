@@ -2,12 +2,15 @@ import { settingOf } from '@seefore/core';
 import type { Picture, View, ViewerState } from '@seefore/core';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
+import { BOX_WIDTH, TEXT_INSET } from '../../layout/src/sizes.ts';
 import { START } from '../src/address.ts';
 import type { Route } from '../src/address.ts';
 import type { Selection } from '../src/follow.ts';
+import { COMPONENT_SIGN, SYSTEM_INNER } from '../src/geometry.ts';
 import type { Shown } from '../src/live.ts';
-import { Page } from '../src/page.tsx';
+import { Page, pageTitle } from '../src/page.tsx';
 import { scopeGroups } from '../src/sidebar.tsx';
+import { TEXT_SLACK } from '../src/theme.ts';
 import { ARCHIVE_FILES, ARCHIVE_STATE, archivePicture, archiveView, stateOf } from './archive.ts';
 import { COMPONENT_PICTURE, CONTAINERS, CONTAINER_PICTURE, CONTEXT, CONTEXT_PICTURE, HARD_CONTAINERS, HARD_PICTURE, HARD_STATE, STATE, VIEWS } from './fixture.ts';
 import { placedPicture } from './placed.ts';
@@ -115,8 +118,8 @@ describe('the sidebar', () => {
     expect(depthsOf(html)).toEqual(['System', 'Container, checked', 'Component']);
   });
 
-  it('lists in Scope, a list labelled Scope, "Everything" first, then each box that can be the scope, grouped and ordered as the listing, a component named with its app', () => {
-    expect(scopesOf(html)).toEqual(['Everything', '[People]', 'Customer', '[Shop]', 'Shop *', 'Order API', 'Order API / Checkout', 'Order API / Order status', 'Orders database', '[Other systems]', 'Card provider']);
+  it('lists in Scope, a list labelled Scope, "Everything" first, then each box that can be the scope, grouped and ordered as the listing, a component by its own name with its app after it in brackets', () => {
+    expect(scopesOf(html)).toEqual(['Everything', '[People]', 'Customer', '[Shop]', 'Shop *', 'Order API', 'Checkout (Order API)', 'Order status (Order API)', 'Orders database', '[Other systems]', 'Card provider']);
     expect(sidebarOf(html)).toMatch(/<label for="([^"]+)">Scope<\/label><select id="\1">/);
   });
 
@@ -137,34 +140,44 @@ describe('the sidebar', () => {
     for (const key of ['system', 'container', 'component', 'component~checkout', 'system~card-provider', 'container~order-api']) expect(plain(scopesOf(render(routeTo(key)))), key).toEqual(all);
     expect(chosen('system')).toEqual(['Everything *']);
     expect(chosen('component')).toEqual(['Everything *']);
-    expect(chosen('component~checkout')).toEqual(['Order API / Checkout *']);
+    expect(chosen('component~checkout')).toEqual(['Checkout (Order API) *']);
     expect(chosen('system~card-provider')).toEqual(['Card provider *']);
   });
 
-  it('tells two boxes of one name apart by their ids, and a box named as Everything is', () => {
+  it('tells two boxes of one name apart by their ids, not counting capitals, and a box named as Everything is', () => {
     const twins = stateOf({
       'seefore.yaml': 'format: 1\nname: Twins\n',
-      'people/everything.yaml': 'name: Everything\n',
+      'people/everything.yaml': 'name: everything\n',
       'systems/billing.yaml': 'name: Billing\n',
       'systems/billing-old.yaml': 'name: Billing\n',
       'systems/ledger.yaml': 'name: Ledger\n',
+      'systems/shop.yaml': 'name: Shop\n',
       'apps/billing-api.yaml': 'name: API\nin: billing\n',
       'apps/ledger-api.yaml': 'name: API\nin: ledger\n',
+      'apps/shop-app.yaml': 'name: shop\nin: ledger\n',
+      'components/billing-worker.yaml': 'name: Worker\nin: billing-api\n',
+      'components/ledger-worker.yaml': 'name: worker\nin: ledger-api\n',
+      'components/sorter.yaml': 'name: Sorter\nin: ledger-api\n',
       'infrastructure/proxy.yaml': 'name: Proxy\n',
       'connections/everything-reloads-proxy.yaml': 'from: everything\nto: proxy\n',
     });
     expect(scopesOf(render({ page: 'model' }, null, null, twins))).toEqual([
       'Everything *',
       '[People]',
-      'Everything (everything)',
+      'everything (everything)',
       '[Billing (billing)]',
       'Billing (billing)',
       'API (billing-api)',
+      'Worker (billing-worker) (API)',
       '[Ledger]',
       'Ledger',
       'API (ledger-api)',
+      'worker (ledger-worker) (API)',
+      'Sorter (API)',
+      'shop (shop-app)',
       '[Other systems]',
       'Billing (billing-old)',
+      'Shop (shop)',
       '[Infrastructure]',
       'Proxy',
     ]);
@@ -275,6 +288,18 @@ describe('a boundary inside a boundary', () => {
     expect(html).toContain('>[Component]<');
   });
 
+  it('keeps a component’s text clear of the sign in its top right corner, in the room the layout broke its lines for', () => {
+    const { left, right } = TEXT_INSET.component;
+    // The left edge of the sign, with its tabs and half its line.
+    const sign = BOX_WIDTH - COMPONENT_SIGN.inset - COMPONENT_SIGN.size - SYSTEM_INNER / 2;
+    // A line may run to the edge of its room, and the page gives it a little more.
+    expect(BOX_WIDTH - right + TEXT_SLACK).toBeLessThan(sign);
+    const components = new Set(['checkout', 'order-status']);
+    const insetted = { ...picture, boxes: picture.boxes.map((each) => (components.has(each.id) ? { ...each, inset: { left, right } } : each)) };
+    const drawn = render(routeTo('component~shop'), insetted);
+    expect(drawn.match(/data-look="component"[^]*?<div class="box-text" style="([^"]*)"/)?.[1]).toBe(`padding-left:${left - TEXT_SLACK}px;padding-right:${right - TEXT_SLACK}px`);
+  });
+
   it('lets a boundary be chosen as a box is: it lights what a box lights, says its words on the reading line, and opens its panel', () => {
     const chosen = render(routeTo('component~shop'), picture, { kind: 'box', id: 'order-api' });
     expect(chosen).toMatch(/<div class="boundary family-apps lit chosen"/);
@@ -314,9 +339,19 @@ describe('the title of each kind of setting', () => {
     expect(title('system~shop')).toBe('Context view: Shop');
     expect(title('container~shop')).toBe('Container view: Shop');
     expect(title('component~shop')).toBe('Component view: Shop');
-    expect(title('container~order-api')).toBe('Container view: Order API');
-    expect(title('component~checkout')).toBe('Component view: Checkout');
-    expect(title('system~customer')).toBe('System view: Customer');
+  });
+
+  it('has the kind of a chosen box that is not a system after its name, and the page’s tab title follows', () => {
+    const title = (key: string) => /<h1 class="view-title">([^<]*)<\/h1>/.exec(engine(key))?.[1];
+    expect(title('container~order-api')).toBe('Container view: Order API [App]');
+    expect(title('component~order-api')).toBe('Component view: Order API [App]');
+    expect(title('component~checkout')).toBe('Component view: Checkout [Component]');
+    expect(title('system~customer')).toBe('System view: Customer [Person]');
+    expect(title('container~orders-database')).toBe('Container view: Orders database [Store]');
+    expect(title('system~card-provider')).toBe('Context view: Card provider');
+    expect(engine('container~order-api')).toContain('aria-label="The picture: Container view: Order API [App]"');
+    const app = archiveView('container~order-api', STATE);
+    expect(pageTitle(shownFor(routeTo('container~order-api'), placedPicture(app), STATE, app))).toBe('Container view: Order API [App] · Shop · seefore');
   });
 });
 

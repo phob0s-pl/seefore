@@ -1200,7 +1200,7 @@ describe('the note of a large picture on the page', () => {
   it('is said of the zoom the picture is shown at, and never of the zoom it would open at: drawn without a browser it stands at full size, and says nothing', () => {
     const { state, view, drawn } = grid(81);
     // Fitted to its room, this picture would be too small to read, and the stage 7 page said so before it was shown.
-    expect(smallNote(drawn, fitViewport(whole(drawn), ROOM).zoom)).toContain('Too small to read at');
+    expect(smallNote(view, fitViewport(whole(drawn), ROOM).zoom)).toContain('Too small to read at');
     const html = render(routeTo(view.id), drawn, null, state);
     expect(html).toContain('<p class="small-note" role="status"></p>');
     expect(html).not.toContain('crowded');

@@ -138,38 +138,40 @@ describe('the bounds of what is lit', () => {
 });
 
 describe('the one note under the counts', () => {
-  /** A picture of so many boxes and arrows, wherever they stand. */
-  const counted = (boxes: number, arrows: number): Drawn => ({
-    ...CONTAINER_PICTURE,
-    boxes: Array.from({ length: boxes }, (_, at) => ({ ...(CONTAINER_PICTURE.boxes[0] as Drawn['boxes'][number]), id: `box-${at}` })),
-    arrows: Array.from({ length: arrows }, (_, at) => ({ ...(CONTAINER_PICTURE.arrows[0] as Drawn['arrows'][number]), id: `arrow-${at}` })),
+  const everything = { scope: null };
+  const one = { scope: 'order-api' };
+
+  it('says, as the spec words it, that the picture is too small to read at the zoom it is shown at, and how to read it', () => {
+    expect(smallNote(everything, 0.07)).toBe(
+      "Too small to read at 7 %. Names can be read from 60 %. Zoom in, or point at a box or an arrow, or move the keyboard's focus to it, to read it here. To see one box with its neighbours, choose it as the scope.",
+    );
+    expect(smallNote(one, 0.18)).toBe("Too small to read at 18 %. Names can be read from 60 %. Zoom in, or point at a box or an arrow, or move the keyboard's focus to it, to read it here.");
   });
 
-  it('says, as the spec words it, what is too small to read at the zoom it is shown at, and how to read it', () => {
-    expect(smallNote(counted(118, 193), 0.07)).toBe(
-      "Too small to read at 7 %: 118 boxes and 193 arrows. Names can be read from 60 %. Zoom in, or point at a box or an arrow, or move the keyboard's focus to it, to read it here. To see one box with its neighbours, choose it as the scope.",
-    );
+  it('says how to see one box with its neighbours only with everything as the scope', () => {
+    expect(smallNote(everything, 0.3)).toContain('choose it as the scope');
+    for (const scope of ['shop', 'order-api', 'checkout', 'customer']) expect(smallNote({ scope }, 0.3), scope).not.toContain('scope');
+  });
+
+  it('does not say the numbers of boxes and arrows, which stand on the line above it', () => {
+    for (const view of [everything, one]) expect(smallNote(view, 0.07)).not.toMatch(/\d+ (box|boxes|arrow|arrows)\b/);
+    expect(smallNote(everything, 0.07)).not.toContain(':');
   });
 
   it('is there under the zoom from which names can be read, and not from it', () => {
-    expect(smallNote(CONTAINER_PICTURE, 0.5999)).toContain('Too small to read at 60 %: 4 boxes and 3 arrows.');
-    expect(smallNote(CONTAINER_PICTURE, 0.6)).toBeUndefined();
-    expect(smallNote(CONTAINER_PICTURE, 1)).toBeUndefined();
+    expect(smallNote(CONTAINERS, 0.5999)).toMatch(/^Too small to read at 60 %\. /);
+    expect(smallNote(CONTAINERS, 0.6)).toBeUndefined();
+    expect(smallNote(CONTAINERS, 1)).toBeUndefined();
   });
 
   it('is decided by the zoom alone, and counts no box to decide it', () => {
     // Stage 7 had a note of its own for a view of more than 40 boxes, at any zoom.
-    const { drawn } = grid(41);
-    expect(smallNote(drawn, 0.75)).toBeUndefined();
-    expect(smallNote(drawn, 0.2)).toBe(smallNote({ ...drawn, boxes: drawn.boxes.slice(0, 40) }, 0.2)?.replace('40 boxes', '41 boxes'));
+    const { view, drawn } = grid(41);
+    expect(smallNote(view, 0.75)).toBeUndefined();
+    expect(smallNote(view, 0.2)).toBe(smallNote(grid(40).view, 0.2));
     const large = fitViewport(whole(drawn), { width: 1920, height: 1080 }).zoom;
     expect(large).toBeGreaterThanOrEqual(0.6);
-    expect(smallNote(drawn, large)).toBeUndefined();
-  });
-
-  it('counts one box and one arrow in the singular', () => {
-    const one = { ...CONTAINER_PICTURE, boxes: CONTAINER_PICTURE.boxes.slice(0, 1), arrows: CONTAINER_PICTURE.arrows.slice(0, 1) };
-    expect(smallNote(one, 0.1)).toContain('1 box and 1 arrow.');
+    expect(smallNote(view, large)).toBeUndefined();
   });
 
   it('writes a zoom as a share', () => {
@@ -329,10 +331,12 @@ describe('where the picture stands when a new one comes and the words above the 
 });
 
 /**
- * Pass number 21 by arithmetic: at a change of depth one box keeps its top left at the same point
- * of the screen, at the same zoom, opening and closing. Where a box stands on the screen is
- * worked out here as React Flow puts it, from the viewport and the place of the canvas; the
- * browser measures the same, and the trial measured it there.
+ * A change of depth, by arithmetic. A picture the reader has not moved stood fitted to its room,
+ * and is fitted anew when a box opens or closes. On a picture the reader has moved or zoomed,
+ * one box keeps its top left at the same point of the screen, at the same zoom, opening and
+ * closing: pass number 21. Where a box stands on the screen is worked out here as React Flow
+ * puts it, from the viewport and the place of the canvas; the browser measures the same, and
+ * `scripts/shoot.mjs --by-depth` measures it there.
  */
 describe('a change of depth', () => {
   const room: Room = { width: 1200, height: 800 };
@@ -342,7 +346,7 @@ describe('a change of depth', () => {
     if (place === undefined) throw new Error(`The picture draws no ${id}.`);
     return { x: canvas.x + at.x + place.x * at.zoom, y: canvas.y + at.y + place.y * at.zoom };
   };
-  /** A change from one picture to another, the one before shown at a viewport. */
+  /** A change from one picture to another, the one before shown at a viewport, which the reader has not moved unless said. */
   const change = (before: [View, Drawn], after: [View, Drawn], viewport: Viewport, more: Partial<PictureChange> = {}): PictureChange => ({
     before: { view: before[0], drawn: before[1] },
     after: { view: after[0], drawn: after[1] },
@@ -353,6 +357,8 @@ describe('a change of depth', () => {
     room,
     ...more,
   });
+  /** A picture the reader has moved or zoomed. */
+  const MOVED = { moved: true };
   const containers: [View, Drawn] = [CONTAINERS, CONTAINER_PICTURE];
   const components: [View, Drawn] = [COMPONENTS, COMPONENT_PICTURE];
   const viewports: Viewport[] = [
@@ -368,21 +374,42 @@ describe('a change of depth', () => {
     expect(changeOf(CONTEXT, CARD_CONTEXT)).toBe('scope');
   });
 
-  it('keeps the box that opens with its top left at the same point of the screen, at the same zoom', () => {
+  it('fits anew a picture the reader has not moved when a box opens, and the page then counts it as not moved', () => {
     for (const viewport of viewports) {
-      const { viewport: next, kept } = viewportOnChange(change(containers, components, viewport), room);
+      expect(viewportOnChange(change(containers, components, viewport), room)).toEqual({ viewport: fitViewport(whole(COMPONENT_PICTURE), room), fitted: true });
+      // Also when the words above the canvas grow by a line: it is fitted to the room as it is now.
+      const now = { width: room.width, height: room.height - 18 };
+      expect(viewportOnChange(change(containers, components, viewport), now, { canvasBefore: { x: 240, y: 112 }, canvasAfter: { x: 240, y: 130 } })).toEqual({
+        viewport: fitViewport(whole(COMPONENT_PICTURE), now),
+        fitted: true,
+      });
+    }
+  });
+
+  it('fits anew a picture the reader has not moved when a box closes', () => {
+    for (const viewport of viewports) {
+      expect(viewportOnChange(change(components, containers, viewport), room)).toEqual({ viewport: fitViewport(whole(CONTAINER_PICTURE), room), fitted: true });
+    }
+  });
+
+  it('keeps the box that opens with its top left at the same point of the screen, at the same zoom, on a picture the reader has moved', () => {
+    for (const viewport of viewports) {
+      const { viewport: next, fitted, kept } = viewportOnChange(change(containers, components, viewport, MOVED), room);
       expect(kept).toBe('order-api');
+      expect(fitted).toBe(false);
       expect(next?.zoom).toBe(viewport.zoom);
       const [was, is] = [onScreen(CONTAINER_PICTURE, 'order-api', viewport), onScreen(COMPONENT_PICTURE, 'order-api', next ?? viewport)];
+      // Within a pixel, as pass number 21 asks: by arithmetic, to the last digits.
       expect(Math.abs(is.x - was.x)).toBeLessThan(1e-6);
       expect(Math.abs(is.y - was.y)).toBeLessThan(1e-6);
     }
   });
 
-  it('keeps the boundary that closes, its top left where the box now stands', () => {
+  it('keeps the boundary that closes, its top left where the box now stands, on a picture the reader has moved', () => {
     for (const viewport of viewports) {
-      const { viewport: next, kept } = viewportOnChange(change(components, containers, viewport), room);
+      const { viewport: next, fitted, kept } = viewportOnChange(change(components, containers, viewport, MOVED), room);
       expect(kept).toBe('order-api');
+      expect(fitted).toBe(false);
       expect(next?.zoom).toBe(viewport.zoom);
       const [was, is] = [onScreen(COMPONENT_PICTURE, 'order-api', viewport), onScreen(CONTAINER_PICTURE, 'order-api', next ?? viewport)];
       expect(Math.abs(is.x - was.x)).toBeLessThan(1e-6);
@@ -394,14 +421,14 @@ describe('a change of depth', () => {
     const canvasBefore = { x: 240, y: 112 };
     const canvasAfter = { x: 240, y: 130 };
     for (const viewport of viewports) {
-      const opening = viewportOnChange(change(containers, components, viewport), room, { canvasBefore, canvasAfter });
+      const opening = viewportOnChange(change(containers, components, viewport, MOVED), room, { canvasBefore, canvasAfter });
       const was = onScreen(CONTAINER_PICTURE, 'order-api', viewport, canvasBefore);
       const is = onScreen(COMPONENT_PICTURE, 'order-api', opening.viewport ?? viewport, canvasAfter);
       expect(Math.abs(is.x - was.x)).toBeLessThan(1e-6);
       expect(Math.abs(is.y - was.y)).toBeLessThan(1e-6);
       // Closing again, the line gone.
       const shown = opening.viewport ?? viewport;
-      const closing = viewportOnChange(change(components, containers, shown), room, { canvasBefore: canvasAfter, canvasAfter: canvasBefore });
+      const closing = viewportOnChange(change(components, containers, shown, MOVED), room, { canvasBefore: canvasAfter, canvasAfter: canvasBefore });
       const back = onScreen(CONTAINER_PICTURE, 'order-api', closing.viewport ?? shown, canvasBefore);
       expect(Math.abs(back.x - was.x)).toBeLessThan(1e-6);
       expect(Math.abs(back.y - was.y)).toBeLessThan(1e-6);
@@ -412,7 +439,7 @@ describe('a change of depth', () => {
   it('keeps it where the page measured its element to stand, when it did', () => {
     const viewport = viewports[1] as Viewport;
     const box = { x: 512.5, y: 300.25 };
-    const { viewport: next } = viewportOnChange(change(containers, components, viewport), room, { canvasBefore: { x: 240, y: 112 }, canvasAfter: { x: 240, y: 112 }, box });
+    const { viewport: next } = viewportOnChange(change(containers, components, viewport, MOVED), room, { canvasBefore: { x: 240, y: 112 }, canvasAfter: { x: 240, y: 112 }, box });
     expect(onScreen(COMPONENT_PICTURE, 'order-api', next ?? viewport, { x: 240, y: 112 })).toEqual(box);
   });
 
@@ -426,8 +453,9 @@ describe('a change of depth', () => {
     // The middle of the canvas over a neighbour far from the app: the app is kept all the same.
     const card = closed[1].boxes.find((box) => box.id === 'card-provider');
     const viewport: Viewport = { x: room.width / 2 - ((card?.x ?? 0) + 120), y: room.height / 2 - ((card?.y ?? 0) + 75), zoom: 1 };
-    expect(holdOf(change(closed, open, viewport))).toEqual({ change: 'depth', box: 'order-api' });
-    expect(holdOf(change(open, closed, viewport))).toEqual({ change: 'depth', box: 'order-api' });
+    expect(holdOf(change(closed, open, viewport, MOVED))).toEqual({ change: 'depth', box: 'order-api' });
+    expect(holdOf(change(open, closed, viewport, MOVED))).toEqual({ change: 'depth', box: 'order-api' });
+    expect(viewportOnChange(change(closed, open, viewport, MOVED), room).kept).toBe('order-api');
   });
 
   it('else keeps the one nearest the middle of the canvas, and of two as near, the first by id', () => {
@@ -458,7 +486,7 @@ describe('a change of depth', () => {
     expect(keptAtDepth(container[0], container[1], system[0], over(westOpen), room)).toBe('west');
   });
 
-  it('that opens nothing gives the same picture, and the page does not move', () => {
+  it('that opens nothing gives the same picture, and the page does not move, whether the reader has moved it or not', () => {
     const person = (depth: 'system' | 'container' | 'component'): [View, Drawn] => {
       const view = archiveView(`${depth}~customer`, STATE);
       return [view, placedPicture(view)];
@@ -466,17 +494,22 @@ describe('a change of depth', () => {
     const [system, container] = [person('system'), person('container')];
     expect(container[1].boxes).toEqual(system[1].boxes);
     for (const viewport of viewports) {
-      expect(viewportOnChange(change(system, container, viewport), room)).toEqual({ viewport: undefined, fitted: false });
-      // When the words above the canvas change, the picture stays where it stood on the screen.
-      const moved = viewportOnChange(change(system, container, viewport), room, { canvasBefore: { x: 240, y: 112 }, canvasAfter: { x: 240, y: 130 } });
-      expect(moved.viewport).toEqual({ x: viewport.x, y: viewport.y - 18, zoom: viewport.zoom });
+      for (const moved of [false, true]) {
+        expect(viewportOnChange(change(system, container, viewport, { moved }), room)).toEqual({ viewport: undefined, fitted: false });
+        // When the words above the canvas change, the picture stays where it stood on the screen.
+        const shifted = viewportOnChange(change(system, container, viewport, { moved }), room, { canvasBefore: { x: 240, y: 112 }, canvasAfter: { x: 240, y: 130 } });
+        expect(shifted).toEqual({ viewport: { x: viewport.x, y: viewport.y - 18, zoom: viewport.zoom }, fitted: false });
+      }
     }
   });
 
-  it('is said of the zoom it is shown at by the note, which the change keeps', () => {
+  it('is said of the zoom it is shown at by the note: the zoom kept on a picture the reader has moved, the new fit on one fitted anew', () => {
     const viewport = viewports[2] as Viewport;
-    const { viewport: next } = viewportOnChange(change(containers, components, viewport), room);
-    expect(smallNote(COMPONENT_PICTURE, next?.zoom ?? 1)).toContain(`Too small to read at ${percent(viewport.zoom)}:`);
+    const { viewport: kept } = viewportOnChange(change(containers, components, viewport, MOVED), room);
+    expect(smallNote(COMPONENTS, kept?.zoom ?? 1)).toMatch(new RegExp(`^Too small to read at ${percent(viewport.zoom)}\\. `));
+    const { viewport: fitted } = viewportOnChange(change(containers, components, viewport), room);
+    expect(fitted?.zoom).toBe(fitViewport(whole(COMPONENT_PICTURE), room).zoom);
+    expect(smallNote(COMPONENTS, fitted?.zoom ?? 1)).toBeUndefined();
   });
 });
 

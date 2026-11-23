@@ -361,11 +361,11 @@ function Counts({ view, drawn }: { view: View; drawn: Drawn }) {
  * and never at one it would have opened at. Its line is there when empty too, so that the canvas
  * does not move when the note comes and goes, and so that a screen reader hears it come.
  */
-function Note({ drawn }: { drawn: Drawn }) {
+function Note({ view }: { view: View }) {
   const zoom = useViewportStore((state) => state.transform[2]);
   return (
     <p className="small-note" role="status">
-      {smallNote(drawn, zoom) ?? ''}
+      {smallNote(view, zoom) ?? ''}
     </p>
   );
 }
@@ -409,13 +409,14 @@ interface HoldPlaceProps {
 
 /**
  * Holds a box in place when a new picture comes: the chosen box at a new reading of the files,
- * the box that opens or closes at a change of depth; or fits a picture of another scope. React
- * calls `getSnapshotBeforeUpdate` once the new picture is worked out and before the page is
- * changed, which no hook can: there it measures where the canvas and the box to hold stand on
- * the screen. `componentDidUpdate` comes once the page is changed, the title and counts above
- * the canvas with it, and before the browser paints: there the canvas is measured again, for
- * those words may have grown or shrunk by a line, and the picture is moved once. A move made
- * there is drawn with the new picture, in the same frame.
+ * the box that opens or closes at a change of depth of a picture the reader has moved; or fits
+ * the new picture, of another scope, or of another depth when the one before stood fitted.
+ * React calls `getSnapshotBeforeUpdate` once the new picture is worked out and before the page
+ * is changed, which no hook can: there it measures where the canvas and the box to hold stand
+ * on the screen. `componentDidUpdate` comes once the page is changed, the title and counts
+ * above the canvas with it, and before the browser paints: there the canvas is measured again,
+ * for those words may have grown or shrunk by a line, and the picture is moved once. A move
+ * made there is drawn with the new picture, in the same frame.
  */
 class HoldPlace extends Component<HoldPlaceProps> {
   override getSnapshotBeforeUpdate(previous: Readonly<HoldPlaceProps>): Before | null {
@@ -510,9 +511,10 @@ function Inside({ view, drawn, room: given, chosen, speaking, reading, laying, g
   };
   // A new picture in place of the one drawn: of a new reading, a chosen box keeps its place on
   // the screen, else the picture is fitted again when the reader has not moved it, else kept
-  // where it stood on the screen; at another depth, the box that opens or closes keeps its place;
-  // of another scope, it is fitted. See `HoldPlace`, which measures the page before and after the
-  // new picture is put in, and `viewportOnChange`.
+  // where it stood on the screen; at another depth that opens or closes a box, it is fitted again
+  // when the reader has not moved it, else that box keeps its place; of another scope, it is
+  // fitted. See `HoldPlace`, which measures the page before and after the new picture is put in,
+  // and `viewportOnChange`.
   const measure = (before: Pictured): Before => {
     const element = canvas.current;
     const change: PictureChange = { before, after: { view, drawn }, chosen, gone, viewport: flow.getViewport(), moved: moved.current, room: roomNow() };
@@ -619,7 +621,7 @@ function Inside({ view, drawn, room: given, chosen, speaking, reading, laying, g
         </div>
         <GoneLine gone={gone} />
         <Counts view={view} drawn={drawn} />
-        <Note drawn={drawn} />
+        <Note view={view} />
         <ReadingLine {...reading} />
       </header>
       <div className="canvas" ref={canvas}>
