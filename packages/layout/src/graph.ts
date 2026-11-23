@@ -1,7 +1,7 @@
-import type { Drawn, PlacedArrow, PlacedBoundary, PlacedBox, Point, View, ViewArrow, ViewBox, ViewBoundary } from '@seefore/core';
+import type { Drawn, PlacedArrow, PlacedBoundary, PlacedBox, Point, Rect, View, ViewArrow, ViewBox, ViewBoundary } from '@seefore/core';
 import type { ElkEdgeSection, ElkExtendedEdge, ElkNode, ElkShape } from 'elkjs/lib/elk.bundled.js';
 import { BOUNDARY_OPTIONS, LABEL_OPTIONS, PERSON_OPTIONS, ROOT_OPTIONS, UNZIP_OPTIONS } from './settings.ts';
-import { BOUNDARY_PADDING, BOX_HEIGHT, BOX_WIDTH, TITLE_LINE_HEIGHT, UNZIP_FROM } from './sizes.ts';
+import { BOUNDARY_PADDING, BOX_HEIGHT, BOX_WIDTH, TITLE_LINE_HEIGHT } from './sizes.ts';
 import { boxText, titleText, titleWidth } from './text.ts';
 import type { LabelText } from './text.ts';
 
@@ -13,6 +13,9 @@ import type { LabelText } from './text.ts';
 /** The id of the whole picture in ELK's graph. A record's id cannot hold `~`, so no box has it. */
 const ROOT = '~picture';
 
+/** How far apart, top to bottom, the made-up places of two turns of the walk are. Any number would do: only their order counts. */
+const TURN_STEP = 200;
+
 /** A view with its boxes and arrows in order of id. */
 export function sorted(view: View): View {
   return { ...view, boxes: [...view.boxes].sort(byId), arrows: [...view.arrows].sort(byId) };
@@ -20,36 +23,120 @@ export function sorted(view: View): View {
 
 /**
  * The graph ELK lays out: the boxes outside, the boundary with the boxes inside it, and one
- * edge for each arrow with its label at its measured size. The view must be sorted.
+ * edge for each arrow with its label's room. Each box and the boundary has a made-up place
+ * whose height is its turn in the walk, and ELK keeps the boxes of every column in the order
+ * of those places. The long column of a context view is split, whatever its size. The view
+ * must be sorted.
  */
 export function graphOf(view: View, labels: ReadonlyMap<string, LabelText>): ElkNode {
   const boundary = view.boundary;
-  const outside = view.boxes.filter((box) => boundary === undefined || !box.inside).map(nodeOf);
+  const turns = turnsOf(view);
+  const node = (box: ViewBox) => nodeOf(box, turns.get(box.id) ?? 0);
+  const outside = view.boxes.filter((box) => boundary === undefined || !box.inside).map(node);
   const children =
     boundary === undefined
       ? outside
-      : [...outside, { id: boundary.id, layoutOptions: { ...BOUNDARY_OPTIONS }, children: view.boxes.filter((box) => box.inside).map(nodeOf) }].sort(byId);
-  const unzip = view.kind === 'context' && view.boxes.length >= UNZIP_FROM;
+      : [
+          ...outside,
+          { id: boundary.id, layoutOptions: { ...BOUNDARY_OPTIONS, ...placeOf(turns.get(boundary.id) ?? 0) }, children: view.boxes.filter((box) => box.inside).map(node) },
+        ].sort(byId);
   return {
     id: ROOT,
-    layoutOptions: { ...ROOT_OPTIONS, ...(unzip ? UNZIP_OPTIONS : {}) },
+    layoutOptions: { ...ROOT_OPTIONS, ...(view.kind === 'context' ? UNZIP_OPTIONS : {}) },
     children,
     edges: view.arrows.map((arrow) => edgeOf(arrow, labels.get(arrow.id))),
   };
 }
 
-/** The node of a box: every box one size, and a person in the first column. */
-function nodeOf(box: ViewBox): ElkNode {
-  return { id: box.id, width: BOX_WIDTH, height: BOX_HEIGHT, layoutOptions: box.family === 'people' ? { ...PERSON_OPTIONS } : {} };
+/**
+ * The turn of each box of a view in a walk through it, level by level, and the turn of the
+ * boundary. The order of every column is the order of the walk. The turns are the same in
+ * whatever order the boxes and arrows come.
+ *
+ * - The walk starts at the boxes that nothing acts on: people first, then the others, each
+ *   group in order of id.
+ * - From each box in turn it takes the boxes joined to it by an arrow, either way, in order of
+ *   id, that it has not yet taken.
+ * - A box in a circle that no start reaches is a start of its own, in order of id. Every box
+ *   that no start reaches hangs on such a circle, so the walk takes every box.
+ * - An arrow may start or end at the boundary, so the walk takes the boundary as it takes a
+ *   box. Then the boundary has the turn of the first box inside it, or its own when it holds
+ *   none.
+ *
+ * Nothing is stored: the turns come from the view alone, each time, so that the picture is
+ * made from its model and never from the picture before it.
+ */
+export function turnsOf(view: View): Map<string, number> {
+  const ids = [...view.boxes.map((box) => box.id), ...(view.boundary === undefined ? [] : [view.boundary.id])].sort(byText);
+  const joined = new Map<string, Set<string>>(ids.map((id) => [id, new Set()]));
+  const onward = new Map<string, Set<string>>(ids.map((id) => [id, new Set()]));
+  const acted = new Set<string>();
+  for (const arrow of view.arrows) {
+    const from = joined.get(arrow.from);
+    const to = joined.get(arrow.to);
+    // An arrow to an id the view does not have is left to ELK, which says so in words.
+    if (arrow.from === arrow.to || from === undefined || to === undefined) continue;
+    from.add(arrow.to);
+    to.add(arrow.from);
+    onward.get(arrow.from)?.add(arrow.to);
+    acted.add(arrow.to);
+  }
+  const people = new Set(view.boxes.filter((box) => box.family === 'people').map((box) => box.id));
+  const starts = [...ids.filter((id) => !acted.has(id) && people.has(id)), ...ids.filter((id) => !acted.has(id) && !people.has(id))];
+  const order: string[] = [];
+  const taken = new Set<string>();
+  const walkFrom = (start: string) => {
+    taken.add(start);
+    for (let at = order.push(start) - 1; at < order.length; at++) {
+      for (const next of [...(joined.get(order[at] ?? '') ?? [])].sort(byText)) {
+        if (taken.has(next)) continue;
+        taken.add(next);
+        order.push(next);
+      }
+    }
+  };
+  for (const start of starts) if (!taken.has(start)) walkFrom(start);
+  for (const id of ids) if (!taken.has(id) && inCircle(id, onward)) walkFrom(id);
+  const turns = new Map(order.map((id, turn) => [id, turn]));
+  const boundary = view.boundary;
+  if (boundary !== undefined) {
+    const held = view.boxes.filter((box) => box.inside).map((box) => turns.get(box.id) ?? 0);
+    if (held.length > 0) turns.set(boundary.id, Math.min(...held));
+  }
+  return turns;
+}
+
+/** True when the arrows lead from a box back to it. */
+function inCircle(start: string, onward: ReadonlyMap<string, ReadonlySet<string>>): boolean {
+  const seen = new Set<string>();
+  const ahead = [...(onward.get(start) ?? [])];
+  for (let next = ahead.pop(); next !== undefined; next = ahead.pop()) {
+    if (next === start) return true;
+    if (seen.has(next)) continue;
+    seen.add(next);
+    ahead.push(...(onward.get(next) ?? []));
+  }
+  return false;
+}
+
+/** The made-up place of a turn of the walk, which ELK keeps the order of. */
+function placeOf(turn: number): { 'elk.position': string } {
+  return { 'elk.position': `(0, ${turn * TURN_STEP})` };
+}
+
+/** The node of a box: every box one size, at the place of its turn, and a person in the first column. */
+function nodeOf(box: ViewBox, turn: number): ElkNode {
+  return { id: box.id, width: BOX_WIDTH, height: BOX_HEIGHT, layoutOptions: { ...(box.family === 'people' ? PERSON_OPTIONS : {}), ...placeOf(turn) } };
 }
 
 /**
  * The edge of an arrow, from the box or boundary that acts, with its label's room. ELK places
- * a label only when it has a text; it never measures it, so the room is what counts.
+ * a label only when it has a text; it never measures it, so the room is what counts, and the
+ * room does not follow the words.
  */
 function edgeOf(arrow: ViewArrow, label: LabelText | undefined): ElkExtendedEdge {
   const text = label === undefined ? '' : [...label.lines, label.route, ...(label.only ?? []), label.opened, label.technology].filter((line) => line !== undefined && line !== '').join('\n');
-  const labels = label === undefined ? [] : [{ text, width: label.width, height: label.height, layoutOptions: { ...LABEL_OPTIONS } }];
+  const labels = label === undefined ? [] : [{ text, width: label.room.width, height: label.room.height, layoutOptions: { ...LABEL_OPTIONS } }];
   return { id: arrow.id, sources: [arrow.from], targets: [arrow.to], labels };
 }
 
@@ -98,7 +185,10 @@ function placedBoundary(boundary: ViewBoundary, shape: ElkShape): PlacedBoundary
   return { id: boundary.id, ...rect, title, titleAt };
 }
 
-/** An arrow with its route and its label at the place ELK gave them. */
+/**
+ * An arrow with its route at the place ELK gave it, and its label where the words are: at their
+ * own size, in the middle of the room ELK gave the label.
+ */
 function placedArrow(arrow: ViewArrow, edge: ElkExtendedEdge | undefined, text: LabelText | undefined): PlacedArrow {
   if (edge === undefined) throw new Error(`ELK gave no route to ${arrow.id}.`);
   const placed: PlacedArrow = { id: arrow.id, from: arrow.from, to: arrow.to, sections: routeOf(edge.sections ?? []).map(straightened) };
@@ -108,7 +198,7 @@ function placedArrow(arrow: ViewArrow, edge: ElkExtendedEdge | undefined, text: 
   return {
     ...placed,
     label: {
-      ...rectOf(shape),
+      ...centred(text, rectOf(shape)),
       lines,
       ...(route === undefined ? {} : { route }),
       ...(only === undefined ? {} : { only }),
@@ -119,8 +209,13 @@ function placedArrow(arrow: ViewArrow, edge: ElkExtendedEdge | undefined, text: 
 }
 
 /** The place of a shape. */
-function rectOf(shape: ElkShape): { x: number; y: number; width: number; height: number } {
+function rectOf(shape: ElkShape): Rect {
   return { x: shape.x ?? 0, y: shape.y ?? 0, width: shape.width ?? 0, height: shape.height ?? 0 };
+}
+
+/** A place of the size given, in the middle of a room. */
+function centred(size: { width: number; height: number }, room: Rect): Rect {
+  return { x: room.x + (room.width - size.width) / 2, y: room.y + (room.height - size.height) / 2, width: size.width, height: size.height };
 }
 
 /**
@@ -221,5 +316,10 @@ function direction(from: Point, to: Point): 'across' | 'down' | undefined {
 
 /** Order by id, character by character, the same on every machine. */
 function byId<T extends { id: string }>(a: T, b: T): number {
-  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+  return byText(a.id, b.id);
+}
+
+/** Order of two ids, character by character. */
+function byText(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
 }

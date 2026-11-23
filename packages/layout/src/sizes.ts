@@ -66,10 +66,16 @@ export const ONLY_FONT: Font = { size: 11, bold: false };
 /** The names on an arrow's label: 12 px. Measured. */
 export const LABEL_FONT: Font = { size: 12, bold: false };
 
-/** The widest a label may be. Measured: 140 px and three lines cut 2 % of the labels. */
+/**
+ * The widest a label may be. Measured: 140 px and three lines cut 2 % of the labels. Every
+ * label has room this wide, however narrow its words, so that a new name cannot move anything.
+ */
 export const LABEL_WIDTH = 140;
 
-/** The most lines of names a label has, `+ n more` among them. Measured, with the width. */
+/**
+ * The most lines of names a label has, `+ n more` among them. Measured, with the width. The
+ * name of a single connection has room for this many, however short it is.
+ */
 export const LABEL_LINES = 3;
 
 /** The height of a line of names on a label. */
@@ -111,6 +117,3 @@ export const TITLE_LINE_HEIGHT = 20;
 
 /** The room inside a boundary around what it holds. Measured: the title sits in the top 44 px. */
 export const BOUNDARY_PADDING = { top: 44, left: 24, bottom: 24, right: 24 } as const;
-
-/** A context view of this many boxes or more has its long row of systems split in two. Measured: it fits 28 to 88 % larger. */
-export const UNZIP_FROM = 16;

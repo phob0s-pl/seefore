@@ -11,11 +11,13 @@ import {
   BOX_WIDTH,
   CONDITION_LINE_HEIGHT,
   LABEL_LINE_HEIGHT,
+  LABEL_WIDTH,
   NAME_FONT,
   ROUTE_LINE_HEIGHT,
   TECHNOLOGY_LINE_HEIGHT,
   TITLE_FONT,
 } from '../src/sizes.ts';
+import { labelText } from '../src/text.ts';
 import { onEdge, troubles, within } from './geometry.ts';
 import { arrow, box, containerView, contextView, crowded, fan, inside, route, shopContainers, shopContext } from './views.ts';
 
@@ -63,11 +65,18 @@ describe('the layout of a view', () => {
     expect(picture.width).toBeGreaterThan(0);
   });
 
-  it('puts the people in the first column', async () => {
-    const picture = await drawn(shopContext());
+  it('puts the people in the first column of a container view', async () => {
+    const picture = await drawn(shopContainers());
     const left = Math.min(...picture.boxes.map((each) => each.x));
-    expect(placeOf(picture, 'customer').x).toBe(left);
-    expect(placeOf(picture, 'warehouse-clerk').x).toBe(left);
+    for (const id of ['auditor', 'customer', 'warehouse-clerk']) expect(placeOf(picture, id).x).toBe(left);
+  });
+
+  it('puts the people of a context view before every other box, their column split in two as every long column is', async () => {
+    // Before stage 7 a context view of fewer than 16 boxes kept its people in one column.
+    const picture = await drawn(shopContext());
+    const columns = [...new Set(picture.boxes.map((each) => each.x))].sort((a, b) => a - b);
+    expect([placeOf(picture, 'customer').x, placeOf(picture, 'warehouse-clerk').x]).toEqual(columns.slice(0, 2));
+    for (const id of ['shop', 'card-provider']) expect(placeOf(picture, id).x).toBeGreaterThan(columns[1] ?? 0);
   });
 
   it('gives the same picture for the same view', async () => {
@@ -225,12 +234,50 @@ describe('the layout of a view', () => {
 });
 
 describe('the graph ELK is given', () => {
-  it('splits the long row of a context view of 16 boxes or more, and of no other', () => {
+  it('splits the long column of every context view, whatever its size, and of no container view', () => {
     const many = (count: number) => contextView('a', [box('a', 'systems', { scope: true }), ...Array.from({ length: count - 1 }, (_, at) => box(`s${at}`, 'systems'))], []);
     const unzipped = (view: View) => graphOf(sorted(view), new Map()).layoutOptions?.['elk.layered.layerUnzipping.strategy'];
-    expect(unzipped(many(16))).toBe('ALTERNATING');
-    expect(unzipped(many(15))).toBeUndefined();
+    for (const count of [1, 4, 15, 16, 40]) expect(unzipped(many(count))).toBe('ALTERNATING');
+    expect(unzipped(shopContainers())).toBeUndefined();
     expect(unzipped(crowded(20, 10))).toBeUndefined();
+  });
+
+  it('keeps the order of the walk in every column, on the root and on the boundary', () => {
+    const graph = graphOf(sorted(shopContainers()), new Map());
+    const boundary = graph.children?.find((child) => child.id === 'shop');
+    expect(graph.layoutOptions?.['elk.layered.crossingMinimization.semiInteractive']).toBe('true');
+    expect(boundary?.layoutOptions?.['elk.layered.crossingMinimization.semiInteractive']).toBe('true');
+    // Each box at the place of its turn, and the boundary at the turn of the first box inside it: see `turnsOf`.
+    const places = Object.fromEntries([...(graph.children ?? []), ...(boundary?.children ?? [])].map((child) => [child.id, child.layoutOptions?.['elk.position']]));
+    expect(places).toEqual({
+      auditor: '(0, 0)',
+      shop: '(0, 600)',
+      'card-provider': '(0, 400)',
+      'order-api': '(0, 600)',
+      'orders-database': '(0, 800)',
+      storefront: '(0, 1000)',
+      shipping: '(0, 1200)',
+      customer: '(0, 1400)',
+      'warehouse-clerk': '(0, 1600)',
+    });
+  });
+
+  it('gives ELK every label 140 px wide, room for three lines of a single name, and for the lines the arrow has', () => {
+    const view = shopContainers();
+    const routed: View = { ...view, arrows: view.arrows.map((each) => (each.id === 'storefront~order-api' ? { ...each, route: route(['Ingress']) } : each)) };
+    const input = sorted(routed);
+    const labels = new Map(input.arrows.flatMap((each) => {
+      const text = labelText(each);
+      return text === undefined ? [] : [[each.id, text] as const];
+    }));
+    const rooms = Object.fromEntries((graphOf(input, labels).edges ?? []).map((edge) => [edge.id, edge.labels?.map((label) => [label.width, label.height])]));
+    expect(rooms).toMatchObject({
+      // One name of one line, and its technology.
+      'storefront~order-api': [[LABEL_WIDTH, 3 * LABEL_LINE_HEIGHT + ROUTE_LINE_HEIGHT + TECHNOLOGY_LINE_HEIGHT]],
+      'customer~storefront': [[LABEL_WIDTH, 3 * LABEL_LINE_HEIGHT]],
+      // Two names, a line each.
+      'order-api~card-provider': [[LABEL_WIDTH, 2 * LABEL_LINE_HEIGHT + TECHNOLOGY_LINE_HEIGHT]],
+    });
   });
 
   it('sets model order on the root only, and the spacing and node placement on the boundary too', () => {

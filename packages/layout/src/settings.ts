@@ -4,12 +4,24 @@ import { BOUNDARY_PADDING, BOX_HEIGHT, BOX_WIDTH } from './sizes.ts';
 /**
  * The settings of ELK for every view, as the research measured them (`recommendations.md`,
  * section 4, and 2.6 for what to leave out). Never set: model order on the boundary, which
- * crashes ELK; the layering strategies `STRETCH_WIDTH`, which hangs, and `BF_MODEL_ORDER` and
- * `DF_MODEL_ORDER`, which crash.
+ * crashes ELK; the layering strategies `STRETCH_WIDTH` and `MIN_WIDTH`, which hang, and
+ * `BF_MODEL_ORDER` and `DF_MODEL_ORDER`, which crash.
  */
+
+/**
+ * What makes ELK keep the boxes of a column in the order of the places they are given, which
+ * is the order of the walk in `graph.ts`. It is set on the root and on the boundary, where
+ * model order crashes ELK. Measured on the trial models: after one edit 84 % of the pairs of
+ * boxes keep their order, where 51 % did when ELK chose the order, for 1.8 times the
+ * crossings. Without places to keep, the setting does nothing.
+ */
+export const ORDER_OPTIONS: Readonly<LayoutOptions> = {
+  'elk.layered.crossingMinimization.semiInteractive': 'true',
+};
 
 /** The settings of the whole picture. */
 export const ROOT_OPTIONS: Readonly<LayoutOptions> = {
+  ...ORDER_OPTIONS,
   'elk.algorithm': 'layered',
   // Left to right for every view: the directions fit within 17 % of each other, and no arrow crossed a boundary's title.
   'elk.direction': 'RIGHT',
@@ -46,18 +58,19 @@ const PASSED_DOWN: Readonly<LayoutOptions> = Object.fromEntries(
 );
 
 /**
- * The settings of the boundary: those of the root it does not get by itself, room for the
- * title at its top, and at least the size of one box inside it, so that a boundary with
- * nothing to draw inside still shows, with its title.
+ * The settings of the boundary: those of the root it does not get by itself, the order of the
+ * walk, room for the title at its top, and at least the size of one box inside it, so that a
+ * boundary with nothing to draw inside still shows, with its title.
  */
 export const BOUNDARY_OPTIONS: Readonly<LayoutOptions> = {
   ...PASSED_DOWN,
+  ...ORDER_OPTIONS,
   'elk.padding': `[top=${BOUNDARY_PADDING.top},left=${BOUNDARY_PADDING.left},bottom=${BOUNDARY_PADDING.bottom},right=${BOUNDARY_PADDING.right}]`,
   'elk.nodeSize.constraints': 'MINIMUM_SIZE',
   'elk.nodeSize.minimum': `(${BOX_WIDTH + BOUNDARY_PADDING.left + BOUNDARY_PADDING.right}, ${BOX_HEIGHT + BOUNDARY_PADDING.top + BOUNDARY_PADDING.bottom})`,
 };
 
-/** The settings of an arrow's label: placed by ELK at its measured size, on its line, half way. With these no label touched a box, a line or a label. */
+/** The settings of an arrow's label: its room placed by ELK on its line, half way. With these no label touched a box, a line or a label. */
 export const LABEL_OPTIONS: Readonly<LayoutOptions> = {
   'elk.edgeLabels.inline': 'true',
   'elk.edgeLabels.placement': 'CENTER',
@@ -68,7 +81,11 @@ export const PERSON_OPTIONS: Readonly<LayoutOptions> = {
   'elk.layered.layering.layerConstraint': 'FIRST',
 };
 
-/** What a large context view adds to the root: its long row of systems split in two. */
+/**
+ * What every context view adds to the root: its long column of neighbours split in two, so
+ * that it fits the window. At every size: when it was done from 16 boxes, one neighbour fewer
+ * at that size redrew the whole view.
+ */
 export const UNZIP_OPTIONS: Readonly<LayoutOptions> = {
   'elk.layered.layerUnzipping.strategy': 'ALTERNATING',
 };

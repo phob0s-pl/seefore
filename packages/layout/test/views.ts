@@ -2,7 +2,8 @@ import type { BoxFamily, BoxLook, View, ViewArrow, ViewBox, ViewRoute } from '@s
 
 /**
  * Views made by hand for the tests, as `viewsOf` gives them: a shop seen from outside and from
- * inside, a fan of stores, a crowded system, and views of any size.
+ * inside, a fan of stores, a crowded system, views of any size, and views of the shape real
+ * models have, with the edits a model goes through.
  */
 
 /** The word of a kind line for each family. */
@@ -154,6 +155,176 @@ export function crowded(parts: number, others: number): View {
   add(pick(outer), 'crowd');
   add('crowd', pick(outer.filter((id) => boxes.find((each) => each.id === id)?.family === 'systems')));
   return containerView('crowd', boxes, [...arrows.values()]);
+}
+
+/** Names of connections, of many lengths, for the views of real shape. */
+const NAMES = [
+  'Uses',
+  'Reads the settings',
+  'Sends the events it has seen, once a minute',
+  'Asks for the account of the person signed in',
+  'Writes each job and how far it has got',
+  'Publishes a change',
+  'Fetches the latest release and its notes from the mirror',
+  'Checks a login',
+];
+
+/**
+ * A container view of the size and density the trial models have, its arrows thrown between
+ * its boxes at random: `parts` apps and stores inside the boundary, with one hub, `core`, that
+ * about half the apps call; three people and five systems outside; and about 1.65 arrows a
+ * box. An arrow has one to three connections, and some have a technology, a route or an
+ * `only`. The same numbers always give the same view. With no tiers, one edit moves more of
+ * it than of a real system: see `tiered`.
+ */
+export function grown(parts: number, seed = 1): View {
+  const random = numbers(seed * 7919 + parts * 31);
+  const pick = (list: readonly string[]) => list[Math.floor(random() * list.length)] ?? '';
+  const ids = (prefix: string, count: number) => Array.from({ length: count }, (_, at) => `${prefix}-${String(at + 1).padStart(2, '0')}`);
+  const stores = ids('store', Math.round(parts * 0.3));
+  const apps = ['core', ...ids('app', parts - stores.length - 1)];
+  const people = ids('person', 3);
+  const systems = ids('system', 5);
+  const boxes = [
+    ...apps.map((id) => inside(id, 'apps', { line: '[App: service · Go]', sentence: 'Does one part of the work of the system.' })),
+    ...stores.map((id) => inside(id, 'stores', { line: '[Store: database · PostgreSQL]', sentence: 'Keeps what one part of the system needs.' })),
+    ...people.map((id) => box(id, 'people', { sentence: 'Uses the system.' })),
+    ...systems.map((id) => box(id, 'systems', { sentence: 'Stands outside and talks to the system.' })),
+  ];
+  const arrows = new Map<string, ViewArrow>();
+  const add = (from: string, to: string) => {
+    if (from === to || from === '' || to === '' || arrows.has(`${from}~${to}`)) return;
+    const names = Array.from({ length: random() < 0.7 ? 1 : random() < 0.6 ? 2 : 3 }, () => NAMES[Math.floor(random() * NAMES.length)] ?? 'Uses');
+    const technology = random() < 0.5 ? ['HTTPS'] : [];
+    const made = arrow(from, to, names, technology);
+    const extra = random();
+    arrows.set(made.id, extra < 0.08 ? { ...made, route: route(['Gateway']) } : extra < 0.12 ? { ...made, only: { count: names.length, all: true, words: 'in the hosted edition', line: 'only in the hosted edition' } } : made);
+  };
+  for (const person of people) {
+    add(person, pick(apps));
+    add(person, pick(apps));
+  }
+  for (const app of apps.slice(1)) if (random() < 0.5) add(app, 'core');
+  for (const store of stores) add(pick(apps), store);
+  for (const system of systems) {
+    add(pick(apps), system);
+    if (random() < 0.5) add(system, pick(apps));
+  }
+  const target = Math.round(boxes.length * 1.65);
+  while (arrows.size < target) add(pick(apps.slice(1)), random() < 0.4 ? pick(stores) : pick(apps));
+  return containerView('estate', boxes, [...arrows.values()]);
+}
+
+/**
+ * A container view in tiers, as a real system is built: three people use the front apps, which
+ * call the services, which keep stores and call one another, the workers and the systems
+ * outside; one service, `core`, is called by most of the others. `parts` apps and stores
+ * inside, about 1.65 arrows a box. The same numbers always give the same view.
+ */
+export function tiered(parts: number, seed = 1): View {
+  const random = numbers(seed * 104729 + parts * 13);
+  const pick = (list: readonly string[]) => list[Math.floor(random() * list.length)] ?? '';
+  const ids = (prefix: string, count: number) => Array.from({ length: count }, (_, at) => `${prefix}-${String(at + 1).padStart(2, '0')}`);
+  const stores = ids('store', Math.round(parts * 0.3));
+  const fronts = ids('front', Math.max(2, Math.round(parts * 0.12)));
+  const workers = ids('worker', Math.max(1, Math.round(parts * 0.1)));
+  const services = ['core', ...ids('service', parts - stores.length - fronts.length - workers.length - 1)];
+  const people = ids('person', 3);
+  const systems = ids('system', 5);
+  const app = (id: string) => inside(id, 'apps', { line: '[App: service · Go]', sentence: 'Does one part of the work of the system.' });
+  const boxes = [
+    ...[...fronts, ...services, ...workers].map(app),
+    ...stores.map((id) => inside(id, 'stores', { line: '[Store: database · PostgreSQL]', sentence: 'Keeps what one part of the system needs.' })),
+    ...people.map((id) => box(id, 'people', { sentence: 'Uses the system.' })),
+    ...systems.map((id) => box(id, 'systems', { sentence: 'Stands outside and talks to the system.' })),
+  ];
+  const arrows = new Map<string, ViewArrow>();
+  const add = (from: string, to: string) => {
+    if (from === to || from === '' || to === '' || arrows.has(`${from}~${to}`)) return;
+    const names = Array.from({ length: random() < 0.7 ? 1 : random() < 0.6 ? 2 : 3 }, () => NAMES[Math.floor(random() * NAMES.length)] ?? 'Uses');
+    arrows.set(`${from}~${to}`, arrow(from, to, names, random() < 0.5 ? ['HTTPS'] : []));
+  };
+  const others = services.slice(1);
+  for (const person of people) for (const front of fronts) if (random() < 0.6) add(person, front);
+  for (const front of fronts) {
+    add(front, 'core');
+    add(front, pick(others));
+  }
+  // Each store is kept by a service or a worker, which writes it.
+  for (const [at, store] of stores.entries()) add(at % 4 === 3 ? pick(workers) : (services[at % services.length] ?? 'core'), store);
+  for (const service of others) if (random() < 0.6) add(service, 'core');
+  for (const worker of workers) {
+    add(pick(services), worker);
+    add(worker, pick(stores));
+  }
+  for (const system of systems) {
+    add(pick(services), system);
+    if (random() < 0.4) add(system, pick(fronts));
+  }
+  const target = Math.round(boxes.length * 1.65);
+  while (arrows.size < target) add(pick(services), random() < 0.5 ? pick(stores) : pick(others));
+  return containerView('estate', boxes, [...arrows.values()]);
+}
+
+/**
+ * A context view of a system and `count - 1` of its neighbours, the same neighbours for every
+ * count: those of a smaller view are the first of a larger one. About one in four is a person,
+ * who uses the system; the system uses most of the others, and some use it back.
+ */
+export function neighbourhood(count: number): View {
+  const random = numbers(4049);
+  const neighbours = Array.from({ length: 30 }, (_, at) => {
+    const person = at % 4 === 1;
+    const id = `${person ? 'person' : 'system'}-${String(at + 1).padStart(2, '0')}`;
+    return { id, person, back: random() < 0.3, out: random() < 0.8 };
+  }).slice(0, count - 1);
+  const boxes = [box('hub', 'systems', { scope: true, sentence: 'The system the view is about.' }), ...neighbours.map((each) => box(each.id, each.person ? 'people' : 'systems', { sentence: 'Stands outside.' }))];
+  const arrows = neighbours.flatMap((each) =>
+    each.person ? [arrow(each.id, 'hub', ['Uses the system'])] : [...(each.out || !each.back ? [arrow('hub', each.id, ['Asks for what it keeps'], ['HTTPS'])] : []), ...(each.back ? [arrow(each.id, 'hub', ['Tells of a change'])] : [])],
+  );
+  return contextView('hub', boxes, arrows);
+}
+
+/** The view with one arrow more, of one connection. */
+export function withArrow(view: View, from: string, to: string): View {
+  return { ...view, arrows: [...view.arrows, arrow(from, to, ['Asks for something new'])] };
+}
+
+/** The view with a new app inside, which a box calls and which calls another box or writes a store. */
+export function withApp(view: View, id: string, from: string, to: string): View {
+  return { ...view, boxes: [...view.boxes, inside(id, 'apps', { sentence: 'A new app.' })], arrows: [...view.arrows, arrow(from, id, ['Asks the new app']), arrow(id, to, ['Tells of a result'])] };
+}
+
+/** The view less a box and every arrow at it. */
+export function without(view: View, id: string): View {
+  return { ...view, boxes: view.boxes.filter((each) => each.id !== id), arrows: view.arrows.filter((each) => each.from !== id && each.to !== id) };
+}
+
+/**
+ * The view with an app moved to a system outside, as `viewsOf` draws it: the app's box goes,
+ * and its arrows go to the system's box, one with an arrow that box already has. An arrow
+ * between the two is then inside the other system, and goes.
+ */
+export function movedOut(view: View, app: string, system: string): View {
+  const arrows = new Map<string, ViewArrow>();
+  for (const each of view.arrows) {
+    const from = each.from === app ? system : each.from;
+    const to = each.to === app ? system : each.to;
+    if (from === to) continue;
+    const id = `${from}~${to}`;
+    const had = arrows.get(id);
+    if (had === undefined) arrows.set(id, { ...each, id, from, to });
+    else {
+      // Two arrows made one say every connection, and only the technology both name.
+      arrows.set(id, { id, from, to, connections: [...had.connections, ...each.connections], names: [...had.names, ...each.names], technology: had.technology.filter((name) => each.technology.includes(name)) });
+    }
+  }
+  return { ...view, boxes: view.boxes.filter((each) => each.id !== app), arrows: [...arrows.values()] };
+}
+
+/** The view with a new system outside, which a box inside calls. */
+export function withNeighbour(view: View, id: string, from: string): View {
+  return { ...view, boxes: [...view.boxes, box(id, 'systems', { sentence: 'A new system outside.' })], arrows: [...view.arrows, arrow(from, id, ['Asks the new system'])] };
 }
 
 /** Numbers between 0 and 1 that look random and are always the same for the same seed. */
