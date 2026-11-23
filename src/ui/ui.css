@@ -1,0 +1,131 @@
+/* The shared glass vocabulary, rendered by ui.tsx: buttons, the large title, the panel, the
+   glass group and the empty state. */
+
+/* Buttons: pills. */
+.button {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 16px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-full);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 18px;
+  white-space: nowrap;
+  text-decoration: none;
+}
+.button svg {
+  width: 15px;
+  height: 15px;
+}
+.button-ghost {
+  background: transparent;
+  color: rgba(255, 255, 255, 0.75);
+  font-weight: 500;
+}
+.button-ghost:hover {
+  background: var(--surface-selected);
+  color: var(--text-strong);
+}
+.button-icon {
+  width: 32px;
+  height: 30px;
+  min-height: 30px;
+  padding: 0;
+}
+.button-icon svg {
+  width: 16px;
+  height: 16px;
+}
+.large-title {
+  margin: 0 0 20px;
+  padding: 0 4px;
+  font-size: var(--fs-large-title);
+  line-height: var(--lh-large-title);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--text-strong);
+}
+
+/* The panel: a translucent surface with a hairline and an inner highlight. */
+.panel {
+  position: relative;
+  border-radius: var(--radius-panel);
+  overflow: hidden;
+  background: var(--surface-panel);
+  border: 1px solid var(--border-panel);
+  box-shadow: var(--shadow-panel);
+}
+
+/* Glass groups: the toolbar's pill of controls. */
+.glass-group {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--radius-full);
+  background: var(--surface-glass);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--border-glass);
+  box-shadow: var(--shadow-pill);
+}
+.glass-group .button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 30px;
+  min-height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.75);
+  box-shadow: none;
+}
+.glass-group .button:hover {
+  background: var(--surface-selected);
+  color: #fff;
+}
+.glass-group svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Empty states: a title and one line, centred in the panel. */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 28px 24px;
+  text-align: center;
+}
+.empty-state h2 {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: rgba(255, 255, 255, 0.9);
+}
+.empty-state p {
+  max-width: 52ch;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  text-wrap: pretty;
+}
+
+/* The one line a page says in its place: while it reads, or when it cannot. */
+.page-line {
+  padding: 0 4px;
+  color: var(--text-secondary);
+}
+.page-line.failed {
+  color: var(--danger);
+}

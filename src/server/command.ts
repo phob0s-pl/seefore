@@ -80,7 +80,7 @@ export async function run(args: readonly string[], cwd: string, io: Io): Promise
   }
   io.out(`seefore: ${model.records.length} ${model.records.length === 1 ? 'record' : 'records'} read from ${options.workdir}`);
   const count = model.problems.length;
-  if (count > 0) io.out(`seefore: ${count} ${count === 1 ? 'problem' : 'problems'}; the page lists them`);
+  if (count > 0) io.out(`seefore: ${count} ${count === 1 ? 'problem' : 'problems'}; run "seefore check" to list them`);
   io.out(`seefore: http://${HOST}:${options.port}`);
   return 0;
 }

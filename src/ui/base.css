@@ -1,0 +1,127 @@
+/* The base every page is written against; the tokens live in theme.css. */
+:root {
+  font-family: var(--font-sans);
+  color: var(--text-primary);
+  background: var(--surface-page);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* A plain reset: no margins, borders drawn only where asked, sizes that include them. */
+*,
+*::before,
+*::after,
+::backdrop {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  border: 0 solid;
+}
+html {
+  scroll-padding-top: 80px;
+}
+body {
+  min-width: 320px;
+  font-size: var(--fs-body);
+  line-height: 1.5;
+  background: var(--surface-page);
+  color: var(--text-primary);
+}
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-size: inherit;
+  font-weight: inherit;
+}
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+a {
+  color: inherit;
+  text-decoration: inherit;
+}
+b,
+strong {
+  font-weight: bolder;
+}
+code,
+kbd,
+samp,
+pre {
+  font-size: 1em;
+}
+ol,
+ul,
+menu {
+  list-style: none;
+}
+img,
+svg {
+  display: block;
+  vertical-align: middle;
+}
+img {
+  max-width: 100%;
+  height: auto;
+}
+button {
+  font: inherit;
+  color: inherit;
+  opacity: 1;
+  background-color: transparent;
+  border-radius: 0;
+  cursor: pointer;
+}
+button:disabled {
+  cursor: default;
+}
+[hidden]:where(:not([hidden='until-found'])) {
+  display: none !important;
+}
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background-color var(--duration-fast) var(--ease),
+    color var(--duration-fast) var(--ease),
+    border-color var(--duration-fast) var(--ease);
+}
+svg {
+  flex-shrink: 0;
+  stroke-width: 1.8;
+}
+.mono,
+code,
+kbd {
+  font-family: var(--font-mono);
+}
+::selection {
+  background: var(--selection);
+  color: var(--text-primary);
+}
+/* One focus treatment everywhere: a soft accent halo. An outline draws it because,
+   unlike a shadow, it is never clipped by a scrolling or overflow-hidden ancestor. */
+:is(button, a, [tabindex]):focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* Motion off when the system asks. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}

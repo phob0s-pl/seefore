@@ -68,3 +68,30 @@ test("the page's files are served, and nothing outside them", async () => {
   expect((await fetch(`${address}/missing.js`)).status).toBe(404);
   expect((await fetch(`${address}/..%2fsecret.json`)).status).toBe(404);
 });
+
+test('a font file is served with its type', async () => {
+  const page = await mkdtemp(join(tmpdir(), 'seefore-'));
+  await mkdir(join(page, 'assets'));
+  await writeFile(join(page, 'assets', 'inter.woff2'), 'wOF2');
+  await writeFile(join(page, 'assets', 'inter.woff'), 'wOFF');
+  const address = await serve(SMALL, page);
+
+  const woff2 = await fetch(`${address}/assets/inter.woff2`);
+  expect(woff2.headers.get('content-type')).toBe('font/woff2');
+  expect(await woff2.text()).toBe('wOF2');
+  expect((await fetch(`${address}/assets/inter.woff`)).headers.get('content-type')).toBe('font/woff');
+});
+
+test('an address that names no file gets the page, and a missing file still gets 404', async () => {
+  const page = await mkdtemp(join(tmpdir(), 'seefore-'));
+  await writeFile(join(page, 'index.html'), '<!doctype html><title>seefore</title>');
+  const address = await serve(SMALL, page);
+
+  for (const path of ['/architecture', '/records/order-api', '/..%2f..%2fsecret']) {
+    const response = await fetch(`${address}${path}`);
+    expect(response.headers.get('content-type')).toBe('text/html; charset=utf-8');
+    expect(await response.text()).toContain('<title>seefore</title>');
+  }
+  expect((await fetch(`${address}/assets/missing.css`)).status).toBe(404);
+  expect((await fetch(`${address}/api/nothing`)).status).toBe(404);
+});

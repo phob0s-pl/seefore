@@ -12,6 +12,8 @@ const TYPES: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
+  '.woff2': 'font/woff2',
+  '.woff': 'font/woff',
 };
 
 /**
@@ -50,7 +52,9 @@ function fromHere(host: string | undefined): boolean {
 async function answer(folder: string, page: string, url: string, response: ServerResponse): Promise<void> {
   const path = decodeURIComponent(url.split('?')[0] ?? '/');
   if (path === '/api/model') await model(folder, response);
-  else await file(page, path, response);
+  else if (path.startsWith('/api/')) send(response, 404, 'text/plain; charset=utf-8', 'Not found.\n');
+  // An address that names no file is a page of the app, so that a reload on it works.
+  else await file(page, extname(path) === '' ? '/index.html' : path, response);
 }
 
 async function model(folder: string, response: ServerResponse): Promise<void> {
@@ -64,10 +68,10 @@ async function model(folder: string, response: ServerResponse): Promise<void> {
   send(response, 200, 'application/json; charset=utf-8', JSON.stringify(answer));
 }
 
-/** A file of the built page. `/` is its `index.html`; nothing outside `page` is served. */
+/** A file of the built page; nothing outside `page` is served. */
 async function file(page: string, path: string, response: ServerResponse): Promise<void> {
   const root = resolve(page);
-  const wanted = resolve(join(root, path === '/' ? 'index.html' : path));
+  const wanted = resolve(join(root, path));
   const type = TYPES[extname(wanted)];
   if (!wanted.startsWith(root + sep) || type === undefined) {
     send(response, 404, 'text/plain; charset=utf-8', 'Not found.\n');
