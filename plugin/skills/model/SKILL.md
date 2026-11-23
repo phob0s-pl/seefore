@@ -503,6 +503,12 @@ Run `seefore check --workdir=<folder>`. Mend every error it reports in a file yo
 run it again. For a warning, say what it is and ask. Do not change a file you did not mean to
 change.
 
+`view-crowded` is the one warning that asks nothing. When your change takes a view over the
+limit, or adds to a view that was over it in the check of section 1, say so in one sentence:
+which view, how many boxes, that the page draws it as a map, and that pointing at a box reads
+it. Do not propose merging records or leaving any out to get under the limit. A system with
+many real parts has many boxes.
+
 ## 9. Say what happened
 
 Tell the person which files were written, changed and removed, in words: what was added,

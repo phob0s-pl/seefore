@@ -119,12 +119,14 @@ system, a store in a system or an app, a component in an app, and a piece of inf
 a system or in nothing.
 
 Two more are warnings. The model can be read, and says something the conventions call
-doubtful.
+doubtful. A third, of stage 7, says only that a view is too crowded to read as one picture,
+and asks for no record less (`layout.md`).
 
 | Check | Problem code |
 | --- | --- |
 | Two connections have the same ends and the same name | `connection-twice` |
 | A connection says higher up, in the same words, what another says beneath it | `connection-repeated-above` |
+| A view has more than 40 boxes (stage 7) | `view-crowded` |
 
 ## The conventions
 

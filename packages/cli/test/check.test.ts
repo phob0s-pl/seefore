@@ -3,6 +3,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, sy
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { CROWDED_FROM } from '@seefore/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { CheckResult, Failure } from '../src/check.ts';
 import { HELP, main } from '../src/main.ts';
@@ -39,6 +40,21 @@ function run(args: string[], cwd = '.') {
 function json(args: string[], cwd = '.') {
   const result = run([...args, '--json'], cwd);
   return { code: result.code, data: JSON.parse(result.out) as CheckResult & Failure };
+}
+
+/** A source directory made by code: a system with this many apps in it, and so this many boxes in its container view. */
+function crowded(apps: number): Record<string, string> {
+  const files: Record<string, string> = { 'seefore.yaml': MARKER, 'systems/shop.yaml': 'name: Shop\n' };
+  for (let n = 1; n <= apps; n += 1) files[`apps/app-${n}.yaml`] = `name: App ${n}\nin: shop\n`;
+  return files;
+}
+
+/** What the warning says of a container view of the shop with this many boxes. */
+function crowdedMessage(boxes: number): string {
+  return (
+    `The container view of Shop has ${boxes} boxes. A view of more than ${CROWDED_FROM} cannot be read as one picture: ` +
+    'the page draws it as a map. Until focused views exist, read it by pointing at a box.'
+  );
 }
 
 describe('seefore check', () => {
@@ -451,22 +467,40 @@ describe('seefore check', () => {
     ]);
   });
 
-  it('passes a directory whose records keep every rule, with a warning about a check', () => {
-    write({
-      'seefore.yaml': MARKER,
-      'people/customer.yaml': 'name: Customer\n',
-      'systems/shop.yaml': 'name: Shop\n',
-      'connections/buys.yaml': 'from: customer\nto: shop\nname: Buys\n',
-      'connections/buys-again.yaml': 'from: customer\nto: shop\nname: Buys\n',
-    });
-    const result = run(['check']);
-    expect(result.code).toBe(0);
-    expect(result.out).toContain(
+  // A warning never changes the exit code, whichever check gives it.
+  it.each([
+    [
+      'two connections that say one thing',
+      {
+        'seefore.yaml': MARKER,
+        'people/customer.yaml': 'name: Customer\n',
+        'systems/shop.yaml': 'name: Shop\n',
+        'connections/buys.yaml': 'from: customer\nto: shop\nname: Buys\n',
+        'connections/buys-again.yaml': 'from: customer\nto: shop\nname: Buys\n',
+      },
       'connections/buys.yaml:1:1: warning: This connection has the same `from`, `to` and `name` as `connections/buys-again.yaml`. ' +
         'If these are the same exchange, keep one. If they are two ways of one exchange, give each its route in `via`, or say in `only` when each is taken. ' +
         'If their purposes differ, give each a name that says which.',
-    );
-    expect(result.out.endsWith('4 records read. 0 errors, 2 warnings.')).toBe(true);
+      '4 records read. 0 errors, 2 warnings.',
+    ],
+    ['a crowded view', crowded(CROWDED_FROM + 1), `systems/shop.yaml:1:1: warning: ${crowdedMessage(CROWDED_FROM + 1)}`, `${CROWDED_FROM + 2} records read. 0 errors, 1 warning.`],
+  ])('passes a directory whose records keep every rule, with a warning about %s', (_what, files, line, counted) => {
+    write(files);
+    const result = run(['check']);
+    expect(result.code).toBe(0);
+    expect(result.out).toContain(line);
+    expect(result.out.endsWith(counted)).toBe(true);
+  });
+
+  it('gives a crowded view as data, as any other problem, and still exits with 0', () => {
+    write(crowded(CROWDED_FROM + 1));
+    const result = json(['check']);
+    expect(result.code).toBe(0);
+    expect(result.data).toMatchObject({ records: CROWDED_FROM + 2, errors: 0, warnings: 1 });
+    expect(result.data.problems).toEqual([
+      { file: 'systems/shop.yaml', line: 1, column: 1, severity: 'warning', code: 'view-crowded', message: crowdedMessage(CROWDED_FROM + 1) },
+    ]);
+    expect(json(['check'], 'systems').data.problems).toEqual(result.data.problems);
   });
 
   it('refuses a directory written in a newer format', () => {

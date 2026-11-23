@@ -2,7 +2,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseDocument } from 'yaml';
-import { APP_KINDS, CURRENT_FORMAT, STORE_KINDS, load } from '@seefore/core';
+import { APP_KINDS, CROWDED_FROM, CURRENT_FORMAT, STORE_KINDS, load } from '@seefore/core';
 import type { SourceFile } from '@seefore/core';
 import { describe, expect, it } from 'vitest';
 import type { z } from 'zod';
@@ -103,6 +103,17 @@ describe('the model skill', () => {
       const expected = keysOf(family.record.schema).map(({ key, required }) => (required ? `**\`${key}\`**` : `\`${key}\``));
       expect(written, family.folder).toEqual(expected);
     }
+  });
+
+  it('knows the warning of a crowded view by the code the engine gives it, and asks for no record less', () => {
+    const apps = Array.from({ length: CROWDED_FROM + 1 }, (_, n): SourceFile => ({ path: `apps/app-${n + 1}.yaml`, text: `name: App ${n + 1}\nin: shop\n` }));
+    const shop: SourceFile[] = [
+      { path: 'seefore.yaml', text: 'format: 1\nname: Shop\n' },
+      { path: 'systems/shop.yaml', text: 'name: Shop\n' },
+    ];
+    expect(load([...shop, ...apps]).problems.map((problem) => problem.code)).toEqual(['view-crowded']);
+    const said = skill.split('\n\n').find((paragraph) => paragraph.startsWith('`view-crowded`')) ?? '';
+    expect(said.replace(/\s+/g, ' ')).toContain('Do not propose merging records or leaving any out to get under the limit.');
   });
 
   it('names the kinds the engine allows, in order', () => {
