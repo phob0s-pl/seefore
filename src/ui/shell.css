@@ -1,0 +1,154 @@
+/* The window: a floating glass sidebar, a transparent toolbar row on a fade, and the page
+   beside them. */
+.app-shell {
+  position: relative;
+  min-height: 100dvh;
+  isolation: isolate;
+}
+.app-fade {
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 76px;
+  z-index: 15;
+  pointer-events: none;
+  background: var(--bg-fade);
+}
+.skip-link {
+  position: fixed;
+  top: -80px;
+  left: 16px;
+  z-index: 100;
+  padding: 10px 16px;
+  background: var(--accent);
+  color: var(--text-on-accent);
+  border-radius: var(--radius-card);
+}
+.skip-link:focus {
+  top: 12px;
+}
+
+/* The sidebar floats inside the window on every side. */
+.desktop-sidebar {
+  position: fixed;
+  top: var(--sidebar-inset);
+  bottom: var(--sidebar-inset);
+  left: var(--sidebar-inset);
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  width: var(--sidebar-width);
+  padding: 14px 10px 10px;
+  overflow-y: auto;
+  border-radius: var(--radius-sidebar);
+  background: var(--surface-sidebar);
+  backdrop-filter: var(--glass-blur-strong);
+  -webkit-backdrop-filter: var(--glass-blur-strong);
+  border: 1px solid var(--border-glass);
+  box-shadow: var(--shadow-glass);
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: fit-content;
+  padding: 4px 12px 20px;
+  color: rgba(255, 255, 255, 0.92);
+}
+.brand > span {
+  font-family: var(--font-sans);
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.035em;
+  color: rgba(255, 255, 255, 0.92);
+}
+.brand-dot {
+  color: var(--accent);
+}
+.sidebar-navigation {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: 2px;
+  padding: 0;
+}
+.nav-link {
+  display: flex;
+  position: relative;
+  align-items: center;
+  gap: 10px;
+  min-height: 32px;
+  padding: 5px 12px;
+  border-radius: var(--radius-full);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 13px;
+  font-weight: 500;
+}
+.nav-link:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff;
+}
+.nav-link.active {
+  background: var(--surface-selected-strong);
+  color: #fff;
+  font-weight: 600;
+  box-shadow: var(--shadow-active);
+}
+.nav-link > svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 1.7;
+  color: rgba(255, 255, 255, 0.6);
+}
+.nav-link.active > svg {
+  color: var(--link);
+}
+.nav-link .nav-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The page beside the sidebar and its toolbar row. */
+.app-inset {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  min-width: 0;
+  margin-left: calc(var(--sidebar-width) + 2 * var(--sidebar-inset));
+}
+.top-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: var(--toolbar-height);
+  padding: var(--sidebar-inset) var(--content-gutter) 0;
+  background: transparent;
+}
+.history-controls > .button:last-child {
+  color: rgba(255, 255, 255, 0.4);
+}
+.history-controls > .button:last-child:hover {
+  color: #fff;
+}
+.page-content {
+  flex: 1;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 32px var(--content-gutter) 56px;
+  outline: none;
+}
+
+@media (max-width: 1200px) {
+  :root {
+    --sidebar-width: 232px;
+  }
+}

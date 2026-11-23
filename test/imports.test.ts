@@ -9,7 +9,11 @@ const SRC = fileURLToPath(new URL('../src', import.meta.url));
 const ALLOWED: Record<string, { folders: string[]; packages: string[]; node: boolean }> = {
   model: { folders: ['model'], packages: ['yaml', 'zod'], node: false },
   server: { folders: ['server', 'model'], packages: [], node: true },
-  ui: { folders: ['ui', 'model'], packages: ['react', 'react-dom', '@xyflow/react', 'elkjs'], node: false },
+  ui: {
+    folders: ['ui', 'model'],
+    packages: ['react', 'react-dom', '@xyflow/react', 'elkjs', 'react-router-dom', 'lucide-react', '@fontsource/inter', '@fontsource/ibm-plex-mono'],
+    node: false,
+  },
 };
 
 const IMPORT = /\b(?:import|export)\s(?:[^'";]*?\sfrom\s)?['"]([^'"]+)['"]|\bimport\(\s*['"]([^'"]+)['"]/g;
