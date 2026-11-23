@@ -49,7 +49,10 @@ connections/orders-holds-seats.yaml:3:7: warning: This connection is named `Uses
 apps/linux-desktop-service.yaml:1:1: note: No connection starts or ends at this app or at anything in it, and none passes through it. That may be right: add one only for an exchange that the facts name.
 ```
 
-A note stands at the start of its file, since what it is about is not there.
+A note stands at the start of its file, since what it is about is not there. The warning
+quotes the name as it is written. The last note says of each kind only what can be so: a
+person has nothing in it and cannot be passed through, so its note says "No connection
+starts or ends at this person.".
 
 ## "Unknown"
 
@@ -113,7 +116,7 @@ seefore check --require-names [--workdir=<directory>] [--json]
 
 It ends with 1 unless all of these hold: there is no error; the directory was read in full;
 there is at least one connection; every connection has a name; and no name is the bare
-"Uses". It says which did not hold:
+"Uses". It says the first of these that does not hold, between the counts and the last line:
 
 ```
 Names are required, and the directory was not read in full.
@@ -150,10 +153,14 @@ C4 checks:
 
 - **A check that looked at nothing says so**: "0 connections checked, 0 without".
 - **A check that was not run says so, and why**: "- A connection: not checked, since the
-  directory was not read in full." When the marker cannot be read, none of the five is run.
+  directory was not read in full." When the marker cannot be read, none of the five is run,
+  and each says "not checked, since the records were not read."
+- **One is said as one**: "1 thing checked", "1 app, store or component", "1 that does not".
 - **With `--full`** each line that found something is followed by what it found, one to a
   line, as a problem is written, with `note` or `warning` for its kind. The line that sends
-  the reader to `--full` is then left out. It is also left out when nothing was found.
+  the reader to `--full` is then left out. It is also left out when nothing was found. It
+  names the directory when the command was given one: "`seefore check --full
+  --workdir=architecture` lists each.".
 - The last line counts errors and warnings, as before. Notes are not in it.
 
 As data, `--json` gains one key, `c4`:
@@ -164,7 +171,8 @@ As data, `--json` gains one key, `c4`:
 | One key for each code | `severity` (`note` or `warning`), `checked` (how many records the check looked at, or `null` when it was not run) and `findings`: a list, each with `file`, `line`, `column` and `message`, in order of file |
 
 With `--require-names` there is one more key, `requireNames`: `met` (true or false),
-`complete`, `connections`, `unnamed` and `vague`.
+`complete`, `connections`, `unnamed` and `vague`. The three counts are 0 when the records
+were not read.
 
 The warning `connection-vague` is in `problems` as well, and in the count of warnings. The
 notes are in `c4` alone.
@@ -193,9 +201,11 @@ beside each other.
 ## The page
 
 Under "Problems", after the errors and warnings, the page shows the five lines of the set
-with their counts. A line that found something opens to what it found, each with its file
-and its words. Notes are not in the number beside "Problems" in the sidebar: that counts
-errors and warnings, as before.
+with their counts, in the words of `seefore check`: both are written from one place. A line
+that found something opens to what it found, each with its file and its words, and is closed
+until the reader opens it. Above the lines the page says what a note is. Notes are not in
+the number beside "Problems" in the sidebar: that counts errors and warnings, as before. The
+warning for a bare "Uses" stands twice on the page, among the problems and under its line.
 
 No box and no arrow carries a mark for a finding. An arrow may stand for several connections,
 and a mark on it for one of them would say too much.

@@ -172,7 +172,8 @@ No mark is added, and the zooms at which detail comes and goes are those of stag
 
 ## The commands
 
-- **`seefore check`** gives the warning above. Nothing about how it is called changes.
+- **`seefore check`** gives the warning above. Nothing about how it is called changes at
+  this stage.
 - **`seefore list`** and **`seefore uses`** are called as before and end with the same exit
   codes. The number of problems each prints, in words and under `--json`, is that of `seefore
   check`, so a crowded view adds a warning to it. How **`seefore --server`** is called: no

@@ -96,7 +96,8 @@ model changes.
   (`layout.md`).
 - **Model** is the listing of `seefore list`, in the same order, from the same code. A click on
   a record opens the same panel. **Problems** lists what the check found, each with its file,
-  line and column.
+  line and column. Since stage 8 it also shows, under them, the five lines of the C4 checks
+  with their counts, each opening to what it found (`c4-checks.md`).
 - **Following the files.** When a file changes the page takes the new model in place. It keeps
   the zoom and the selection, and fits again only when the reader has not moved. Since stage
   7 a chosen box stays where it is on the screen. A selection that is gone is cleared; when
