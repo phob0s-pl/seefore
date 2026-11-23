@@ -14,12 +14,14 @@ test('a small good model is read, with its name and its records', () => {
   const read = readModel([
     MARKER,
     ALICE,
+    { path: 'systems/shop.yaml', text: 'name: Shop\n' },
+    { path: 'technologies/go.yaml', text: 'name: Go\n' },
     { path: 'apps/order-api.yaml', text: 'name: Order API\nin: shop\nkind: service\ntechnology: [go]\n' },
     { path: 'connections/a-to-b.yaml', text: 'from: alice\nto: order-api\n' },
   ]);
   expect(read.problems).toEqual([]);
   expect(read.name).toBe('Shop');
-  expect(read.records.map((record) => `${record.kind}/${record.id}`)).toEqual(['apps/order-api', 'connections/a-to-b', 'people/alice']);
+  expect(read.records.map((record) => `${record.kind}/${record.id}`)).toEqual(['apps/order-api', 'connections/a-to-b', 'people/alice', 'systems/shop', 'technologies/go']);
   expect(read.records[0]?.fields).toEqual({ name: 'Order API', in: 'shop', kind: 'service', technology: ['go'] });
 });
 

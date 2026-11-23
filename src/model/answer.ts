@@ -6,6 +6,8 @@ export type Place = {
   /** The file, relative to the folder, with `/`. */
   file: string;
   line: number;
+  /** The column, from 1. */
+  column: number;
   record?: string;
   field?: string;
 };
@@ -14,14 +16,27 @@ export type Place = {
 export type Problem = Place & {
   /** The id of the rule that found it. */
   rule: string;
-  /** Only the warning for a file in a folder that is not known is a warning. */
   severity: 'error' | 'warning';
+} & Found;
+
+/** What a rule found: its place, what is wrong and how to mend it. */
+export type Found = Place & {
   /** What is wrong. */
   message: string;
   /** How to mend it, so that an agent can act on it without reading anything else. */
   fix: string;
   /** The second place, where two records clash. */
   second?: Place;
+};
+
+/** What a count looked at and found. It is no problem. */
+export type Count = {
+  rule: string;
+  /** The sentence that says what must be true. */
+  says: string;
+  /** How many records it looked at, or null when it was not counted since a file could not be read. */
+  checked: number | null;
+  found: Found[];
 };
 
 /** One record: its kind (the folder it is in), its id (its file's name), its file and its fields. */
@@ -39,6 +54,7 @@ export type ModelRead = {
   name?: string;
   records: ModelRecord[];
   problems: Problem[];
+  counts: Count[];
 };
 
 /** The answer of `/api/model`. */

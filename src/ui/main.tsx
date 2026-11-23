@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { ModelAnswer } from '../model/answer.ts';
+import { countLine } from '../model/counts.ts';
 import { KINDS } from '../model/kinds.ts';
 import './page.css';
 
@@ -41,7 +42,7 @@ function Page() {
             <li key={index}>
               <p className="where">
                 {problem.severity === 'warning' && <strong>Warning </strong>}
-                {problem.file}, line {problem.line}
+                {problem.file}, line {problem.line}, column {problem.column}
               </p>
               <p>{problem.message}</p>
               <p>Mend: {problem.fix}</p>
@@ -50,6 +51,10 @@ function Page() {
         </ul>
         </>
       )}
+      {answer.counts.map((count) => {
+        const line = countLine(count);
+        return line === undefined ? null : <p key={count.rule}>{line}</p>;
+      })}
     </main>
   );
 }
