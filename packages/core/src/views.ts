@@ -59,6 +59,13 @@ const BOUNDARY_ARROWS = '; an arrow at its edge is to or from the system itself'
 const INSIDE = 'with its apps and stores inside';
 const INSIDE_WITH_PIECES = 'with its apps, stores and pieces of infrastructure inside';
 
+/**
+ * A view of more boxes than this is crowded: it cannot be read as one picture. The check
+ * reports it and the page draws it as a map. Chosen on the trial models, whose views have 32
+ * boxes or fewer, or 56 or more.
+ */
+export const CROWDED_FROM = 40;
+
 /** The kinds of store that hold messages on their way, drawn with a look of their own. */
 const MESSAGE_KINDS: ReadonlySet<string> = new Set(['queue', 'topic']);
 
