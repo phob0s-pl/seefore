@@ -4,6 +4,7 @@ import type { ModelAnswer } from '../model/answer.ts';
 import { fileURLToPath } from 'node:url';
 import { readFolder } from './files.ts';
 import { HOST, startServer } from './server.ts';
+import { countLine } from '../model/counts.ts';
 
 /** What the command was asked to do. */
 export type Options = { server: boolean; check: boolean; json: boolean; workdir: string; port: number };
@@ -102,11 +103,8 @@ function check(model: ModelAnswer, json: boolean, io: Io): number {
   const summary = model.problems.length === 0 ? 'No problem of form.' : `${many(errors, 'error')}, ${many(warnings, 'warning')}.`;
   io.out(`${many(model.records.length, 'record')} read. ${summary}`);
   for (const count of model.counts) {
-    if (count.checked === null) io.out('Not counted: owners and technologies that nothing names, since a file could not be read.');
-    else if (count.found.length > 0) {
-      const names = count.found.map((item) => `\`${item.record}\``).join(', ');
-      io.out(`${count.found.length === 1 ? '1 owner or technology' : `${count.found.length} owners or technologies`} that nothing names: ${names}.`);
-    }
+    const line = countLine(count);
+    if (line !== undefined) io.out(line);
   }
   return errors > 0 ? 1 : 0;
 }

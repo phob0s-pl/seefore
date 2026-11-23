@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { ModelAnswer } from '../model/answer.ts';
+import { countLine } from '../model/counts.ts';
 import { KINDS } from '../model/kinds.ts';
 import './page.css';
 
@@ -50,15 +51,10 @@ function Page() {
         </ul>
         </>
       )}
-      {answer.counts.map((count) =>
-        count.checked === null ? (
-          <p key={count.rule}>Not counted: {count.says} A file could not be read.</p>
-        ) : count.found.length > 0 ? (
-          <p key={count.rule}>
-            {count.found.length} found, not a problem: {count.found.map((item) => item.record).join(', ')}. {count.says}
-          </p>
-        ) : null,
-      )}
+      {answer.counts.map((count) => {
+        const line = countLine(count);
+        return line === undefined ? null : <p key={count.rule}>{line}</p>;
+      })}
     </main>
   );
 }

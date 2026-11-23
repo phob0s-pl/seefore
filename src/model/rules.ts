@@ -96,13 +96,13 @@ const WRONG: Wrong[] = [
     folder: 'components',
     found: ['stores', 'systems'],
     says: 'A component is in an app.',
-    fix: "A component is in an app. For our code inside somebody else's software, write that app inside the outside system and put the component in it. For code inside a database, say it in the store's description.",
+    fix: "For our code inside somebody else's software, write that app inside the outside system and put the component in it. For code inside a database, say it in the store's description.",
   },
   {
     field: 'via',
     found: ['stores'],
     says: 'A store is not passed through.',
-    fix: 'A store is not passed through. Write one connection to it from each side.',
+    fix: 'Write one connection to the store from each side, and take it out of `via`.',
   },
   {
     field: 'via',
@@ -218,14 +218,18 @@ const referenceUnknown: Rule = {
         id,
         model.entries.filter((other) => spec.kinds.includes(other.kind)).map((other) => other.id),
       );
-      const folder = spec.kinds[0] as string;
+      // Where the missing record would go: its folder when the field allows one kind only.
+      const write =
+        spec.kinds.length === 1
+          ? `write \`${spec.kinds[0]}/${id}.yaml\` with a \`name\``
+          : `write the record for ${quote(id)} in the folder of its kind`;
       findings.push({
         entry,
         field: path,
         message: `\`${spec.field}\` names ${quote(id)}, but no record has that id.${close ? ` The nearest id is ${quote(close)}.` : ''}`,
         fix: close
-          ? `If ${quote(close)} was meant, write it instead of ${quote(id)}. Otherwise write \`${folder}/${id}.yaml\` with a \`name\`.`
-          : `No record has the id ${quote(id)}. Write \`${folder}/${id}.yaml\` with a \`name\`, or use an id that exists. \`${spec.field}\` names ${allowed(spec.kinds)}.`,
+          ? `If ${quote(close)} was meant, write it instead of ${quote(id)}. Otherwise ${write}.`
+          : `Use an id that exists, or ${write}. \`${spec.field}\` names ${allowed(spec.kinds)}.`,
       });
     }
     return findings;

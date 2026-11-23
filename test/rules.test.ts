@@ -62,7 +62,7 @@ test('an app in an app, a component in a system, via a store and an owner that i
   expect(model.problems.map((problem) => problem.rule)).toEqual(Array(4).fill('reference-wrong-kind'));
   expect(fixes.some((fix) => fix.includes('component of the host'))).toBe(true);
   expect(fixes.some((fix) => fix.includes('somebody else'))).toBe(true);
-  expect(fixes.some((fix) => fix.includes('one connection to it from each side'))).toBe(true);
+  expect(fixes.some((fix) => fix.includes('one connection to the store from each side'))).toBe(true);
   expect(fixes.some((fix) => fix.includes('owners/'))).toBe(true);
 });
 
