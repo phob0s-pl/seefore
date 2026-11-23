@@ -1,0 +1,25 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100,
+      "pattern": "^\\S(?:[^\\n\\r\\u0085\\u2028\\u2029]*\\S)?$",
+      "description": "What people call it: one line of 1 to 100 characters, with no space at either end."
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000,
+      "pattern": "\\S",
+      "description": "What it is responsible for, in 1 to 2,000 characters. Its first sentence says what the thing is: a box shows that sentence."
+    }
+  },
+  "required": [
+    "name"
+  ],
+  "additionalProperties": false,
+  "description": "A thing with a name that a part is built with or an exchange is carried in: a language, a product, a protocol, a format."
+}

@@ -14,19 +14,35 @@ export type Place = {
 export type Problem = Place & {
   /** The id of the rule that found it. */
   rule: string;
+  /** Only the warning for a file in a folder that is not known is a warning. */
+  severity: 'error' | 'warning';
   /** What is wrong. */
   message: string;
-  /** How to mend it. */
+  /** How to mend it, so that an agent can act on it without reading anything else. */
   fix: string;
   /** The second place, where two records clash. */
   second?: Place;
 };
 
-/** The answer of `/api/model`. Nothing finds problems yet: B2 does. */
-export type ModelAnswer = {
+/** One record: its kind (the folder it is in), its id (its file's name), its file and its fields. */
+export type ModelRecord = {
+  kind: string;
+  id: string;
+  file: string;
+  /** What the file holds. The field `kind` of an app or a store is here, not above. */
+  fields: Record<string, unknown>;
+};
+
+/** What is read from the files of a model. */
+export type ModelRead = {
+  /** The name in the marker, when the marker has a good one. */
+  name?: string;
+  records: ModelRecord[];
+  problems: Problem[];
+};
+
+/** The answer of `/api/model`. */
+export type ModelAnswer = ModelRead & {
   /** The name of the folder that was read. */
   folder: string;
-  /** The YAML files under it, relative to it, with `/`, in order. */
-  files: string[];
-  problems: Problem[];
 };

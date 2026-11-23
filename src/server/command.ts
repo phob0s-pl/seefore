@@ -1,7 +1,8 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+import type { ModelAnswer } from '../model/answer.ts';
 import { fileURLToPath } from 'node:url';
-import { listFiles } from './files.ts';
+import { readFolder } from './files.ts';
 import { HOST, startServer } from './server.ts';
 
 /** What the command was asked to do. */
@@ -54,12 +55,13 @@ export async function run(args: readonly string[], cwd: string, io: Io): Promise
   if ('error' in options) return fail(options.error);
   if (!options.server) return fail(USAGE);
 
-  let files: string[];
+  let model: ModelAnswer;
   try {
-    files = await listFiles(options.workdir);
+    model = await readFolder(options.workdir);
   } catch {
     return fail(`cannot read the folder "${options.workdir}"`);
   }
+  if (!existsSync(join(options.workdir, 'seefore.yaml'))) return fail(`"${options.workdir}" is not a model: it has no seefore.yaml`);
   if (!existsSync(join(PAGE, 'index.html'))) return fail('the page is not built; run "npm run build"');
 
   try {
@@ -69,7 +71,9 @@ export async function run(args: readonly string[], cwd: string, io: Io): Promise
     if (code === 'EADDRINUSE') return fail(`port ${options.port} is taken`);
     return fail(`cannot listen on port ${options.port}`);
   }
-  io.out(`seefore: ${files.length} ${files.length === 1 ? 'file' : 'files'} read from ${options.workdir}`);
+  io.out(`seefore: ${model.records.length} ${model.records.length === 1 ? 'record' : 'records'} read from ${options.workdir}`);
+  const count = model.problems.length;
+  if (count > 0) io.out(`seefore: ${count} ${count === 1 ? 'problem' : 'problems'}; the page lists them`);
   io.out(`seefore: http://${HOST}:${options.port}`);
   return 0;
 }

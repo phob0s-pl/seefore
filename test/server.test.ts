@@ -1,15 +1,15 @@
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { request } from 'node:http';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, expect, test } from 'vitest';
 import type { ModelAnswer } from '../src/model/answer.ts';
 import { startServer } from '../src/server/server.ts';
 
-const SMALL = fileURLToPath(new URL('./small', import.meta.url));
+const SMALL = fileURLToPath(new URL('./shop', import.meta.url));
 const servers: Server[] = [];
 
 afterEach(async () => {
@@ -23,23 +23,17 @@ async function serve(folder: string, page = SMALL): Promise<string> {
   return `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 }
 
-test('/api/model answers for a small folder', async () => {
-  const response = await fetch(`${await serve(SMALL)}/api/model`);
-  expect(response.headers.get('content-type')).toBe('application/json; charset=utf-8');
-  expect(await response.json()).toEqual({
-    folder: 'small',
-    files: ['people/alice.yaml', 'people/bob.yml', 'shop.yaml'],
-    problems: [],
-  });
-});
-
-test('/api/model answers for an empty folder, and reads it anew at each request', async () => {
+test('/api/model answers with the name, the records and the problems, read anew at each request', async () => {
   const folder = await mkdtemp(join(tmpdir(), 'seefore-'));
+  await cp(SMALL, folder, { recursive: true });
   const address = await serve(folder);
-  const files = async (): Promise<string[]> => ((await (await fetch(`${address}/api/model`)).json()) as ModelAnswer).files;
-  expect(await files()).toEqual([]);
-  await writeFile(join(folder, 'new.yaml'), 'id: new\n');
-  expect(await files()).toEqual(['new.yaml']);
+  const get = async (): Promise<ModelAnswer> => (await fetch(`${address}/api/model`)).json() as Promise<ModelAnswer>;
+
+  const first = await get();
+  expect(first).toMatchObject({ folder: basename(folder), name: 'Shop', problems: [] });
+  expect(first.records.map((record) => record.id)).toEqual(['order-api', 'api-writes-orders', 'customer-orders', 'clerk', 'customer', 'orders', 'shop']);
+  await writeFile(join(folder, 'people', 'bob.yaml'), 'name: Bob\ncolour: red\n');
+  expect((await get()).problems.map((problem) => problem.rule)).toEqual(['key-unknown']);
 });
 
 test('a request sent to another name than this machine is refused', async () => {

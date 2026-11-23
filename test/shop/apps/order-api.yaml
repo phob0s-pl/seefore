@@ -1,0 +1,5 @@
+name: Order API
+in: shop
+kind: service
+technology:
+  - go

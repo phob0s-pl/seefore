@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { ModelAnswer } from '../model/answer.ts';
+import { KINDS } from '../model/kinds.ts';
 import './page.css';
 
-/** The page: the folder's name, how many files were read, and their names. */
+/** The page: the model's name, a count for each kind, and the problems. */
 function Page() {
   const [answer, setAnswer] = useState<ModelAnswer>();
   const [failed, setFailed] = useState<string>();
@@ -21,15 +22,33 @@ function Page() {
 
   if (failed !== undefined) return <main><p className="failed">{failed}</p></main>;
   if (answer === undefined) return <main><p>Reading…</p></main>;
-  const count = answer.files.length;
+  const total = answer.records.length;
+  const counts = KINDS.flatMap(({ folder, one, many }) => {
+    const n = answer.records.filter((record) => record.kind === folder).length;
+    return n > 0 ? [`${n} ${n === 1 ? one : many}`] : [];
+  });
   return (
     <main>
-      <h1>{answer.folder}</h1>
-      <p>{count === 0 ? 'No files.' : `${count} ${count === 1 ? 'file' : 'files'} read.`}</p>
-      {count > 0 && (
-        <ul>
-          {answer.files.map((file) => <li key={file}>{file}</li>)}
+      <h1>{answer.name ?? answer.folder}</h1>
+      <p>{total === 0 ? 'No records.' : `${total} ${total === 1 ? 'record' : 'records'}: ${counts.join(', ')}`}</p>
+      {answer.problems.length === 0 ? (
+        <p>No problems.</p>
+      ) : (
+        <>
+        <p>{answer.problems.length === 1 ? '1 problem' : `${answer.problems.length} problems`}</p>
+        <ul className="problems">
+          {answer.problems.map((problem, index) => (
+            <li key={index}>
+              <p className="where">
+                {problem.severity === 'warning' && <strong>Warning </strong>}
+                {problem.file}, line {problem.line}
+              </p>
+              <p>{problem.message}</p>
+              <p>Mend: {problem.fix}</p>
+            </li>
+          ))}
         </ul>
+        </>
       )}
     </main>
   );

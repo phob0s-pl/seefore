@@ -1,3 +1,6 @@
+import { mkdtemp } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { expect, test } from 'vitest';
 import { readOptions, run } from '../src/server/command.ts';
 
@@ -28,4 +31,12 @@ test('a folder that is not there, or no --server, ends with 1 and one line', asy
   lines.length = 0;
   expect(await run(['--workdir=nowhere'], '/here', io)).toBe(1);
   expect(lines).toEqual(['seefore: run it as "seefore --server [--workdir=<dir>] [--port=<n>]"']);
+});
+
+test('a folder with no seefore.yaml is not a model', async () => {
+  const lines: string[] = [];
+  const io = { out: (line: string) => lines.push(line), err: (line: string) => lines.push(line) };
+  const folder = await mkdtemp(join(tmpdir(), 'seefore-'));
+  expect(await run(['--server', `--workdir=${folder}`], '/here', io)).toBe(1);
+  expect(lines).toEqual([`seefore: "${folder}" is not a model: it has no seefore.yaml`]);
 });
