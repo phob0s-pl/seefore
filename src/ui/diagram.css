@@ -1,0 +1,157 @@
+/* The diagram: the hatched field it is drawn on, React Flow read through the tokens, its zoom
+   column of glass at the lower left, and the boxes, frames and lines on it. */
+
+/* The field fills the page under the top bar and ends level with the sidebar's foot. */
+.canvas-frame {
+  position: relative;
+  height: var(--canvas-height);
+  border-radius: var(--radius-canvas);
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--canvas-hatch), var(--surface-canvas);
+  box-shadow: var(--shadow-panel);
+}
+.page-content:has(> .canvas-frame) {
+  padding-bottom: 0;
+}
+/* A field with nothing to draw, or still laid out: the reason sits in its middle. */
+.canvas-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+.canvas-caption {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+  padding: 6px 12px;
+  border-radius: var(--radius-control);
+  background: rgba(var(--surface-page-rgb), 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.canvas-caption.failed {
+  color: var(--danger);
+}
+
+/* The bridge from the tokens to React Flow: the field's hatch shows through. */
+.canvas-frame .react-flow {
+  --xy-background-color: transparent;
+  --xy-node-background-color: var(--surface-raised);
+  --xy-node-color: var(--text-primary);
+  --xy-node-border: 1px solid var(--border-strong);
+  --xy-edge-stroke: var(--graph-edge);
+  --xy-edge-stroke-width: 1.6;
+  --xy-controls-box-shadow: none;
+}
+
+/* Zoom in, zoom out and fit: the glass column at the field's lower left. */
+.glass-group-column {
+  flex-direction: column;
+  background: var(--surface-glass-strong);
+}
+.canvas-frame .react-flow__controls {
+  margin: 16px;
+}
+.glass-group > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  min-height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.75);
+  box-shadow: none;
+}
+.glass-group > button:hover {
+  background: var(--surface-selected);
+  color: #fff;
+}
+.canvas-frame .react-flow__controls-button svg {
+  width: 15px;
+  height: 15px;
+  max-width: none;
+  max-height: none;
+}
+.canvas-frame .react-flow__controls-button svg.lucide {
+  fill: none;
+}
+
+/* A box: its icon, its name and a small line with its kind. */
+.architecture-node {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  padding: 14px 16px;
+  border-radius: var(--radius-card);
+  border: 1px solid var(--border-strong);
+  border-top: 3px solid var(--accent);
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-panel-lift);
+}
+.architecture-node-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.architecture-node-heading > .model-symbol {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-tile);
+  background: var(--neutral-tint);
+  color: var(--neutral-ink);
+}
+.architecture-node-heading > .model-symbol svg {
+  width: 15px;
+  height: 15px;
+  stroke-width: 1.9;
+}
+.architecture-node-heading > div {
+  min-width: 0;
+  flex: 1;
+}
+.architecture-node-heading strong {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--text-strong);
+}
+.architecture-node-heading small {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+/* A frame: an opened system or app is a dashed outline that names itself and holds its boxes. */
+.architecture-boundary {
+  border: 1.5px dashed var(--accent);
+  background: var(--graph-boundary);
+  box-shadow: none;
+}
+.architecture-boundary .architecture-node-heading {
+  max-width: 270px;
+}
+/* An arrow hangs on these points; they are not shown and cannot be used. */
+.architecture-node .diagram-handle {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Lines: a halo in the field's colour lifts a line over what it crosses. */
+.diagram-edge-halo {
+  pointer-events: none;
+}
