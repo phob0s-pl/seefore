@@ -557,9 +557,11 @@ What is no answer, and what is:
 
 A field left out says "not known yet", and the count shows it. Where the facts say why
 something is not known, the description says so in ordinary words: "The sources do not name
-the product." Never write to make a finding go away: no caller made up, no technology taken
-from the app a component is in, no purpose read out of a port's number, no record taken out
-because it stands alone, and no word such as "Unknown" or "N/A" in a field.
+the product." Never write to make a finding go away: no caller made up, no protocol put
+where a part's technology goes, no technology taken from the app a component is in, no
+purpose read out of a port's number, no connection for who runs a copy, no record taken out
+because it stands alone, no word such as "Unknown" or "N/A" in a field, and no name made up
+to pass `--require-names`.
 
 ## 9. Say what happened
 

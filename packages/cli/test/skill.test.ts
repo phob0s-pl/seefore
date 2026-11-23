@@ -164,7 +164,7 @@ describe('the model skill', () => {
     const c4Spec = readFileSync(join(root, 'docs/c4-checks.md'), 'utf8').replace(/\s+/g, ' ');
     const never = /\*\*It never writes to make a finding go away\*\*: ([^.]*)\./.exec(c4Spec)?.[1] ?? '';
     const items = never.split(/, (?:and )?/).map((item) => item.replace(/ in a field$/, ''));
-    expect(items.length).toBe(5);
+    expect(items.length).toBe(8);
     const flat = skill.replace(/\s+/g, ' ');
     for (const item of items) expect(flat, item).toContain(item);
     expect(flat).toContain('Never write to make a finding go away:');

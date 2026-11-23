@@ -166,7 +166,7 @@ To settle in the stage named, with the recommendation the two proposals reached:
 | 6a | Hard cases in a picture | built 2026-11-22; the trial with the owner is still to do |
 | 6b | Hard cases in a record | built 2026-11-22; the trial with the owner is still to do |
 | 7 | Layout stability (gate) | built 2026-11-23; it passes its pass numbers, one of them set again after it was measured; the owner's judging of the pictures, which is the gate, is still to do, and stage 8 waits for it |
-| 8 | C4 checks | |
+| 8 | C4 checks | built 2026-11-23, on the owner's word, before the two picture tasks of stage 7 were done; the trial with the owner is still to do |
 | 9 | Focused views | |
 | 10 | Flows | |
 | 11 | Flow walkthrough | |
@@ -578,3 +578,19 @@ Open after the trial of stage 7, for the owner:
   one hub and many spokes goes from 5 to 49.
 - **The long column of a context view.** Crossing 16 boxes redraws the view, and in a split
   column a neighbour added or taken out sends the boxes after it to the other side.
+
+Open after the trial of stage 8, for the owner:
+
+- **What `--require-names` asks.** As built: every connection named, and none the bare "Uses".
+  Three of the eight trial models cannot pass it without a made-up name, since each has one
+  connection whose purpose the facts call unstated. The other way: only that none is the
+  bare "Uses".
+- **One word as a list of words.** The warning for a connection named only "Uses" reads one
+  word in two forms, against the rule of stage 6a. It has never met a model whose names were
+  not mended first.
+- **What the checks cannot see.** A description that only says its name again, a name as
+  empty as "Uses" in other words, a part that one connection touches and that is cut off all
+  the same, a protocol written where a part's technology goes. Three tests need no list of
+  words and were not built: a name that is a verb and the name of its far end; a store that
+  is written and never read; a component with a way out and none in.
+- **Ten mends that agents made with nobody to ask**, listed in `research/trial/stage-08.md`.
