@@ -169,6 +169,10 @@ owner's reading of the pictures decides that.
 | 6 | The slowest layout | 2 seconds |
 | 7 | A view of more than 40 boxes | Each is reported |
 
+- **As built, number 3 is missed in its worst edit.** On one trial view of 26 boxes, taking
+  out or moving an app that takes four other boxes out of the view with it keeps 73 % of the
+  order within a column, where 75 % is asked. Over all models the number stands at 98 %. The
+  owner decides what becomes of it: `plan.md`, "Open questions".
 - **A box has moved** when its centre is more than half a box from where it stood, after the
   shift that all boxes share is taken away. The script prints the share. It has no pass
   number: no layout of this kind holds the place.
