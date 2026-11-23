@@ -31,14 +31,22 @@ export function LargeTitle({ children }: { children: ReactNode }) {
   return <h1 className="large-title">{children}</h1>;
 }
 
-/** A panel that says what is not there yet, in one title and one line. */
-export function EmptyState({ title, children }: { title: ReactNode; children?: ReactNode }) {
-  return (
-    <div className="panel">
-      <div className="empty-state">
-        <h2>{title}</h2>
-        {children !== undefined && <p>{children}</p>}
-      </div>
+/** A panel that says what is not there yet, in one title and one line. Bare, it has no panel. */
+export function EmptyState({ title, bare, children }: { title: ReactNode; bare?: boolean; children?: ReactNode }) {
+  const state = (
+    <div className="empty-state">
+      <h2>{title}</h2>
+      {children !== undefined && <p>{children}</p>}
     </div>
+  );
+  return bare ? state : <div className="panel">{state}</div>;
+}
+
+/** The hatched, rounded field a diagram is drawn on. */
+export function CanvasFrame({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <section className="canvas-frame" aria-label={label}>
+      {children}
+    </section>
   );
 }

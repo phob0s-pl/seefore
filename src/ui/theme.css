@@ -73,8 +73,9 @@
   /* The inset shared by the toolbar and every page: their edges align. */
   --content-gutter: 20px;
   --reading-width: 772px;
-  /* Every canvas fills the window below the toolbar, so a fit stays readable. */
-  --canvas-height: max(520px, calc(100dvh - 170px));
+  /* Every canvas fills the window below the toolbar and the page's top padding of 32px, and
+     ends on the sidebar's inset, level with its foot. */
+  --canvas-height: calc(100dvh - var(--toolbar-height) - 32px - var(--sidebar-inset));
 
   /* Glass: what the sidebar, the toolbar controls and canvas controls are made of. */
   --glass-blur: blur(30px) saturate(180%);
