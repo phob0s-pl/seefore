@@ -139,6 +139,9 @@ Decided:
 | Which order a column has | The walk, as built. Two others were measured: every start first, and by id alone. They hold better when a box that the walk passes early goes, at 28 and 44 % more crossings than the walk on every picture | 2026-11-23 |
 | The floor for the worst edit at stage 7 | 75 % of the order within a column, for an edit that adds something. An edit that takes out or moves has no floor: under the walk the worst keeps 48 %. Set again after the measurement | 2026-11-23 |
 | The split column of a context view | From 16 boxes, as stage 5 built it. Split at every size, the small context views held worse | 2026-11-23 |
+| The C4 checks | One set of five. Four count what is missing, as notes that are no problem and fail no run: a description, a technology of an app, a store or a component, a name of a connection, a connection at all. One is a warning: a connection named only "Uses" | 2026-11-23 |
+| How "unknown" is said | By leaving the field out. No value, key or list stands for it | 2026-11-23 |
+| What a pipeline can ask of the check | Names, with `seefore check --require-names`. Nothing makes a run fail on the other counts; a team's own rules are stage 24 | 2026-11-23 |
 | Where finding things stands | Among the last stages: stage 25, before sharing. It was stage 10. Stages 11 to 25 became 10 to 24. Notes in `research/` written before this date name those stages by their old numbers | 2026-11-23 |
 
 To settle in the stage named, with the recommendation the two proposals reached:
@@ -295,8 +298,9 @@ To settle in the stage named, with the recommendation the two proposals reached:
 - **Adds:** the C4 notation rules as one named set, each with a severity.
 - **Ends with:** checks for a missing description, a missing technology, an unlabelled or
   vague connection, and an element connected to nothing. "Unknown" is allowed while
-  exploring. Each check says how much it looked at, so a check that looked at nothing says so.
-  An exit code for CI.
+  exploring: a field that is left out says it, and is counted, not held against the model.
+  Each check says how much it looked at, so a check that looked at nothing says so. An exit
+  code for CI, which can ask for names.
 - **Trial:** run on every trial system. Every finding is fixed in the model, or shows that
   the rule is wrong.
 - **Leaves out:** the team's own rules, and any judgment of whether a description is right.
