@@ -1,9 +1,11 @@
-import type { Drawn, Rect } from '@seefore/core';
-import type { Lit } from './light.ts';
+import { CROWDED_FROM } from '@seefore/core';
+import type { Drawn, Rect, View } from '@seefore/core';
+import type { Lit, Target } from './light.ts';
 
 /**
  * What the zoom decides: how much text a picture shows, how it is fitted to the room it has,
- * and when to say that it is too small to read. The numbers are those of
+ * where it stands when a new picture of it comes, and the note under the counts: that it is too
+ * small to read, or that the view is crowded. The numbers are those of
  * `research/diagrams/recommendations.md`, section 4: names stay at 9 pixels or more.
  */
 
@@ -47,6 +49,30 @@ export function detailAt(zoom: number): Detail {
   if (zoom < NO_LINE_BELOW) return 'names';
   if (zoom < NO_SENTENCE_BELOW) return 'names-lines';
   return 'all';
+}
+
+/**
+ * How far from its line the pointer finds an arrow, on the screen, in CSS pixels: never less
+ * than `REACH_LEAST`, so that at a map's zoom an arrow can still be hit, and never more than
+ * `REACH_MOST`, so that zoomed in it does not take the room of its neighbours. Between them it is
+ * half the width of the target an arrow draws, 14 at full size.
+ */
+export const REACH_LEAST = 6;
+export const REACH_MOST = 12;
+export const REACH_FULL = 7;
+
+/** How far from its line the pointer finds an arrow at a zoom, in the picture's units. */
+export function reachAt(zoom: number): number {
+  return Math.min(Math.max(REACH_FULL, REACH_LEAST / zoom), REACH_MOST / zoom);
+}
+
+/**
+ * How many times its size a lit arrow's head and ring are drawn at a zoom: below the zoom at
+ * which names are drawn, so many that they keep their size on the screen, as the lit line keeps
+ * its width; else as they are.
+ */
+export function litScale(zoom: number): number {
+  return zoom < NO_NAME_BELOW ? 1 / zoom : 1;
 }
 
 /** The width and height of the room a picture is drawn in, in CSS pixels. */
@@ -129,4 +155,84 @@ export function smallNote(drawn: Drawn, zoom: number): string | undefined {
   const boxes = count(drawn.boxes.length, 'box', 'boxes');
   const arrows = count(drawn.arrows.length, 'arrow', 'arrows');
   return `Too small to read at ${percent(zoom)}: ${boxes} and ${arrows}. Names can be read from ${percent(READABLE_FROM)}. Zoom in, or point at a box to follow it.`;
+}
+
+/** What a picture shows at the zoom it opens at, in the words of the crowded note. */
+const OPENS: Readonly<Record<Detail, string>> = {
+  shapes: 'It opens as a map, with no words.',
+  names: 'It opens with the names of its boxes and no other words.',
+  'names-lines': 'It opens with names and kind lines, and no descriptions.',
+  all: 'It opens with all its words.',
+};
+
+/**
+ * The note for a crowded view, one of more boxes than `CROWDED_FROM`, at any zoom: what it shows
+ * at `opened`, the zoom it opens at, which fits it to its room, and how to read it. Missing for
+ * a view under the limit.
+ */
+export function crowdedNote(view: View, opened: number): string | undefined {
+  if (view.boxes.length <= CROWDED_FROM) return undefined;
+  return `A crowded view: more than ${CROWDED_FROM} boxes. ${OPENS[detailAt(opened)]} Point at a box or an arrow, or move the keyboard's focus to it, to read it here. A click, a tap or Enter keeps it lit.`;
+}
+
+/**
+ * The note under the counts of a view: for a crowded view the crowded note, which says how to
+ * read it and so stands in place of the note that it is too small; for a view under the limit,
+ * the note that it is too small to read at this zoom, when it is. `opened` is the zoom the view
+ * opens at in its room.
+ */
+export function noteFor(view: View, drawn: Drawn, zoom: number, opened: number): string | undefined {
+  return crowdedNote(view, opened) ?? smallNote(drawn, zoom);
+}
+
+/** The place of a box, or of the boundary, in a picture. Missing when the picture does not draw it. */
+function placeOf(drawn: Drawn, id: string): Rect | undefined {
+  return drawn.boxes.find((box) => box.id === id) ?? (drawn.boundary?.id === id ? drawn.boundary : undefined);
+}
+
+/** A point on the screen, in the client pixels of the browser's window. */
+export interface ClientPoint {
+  x: number;
+  y: number;
+}
+
+/**
+ * Where things stood on the screen when a new picture came, as the page measures them: the top
+ * left of the canvas just before the new picture and the words above it are put in, the same
+ * just after, before the browser paints, and the top left of the chosen box as it was drawn
+ * before, when one was. The words above the canvas may have grown or shrunk by a line, and the
+ * canvas moved with them.
+ */
+export interface OnScreen {
+  canvasBefore: ClientPoint;
+  canvasAfter: ClientPoint;
+  box?: ClientPoint;
+}
+
+/**
+ * Where the canvas looks when a new picture of the same view comes, the one before shown at
+ * `viewport`. A chosen box, or the boundary, that both pictures draw keeps its top left where it
+ * stood on the screen, at the same zoom, so that a reader who watches the page while the files
+ * change keeps the place: that wins over fitting again. Else a picture the reader has not moved
+ * is fitted again to the room. Else it stays where it is on the screen, though the canvas moved.
+ * Missing when the viewport stays as it is.
+ *
+ * Without `screen` the canvas is taken to stand where it stood, and the box where the viewport
+ * put it.
+ */
+export function viewportAfter(before: Drawn, after: Drawn, chosen: Target | null, viewport: Viewport, moved: boolean, room: Room | null, screen?: OnScreen): Viewport | undefined {
+  const { zoom } = viewport;
+  // How far the canvas moved down the screen, which the viewport takes back.
+  const shift = screen === undefined ? { x: 0, y: 0 } : { x: screen.canvasBefore.x - screen.canvasAfter.x, y: screen.canvasBefore.y - screen.canvasAfter.y };
+  const was = chosen?.kind === 'box' ? placeOf(before, chosen.id) : undefined;
+  const is = chosen?.kind === 'box' ? placeOf(after, chosen.id) : undefined;
+  if (was !== undefined && is !== undefined) {
+    // Where the box stood on the screen, measured when it can be, else from the viewport.
+    const stood = screen?.box ?? (screen === undefined ? { x: viewport.x + was.x * zoom, y: viewport.y + was.y * zoom } : { x: screen.canvasBefore.x + viewport.x + was.x * zoom, y: screen.canvasBefore.y + viewport.y + was.y * zoom });
+    const canvas = screen?.canvasAfter ?? { x: 0, y: 0 };
+    return { x: stood.x - canvas.x - is.x * zoom, y: stood.y - canvas.y - is.y * zoom, zoom };
+  }
+  if (!moved && room !== null) return fitViewport(whole(after), room);
+  if (shift.x === 0 && shift.y === 0) return undefined;
+  return { x: viewport.x + shift.x, y: viewport.y + shift.y, zoom };
 }

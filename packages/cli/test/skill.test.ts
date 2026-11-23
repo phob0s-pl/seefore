@@ -2,7 +2,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseDocument } from 'yaml';
-import { APP_KINDS, CURRENT_FORMAT, STORE_KINDS, load } from '@seefore/core';
+import { APP_KINDS, CROWDED_FROM, CURRENT_FORMAT, STORE_KINDS, load } from '@seefore/core';
 import type { SourceFile } from '@seefore/core';
 import { describe, expect, it } from 'vitest';
 import type { z } from 'zod';
@@ -103,6 +103,27 @@ describe('the model skill', () => {
       const expected = keysOf(family.record.schema).map(({ key, required }) => (required ? `**\`${key}\`**` : `\`${key}\``));
       expect(written, family.folder).toEqual(expected);
     }
+  });
+
+  it('knows the warning of a crowded view by the code the engine gives it, and asks for no record less', () => {
+    const apps = Array.from({ length: CROWDED_FROM + 1 }, (_, n): SourceFile => ({ path: `apps/app-${n + 1}.yaml`, text: `name: App ${n + 1}\nin: shop\n` }));
+    const shop: SourceFile[] = [
+      { path: 'seefore.yaml', text: 'format: 1\nname: Shop\n' },
+      { path: 'systems/shop.yaml', text: 'name: Shop\n' },
+    ];
+    const [crowded] = load([...shop, ...apps]).problems;
+    expect(crowded?.code).toBe('view-crowded');
+    const paragraphs = skill.split('\n\n').map((paragraph) => paragraph.replace(/\s+/g, ' '));
+    // The rule for every warning says, where it stands, that this one asks nothing.
+    const rule = paragraphs.find((paragraph) => paragraph.startsWith('Run `seefore check --workdir=<folder>`.')) ?? '';
+    expect(rule).toContain('For a warning, say what it is and ask, except for `view-crowded`, which asks nothing.');
+    const said = paragraphs.find((paragraph) => paragraph.startsWith('`view-crowded`')) ?? '';
+    // What the skill quotes is how the warning begins, so that the view and its boxes are read from it.
+    const quoted = /"(The container view of Shop has \d+ boxes\.)"/.exec(said)?.[1] ?? '';
+    expect(quoted).not.toBe('');
+    expect(crowded?.message.startsWith(quoted.replace(/\d+/, String(CROWDED_FROM + 1)))).toBe(true);
+    expect(said).toContain('Set these warnings beside those of the check of section 1, made before your change.');
+    expect(said).toContain('Do not propose merging records or leaving any out to get under the limit.');
   });
 
   it('names the kinds the engine allows, in order', () => {

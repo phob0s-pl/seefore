@@ -59,6 +59,13 @@ const BOUNDARY_ARROWS = '; an arrow at its edge is to or from the system itself'
 const INSIDE = 'with its apps and stores inside';
 const INSIDE_WITH_PIECES = 'with its apps, stores and pieces of infrastructure inside';
 
+/**
+ * A view of more boxes than this is crowded: it cannot be read as one picture. The check
+ * reports it and the page draws it as a map. Chosen on the trial models, whose views have 32
+ * boxes or fewer, or 56 or more.
+ */
+export const CROWDED_FROM = 40;
+
 /** The kinds of store that hold messages on their way, drawn with a look of their own. */
 const MESSAGE_KINDS: ReadonlySet<string> = new Set(['queue', 'topic']);
 
@@ -70,14 +77,75 @@ const MESSAGE_KINDS: ReadonlySet<string> = new Set(['queue', 'topic']);
 export function viewsOf(model: Model): View[] {
   const index = indexOf(model);
   const followed = followedOf(model, index);
+  return plannedOf(index, followed).map((planned) => viewOf(planned, index, followed));
+}
+
+/** How many boxes a view draws, with what the view is. */
+export interface BoxCount {
+  /** The id of the view, as `viewsOf` gives it. */
+  id: string;
+  kind: ViewKind;
+  /** The id of the system the view is about. */
+  scope: string;
+  /** How many boxes it draws: as many as its `boxes` in `viewsOf`. */
+  count: number;
+}
+
+/**
+ * How many boxes each view of a model draws, in the order of `viewsOf`. The boxes are picked
+ * by the one function that picks them for `viewsOf`, and nothing more of a view is worked out:
+ * no arrow, label, route or legend. The check of a crowded view needs no more, and the views
+ * themselves are made once, by whoever draws them.
+ */
+export function boxCountsOf(model: Model): BoxCount[] {
+  const index = indexOf(model);
+  return plannedOf(index, followedOf(model, index)).map(({ id, kind, system, boxes }) => ({ id, kind, scope: system.id, count: boxes.length }));
+}
+
+/** A view before it is drawn: what it is about, and which boxes it draws. */
+interface Planned {
+  id: string;
+  kind: ViewKind;
+  system: ModelRecord<System>;
+  /**
+   * The ids of the parts drawn inside the boundary, in a container view: its apps and stores,
+   * then its pieces of infrastructure that have a box. None in a context view.
+   */
+  inside: string[];
+  /**
+   * The id of every box, in order of id. In a context view the system itself and each box
+   * around it; in a container view each box inside the boundary and each box outside, and not
+   * the boundary.
+   */
+  boxes: string[];
+}
+
+/**
+ * Which views a model has, in the order of `viewsOf`, and which boxes each draws. This is the
+ * one place that says which boxes a view has: the views are drawn from it, and the check of a
+ * crowded view counts from it.
+ */
+function plannedOf(index: Index, followed: readonly Followed[]): Planned[] {
   const boxed = boxedPieces(index, followed);
   const shown = withPartsOf(index, boxed);
-  const withParts = model.systems.filter((system) => shown.has(system.id));
-  const others = model.systems.filter((system) => !shown.has(system.id));
-  return [
-    ...withParts.flatMap((system) => [viewOf('context', system, index, followed, boxed), viewOf('containers', system, index, followed, boxed)]),
-    ...others.map((system) => viewOf('context', system, index, followed, boxed)),
-  ];
+  const planned: Planned[] = [];
+  const later: Planned[] = [];
+  for (const system of index.model.systems) {
+    const scope = system.id;
+    // The boxes around a system are the same in both its views.
+    const around = [...neighboursOf(scope, followed)];
+    const context: Planned = { id: `${scope}.context`, kind: 'context', system, inside: [], boxes: [scope, ...around].sort() };
+    if (!shown.has(scope)) {
+      later.push(context);
+      continue;
+    }
+    // A piece of infrastructure in the system has a box only where a connection starts or ends at it,
+    // one whose other end can be followed, and which this view then draws.
+    const pieces = (index.piecesIn.get(scope) ?? []).filter((piece) => boxed.has(piece));
+    const inside = [...(index.partsIn.get(scope) ?? []), ...pieces];
+    planned.push(context, { id: `${scope}.containers`, kind: 'containers', system, inside, boxes: [...inside, ...around].sort() });
+  }
+  return [...planned, ...later];
 }
 
 /**
@@ -280,14 +348,10 @@ interface Frame {
   drawn: ReadonlySet<string>;
 }
 
-/** The view of one kind about a system. `boxed` holds the pieces of infrastructure in a system that have a box. */
-function viewOf(kind: ViewKind, system: ModelRecord<System>, index: Index, followed: readonly Followed[], boxed: ReadonlySet<string>): View {
+/** The view of one kind about a system, drawn from the boxes it was planned with. */
+function viewOf(planned: Planned, index: Index, followed: readonly Followed[]): View {
+  const { kind, system, inside, boxes } = planned;
   const scope = system.id;
-  // A piece of infrastructure in the system has a box only where a connection starts or ends at it,
-  // one whose other end can be followed, and which this view then draws.
-  const pieces = (index.piecesIn.get(scope) ?? []).filter((piece) => boxed.has(piece));
-  const inside = kind === 'containers' ? [...(index.partsIn.get(scope) ?? []), ...pieces] : [];
-  const boxes = [...(kind === 'context' ? [scope] : inside), ...neighboursOf(scope, followed)].sort();
   const ours = new Set([scope, ...inside]);
   const frame: Frame = { kind, scope, ours, drawn: new Set([scope, ...boxes]) };
   const sorted = sortedFor(followed, frame);
@@ -319,7 +383,7 @@ function viewOf(kind: ViewKind, system: ModelRecord<System>, index: Index, follo
   const title = `${system.name} ${line}${only === undefined ? '' : ` only ${only}`}`;
   const boundary = kind === 'containers' ? { id: scope, name: system.name, line, ...(only === undefined ? {} : { only }), title } : undefined;
   return {
-    id: `${scope}.${kind}`,
+    id: planned.id,
     kind,
     scope,
     title: `${kind === 'context' ? 'Context view' : 'Container view'}: ${system.name}`,

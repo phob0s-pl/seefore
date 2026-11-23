@@ -121,13 +121,48 @@ describe('the label of an arrow', () => {
     expect(labelText(arrow('a', 'b', ['Places an order']))).not.toHaveProperty('technology');
   });
 
-  it('takes as much room as its widest line, and a line height for each line', () => {
+  it('has words as wide as its widest line, and a line height for each line', () => {
     const label = labelText(arrow('a', 'b', ['Writes each order', 'Reads an order'], ['SQL']));
     expect(label?.width).toBe(Math.ceil(widthOf('Writes each order', LABEL_FONT)));
     expect(label?.height).toBe(2 * LABEL_LINE_HEIGHT + TECHNOLOGY_LINE_HEIGHT);
   });
 
-  it('is missing when the arrow has no words at all', () => {
+  it('has room as wide as a label may be, however narrow its words', () => {
+    for (const names of [['Uses'], ['Writes each order', 'Reads an order'], ['A', 'B', 'C', 'D']]) expect(labelText(arrow('a', 'b', names))?.room.width).toBe(LABEL_WIDTH);
+  });
+
+  it('has room for three lines of a single connection’s name, however many it takes', () => {
+    for (const name of ['Uses', 'Sends every order that is ready to ship', 'Sends every order that is ready to ship, with its lines and its address, once an hour']) {
+      const label = labelText(arrow('a', 'b', [name], ['HTTPS']));
+      expect(label?.room).toEqual({ width: LABEL_WIDTH, height: 3 * LABEL_LINE_HEIGHT + TECHNOLOGY_LINE_HEIGHT });
+    }
+    expect(labelText(arrow('a', 'b', ['Uses']))?.height).toBe(LABEL_LINE_HEIGHT);
+  });
+
+  it('has room for the lines the number of names gives, when the arrow has several', () => {
+    expect(labelText(arrow('a', 'b', ['Writes', 'Reads']))?.room.height).toBe(2 * LABEL_LINE_HEIGHT);
+    expect(labelText(arrow('a', 'b', ['Writes', 'Reads', 'Deletes']))?.room.height).toBe(3 * LABEL_LINE_HEIGHT);
+    expect(labelText(arrow('a', 'b', ['Writes', 'Reads', 'Deletes', 'Counts', 'Lists']))?.room.height).toBe(3 * LABEL_LINE_HEIGHT);
+  });
+
+  it('has room for the route, the conditions and the technology only when the arrow has them', () => {
+    const label = labelText({
+      ...arrow('a', 'b', ['Pays'], ['HTTPS']),
+      route: route(['Ingress']),
+      only: { count: 1, all: true, words: 'when LDAP authentication is configured', line: 'only when LDAP authentication is configured' },
+      opened: { count: 1, all: false, line: 'far side opened on 1 of 2' },
+    });
+    expect(label?.room.height).toBe(3 * LABEL_LINE_HEIGHT + ROUTE_LINE_HEIGHT + 3 * CONDITION_LINE_HEIGHT + TECHNOLOGY_LINE_HEIGHT);
+    expect(label?.height).toBe(LABEL_LINE_HEIGHT + ROUTE_LINE_HEIGHT + 3 * CONDITION_LINE_HEIGHT + TECHNOLOGY_LINE_HEIGHT);
+  });
+
+  it('has room as wide as a line that says on how many, when it is wider than a label may be', () => {
+    const label = labelText({ ...arrow('a', 'b', ['Pays']), opened: { count: 1, all: false, line: 'far side opened on 123456789 of 987654321, with more words' } });
+    expect(label?.room.width).toBe(label?.width);
+    expect(label?.width).toBeGreaterThan(LABEL_WIDTH);
+  });
+
+  it('is missing when the arrow has no words at all, and so has no room', () => {
     expect(labelText(arrow('a', 'b', []))).toBeUndefined();
   });
 });

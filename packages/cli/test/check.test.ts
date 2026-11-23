@@ -3,6 +3,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, sy
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { CROWDED_FROM } from '@seefore/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { CheckResult, Failure } from '../src/check.ts';
 import { HELP, main } from '../src/main.ts';
@@ -39,6 +40,21 @@ function run(args: string[], cwd = '.') {
 function json(args: string[], cwd = '.') {
   const result = run([...args, '--json'], cwd);
   return { code: result.code, data: JSON.parse(result.out) as CheckResult & Failure };
+}
+
+/** A source directory made by code: a system with this many apps in it, and so this many boxes in its container view. */
+function crowded(apps: number): Record<string, string> {
+  const files: Record<string, string> = { 'seefore.yaml': MARKER, 'systems/shop.yaml': 'name: Shop\n' };
+  for (let n = 1; n <= apps; n += 1) files[`apps/app-${n}.yaml`] = `name: App ${n}\nin: shop\n`;
+  return files;
+}
+
+/** What the warning says of a container view of the shop with this many boxes. */
+function crowdedMessage(boxes: number): string {
+  return (
+    `The container view of Shop has ${boxes} boxes. A view of more than ${CROWDED_FROM} cannot be read as one picture: ` +
+    'the page draws it as a map. Until focused views exist, read it by pointing at a box.'
+  );
 }
 
 describe('seefore check', () => {
@@ -451,22 +467,40 @@ describe('seefore check', () => {
     ]);
   });
 
-  it('passes a directory whose records keep every rule, with a warning about a check', () => {
-    write({
-      'seefore.yaml': MARKER,
-      'people/customer.yaml': 'name: Customer\n',
-      'systems/shop.yaml': 'name: Shop\n',
-      'connections/buys.yaml': 'from: customer\nto: shop\nname: Buys\n',
-      'connections/buys-again.yaml': 'from: customer\nto: shop\nname: Buys\n',
-    });
-    const result = run(['check']);
-    expect(result.code).toBe(0);
-    expect(result.out).toContain(
+  // A warning never changes the exit code, whichever check gives it.
+  it.each([
+    [
+      'two connections that say one thing',
+      {
+        'seefore.yaml': MARKER,
+        'people/customer.yaml': 'name: Customer\n',
+        'systems/shop.yaml': 'name: Shop\n',
+        'connections/buys.yaml': 'from: customer\nto: shop\nname: Buys\n',
+        'connections/buys-again.yaml': 'from: customer\nto: shop\nname: Buys\n',
+      },
       'connections/buys.yaml:1:1: warning: This connection has the same `from`, `to` and `name` as `connections/buys-again.yaml`. ' +
         'If these are the same exchange, keep one. If they are two ways of one exchange, give each its route in `via`, or say in `only` when each is taken. ' +
         'If their purposes differ, give each a name that says which.',
-    );
-    expect(result.out.endsWith('4 records read. 0 errors, 2 warnings.')).toBe(true);
+      '4 records read. 0 errors, 2 warnings.',
+    ],
+    ['a crowded view', crowded(CROWDED_FROM + 1), `systems/shop.yaml:1:1: warning: ${crowdedMessage(CROWDED_FROM + 1)}`, `${CROWDED_FROM + 2} records read. 0 errors, 1 warning.`],
+  ])('passes a directory whose records keep every rule, with a warning about %s', (_what, files, line, counted) => {
+    write(files);
+    const result = run(['check']);
+    expect(result.code).toBe(0);
+    expect(result.out).toContain(line);
+    expect(result.out.endsWith(counted)).toBe(true);
+  });
+
+  it('gives a crowded view as data, as any other problem, and still exits with 0', () => {
+    write(crowded(CROWDED_FROM + 1));
+    const result = json(['check']);
+    expect(result.code).toBe(0);
+    expect(result.data).toMatchObject({ records: CROWDED_FROM + 2, errors: 0, warnings: 1 });
+    expect(result.data.problems).toEqual([
+      { file: 'systems/shop.yaml', line: 1, column: 1, severity: 'warning', code: 'view-crowded', message: crowdedMessage(CROWDED_FROM + 1) },
+    ]);
+    expect(json(['check'], 'systems').data.problems).toEqual(result.data.problems);
   });
 
   it('refuses a directory written in a newer format', () => {
@@ -563,5 +597,59 @@ describe('the built command', () => {
     expect(none.status).toBe(2);
     expect(none.stdout).toBe('');
     expect(none.stderr).toContain('There is no seefore.yaml');
+  });
+
+  // The limit is written out here, and not taken from the code, so that a limit changed by
+  // mistake fails this test.
+  it('warns of a view of 41 boxes and not of 40, once for each such view, and leaves the exit code to the errors', () => {
+    /** A shop under the temporary folder with this many apps in it, this many people who use it, and these files besides. */
+    const shop = (folder: string, apps: number, people: number, more: Record<string, string> = {}) => {
+      const files: Record<string, string> = { [`${folder}/seefore.yaml`]: MARKER, [`${folder}/systems/shop.yaml`]: 'name: Shop\n' };
+      for (let n = 1; n <= apps; n += 1) files[`${folder}/apps/app-${n}.yaml`] = `name: App ${n}\nin: shop\n`;
+      for (let n = 1; n <= people; n += 1) {
+        files[`${folder}/people/person-${n}.yaml`] = `name: Person ${n}\n`;
+        files[`${folder}/connections/person-${n}-uses-shop.yaml`] = `from: person-${n}\nto: shop\nname: Uses the shop\n`;
+      }
+      for (const [path, text] of Object.entries(more)) files[`${folder}/${path}`] = text;
+      write(files);
+    };
+    /** The exit code and what the check counted and found, every field of every problem. */
+    const checked = (folder: string) => {
+      const result = spawnSync(process.execPath, [built, 'check', '--json', `--workdir=${folder}`], { cwd: root, encoding: 'utf8' });
+      const { records, errors, warnings, problems } = JSON.parse(result.stdout) as CheckResult;
+      return { status: result.status, records, errors, warnings, problems };
+    };
+    const crowded = (kind: string, boxes: number) => ({
+      file: 'systems/shop.yaml',
+      line: 1,
+      column: 1,
+      severity: 'warning',
+      code: 'view-crowded',
+      message: `The ${kind} view of Shop has ${boxes} boxes. A view of more than 40 cannot be read as one picture: the page draws it as a map. Until focused views exist, read it by pointing at a box.`,
+    });
+
+    // The container view counts each box inside the boundary, and not the boundary.
+    shop('at-40', 40, 0);
+    expect(checked('at-40')).toEqual({ status: 0, records: 41, errors: 0, warnings: 0, problems: [] });
+    shop('at-41', 41, 0);
+    expect(checked('at-41')).toEqual({ status: 0, records: 42, errors: 0, warnings: 1, problems: [crowded('container', 41)] });
+
+    // The context view counts the system itself. A system with no part has no container view.
+    shop('people-40', 0, 40);
+    expect(checked('people-40')).toEqual({ status: 0, records: 81, errors: 0, warnings: 1, problems: [crowded('context', 41)] });
+
+    // Both views of one system, each with its own warning, the context view first.
+    shop('both', 40, 40);
+    expect(checked('both')).toEqual({ status: 0, records: 121, errors: 0, warnings: 2, problems: [crowded('context', 41), crowded('container', 80)] });
+
+    // A record with an error is not drawn, so it is not counted: 40 boxes are left.
+    shop('broken', 41, 0, { 'apps/app-41.yaml': 'in: shop\n' });
+    expect(checked('broken')).toEqual({
+      status: 1,
+      records: 42,
+      errors: 1,
+      warnings: 0,
+      problems: [{ file: 'apps/app-41.yaml', line: 1, column: 1, severity: 'error', code: 'key-missing', message: '`name` is missing from this app.' }],
+    });
   });
 });

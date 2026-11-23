@@ -73,7 +73,7 @@ const SAMPLE_FAMILY: Readonly<Record<BoxLook, BoxFamily>> = {
 };
 
 /** True when a key of the legend is a look of a box. */
-function isLook(key: LegendKey | 'dashed'): key is BoxLook {
+function isLook(key: LegendKey): key is BoxLook {
   return key in SAMPLE_FAMILY;
 }
 
@@ -120,7 +120,7 @@ function SampleWords({ words }: { words: string }) {
  * the ring of a channel the far side opened, a line of words of a label, or the mark of a box
  * whose copies act on each other, that connections pass through, or that keeps stores.
  */
-export function Sample({ name }: { name: LegendKey | 'dashed' }) {
+export function Sample({ name }: { name: LegendKey }) {
   const { width, height } = SAMPLE;
   const middle = height / 2;
   let drawn;
@@ -138,8 +138,6 @@ export function Sample({ name }: { name: LegendKey | 'dashed' }) {
     );
   } else if (name === 'boundary') {
     drawn = <rect className="sample-boundary" x={1} y={1} width={width - 2} height={height - 2} rx={4} />;
-  } else if (name === 'dashed') {
-    drawn = <rect className="sample-dashed" x={1} y={1} width={width - 2} height={height - 2} rx={4} />;
   } else if (name === 'arrow' || name === 'arrow-many') {
     drawn = (
       <g className={`sample-arrow${name === 'arrow-many' ? ' arrow-many' : ''}`}>

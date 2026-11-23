@@ -30,6 +30,7 @@ const RULES: [Name, Name[], number][] = [
   ['system', ['ground', 'tint'], LINE],
   ['arrow', ['ground', 'tint'], LINE],
   ['fadedLine', ['ground', 'tint'], LINE],
+  ['dimLine', ['ground', 'tint'], LINE],
   ['boundary', ['tint'], LINE],
 ];
 
@@ -55,6 +56,12 @@ describe('the contrast of the colours', () => {
     for (const colours of [LIGHT, DARK]) {
       expect(colours.fadedText).not.toBe(colours.text);
       expect(colours.fadedLine).not.toBe(colours.arrow);
+    }
+  });
+
+  it('fades lines further below the zoom at which names are drawn, and still within the rule', () => {
+    for (const colours of [LIGHT, DARK]) {
+      for (const ground of [colours.ground, colours.tint]) expect(contrast(colours.dimLine, ground)).toBeLessThan(contrast(colours.fadedLine, ground));
     }
   });
 

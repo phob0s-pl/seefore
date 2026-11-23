@@ -11,11 +11,13 @@ import {
   BOX_WIDTH,
   CONDITION_LINE_HEIGHT,
   LABEL_LINE_HEIGHT,
+  LABEL_WIDTH,
   NAME_FONT,
   ROUTE_LINE_HEIGHT,
   TECHNOLOGY_LINE_HEIGHT,
   TITLE_FONT,
 } from '../src/sizes.ts';
+import { labelText } from '../src/text.ts';
 import { onEdge, troubles, within } from './geometry.ts';
 import { arrow, box, containerView, contextView, crowded, fan, inside, route, shopContainers, shopContext } from './views.ts';
 
@@ -233,9 +235,47 @@ describe('the graph ELK is given', () => {
     expect(unzipped(crowded(20, 10))).toBeUndefined();
   });
 
-  it('sets model order on the root only, and the spacing and node placement on the boundary too', () => {
+  it('keeps the order of the walk in every column, on the root and on the boundary', () => {
     const graph = graphOf(sorted(shopContainers()), new Map());
-    expect(graph.layoutOptions?.['elk.layered.considerModelOrder.strategy']).toBe('NODES_AND_EDGES');
+    const boundary = graph.children?.find((child) => child.id === 'shop');
+    expect(graph.layoutOptions?.['elk.layered.crossingMinimization.semiInteractive']).toBe('true');
+    expect(boundary?.layoutOptions?.['elk.layered.crossingMinimization.semiInteractive']).toBe('true');
+    // Each box at the place of its turn, and the boundary at the turn of the first box inside it: see `turnsOf`.
+    const places = Object.fromEntries([...(graph.children ?? []), ...(boundary?.children ?? [])].map((child) => [child.id, child.layoutOptions?.['elk.position']]));
+    expect(places).toEqual({
+      auditor: '(0, 0)',
+      shop: '(0, 600)',
+      'card-provider': '(0, 400)',
+      'order-api': '(0, 600)',
+      'orders-database': '(0, 800)',
+      storefront: '(0, 1000)',
+      shipping: '(0, 1200)',
+      customer: '(0, 1400)',
+      'warehouse-clerk': '(0, 1600)',
+    });
+  });
+
+  it('gives ELK every label 140 px wide, room for three lines of a single name, and for the lines the arrow has', () => {
+    const view = shopContainers();
+    const routed: View = { ...view, arrows: view.arrows.map((each) => (each.id === 'storefront~order-api' ? { ...each, route: route(['Ingress']) } : each)) };
+    const input = sorted(routed);
+    const labels = new Map(input.arrows.flatMap((each) => {
+      const text = labelText(each);
+      return text === undefined ? [] : [[each.id, text] as const];
+    }));
+    const rooms = Object.fromEntries((graphOf(input, labels).edges ?? []).map((edge) => [edge.id, edge.labels?.map((label) => [label.width, label.height])]));
+    expect(rooms).toMatchObject({
+      // One name of one line, and its technology.
+      'storefront~order-api': [[LABEL_WIDTH, 3 * LABEL_LINE_HEIGHT + ROUTE_LINE_HEIGHT + TECHNOLOGY_LINE_HEIGHT]],
+      'customer~storefront': [[LABEL_WIDTH, 3 * LABEL_LINE_HEIGHT]],
+      // Two names, a line each.
+      'order-api~card-provider': [[LABEL_WIDTH, 2 * LABEL_LINE_HEIGHT + TECHNOLOGY_LINE_HEIGHT]],
+    });
+  });
+
+  it('sets no model order, which would break ties against the walk, and the spacing and node placement on the boundary too', () => {
+    const graph = graphOf(sorted(shopContainers()), new Map());
+    expect(graph.layoutOptions).not.toHaveProperty('elk.layered.considerModelOrder.strategy');
     const boundary = graph.children?.find((child) => child.id === 'shop');
     expect(boundary?.layoutOptions).not.toHaveProperty('elk.layered.considerModelOrder.strategy');
     for (const key of ['elk.spacing.nodeNode', 'elk.layered.spacing.nodeNodeBetweenLayers', 'elk.spacing.edgeLabel', 'elk.layered.nodePlacement.strategy', 'elk.layered.thoroughness']) {

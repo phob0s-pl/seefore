@@ -14,6 +14,7 @@ import {
   brokerProblems,
   byId,
   connectionProblems,
+  crowdedProblems,
   keptStoreProblems,
   onlySaidAgainProblems,
   parentsOf,
@@ -301,6 +302,10 @@ export function loadAs(format: Format, files: readonly SourceFile[]): Loaded {
   problems.push(...passesOnOnlyProblems(format, everyRecord, parents, model));
   problems.push(...keptStoreProblems(format, everyRecord, parents, references, model));
   problems.push(...onlySaidAgainProblems(format, everyRecord, model, placeOf));
+  // The page draws the views of this model, so the check of a crowded view counts what it draws.
+  // It counts the boxes and makes no view: those are made once, by whoever draws them. Its two
+  // warnings on one system stand at one place, and the sort below keeps their order.
+  problems.push(...crowdedProblems(model));
 
   records.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : a.file < b.file ? -1 : 1));
   unread.sort((a, b) => (a.file < b.file ? -1 : 1));

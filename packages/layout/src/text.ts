@@ -54,9 +54,15 @@ export interface LabelText {
   opened?: string;
   /** The technology line, `[HTTPS, JSON]`, when every connection of the arrow names the same. */
   technology?: string;
-  /** The room the label takes, in whole pixels: as wide as its widest line, as high as its lines. */
+  /** The size of the words, in whole pixels: as wide as the widest line, as high as the lines. The picture's label has this size. */
   width: number;
   height: number;
+  /**
+   * The room ELK makes for the label, in whole pixels, which the words stand in the middle of:
+   * as wide as a label may be, and as high as the lines the label can have. So a new name
+   * changes the words and never the room.
+   */
+  room: { width: number; height: number };
 }
 
 /**
@@ -85,6 +91,14 @@ export function boxText(box: ViewBox): BoxText {
  * technology. No line is wider than the label may be, but a line that says on how many, `only
  * on 2 of 5` or `far side opened on 2 of 5`, which is short and whose numbers must not be cut.
  * An arrow with no text has no label.
+ *
+ * The room does not follow the words. It is as wide as a label may be, or as the line that says
+ * on how many when that is wider. A single connection's name has room for three lines, however
+ * many it takes; several names have the lines their number gives. The route, the `only` lines,
+ * who opened the channel and the technology each take their room only when the arrow has them.
+ * So what changes the room is an edit to the model, and never a new name: a first route,
+ * condition or technology, a second connection, or the words of a condition that grow from one
+ * line to two.
  */
 export function labelText(arrow: ViewArrow): LabelText | undefined {
   const lines = nameLines(arrow.names);
@@ -102,18 +116,18 @@ export function labelText(arrow: ViewArrow): LabelText | undefined {
     technology === undefined ? 0 : widthOf(technology, TECHNOLOGY_FONT),
   ];
   const conditions = (only?.length ?? 0) + (opened === undefined ? 0 : 1);
+  const under = (route === undefined ? 0 : ROUTE_LINE_HEIGHT) + conditions * CONDITION_LINE_HEIGHT + (technology === undefined ? 0 : TECHNOLOGY_LINE_HEIGHT);
+  const width = Math.ceil(Math.max(...widths));
+  const nameRoom = arrow.names.length === 1 ? LABEL_LINES : lines.length;
   return {
     lines,
     ...(route === undefined ? {} : { route }),
     ...(only === undefined ? {} : { only }),
     ...(opened === undefined ? {} : { opened }),
     ...(technology === undefined ? {} : { technology }),
-    width: Math.ceil(Math.max(...widths)),
-    height:
-      lines.length * LABEL_LINE_HEIGHT +
-      (route === undefined ? 0 : ROUTE_LINE_HEIGHT) +
-      conditions * CONDITION_LINE_HEIGHT +
-      (technology === undefined ? 0 : TECHNOLOGY_LINE_HEIGHT),
+    width,
+    height: lines.length * LABEL_LINE_HEIGHT + under,
+    room: { width: Math.max(LABEL_WIDTH, width), height: nameRoom * LABEL_LINE_HEIGHT + under },
   };
 }
 

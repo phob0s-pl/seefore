@@ -2,15 +2,16 @@ import type { Failed, View, ViewerState } from '@seefore/core';
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Diagram, LightContext } from './diagram.tsx';
-import type { Light } from './diagram.tsx';
+import type { Light, Reading } from './diagram.tsx';
 import { keptSelection, viewOf } from './follow.ts';
 import type { Selection } from './follow.ts';
-import { holds, holdsBox, litBy, litByKept } from './light.ts';
-import type { Target } from './light.ts';
+import { holdsBox, litBy, litByKept, speakingOf } from './light.ts';
+import type { Act, Pointed } from './light.ts';
 import { Listing } from './listing.tsx';
 import type { Shown } from './live.ts';
 import { Panel } from './panel.tsx';
 import { ProblemList, Problems } from './problems.tsx';
+import { keptReading, readingOf } from './reading.ts';
 import { keepersOf } from './records.ts';
 import { Sidebar } from './sidebar.tsx';
 import { themeCss } from './theme.ts';
@@ -43,6 +44,9 @@ function connectionsOf(state: ViewerState, id: string): Set<string> {
   return new Set(state.model.connections.filter((connection) => connection.from === id || connection.to === id).map((connection) => connection.id));
 }
 
+/** How far a finger may move between touching and lifting for it to be a tap, and not a drag, in CSS pixels. */
+const TAP_SLOP = 10;
+
 /** The element of the picture, or of the list of what it passes through, that stands for a target, to give the focus back to. */
 function elementOf(target: Selection): HTMLElement | null {
   if (target.kind === 'record') return null;
@@ -54,11 +58,49 @@ function elementOf(target: Selection): HTMLElement | null {
 export function Page({ shown, room, initialSelection = null }: PageProps) {
   const { state, route, picture, trouble } = shown;
   const [selection, setSelection] = useState<Selection | null>(initialSelection);
-  const [pointed, setPointed] = useState<Target | null>(null);
-  const [focused, setFocused] = useState<Target | null>(null);
+  // What the reader last pointed at, moved the focus to and tapped, each with when.
+  const [pointed, setPointed] = useState<Act | null>(null);
+  const [focused, setFocused] = useState<Act | null>(null);
+  const [tapped, setTapped] = useState<Act | null>(null);
+  const acts = useRef(0);
+  // The tap that lit a line of the legend, which is not a tap elsewhere.
+  const tapping = useRef<PointerEvent | null>(null);
   const [focusPanel, setFocusPanel] = useState(false);
   // Where the focus was when the keyboard opened the panel, to give it back there.
   const returnTo = useRef<HTMLElement | null>(null);
+
+  /** Something the reader did to a target, stamped with when, or nothing. */
+  const act = (target: Pointed | null, whole: boolean): Act | null => (target === null ? null : { target, at: ++acts.current, whole });
+  const point = (target: Pointed | null) => setPointed(act(target, false));
+  const focus = (target: Pointed | null, visible: boolean) => setFocused(act(target, visible));
+  const tap = (target: Pointed, event: PointerEvent) => {
+    tapping.current = event;
+    setTapped(act(target, true));
+  };
+
+  // A tap of a finger anywhere but on the line it lit takes that light away. A drag is no tap.
+  useEffect(() => {
+    const down = new Map<number, { x: number; y: number }>();
+    const onDown = (event: PointerEvent) => {
+      if (event.pointerType === 'touch') down.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    };
+    const onUp = (event: PointerEvent) => {
+      if (event.pointerType !== 'touch') return;
+      const from = down.get(event.pointerId);
+      down.delete(event.pointerId);
+      if (from === undefined || Math.hypot(event.clientX - from.x, event.clientY - from.y) > TAP_SLOP) return;
+      if (event !== tapping.current) setTapped(null);
+    };
+    const onCancel = (event: PointerEvent) => down.delete(event.pointerId);
+    window.addEventListener('pointerdown', onDown);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onCancel);
+    return () => {
+      window.removeEventListener('pointerdown', onDown);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onCancel);
+    };
+  }, []);
 
   // A selection whose record, box or arrow is gone from a new state is cleared.
   const kept = state === null ? null : keptSelection(state, route, selection);
@@ -77,6 +119,7 @@ export function Page({ shown, room, initialSelection = null }: PageProps) {
       const inPanel = document.activeElement?.closest('.panel') != null;
       setSelection(null);
       setFocused(null);
+      setTapped(null);
       setFocusPanel(false);
       if (!inPanel || was === null) return;
       const back = returnTo.current?.isConnected ? returnTo.current : elementOf(was);
@@ -98,18 +141,25 @@ export function Page({ shown, room, initialSelection = null }: PageProps) {
   };
 
   const view = state === null ? undefined : viewOf(state, route);
-  // In another view nothing is pointed at or focused yet.
+  // In another view nothing is pointed at, focused or tapped yet.
   const viewId = view?.id;
   useEffect(() => {
     setPointed(null);
     setFocused(null);
+    setTapped(null);
   }, [viewId]);
   const chosen = kept !== null && kept.kind !== 'record' ? kept : null;
-  // A store that an app keeps is drawn at its app: chosen on a panel, it lights the app and the arrows of its own connections.
+  // A store that an app keeps is drawn at its app: chosen on a panel, it lights the app and the arrows of its own connections, and says its name and its app.
   const keeper = state !== null && kept?.kind === 'record' ? keepersOf(state.outline).get(kept.id) : undefined;
-  const keptLit = state !== null && kept !== null && keeper !== undefined && view !== undefined && holdsBox(view, keeper) ? litByKept(view, keeper, connectionsOf(state, kept.id)) : null;
-  const pointer = pointed ?? focused ?? chosen;
-  const light: Light = { lit: view !== undefined && pointer !== null && holds(view, pointer) ? litBy(view, pointer) : keptLit, chosen };
+  const keptHere = state !== null && kept !== null && keeper !== undefined && view !== undefined && holdsBox(view, keeper);
+  const keptLit = keptHere ? litByKept(view, keeper, connectionsOf(state, kept.id)) : null;
+  // Of what is pointed at, focused and tapped the latest the view holds wins, and over what is chosen, which lights and speaks again once they leave.
+  const speaking = view === undefined ? null : speakingOf(view, [pointed, focused, tapped], chosen);
+  const light: Light = { lit: view !== undefined && speaking !== null ? litBy(view, speaking.target) : keptLit, chosen };
+  const reading: Reading =
+    view !== undefined && speaking !== null
+      ? { words: readingOf(view, speaking.target), whole: speaking.whole }
+      : { words: keptHere ? keptReading(state, kept.id, keeper) : '', whole: false };
 
   let main: ReactNode;
   if (state === null) {
@@ -132,9 +182,12 @@ export function Page({ shown, room, initialSelection = null }: PageProps) {
           view={view}
           drawn={picture}
           chosen={chosen}
+          speaking={speaking?.target ?? null}
+          reading={reading}
           {...(room === undefined ? {} : { room })}
-          onPoint={setPointed}
-          onFocusTarget={setFocused}
+          onPoint={point}
+          onFocusTarget={focus}
+          onTap={tap}
           onChoose={choose}
           onClear={clear}
         />
@@ -184,14 +237,16 @@ function Waiting({ view }: { view: View }) {
   );
 }
 
-/** A view whose layout failed: its message in place of the picture. */
+/**
+ * A view whose layout failed: its message in place of the picture. The layout's message says
+ * that the other views still draw, so the page does not say it again.
+ */
 function FailedView({ view, picture }: { view: View; picture: Failed }) {
   return (
     <div className="diagram">
       <ViewHead view={view} />
       <div className="failed" role="alert">
         <p>{picture.failed.message}</p>
-        <p>The other views still draw.</p>
       </div>
     </div>
   );

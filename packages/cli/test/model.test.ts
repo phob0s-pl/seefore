@@ -525,6 +525,47 @@ describe('seefore uses', () => {
   });
 });
 
+describe('the problems that list and uses count', () => {
+  /** A shop with this many apps in it and this many people who use it. */
+  const shop = (apps: number, people: number): Record<string, string> => {
+    const files: Record<string, string> = { 'seefore.yaml': MARKER, 'systems/shop.yaml': 'name: Shop\n' };
+    for (let n = 1; n <= apps; n += 1) files[`apps/app-${n}.yaml`] = `name: App ${n}\nin: shop\n`;
+    for (let n = 1; n <= people; n += 1) {
+      files[`people/person-${n}.yaml`] = `name: Person ${n}\n`;
+      files[`connections/person-${n}-uses-shop.yaml`] = `from: person-${n}\nto: shop\nname: Uses the shop\n`;
+    }
+    return files;
+  };
+
+  // The warning of a crowded view is a problem of the check as any other, so the two commands
+  // that say how many problems the check finds count it too. The limit is written out.
+  it('are those of seefore check, a crowded view among them, in words and as data', () => {
+    write(shop(40, 0), 'at-40');
+    write(shop(41, 0), 'at-41');
+    write(shop(40, 40), 'both');
+    const lastLine = (args: string[], folder: string) => run([...args, `--workdir=${folder}`]).out.split('\n').at(-1);
+    const counts = (args: string[], folder: string) => {
+      const { code, data } = json<{ errors: number; warnings: number }>([...args, `--workdir=${folder}`]);
+      return { code, errors: data.errors, warnings: data.warnings };
+    };
+
+    expect(lastLine(['list'], 'at-40')).toBe('41 records read. No problems.');
+    expect(run(['uses', 'app-1', '--workdir=at-40']).out).not.toContain('warning');
+    expect(counts(['uses', 'app-1'], 'at-40')).toEqual({ code: 0, errors: 0, warnings: 0 });
+
+    for (const [folder, records, warnings] of [['at-41', 42, '1 warning'], ['both', 121, '2 warnings']] as const) {
+      const said = `0 errors, ${warnings}: run \`seefore check --workdir=${folder}\` to see them.`;
+      expect(lastLine(['check'], folder)).toBe(`${records} records read. 0 errors, ${warnings}.`);
+      expect(lastLine(['list'], folder)).toBe(`${records} records read. ${said}`);
+      expect(lastLine(['uses', 'app-1'], folder)).toBe(said);
+      const checked = counts(['check'], folder);
+      expect(checked).toEqual({ code: 0, errors: 0, warnings: folder === 'both' ? 2 : 1 });
+      expect(counts(['list'], folder)).toEqual(checked);
+      expect(counts(['uses', 'app-1'], folder)).toEqual(checked);
+    }
+  });
+});
+
 describe('the built command', () => {
   const built = join(dirname(fileURLToPath(import.meta.url)), '..', 'dist', 'seefore.cjs');
 

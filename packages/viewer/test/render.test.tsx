@@ -1,14 +1,20 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { CROWDED_FROM } from '@seefore/core';
 import type { Drawn, View, ViewerState } from '@seefore/core';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { Route } from '../src/address.ts';
+import { Legend } from '../src/diagram.tsx';
+import { HEAD_HALF_WIDTH, HEAD_LENGTH } from '../src/flow.ts';
 import type { Selection } from '../src/follow.ts';
 import { holdersWords } from '../src/listing.tsx';
 import type { Shown } from '../src/live.ts';
 import { Page, pageTitle } from '../src/page.tsx';
+import { legendWords } from '../src/reading.ts';
+import { crowdedNote, fitViewport, whole } from '../src/zoom.ts';
 import { ARCHIVE_FILES, ARCHIVE_STATE, archivePicture, archiveView, stateOf } from './archive.ts';
+import { STUDIO_STATE, studioView } from './studio.ts';
 import {
   BROKEN_HOP_STATE,
   CONTAINERS,
@@ -25,6 +31,7 @@ import {
   PROBLEMS,
   STATE,
 } from './fixture.ts';
+import { grid } from './grid.ts';
 
 /** The page drawn without a browser, as React's server rendering draws it. */
 
@@ -397,9 +404,9 @@ describe('the hard cases in a picture', () => {
   });
 
   it('has each new look and mark in the legend, with a sample', () => {
-    for (const key of ['system-external', 'queue-or-topic', 'infrastructure', 'route', 'passing']) expect(html).toMatch(new RegExp(`data-key="${key}"><svg class="sample"`));
-    expect(html).toMatch(/data-key="route"><svg[^]*?>via<\/text>/);
-    expect(html).toMatch(/data-key="passing"><svg[^]*?>⇢ 2<\/text>/);
+    for (const key of ['system-external', 'queue-or-topic', 'infrastructure', 'route', 'passing']) expect(html).toMatch(new RegExp(`data-key="${key}" tabindex="0" aria-describedby="[^"]+"><svg class="sample"`));
+    expect(html).toMatch(/data-key="route" tabindex="0" aria-describedby="[^"]+"><svg[^]*?>via<\/text>/);
+    expect(html).toMatch(/data-key="passing" tabindex="0" aria-describedby="[^"]+"><svg[^]*?>⇢ 2<\/text>/);
   });
 
   it('names for a screen reader the route of an arrow and what passes through a box', () => {
@@ -420,7 +427,8 @@ describe('choosing what is passed through', () => {
     expect(times(html, 'box family-apps faded" data-look="app"')).toBe(1);
     expect(html).toContain('box family-systems lit" data-look="system-external"');
     expect(html).toContain('box family-infrastructure faded');
-    expect(html).toMatch(/<button type="button" data-id="balancer" class="chosen"/);
+    // Lit, as what it is, and chosen.
+    expect(html).toMatch(/<button type="button" data-id="balancer" class="lit chosen"/);
     const panel = html.slice(html.indexOf('aria-label="Details"'));
     expect(panel).toContain('>Load balancer</h2>');
     expect(panel).toContain('<dd>Infrastructure</dd>');
@@ -698,15 +706,12 @@ describe('a condition, in the picture and the panel', () => {
 
   it('has each new mark in the legend where the view draws it, with a sample, and none told by colour alone', () => {
     const legend = html.slice(html.indexOf('aria-label="Legend"'));
-    for (const key of ['kept', 'opened', 'only', 'route-only']) expect(legend).toMatch(new RegExp(`data-key="${key}"><svg class="sample"`));
-    expect(legend).toMatch(/data-key="only"><svg[^]*?>only …<\/text>/);
-    expect(legend).toMatch(/data-key="route-only"><svg[^]*?>via \(…\)<\/text>/);
-    expect(legend).toMatch(/data-key="opened"><svg[^]*?<circle class="arrow-ring"/);
-    expect(legend).toMatch(/data-key="kept"><svg[^]*?class="sample-store-sign"/);
+    for (const key of ['kept', 'opened', 'only', 'route-only']) expect(legend).toMatch(new RegExp(`data-key="${key}" tabindex="0" aria-describedby="[^"]+"><svg class="sample"`));
+    expect(legend).toMatch(/data-key="only" tabindex="0" aria-describedby="[^"]+"><svg[^]*?>only …<\/text>/);
+    expect(legend).toMatch(/data-key="route-only" tabindex="0" aria-describedby="[^"]+"><svg[^]*?>via \(…\)<\/text>/);
+    expect(legend).toMatch(/data-key="opened" tabindex="0" aria-describedby="[^"]+"><svg[^]*?<circle class="arrow-ring"/);
+    expect(legend).toMatch(/data-key="kept" tabindex="0" aria-describedby="[^"]+"><svg[^]*?class="sample-store-sign"/);
     expect(legend).not.toContain('data-key="opened-some"');
-    // The dash is a trial, behind a constant that is off.
-    expect(html).not.toContain(' dashed');
-    expect(legend).not.toContain('data-key="dashed"');
   });
 });
 
@@ -726,7 +731,7 @@ describe('a channel that the far side opened, in the picture and the panel', () 
     expect(html).not.toContain('<circle class="arrow-ring"');
     expect(html).toContain('<text class="label-opened"');
     expect(html).toContain('>far side opened on 1 of 2<');
-    expect(html).toMatch(/data-key="opened-some"><svg[^]*?>opened<\/text>/);
+    expect(html).toMatch(/data-key="opened-some" tabindex="0" aria-describedby="[^"]+"><svg[^]*?>opened<\/text>/);
   });
 
   it('says it on the panel for each connection, in words', () => {
@@ -926,7 +931,7 @@ describe('the boundary of a system that has a condition', () => {
     const html = render({ page: 'view', view: view.id }, archivePicture(view), null, state);
     expect(html).toContain('>Archive [System] only in production<');
     expect(html).toContain('aria-label="Archive [System] only in production, the boundary of the system"');
-    expect(html).toMatch(/data-key="only"><svg/);
+    expect(html).toMatch(/data-key="only" tabindex="0" aria-describedby="[^"]+"><svg/);
   });
 });
 
@@ -939,5 +944,198 @@ describe('the legend, with every mark of the stage', () => {
     expect(rule).toContain('overflow-y: auto;');
     // A line at its foot says there is more while there is; it is measured in the browser.
     expect(/\n\.legend-more \{[^}]*position: sticky;/.test(css)).toBe(true);
+  });
+
+  it('has each line take the focus, so that the keyboard lights what it explains as the pointer does', () => {
+    const html = render(containers, CONTAINER_PICTURE);
+    for (const entry of CONTAINERS.legend) expect(html).toMatch(new RegExp(`<li data-key="${entry.key}" tabindex="0" aria-describedby="[^"]+">`));
+  });
+
+  it('tells a screen reader, as the description of each line, what it lights and how much', () => {
+    const view = studioView('studio.containers');
+    const html = render({ page: 'view', view: view.id }, archivePicture(view), null, STUDIO_STATE);
+    for (const entry of view.legend) {
+      const described = new RegExp(`<li data-key="${entry.key}" tabindex="0" aria-describedby="([^"]+)">`).exec(html)?.[1] ?? 'none';
+      expect(html).toContain(`<span id="${described}" hidden="">${escaped(legendWords(view, entry.key))}</span>`);
+    }
+    expect(legendWords(view, 'route-only')).toBe('Lights every arrow and box whose connections pass through a thing in brackets, and each such thing in the list: 1 arrow and 1 thing in the list');
+  });
+
+  it('marks the line that speaks and lights, as a tap leaves it, and no other', () => {
+    const view = studioView('studio.containers');
+    const none = () => undefined;
+    const html = renderToStaticMarkup(<Legend view={view} speaking={{ kind: 'legend', id: 'route-only' }} onPoint={none} onFocusTarget={none} onTap={none} />);
+    expect(times(html, 'class="lit"')).toBe(1);
+    expect(html).toMatch(/<li data-key="route-only" tabindex="0" aria-describedby="[^"]+" class="lit">/);
+    const css = rulesOf(readFileSync(fileURLToPath(new URL('../src/styles.css', import.meta.url)), 'utf8'));
+    expect(css.find((rule) => rule.selectors.includes('.legend li.lit') && rule.body.includes('box-shadow'))?.body).toContain('var(--accent)');
+  });
+});
+
+describe('the list under the legend, lit', () => {
+  it('marks what an arrow chosen passes through that has no box', () => {
+    const html = hard(undefined, { kind: 'arrow', id: 'web~cards' });
+    expect(html).toMatch(/<button type="button" data-id="balancer" class="lit"/);
+    expect(times(html.slice(html.indexOf('class="passes-through"')), 'class="lit')).toBe(1);
+  });
+
+  it('marks it by a line of the colour of text, as thick as that of what is chosen', () => {
+    const css = rulesOf(readFileSync(fileURLToPath(new URL('../src/styles.css', import.meta.url)), 'utf8'));
+    const lit = css.find((rule) => rule.selectors.includes('.passes-through button.lit'))?.body ?? '';
+    expect(lit).toContain('border-color: var(--text);');
+    expect(lit).toContain('box-shadow: inset 0 0 0 1px var(--text);');
+  });
+});
+
+/** The rules of the style sheet, each as its selectors and its body. */
+function rulesOf(css: string): { selectors: string[]; body: string }[] {
+  const plain = css.replace(/\/\*[^]*?\*\//g, '');
+  return [...plain.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((rule) => ({ selectors: (rule[1] ?? '').split(',').map((one) => one.trim()), body: rule[2] ?? '' }));
+}
+
+describe('the dashed outline for `only`, taken out', () => {
+  const css = readFileSync(fileURLToPath(new URL('../src/styles.css', import.meta.url)), 'utf8');
+
+  it('leaves nothing dashed in the style sheet but the boundary and its sample', () => {
+    const dashed = rulesOf(css).filter((rule) => /dashed|dasharray/.test(rule.body));
+    expect(dashed.flatMap((rule) => rule.selectors).sort()).toEqual(['.boundary', '.sample-boundary']);
+  });
+
+  it('draws no box, arrow or line of the legend as dashed, whatever has an `only`', () => {
+    for (const html of [archive(), edged(), hard()]) {
+      expect(html).not.toMatch(/class="[^"]*\bdashed\b/);
+      expect(html).not.toContain('data-key="dashed"');
+      expect(html).not.toContain('Dashed outline');
+    }
+  });
+});
+
+describe('the reading line', () => {
+  it('stands under the note, which stands under the counts, and says the words of what is chosen, whole in its title', () => {
+    const html = render(containers, CONTAINER_PICTURE, { kind: 'box', id: 'order-api' });
+    expect(html).toContain('</p><p class="small-note" role="status"></p><p class="reading-line" title="Order API [App: service · Go]"><span>Order API [App: service · Go]</span></p></header>');
+    const arrow = render(containers, CONTAINER_PICTURE, { kind: 'arrow', id: 'order-api~orders-database' });
+    expect(arrow).toContain(`<p class="reading-line" title="${escaped('Order API → Orders database: Writes each order · [SQL]')}">`);
+    const passed = hard(undefined, { kind: 'passed', id: 'balancer' });
+    expect(passed).toContain(`>${escaped("Load balancer: 1 of this view's connections passes through it")}</span></p></header>`);
+  });
+
+  it('keeps its place and says nothing when nothing is chosen, and is no live region', () => {
+    const html = render(containers, CONTAINER_PICTURE);
+    expect(html).toContain('<p class="reading-line"><span></span></p></header>');
+    expect(html).not.toMatch(/class="reading-line"[^>]*(role|aria-live)=/);
+  });
+
+  it('is one line of one height, cut with an ellipsis when too long', () => {
+    const css = rulesOf(readFileSync(fileURLToPath(new URL('../src/styles.css', import.meta.url)), 'utf8'));
+    const line = css.find((one) => one.selectors.includes('.reading-line'))?.body ?? '';
+    for (const part of ['height: 20px;', 'line-height: 20px;']) expect(line).toContain(part);
+    const words = css.find((one) => one.selectors.includes('.reading-line > span'))?.body ?? '';
+    for (const part of ['position: absolute;', 'white-space: nowrap;', 'overflow: hidden;', 'text-overflow: ellipsis;']) expect(words).toContain(part);
+  });
+
+  it('unfolds its words whole over the top of the canvas for the keyboard and a tap, on the ground, keeping its height', () => {
+    const css = rulesOf(readFileSync(fileURLToPath(new URL('../src/styles.css', import.meta.url)), 'utf8'));
+    const whole = css.find((one) => one.selectors.includes('.reading-line.whole > span'))?.body ?? '';
+    for (const part of ['white-space: normal;', 'overflow: visible;', 'background: var(--ground);', 'z-index: 10;']) expect(whole).toContain(part);
+    expect(css.find((one) => one.selectors.includes('.reading-line.whole'))).toBeUndefined();
+  });
+
+  it('says for a store that an app keeps, chosen in the listing or on a panel, its name, its kind line and its app', () => {
+    const html = archive(undefined, { kind: 'record', id: 'drafts' });
+    expect(html).toContain('<p class="reading-line" title="Drafts [Store: files], kept by Desk"><span>Drafts [Store: files], kept by Desk</span></p>');
+    // Nothing where the view does not draw its app, as nothing lights there.
+    expect(archive({ page: 'view', view: 'archive.context' }, { kind: 'record', id: 'drafts' })).toContain('<p class="reading-line"><span></span></p>');
+  });
+
+  it('says for an arrow of more connections than it names how many of how many', () => {
+    const view = { ...CONTAINERS, arrows: CONTAINERS.arrows.map((arrow) => (arrow.id === 'customer~shop' ? { ...arrow, connections: ['a', 'b', 'c', 'd'], names: ['Asks', 'Buys', 'Calls', 'Drops'] } : arrow)) };
+    const html = render(containers, CONTAINER_PICTURE, { kind: 'arrow', id: 'customer~shop' }, { ...STATE, views: [CONTEXT, view] });
+    expect(html).toContain('<span>Customer → Shop, 3 of its 4 connections: Asks; Buys; Calls</span>');
+  });
+});
+
+describe('the note of a crowded view on the page', () => {
+  /** The page of a grid of so many apps, and the note for the zoom it opens at in the room. */
+  const page = (apps: number) => {
+    const { state, view, drawn } = grid(apps);
+    return { html: render({ page: 'view', view: view.id }, drawn, null, state), note: crowdedNote(view, fitViewport(whole(drawn), ROOM).zoom) };
+  };
+
+  it('says it under the counts for a view of more boxes than the limit, with what it shows at the zoom it opens at', () => {
+    const { html, note } = page(CROWDED_FROM + 1);
+    expect(note).toContain('It opens with the names of its boxes and no other words.');
+    expect(html).toContain(`<p class="small-note" role="status">${escaped(note ?? '')}</p>`);
+    expect(html).not.toContain('Too small to read');
+  });
+
+  it('is not there for a view at the limit', () => {
+    expect(page(CROWDED_FROM).html).not.toContain('A crowded view');
+  });
+});
+
+/**
+ * A picture at a map's zoom. Drawn without a browser the canvas stands at full size, so what
+ * keeps its size on the screen is tried here by its rules; the size of a lit head at a zoom is
+ * tried in the tests of `headOf` and `litScale`, and was measured in a browser.
+ */
+describe('a picture at a map’s zoom', () => {
+  it('draws the head of a lit arrow at full size as it is', () => {
+    const html = render(containers, CONTAINER_PICTURE, { kind: 'arrow', id: 'customer~shop' });
+    expect(html).toMatch(/<g class="arrow lit chosen"><path class="arrow-hit" d="M280,275 L440,275"><\/path><path class="arrow-line" d="M280,275 L440,275"><\/path><polygon class="arrow-head" points="440,275 430,280 430,270">/);
+    const css = rulesOf(readFileSync(fileURLToPath(new URL('../src/styles.css', import.meta.url)), 'utf8'));
+    // Below the zoom at which names are drawn the ring's line keeps its width with the arrow's.
+    expect(css.find((rule) => rule.selectors.includes(".diagram[data-detail='shapes'] .arrow.lit .arrow-ring"))?.body).toContain('stroke-width: calc(1.5px / var(--zoom, 1));');
+    expect(HEAD_LENGTH).toBe(10);
+    expect(HEAD_HALF_WIDTH).toBe(5);
+  });
+
+  it('gives the boundary a strip along its line that takes the pointer, 12 pixels wide on the screen at any zoom', () => {
+    expect(render(containers, CONTAINER_PICTURE)).toMatch(/<svg class="boundary-edge" width="700" height="400" aria-hidden="true"><rect x="0.75" y="0.75" width="698.5" height="398.5" rx="8"><\/rect><\/svg>/);
+    const css = rulesOf(readFileSync(fileURLToPath(new URL('../src/styles.css', import.meta.url)), 'utf8'));
+    const strip = css.find((rule) => rule.selectors.includes('.boundary-edge rect'))?.body ?? '';
+    for (const part of ['stroke: transparent;', 'stroke-width: calc(12px / var(--zoom, 1));', 'pointer-events: stroke;', 'cursor: pointer;']) expect(strip).toContain(part);
+    // The room inside it moves the canvas: the strip's picture takes no pointer but its line.
+    expect(css.find((rule) => rule.selectors.includes('.boundary-edge'))?.body).toContain('pointer-events: none;');
+  });
+
+  it('shows the hand on the empty canvas near an arrow, as over the arrow itself', () => {
+    const css = rulesOf(readFileSync(fileURLToPath(new URL('../src/styles.css', import.meta.url)), 'utf8'));
+    expect(css.find((rule) => rule.selectors.includes('.diagram[data-near] .react-flow__pane'))?.body).toContain('cursor: pointer;');
+  });
+});
+
+describe('a view whose layout failed', () => {
+  it('says once that the other views still draw, as the layout’s message says it', () => {
+    const failed = { view: 'card-provider.context', failed: { reason: 'time' as const, message: 'This view took more than 5 seconds to lay out, so it was stopped and is not drawn. The other views still draw.' } };
+    const html = render({ page: 'view', view: 'card-provider.context' }, failed);
+    expect(times(html, 'The other views still draw.')).toBe(1);
+  });
+});
+
+describe('the light below the zoom at which names are drawn', () => {
+  const rules = rulesOf(readFileSync(fileURLToPath(new URL('../src/styles.css', import.meta.url)), 'utf8'));
+  /** The body of the rule with this selector. */
+  const body = (selector: string) => rules.find((rule) => rule.selectors.includes(selector))?.body ?? '';
+  const shapes = ".diagram[data-detail='shapes']";
+
+  it('keeps a lit line as wide on the screen as at full size, a thick one too', () => {
+    expect(body(`${shapes} .arrow.lit .arrow-line`)).toContain('stroke-width: calc(1.5px / var(--zoom, 1));');
+    expect(body(`${shapes} .arrow-many.lit .arrow-line`)).toContain('stroke-width: calc(3px / var(--zoom, 1));');
+    // At full size the lines are those widths.
+    expect(body('.arrow-line')).toContain('stroke-width: 1.5;');
+    expect(body('.arrow-many .arrow-line')).toContain('stroke-width: 3;');
+  });
+
+  it('fills a lit box with a tint of its colour, and a chosen one with a tint of the accent', () => {
+    expect(body(`${shapes} .box.lit .outline:not(.rim)`)).toMatch(/fill: color-mix\(in srgb, var\(--line-colour\) \d+%, var\(--ground\)\);/);
+    expect(body(`${shapes} .box.chosen .outline:not(.rim)`)).toMatch(/fill: color-mix\(in srgb, var\(--accent\) \d+%, var\(--ground\)\);/);
+  });
+
+  it('fades what is not lit to the lines further from the lit', () => {
+    expect(body(`${shapes} .box.faded`)).toContain('--line-colour: var(--dim-line);');
+    expect(body(`${shapes} .boundary.faded`)).toContain('border-color: var(--dim-line);');
+    expect(body(`${shapes} .arrow.faded .arrow-line`)).toContain('stroke: var(--dim-line);');
+    expect(body(`${shapes} .arrow.faded .arrow-head`)).toContain('fill: var(--dim-line);');
   });
 });

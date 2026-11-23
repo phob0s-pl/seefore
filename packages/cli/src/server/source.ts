@@ -23,7 +23,8 @@ const FORMAT_UNKNOWN = new Set(['marker-missing', 'format-unknown', 'format-not-
  * Reads the source directory as `seefore check` does, with the same problems, and works out
  * the model's views, its listing, the conditions each record is under and the connections that
  * no view holds. When the directory is gone, or its marker cannot say which format it is in,
- * there is no model and there are no views.
+ * there is no model and there are no views. The views are made here, once for each reading:
+ * the check counts their boxes and makes none.
  */
 export function readingOf(directory: string, views: (model: Model) => View[] = viewsOf): Reading {
   if (identityOf(directory) === undefined) {

@@ -145,7 +145,7 @@ export function toFlow(view: View, drawn: Drawn): { nodes: PictureNode[]; edges:
       draggable: false,
       connectable: false,
       selectable: false,
-      // Only its title takes the pointer, so that the room inside it moves the canvas.
+      // Only its title and a strip along its line take the pointer, so that the room inside it moves the canvas.
       style: { pointerEvents: 'none' },
     });
   }
@@ -218,9 +218,9 @@ export function pathOf(sections: readonly (readonly Point[])[]): string {
 
 /**
  * The head of an arrow: a triangle whose tip is the last point of the route, pointing along its
- * last stretch. None when the route has no stretch of any length.
+ * last stretch, `scale` times its size. None when the route has no stretch of any length.
  */
-export function headOf(sections: readonly (readonly Point[])[]): string | undefined {
+export function headOf(sections: readonly (readonly Point[])[], scale = 1): string | undefined {
   const points = sections.flat();
   const tip = points[points.length - 1];
   if (tip === undefined) return undefined;
@@ -236,9 +236,10 @@ export function headOf(sections: readonly (readonly Point[])[]): string | undefi
   if (before === undefined) return undefined;
   const length = Math.hypot(tip.x - before.x, tip.y - before.y);
   const along = { x: (tip.x - before.x) / length, y: (tip.y - before.y) / length };
-  const base = { x: tip.x - along.x * HEAD_LENGTH, y: tip.y - along.y * HEAD_LENGTH };
-  const left = { x: base.x - along.y * HEAD_HALF_WIDTH, y: base.y + along.x * HEAD_HALF_WIDTH };
-  const right = { x: base.x + along.y * HEAD_HALF_WIDTH, y: base.y - along.x * HEAD_HALF_WIDTH };
+  const [long, half] = [HEAD_LENGTH * scale, HEAD_HALF_WIDTH * scale];
+  const base = { x: tip.x - along.x * long, y: tip.y - along.y * long };
+  const left = { x: base.x - along.y * half, y: base.y + along.x * half };
+  const right = { x: base.x + along.y * half, y: base.y - along.x * half };
   return [tip, left, right].map((point) => `${coordinate(point.x)},${coordinate(point.y)}`).join(' ');
 }
 
@@ -272,11 +273,12 @@ export function labelLines(label: PlacedLabel): LabelLine[] {
 /**
  * Where the ring of an arrow whose channel the far side opened stands: on its line, just before
  * its head, measured back along the route from the tip so that it keeps to the line round a
- * bend. None when the route is too short to hold it.
+ * bend. With a `scale`, for a head and a ring that many times their size, it stands as far
+ * again. None when the route is too short to hold it.
  */
-export function ringOf(sections: readonly (readonly Point[])[]): Point | undefined {
+export function ringOf(sections: readonly (readonly Point[])[], scale = 1): Point | undefined {
   const points = sections.flat();
-  let left = HEAD_LENGTH + RING_GAP + RING_RADIUS;
+  let left = RING_BACK * scale;
   for (let at = points.length - 1; at > 0; at--) {
     const [to, from] = [points[at], points[at - 1]];
     if (to === undefined || from === undefined) continue;
@@ -285,4 +287,60 @@ export function ringOf(sections: readonly (readonly Point[])[]): Point | undefin
     left -= length;
   }
   return undefined;
+}
+
+/** How far back from the tip of an arrow its ring stands, at full size: the head, a little room and the ring's radius. */
+const RING_BACK = HEAD_LENGTH + RING_GAP + RING_RADIUS;
+
+/** The length of a route, along its stretches. */
+export function lengthOf(sections: readonly (readonly Point[])[]): number {
+  return sections.flat().reduce((sum, point, at, points) => {
+    const before = points[at - 1];
+    return before === undefined ? sum : sum + Math.hypot(point.x - before.x, point.y - before.y);
+  }, 0);
+}
+
+/**
+ * How many times their size the head and the ring of an arrow are drawn, when `scale` is asked:
+ * as many as its route has room for, so that the ring stays on the line, and never fewer than
+ * one. A short route at a map's zoom has both smaller on the screen than at full size.
+ */
+export function ringScale(sections: readonly (readonly Point[])[], scale: number): number {
+  return Math.max(1, Math.min(scale, lengthOf(sections) / RING_BACK));
+}
+
+/** How far a point is from the nearest point of a route. Infinite for a route with no point. */
+export function distanceTo(sections: readonly (readonly Point[])[], point: Point): number {
+  let nearest = Number.POSITIVE_INFINITY;
+  for (const section of sections) {
+    for (let at = 0; at < section.length; at++) {
+      const from = section[at];
+      const to = section[at + 1] ?? from;
+      if (from === undefined || to === undefined) continue;
+      const [dx, dy] = [to.x - from.x, to.y - from.y];
+      const squared = dx * dx + dy * dy;
+      // The share of the stretch at which it comes nearest the point, held to the stretch.
+      const share = squared === 0 ? 0 : Math.min(1, Math.max(0, ((point.x - from.x) * dx + (point.y - from.y) * dy) / squared));
+      nearest = Math.min(nearest, Math.hypot(point.x - (from.x + share * dx), point.y - (from.y + share * dy)));
+    }
+  }
+  return nearest;
+}
+
+/**
+ * The arrow whose route passes nearest a point, when one passes within `reach` of it; null when
+ * none does. Where the routes of several lie within reach, the nearest wins, and of two as near
+ * the first given.
+ */
+export function nearestArrow(arrows: readonly { id: string; sections: readonly (readonly Point[])[] }[], point: Point, reach: number): string | null {
+  let found: string | null = null;
+  let nearest = Number.POSITIVE_INFINITY;
+  for (const arrow of arrows) {
+    const distance = distanceTo(arrow.sections, point);
+    if (distance <= reach && distance < nearest) {
+      found = arrow.id;
+      nearest = distance;
+    }
+  }
+  return found;
 }
