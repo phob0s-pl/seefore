@@ -1,0 +1,33 @@
+{
+  "name": "seefore",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Software architecture kept as YAML files, shown as a page on this machine.",
+  "type": "module",
+  "bin": {
+    "seefore": "bin/seefore.js"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "types": "tsc --noEmit -p src/model && tsc --noEmit -p src/server && tsc --noEmit -p src/ui",
+    "test": "vitest run",
+    "build": "vite build",
+    "check": "node scripts/check.ts",
+    "dev": "node scripts/dev.ts"
+  },
+  "dependencies": {
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.6",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.3.0",
+    "typescript": "7.0.2",
+    "vite": "8.3.8",
+    "vitest": "5.1.1"
+  }
+}
