@@ -1,4 +1,4 @@
-import type { Drawn, Failed, Model, Outline, Picture, PictureAnswer, Problem, View, ViewBox, ViewerState } from '@seefore/core';
+import type { C4Finding, C4Report, Drawn, Failed, Model, Outline, Picture, PictureAnswer, Problem, View, ViewBox, ViewerState } from '@seefore/core';
 
 /**
  * A made-up reading of a small shop, as the server would hand it to the page: the state, and
@@ -573,4 +573,93 @@ export const BROKEN_HOP_STATE: ViewerState = {
   model: { ...HARD_MODEL, infrastructure: HARD_MODEL.infrastructure.filter((piece) => piece.id !== 'balancer') },
   outline: { ...HARD_OUTLINE, infrastructure: ['proxy'] },
   views: [{ ...HARD_CONTAINERS, passed: [{ id: 'balancer', name: 'balancer', conditions: [], own: false, connections: ['web-calls-cards'], arrows: ['web~cards'] }] }],
+};
+
+/** What one of the C4 checks found at the start of a file, where a note stands. */
+function noteAt(file: string, message: string): C4Finding {
+  return { file, line: 1, column: 1, message };
+}
+
+/** The warning of a connection named only "Uses", at its `name`. */
+const VAGUE: Problem = {
+  file: 'connections/web-uses-events.yaml',
+  line: 3,
+  column: 7,
+  severity: 'warning',
+  code: 'connection-vague',
+  message: 'This connection is named `Uses`, which says nothing of what is done. Say what the one that acts does. If nobody knows yet, leave `name` out.',
+};
+
+/**
+ * The hard cases with something for each of the C4 checks to find: an auditor who has no
+ * description and takes part in no connection, a connection with no name, and one named only
+ * "Uses", which is a warning among the problems as well. The load balancer has no description,
+ * and neither app names a technology. The report is made here, as the server hands it to the
+ * page, and the directory was read in full.
+ */
+export const C4_MODEL: Model = {
+  ...HARD_MODEL,
+  people: [{ id: 'auditor', file: 'people/auditor.yaml', name: 'Auditor' }, ...HARD_MODEL.people],
+  connections: [
+    ...HARD_MODEL.connections.slice(0, 1),
+    { id: 'gateway-reads-events', file: 'connections/gateway-reads-events.yaml', from: 'gateway', to: 'events' },
+    ...HARD_MODEL.connections.slice(1),
+    { id: 'web-uses-events', file: 'connections/web-uses-events.yaml', from: 'web', to: 'events', name: 'Uses' },
+  ],
+};
+
+export const C4_REPORT: C4Report = {
+  complete: true,
+  'description-missing': {
+    severity: 'note',
+    checked: 9,
+    findings: [
+      noteAt('infrastructure/balancer.yaml', 'This piece of infrastructure has no description. Say what it is for, when that is known.'),
+      noteAt('people/auditor.yaml', 'This person has no description. Say what it is for, when that is known.'),
+    ],
+  },
+  'technology-missing': {
+    severity: 'note',
+    checked: 3,
+    findings: [
+      noteAt('apps/gateway.yaml', 'This app names no technology. Name what it is built with, if the facts say.'),
+      noteAt('apps/web.yaml', 'This app names no technology. Name what it is built with, if the facts say.'),
+    ],
+  },
+  'connection-unnamed': {
+    severity: 'note',
+    checked: 7,
+    findings: [noteAt('connections/gateway-reads-events.yaml', 'This connection has no name. Say what the one that acts does, when that is known.')],
+  },
+  'connection-vague': { severity: 'warning', checked: 6, findings: [{ file: VAGUE.file, line: VAGUE.line, column: VAGUE.column, message: VAGUE.message }] },
+  'element-unconnected': {
+    severity: 'note',
+    checked: 9,
+    findings: [
+      noteAt(
+        'people/auditor.yaml',
+        'No connection starts or ends at this person or at anything in it, and none passes through it. That may be right: add one only for an exchange that the facts name.',
+      ),
+    ],
+  },
+};
+
+export const C4_STATE: ViewerState = {
+  ...HARD_STATE,
+  revision: 'c1',
+  records: HARD_STATE.records + 3,
+  warnings: 1,
+  problems: [VAGUE],
+  c4: C4_REPORT,
+  model: C4_MODEL,
+  outline: {
+    ...HARD_OUTLINE,
+    people: ['auditor', 'clerk'],
+    connections: [
+      { start: 'clerk', known: true, connections: ['clerk-uses-web'] },
+      { start: 'gateway', known: true, connections: ['gateway-reads-events'] },
+      { start: 'web', known: true, connections: ['web-asks-cards', 'web-calls-cards', 'web-publishes-events', 'web-uses-events'] },
+      { start: 'proxy', known: true, connections: ['proxy-checks-web'] },
+    ],
+  },
 };

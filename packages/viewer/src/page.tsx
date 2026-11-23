@@ -167,7 +167,7 @@ export function Page({ shown, room, initialSelection = null }: PageProps) {
   } else if (route.page === 'model') {
     main = <Listing state={state} onOpen={(id, byKeyboard) => choose({ kind: 'record', id }, byKeyboard)} />;
   } else if (route.page === 'problems') {
-    main = <Problems problems={state.problems} />;
+    main = <Problems problems={state.problems} c4={state.c4} />;
   } else if (view === undefined) {
     main = <NoViews state={state} />;
   } else if (picture === null || picture.view !== view.id) {

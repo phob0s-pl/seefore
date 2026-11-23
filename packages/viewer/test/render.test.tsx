@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { CROWDED_FROM } from '@seefore/core';
-import type { Drawn, View, ViewerState } from '@seefore/core';
+import { C4_CODES, CROWDED_FROM } from '@seefore/core';
+import type { C4Report, Drawn, View, ViewerState } from '@seefore/core';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { Route } from '../src/address.ts';
@@ -11,12 +11,15 @@ import type { Selection } from '../src/follow.ts';
 import { holdersWords } from '../src/listing.tsx';
 import type { Shown } from '../src/live.ts';
 import { Page, pageTitle } from '../src/page.tsx';
+import { c4Line } from '../src/problems.tsx';
 import { legendWords } from '../src/reading.ts';
 import { crowdedNote, fitViewport, whole } from '../src/zoom.ts';
 import { ARCHIVE_FILES, ARCHIVE_STATE, archivePicture, archiveView, stateOf } from './archive.ts';
 import { STUDIO_STATE, studioView } from './studio.ts';
 import {
   BROKEN_HOP_STATE,
+  C4_REPORT,
+  C4_STATE,
   CONTAINERS,
   CONTAINER_PICTURE,
   CONTEXT,
@@ -322,6 +325,135 @@ describe('the problems', () => {
     for (const problem of PROBLEMS) expect(html).toContain(`>${problem.file}:${problem.line}:${problem.column}<`);
     expect(html).toContain('<code>kind</code> is <code>server</code>');
     expect(html).toContain('The check found 1 error and 1 warning.');
+  });
+});
+
+/** The line of each check of the set, in the order the page has them, as text, by code. */
+function c4LinesOf(html: string): [string, string][] {
+  return [...html.matchAll(/<li class="c4-check" data-code="([^"]+)">(?:<details><summary>)?([^<]*)/g)].map((found) => [found[1] ?? '', unescaped(found[2] ?? '')]);
+}
+
+/** A text as it reads, from how the markup holds it. */
+function unescaped(text: string): string {
+  return text.replaceAll('&quot;', '"').replaceAll('&#x27;', "'").replaceAll('&lt;', '<').replaceAll('&gt;', '>').replaceAll('&amp;', '&');
+}
+
+/** The markup of the line of one check, from its start to its end. */
+function c4LineOf(html: string, code: string): string {
+  const start = html.indexOf(`<li class="c4-check" data-code="${code}">`);
+  if (start < 0) throw new Error(`No line for ${code}.`);
+  const next = html.indexOf('<li class="c4-check"', start + 1);
+  return html.slice(start, next < 0 ? html.indexOf('</ul></section>', start) : next);
+}
+
+describe('the C4 checks on the problems page', () => {
+  const html = render({ page: 'problems' }, null, null, C4_STATE);
+  /** The shop with its error: the directory was not read in full, so the check of connections was not run. */
+  const partial: C4Report = { ...C4_REPORT, complete: false, 'element-unconnected': { severity: 'note', checked: null, findings: [] } };
+
+  it('has the five lines of the set, in its order, in the words `seefore check` prints', () => {
+    expect(c4LinesOf(html)).toEqual([
+      ['description-missing', 'A description: 9 things checked, 2 without.'],
+      ['technology-missing', 'A technology: 3 apps, stores and components checked, 2 without.'],
+      ['connection-unnamed', 'A name for a connection: 7 connections checked, 1 without.'],
+      ['connection-vague', 'A name that says more than "Uses": 6 names checked, 1 that does not.'],
+      ['element-unconnected', 'A connection: 9 things checked, 1 with none.'],
+    ]);
+    expect(c4LinesOf(html).map(([code]) => code)).toEqual([...C4_CODES]);
+  });
+
+  it('stands after the errors and warnings, under a heading of its own, with a sentence on what a note is above the lines', () => {
+    const order = ['<h1>Problems</h1>', '<ol class="problems">', '<section class="c4"><h2>C4 checks</h2>', 'A note counts something that is missing, and is no problem of the check.', '<ul class="c4-checks">'];
+    const places = order.map((piece) => html.indexOf(piece));
+    expect(places.every((place) => place >= 0)).toBe(true);
+    expect([...places].sort((a, b) => a - b)).toEqual(places);
+  });
+
+  it('opens a line that found something to what it found, closed when the page opens', () => {
+    expect(times(html, '<details>')).toBe(5);
+    expect(html).not.toContain('<details open');
+    const line = c4LineOf(html, 'technology-missing');
+    expect(line).toMatch(/^<li class="c4-check" data-code="technology-missing"><details><summary>A technology: [^<]*<\/summary><ol class="problems">/);
+    expect(times(line, '<li class="problem note">')).toBe(2);
+  });
+
+  it('shows each finding with its kind, its file, its place and its words, as a problem is shown', () => {
+    expect(c4LineOf(html, 'technology-missing')).toContain(
+      '<li class="problem note"><span class="severity">Note</span> <code class="place">apps/gateway.yaml:1:1</code> <span class="message">This app names no technology. Name what it is built with, if the facts say.</span> <span class="code">(technology-missing)</span></li>',
+    );
+    // The warning reads as it does among the problems, its quoted words set as code.
+    const vague = c4LineOf(html, 'connection-vague');
+    expect(vague).toContain('<li class="problem warning"><span class="severity">Warning</span> <code class="place">connections/web-uses-events.yaml:3:7</code>');
+    expect(vague).toContain('This connection is named <code>Uses</code>, which says nothing');
+    expect(times(html, '<code class="place">connections/web-uses-events.yaml:3:7</code>')).toBe(2);
+  });
+
+  it('says in the words of a line that opens how many it holds', () => {
+    for (const code of C4_CODES) {
+      const line = c4LineOf(html, code);
+      const said = /(\d+) (?:without|that does not|that do not|with none)\.<\/summary>/.exec(line)?.[1];
+      expect(Number(said)).toBe(times(line, '<li class="problem '));
+      expect(Number(said)).toBe(C4_REPORT[code].findings.length);
+    }
+  });
+
+  it('says of a check that was not run that it was not, and why, and it does not open', () => {
+    const shop = render({ page: 'problems' }, null, null, { ...STATE, c4: partial });
+    expect(c4LineOf(shop, 'element-unconnected')).toBe('<li class="c4-check" data-code="element-unconnected">A connection: not checked, since the directory was not read in full.</li>');
+    // With the marker unreadable none of the five is run.
+    const none = C4_CODES.reduce<C4Report>((report, code) => ({ ...report, [code]: { severity: report[code].severity, checked: null, findings: [] } }), partial);
+    const marker = render({ page: 'problems' }, null, null, { ...STATE, available: false, name: null, format: null, views: [], c4: none });
+    expect(c4LinesOf(marker).map(([, line]) => line)).toEqual([
+      'A description: not checked, since the directory was not read in full.',
+      'A technology: not checked, since the directory was not read in full.',
+      'A name for a connection: not checked, since the directory was not read in full.',
+      'A name that says more than "Uses": not checked, since the directory was not read in full.',
+      'A connection: not checked, since the directory was not read in full.',
+    ]);
+    expect(marker).not.toContain('<details>');
+  });
+
+  it('says of a check that looked at nothing or found nothing that it did, and that line does not open', () => {
+    const empty = { severity: 'note' as const, checked: 0, findings: [] };
+    expect(c4Line('connection-unnamed', empty, true)).toBe('A name for a connection: 0 connections checked, 0 without.');
+    expect(c4Line('connection-vague', { ...empty, severity: 'warning' }, true)).toBe('A name that says more than "Uses": 0 names checked, 0 that do not.');
+    expect(c4Line('technology-missing', empty, true)).toBe('A technology: 0 apps, stores and components checked, 0 without.');
+    const cleared: C4Report = { ...C4_REPORT, 'technology-missing': { severity: 'note', checked: 3, findings: [] } };
+    expect(c4LineOf(render({ page: 'problems' }, null, null, { ...C4_STATE, c4: cleared }), 'technology-missing')).toBe(
+      '<li class="c4-check" data-code="technology-missing">A technology: 3 apps, stores and components checked, 0 without.</li>',
+    );
+  });
+
+  it('counts one of each in the singular', () => {
+    const one = { severity: 'note' as const, checked: 1, findings: [{ file: 'a.yaml', line: 1, column: 1, message: 'A.' }] };
+    expect(c4Line('description-missing', one, true)).toBe('A description: 1 thing checked, 1 without.');
+    expect(c4Line('technology-missing', one, true)).toBe('A technology: 1 app, store or component checked, 1 without.');
+    expect(c4Line('connection-unnamed', one, true)).toBe('A name for a connection: 1 connection checked, 1 without.');
+    expect(c4Line('connection-vague', { ...one, severity: 'warning' }, true)).toBe('A name that says more than "Uses": 1 name checked, 1 that does not.');
+    expect(c4Line('element-unconnected', one, true)).toBe('A connection: 1 thing checked, 1 with none.');
+  });
+
+  it('has no block when there is no report, as from an older server or with the directory gone, and the page stands as before', () => {
+    const before = render({ page: 'problems' });
+    expect(STATE.c4).toBeUndefined();
+    expect(before).not.toContain('C4 checks');
+    expect(before).not.toContain('class="c4');
+    expect(before).toContain('The check found 1 error and 1 warning.');
+    const gone = render({ page: 'problems' }, null, null, { ...STATE, available: false, problems: [], views: [], errors: 0, warnings: 0 });
+    expect(gone).toContain('The check found no problems.');
+    expect(gone).not.toContain('C4 checks');
+  });
+
+  it('leaves the number beside "Problems" in the sidebar to the errors and warnings, whatever the notes', () => {
+    expect(html).toContain('>Problems (1)<');
+    expect(render({ page: 'problems' }, null, null, { ...STATE, c4: partial })).toContain('>Problems (2)<');
+    // The listing counts the same, and no note.
+    expect(render({ page: 'model' }, null, null, C4_STATE)).toContain('>1 warning.</a>');
+  });
+
+  it('puts no mark on a box or an arrow: a view is drawn the same with a report as without', () => {
+    expect(render(containers, CONTAINER_PICTURE, null, { ...STATE, c4: partial })).toBe(render(containers, CONTAINER_PICTURE));
+    expect(render({ page: 'view', view: HARD_CONTAINERS.id }, HARD_PICTURE, null, { ...HARD_STATE, c4: C4_REPORT })).toBe(hard());
   });
 });
 
