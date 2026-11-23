@@ -158,7 +158,7 @@ To settle in the stage named, with the recommendation the two proposals reached:
 | 5 | Automatic diagrams | built 2026-11-22; the trial with the owner is still to do |
 | 6a | Hard cases in a picture | built 2026-11-22; the trial with the owner is still to do |
 | 6b | Hard cases in a record | built 2026-11-22; the trial with the owner is still to do |
-| 7 | Layout stability (gate) | built 2026-11-23; one pass number of its spec is missed by two points; the owner's judging of the pictures, which is the gate, is still to do |
+| 7 | Layout stability (gate) | built 2026-11-23; **the gate is not passed**: one pass number of its spec is missed, and the owner's judging of the pictures is still to do |
 | 8 | C4 checks | |
 | 9 | Focused views | |
 | 10 | Finding things | |
@@ -556,15 +556,19 @@ Stage 7 changed two answers that stood before it, and took back one of its own:
 
 Open after the trial of stage 7, for the owner:
 
-- **The gate.** Nobody but a program has judged a picture of this stage. The owner is to find
-  a box again and follow an exchange after one edit, on Sentry's container view and on
+- **The gate is not passed.** One pass number is missed, the reviewer from outside said "do
+  not merge", and nobody but a program has judged a picture of this stage. The owner is to
+  find a box again and follow an exchange after one edit, on Sentry's container view and on
   Syncthing's. `research/trial/stage-07.md` says how.
-- **One pass number is missed.** After one edit to a container view, the pairs in one column
-  are to keep their order at 75 % in the worst edit. Two edits of one view of 26 boxes keep 73
-  and 74 %: both take out or move an app that takes four other boxes out of the view with
-  it. The spec says that the order does not hold when such a box goes. Either the number
-  comes down to what is measured, or such edits are set apart, or the gate holds.
+- **Which order a column has.** After one edit to a container view, the pairs in one column
+  are to keep their order at 75 % in the worst edit. With the walk, taking out the app that
+  the first person uses keeps 48 %: the walk then reaches the rest another way. Over all
+  edits the walk keeps 98.6 %. No order taken from the arrows can promise more. Two others
+  were measured and pass every number: every start first and then the walk, at two thirds
+  more crossings than before the stage, and by id alone, which no edit can turn round, at
+  nine tenths more. The walk has a third more. The owner chooses one of the three, and what
+  the worst-edit floor then means.
 - **More crossings where lines are followed.** A third more over the main views; a view with
-  one hub and many spokes goes from 5 to 52.
+  one hub and many spokes goes from 5 to 49.
 - **The long column of a context view.** Crossing 16 boxes redraws the view, and in a split
   column a neighbour added or taken out sends the boxes after it to the other side.
