@@ -1,9 +1,10 @@
 import { dirname, isAbsolute, relative, sep } from 'node:path';
-import { MARKER_FILE, compareProblems, load } from '@seefore/core';
-import type { Loaded, Problem } from '@seefore/core';
+import { C4_CODES, MARKER_FILE, compareProblems, load } from '@seefore/core';
+import type { C4Check, C4Code, C4Report, Loaded, Problem } from '@seefore/core';
 import { findSourceDirectoriesBelow, findSourceDirectory, isDirectory, physical, readSourceFiles, withSlashes } from './directory.ts';
 import type { Io } from './io.ts';
-import { count, fromHere } from './words.ts';
+import { count, fromHere, seefore } from './words.ts';
+import type { Here } from './words.ts';
 
 /** Where to start looking, and whether to answer as data. Every command takes these. */
 export interface CheckOptions {
@@ -20,6 +21,14 @@ export interface Rerun {
 }
 
 const CHECK: Rerun = { verb: 'check', command: 'check' };
+
+/** What `seefore check` takes besides what every command does. */
+export interface CheckCommandOptions extends CheckOptions {
+  /** List what each C4 check found, beneath its line. */
+  full: boolean;
+  /** End with 1 unless every connection has a name that says more than "Uses", as a pipeline that publishes pictures may ask. */
+  requireNames: boolean;
+}
 
 /** A source directory that was found and read. */
 export interface Opened {
@@ -47,6 +56,24 @@ export interface CheckResult {
   warnings: number;
   /** Each problem, with its file as a path from the source directory. */
   problems: Problem[];
+  /** What the C4 checks looked at and found. Its warnings are among the problems too. */
+  c4: C4Report;
+  /** With `--require-names`: whether the names are there that a pipeline publishing pictures asks for, and the counts it rests on. */
+  requireNames?: RequireNames;
+}
+
+/** What `--require-names` asks for, and what it found. */
+export interface RequireNames {
+  /** True when there is no error, the directory was read in full, there is a connection, and each has a name that is not the bare "Uses". */
+  met: boolean;
+  /** Whether the directory was read in full. */
+  complete: boolean;
+  /** How many connections were read. */
+  connections: number;
+  /** How many of them have no name. */
+  unnamed: number;
+  /** How many are named only "Uses". */
+  vague: number;
 }
 
 /** What a command prints with `--json` when it could not start, or could not find the record it was asked about. */
@@ -67,12 +94,17 @@ export const EXIT_OK = 0;
 export const EXIT_ERRORS = 1;
 export const EXIT_NOT_STARTED = 2;
 
-/** Reads the source directory and reports what is wrong with it. Returns the exit code. */
-export function check(options: CheckOptions, io: Io): number {
+/**
+ * Reads the source directory, reports what is wrong with it, and counts what the C4 checks
+ * found. Returns the exit code. What the checks found never changes it, unless names are
+ * required and are not all there.
+ */
+export function check(options: CheckCommandOptions, io: Io): number {
   const opened = openSource(options, io);
   if (typeof opened === 'number') return opened;
   const { directory, loaded, problems, errors, warnings } = opened;
 
+  const names = options.requireNames ? requireNames(loaded.c4, errors) : undefined;
   const result: CheckResult = {
     directory,
     name: loaded.marker?.name ?? null,
@@ -81,12 +113,25 @@ export function check(options: CheckOptions, io: Io): number {
     errors,
     warnings,
     problems,
+    c4: loaded.c4,
+    ...(names === undefined ? {} : { requireNames: names }),
   };
 
+  const here: Here = { cwd: io.cwd, directory, workdir: options.workdir };
   if (options.json) io.out(JSON.stringify(result, null, 2));
-  else io.out(report(result, io.cwd));
+  else io.out(report(result, here, options.full));
 
-  return errors > 0 ? EXIT_ERRORS : EXIT_OK;
+  return errors > 0 || names?.met === false ? EXIT_ERRORS : EXIT_OK;
+}
+
+/** What `--require-names` finds: the counts of the two checks of names, and whether they meet it. */
+function requireNames(c4: C4Report, errors: number): RequireNames {
+  // A check that was not run read no connection.
+  const connections = c4['connection-unnamed'].checked ?? 0;
+  const unnamed = c4['connection-unnamed'].findings.length;
+  const vague = c4['connection-vague'].findings.length;
+  const met = errors === 0 && c4.complete && connections > 0 && unnamed === 0 && vague === 0;
+  return { met, complete: c4.complete, connections, unnamed, vague };
 }
 
 /**
@@ -138,16 +183,19 @@ export function findSource(options: CheckOptions, io: Io, rerun: Rerun = CHECK):
   return found.directory;
 }
 
-/** Reads a source directory that was found, and gathers every problem in it. */
+/**
+ * Reads a source directory that was found, and gathers every problem in it. What reading the
+ * disk found is gathered first and handed to the core library, so that the C4 checks know
+ * whether the directory was read in full.
+ */
 export function readSource(directory: string): Opened {
   const read = readSourceFiles(directory);
-  const loaded = load(read.files);
-  const problems = [...read.problems, ...loaded.problems];
+  const found = [...read.problems];
 
   const above = dirname(directory) === directory ? undefined : findSourceDirectory(dirname(directory));
   const outer = above && 'directory' in above ? above.directory : undefined;
   if (outer) {
-    problems.push({
+    found.push({
       file: MARKER_FILE,
       line: 1,
       column: 1,
@@ -157,6 +205,8 @@ export function readSource(directory: string): Opened {
     });
   }
 
+  const loaded = load(read.files, { problems: found });
+  const problems = [...found, ...loaded.problems];
   problems.sort(compareProblems);
   const errors = problems.filter((problem) => problem.severity === 'error').length;
   return { directory, loaded, problems, errors, warnings: problems.length - errors };
@@ -177,17 +227,34 @@ export function notStarted(json: boolean, io: Io, code: string, message: string,
   return EXIT_NOT_STARTED;
 }
 
-/** The result as a person reads it: a heading, each problem on a line, and a count. */
-function report(result: CheckResult, cwd: string): string {
+/**
+ * The result as a person reads it: a heading, each problem on a line, what the C4 checks
+ * looked at and found, what `--require-names` did not find, and a count. With `full`, what each
+ * check found follows its line.
+ */
+function report(result: CheckResult, here: Here, full: boolean): string {
   const lines: string[] = [];
   lines.push(result.name ?? '(no name: the marker file could not be read)');
   lines.push(`${result.format === null ? 'format unknown' : `format ${result.format}`}, ${result.directory}`);
   lines.push('');
 
-  for (const problem of result.problems) {
-    lines.push(`${fromHere(cwd, result.directory, problem.file)}:${problem.line}:${problem.column}: ${problem.severity}: ${problem.message}`);
-  }
+  const at = (file: string, line: number, column: number): string => `${fromHere(here.cwd, result.directory, file)}:${line}:${column}`;
+  for (const problem of result.problems) lines.push(`${at(problem.file, problem.line, problem.column)}: ${problem.severity}: ${problem.message}`);
   if (result.problems.length > 0) lines.push('');
+
+  lines.push('C4 checks:');
+  const recordsRead = C4_CODES.some((code) => result.c4[code].checked !== null);
+  for (const code of C4_CODES) {
+    const check = result.c4[code];
+    lines.push(`- ${c4Line(code, check, recordsRead)}`);
+    if (full) for (const finding of check.findings) lines.push(`${at(finding.file, finding.line, finding.column)}: ${check.severity}: ${finding.message}`);
+  }
+  // The line that sends the reader on is for a run that found something and did not list it.
+  if (!full && C4_CODES.some((code) => result.c4[code].findings.length > 0)) lines.push(`\`${seefore('check --full', here)}\` lists each.`);
+  lines.push('');
+
+  const names = result.requireNames;
+  if (names !== undefined && !names.met) lines.push(namesMissing(names), '');
 
   const read = `${count(result.records, 'record')} read.`;
   const found =
@@ -196,6 +263,42 @@ function report(result: CheckResult, cwd: string): string {
       : `${count(result.errors, 'error')}, ${count(result.warnings, 'warning')}.`;
   lines.push(`${read} ${found}`);
   return lines.join('\n');
+}
+
+/** What each check of the set looks at, as its line names it: a title, and the noun for one record and for many. */
+const LOOKED_AT: Readonly<Record<C4Code, { title: string; one: string; many: string }>> = {
+  'description-missing': { title: 'A description', one: 'thing', many: 'things' },
+  'technology-missing': { title: 'A technology', one: 'app, store or component', many: 'apps, stores and components' },
+  'connection-unnamed': { title: 'A name for a connection', one: 'connection', many: 'connections' },
+  'connection-vague': { title: 'A name that says more than "Uses"', one: 'name', many: 'names' },
+  'element-unconnected': { title: 'A connection', one: 'thing', many: 'things' },
+};
+
+/**
+ * The line of one check: how many records it looked at and how many it found, or that it was
+ * not run, and why. The check of a connection is left out by itself when the directory was not
+ * read in full. When the records were not read, none of the five is run.
+ */
+function c4Line(code: C4Code, check: C4Check, recordsRead: boolean): string {
+  const { title, one, many } = LOOKED_AT[code];
+  if (check.checked === null) return `${title}: not checked, since ${recordsRead ? 'the directory was not read in full' : 'the records were not read'}.`;
+  const n = check.findings.length;
+  const found = code === 'connection-vague' ? `${n} that ${n === 1 ? 'does' : 'do'} not` : code === 'element-unconnected' ? `${n} with none` : `${n} without`;
+  return `${title}: ${check.checked} ${check.checked === 1 ? one : many} checked, ${found}.`;
+}
+
+/** What `--require-names` says when the names are not all there: the first of its conditions that does not hold. */
+function namesMissing(names: RequireNames): string {
+  if (!names.complete) return 'Names are required, and the directory was not read in full.';
+  if (names.connections === 0) return 'Names are required, and there is no connection to check.';
+  const said: string[] = [];
+  if (names.unnamed > 0) said.push(`${count(names.unnamed, 'connection')} ${names.unnamed === 1 ? 'has' : 'have'} no name`);
+  if (names.vague > 0) {
+    // After the first count, "connection" goes without saying.
+    const which = said.length > 0 ? String(names.vague) : count(names.vague, 'connection');
+    said.push(`${which} ${names.vague === 1 ? 'is' : 'are'} named only "Uses"`);
+  }
+  return `Names are required: ${said.join(', and ')}.`;
 }
 
 /** Writes a path, or any word, so that a shell takes it as one word. */

@@ -153,11 +153,12 @@ describe('the connections', () => {
       '    broken-calls-web: -> Web: Calls',
       '    part-calls-web: Part -> Web: Calls too',
     ]);
+    // The warning is the C4 check's, on the connection the visitor makes, which is named only "Uses".
     expect(body(result.out).slice(-4)).toEqual([
       'Parts in a record with an error (1)',
       '  component part: Part (in: broken) - A piece of what is broken.',
       '',
-      '21 records read. 1 error, 0 warnings: run `seefore check` to see them.',
+      '21 records read. 1 error, 1 warning: run `seefore check` to see them.',
     ]);
   });
 });
@@ -513,7 +514,7 @@ describe('what is in what, reads and writes, who opened a channel, and condition
     expect(HELP.replace(/\s+/g, ' ')).toContain(
       '--json Print the result as data. For list: the records of each family, and by id who answers for each part and the conditions each record is under, its own first.',
     );
-    expect(HELP.replace(/\s+/g, ' ')).toContain('--full For list: show each description whole, beneath its record, and each condition a record has from another.');
+    expect(HELP.replace(/\s+/g, ' ')).toContain('For list: show each description whole, beneath its record, and each condition a record has from another.');
   });
 });
 
@@ -677,15 +678,14 @@ describe('--full', () => {
     expect(run(['list', '--full', '--json']).out).toBe(run(['list', '--json']).out);
   });
 
-  it('is an option of list only', () => {
+  it('is an option of check and list only', () => {
     write(EXAMPLE);
-    for (const args of [['check', '--full'], ['uses', 'shop', '--full']]) {
-      const result = run(args);
-      expect(result.code).toBe(2);
-      expect(result.err).toBe('seefore: `--full` is an option of `seefore list` only.\nRun `seefore --help` to see how it is used.');
-      const data = JSON.parse(run([...args, '--json']).out) as Failure;
-      expect(data.error).toEqual({ code: 'usage', message: '`--full` is an option of `seefore list` only.' });
-    }
+    const args = ['uses', 'shop', '--full'];
+    const result = run(args);
+    expect(result.code).toBe(2);
+    expect(result.err).toBe('seefore: `--full` is an option of `seefore check` and `seefore list` only.\nRun `seefore --help` to see how it is used.');
+    const data = JSON.parse(run([...args, '--json']).out) as Failure;
+    expect(data.error).toEqual({ code: 'usage', message: '`--full` is an option of `seefore check` and `seefore list` only.' });
   });
 });
 

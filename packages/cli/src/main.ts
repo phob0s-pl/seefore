@@ -13,10 +13,16 @@ export const VERSION: string = typeof SEEFORE_VERSION === 'string' ? SEEFORE_VER
 
 const COMMANDS = ['check', 'list', 'uses'];
 
+/** What a command that does not take `--full` is told. */
+const FULL_ONLY = '`--full` is an option of `seefore check` and `seefore list` only.';
+
+/** What a command other than `seefore check` is told of `--require-names`: only a check can fail on what it found. */
+const REQUIRE_NAMES_ONLY = '`--require-names` is an option of `seefore check` only.';
+
 export const HELP = `seefore: design software architecture on the C4 model, kept as files in Git.
 
 Usage:
-  seefore check [--workdir=<directory>] [--json]
+  seefore check [--workdir=<directory>] [--full] [--require-names] [--json]
   seefore list [--workdir=<directory>] [--full] [--json]
   seefore uses <id> [--workdir=<directory>] [--json]
   seefore --server [--workdir=<directory>] [--port=<number>] [--no-open]
@@ -24,7 +30,10 @@ Usage:
   seefore --version
 
 Commands:
-  check    Read the source directory and report what is wrong with it.
+  check    Read the source directory and report what is wrong with it. Then count,
+           by the C4 checks, the things with no description, the parts with no
+           technology, the connections with no name or named only "Uses", and
+           the things that no connection reaches.
   list     List the model: people, systems with what is in them, infrastructure in
            no system, connections under what they start from, owners, technologies
            and each wording of a condition. Each description shows its first
@@ -38,8 +47,12 @@ Commands:
 
 Options:
   --workdir=<directory>   Where to start looking. Without it, the current directory.
-  --full                  For list: show each description whole, beneath its record,
-                          and each condition a record has from another.
+  --full                  For check: list what each C4 check found. For list: show
+                          each description whole, beneath its record, and each
+                          condition a record has from another.
+  --require-names         For check: end with 1 unless the directory was read in
+                          full and has connections, and each has a name that is
+                          not only "Uses". For a pipeline that publishes pictures.
   --json                  Print the result as data. For list: the records of each
                           family, and by id who answers for each part and the
                           conditions each record is under, its own first.
@@ -52,7 +65,8 @@ The first folder that has one is the source directory.
 
 Exit code:
   0   check found no errors, list or uses did its work, or --server was stopped.
-  1   check found errors.
+  1   check found errors, or with --require-names, not every name it asks for.
+      What the C4 checks count never changes the exit code otherwise.
   2   seefore could not start, --server could not listen on its port, or uses was
       given an id that no record has, or that more than one has.`;
 
@@ -71,6 +85,7 @@ export function main(argv: readonly string[], io: Io): number | Promise<number> 
       options: {
         workdir: { type: 'string' },
         full: { type: 'boolean', default: false },
+        'require-names': { type: 'boolean', default: false },
         json: { type: 'boolean', default: false },
         help: { type: 'boolean', short: 'h', default: false },
         version: { type: 'boolean', default: false },
@@ -98,7 +113,8 @@ export function main(argv: readonly string[], io: Io): number | Promise<number> 
       return usage(json, io, `\`--server\` runs on its own and takes no command or name, but got \`${positionals.join(' ')}\`. Use --workdir=<directory> to say where to look.`);
     }
     if (values.json) return usage(json, io, '`--json` is not an option of `seefore --server`.');
-    if (values.full) return usage(json, io, '`--full` is an option of `seefore list` only.');
+    if (values.full) return usage(json, io, FULL_ONLY);
+    if (values['require-names']) return usage(json, io, REQUIRE_NAMES_ONLY);
     const port = values.port === undefined ? undefined : portOf(values.port);
     if (port === null) return usage(json, io, `\`--port\` needs a whole number from 1 to 65535, as in --port=${FIRST_PORT}, but got \`${values.port}\`.`);
     return serve({ ...(values.workdir === undefined ? {} : { workdir: values.workdir }), ...(port === undefined ? {} : { port }), open: !values['no-open'] }, io);
@@ -114,14 +130,15 @@ export function main(argv: readonly string[], io: Io): number | Promise<number> 
   }
 
   const options: CheckOptions = { ...(values.workdir === undefined ? {} : { workdir: values.workdir }), json: values.json };
-  if (values.full && command !== 'list' && COMMANDS.includes(command)) return usage(json, io, '`--full` is an option of `seefore list` only.');
+  if (values.full && command !== 'check' && command !== 'list' && COMMANDS.includes(command)) return usage(json, io, FULL_ONLY);
+  if (values['require-names'] && command !== 'check' && COMMANDS.includes(command)) return usage(json, io, REQUIRE_NAMES_ONLY);
   switch (command) {
     case 'check':
     case 'list':
       if (rest.length > 0) {
         return usage(json, io, `\`seefore ${command}\` takes no names after it, but got \`${rest.join(' ')}\`. Use --workdir=<directory> to say where to look.`);
       }
-      return command === 'check' ? check(options, io) : list({ ...options, full: values.full }, io);
+      return command === 'check' ? check({ ...options, full: values.full, requireNames: values['require-names'] }, io) : list({ ...options, full: values.full }, io);
     case 'uses': {
       const [id, ...more] = rest;
       if (id === undefined) return usage(json, io, '`seefore uses` needs the id of a record, as in `seefore uses order-api`.');

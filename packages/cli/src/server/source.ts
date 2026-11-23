@@ -50,6 +50,9 @@ export function readingOf(directory: string, views: (model: Model) => View[] = v
     errors,
     warnings,
     problems,
+    // The same counts as `seefore check`, from the same reading. When the marker cannot say
+    // which format the directory is in, they say that none of the checks was run.
+    c4: loaded.c4,
     model,
     ownership: Object.fromEntries(ownership(model)),
     conditions: conditionsByRecord(model),
@@ -66,7 +69,7 @@ function conditionsByRecord(model: Model): Record<string, Condition[]> {
   return Object.fromEntries(found.filter(([, conditions]) => conditions.length > 0));
 }
 
-/** A reading with no model, and the one problem that says why. */
+/** A reading with no model, and the one problem that says why. Nothing was read, so there are no counts of the C4 checks either. */
 function unavailable(directory: string, problem: Problem): Reading {
   const model = emptyModel();
   return {

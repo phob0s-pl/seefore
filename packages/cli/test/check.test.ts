@@ -3,7 +3,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, sy
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CROWDED_FROM } from '@seefore/core';
+import { C4_CODES, CROWDED_FROM } from '@seefore/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { CheckResult, Failure } from '../src/check.ts';
 import { HELP, main } from '../src/main.ts';
@@ -42,6 +42,23 @@ function json(args: string[], cwd = '.') {
   return { code: result.code, data: JSON.parse(result.out) as CheckResult & Failure };
 }
 
+/**
+ * The block of the C4 checks, with the blank line after it, for a model of this many things,
+ * parts and connections, each of which lacks nothing. When the directory was not read in full,
+ * the check of a connection says so.
+ */
+function block(things = 0, parts = 0, connections = 0, complete = true): string[] {
+  return [
+    'C4 checks:',
+    `- A description: ${things} ${things === 1 ? 'thing' : 'things'} checked, 0 without.`,
+    `- A technology: ${parts} ${parts === 1 ? 'app, store or component' : 'apps, stores and components'} checked, 0 without.`,
+    `- A name for a connection: ${connections} ${connections === 1 ? 'connection' : 'connections'} checked, 0 without.`,
+    `- A name that says more than "Uses": ${connections} ${connections === 1 ? 'name' : 'names'} checked, 0 that do not.`,
+    complete ? `- A connection: ${things} ${things === 1 ? 'thing' : 'things'} checked, 0 with none.` : '- A connection: not checked, since the directory was not read in full.',
+    '',
+  ];
+}
+
 /** A source directory made by code: a system with this many apps in it, and so this many boxes in its container view. */
 function crowded(apps: number): Record<string, string> {
   const files: Record<string, string> = { 'seefore.yaml': MARKER, 'systems/shop.yaml': 'name: Shop\n' };
@@ -63,7 +80,7 @@ describe('seefore check', () => {
     const result = run(['check']);
     expect(result.code).toBe(0);
     expect(result.err).toBe('');
-    expect(result.out).toBe(`Boxwick\nformat 1, ${root}\n\n0 records read. No problems.`);
+    expect(result.out.split('\n')).toEqual(['Boxwick', `format 1, ${root}`, '', ...block(), '0 records read. No problems.']);
   });
 
   it('finds the source directory from a folder inside it', () => {
@@ -142,6 +159,8 @@ describe('seefore check', () => {
       'seefore.yaml:2:7: error: `name` must be text, but this is a whole number.',
       'seefore.yaml:3:1: error: `titel` is not a key of the marker file. Its keys are `format` and `name`.',
       '',
+      // The format can be read, so the records are, and four of the checks run on them.
+      ...block(0, 0, 0, false),
       '0 records read. 2 errors, 0 warnings.',
     ]);
   });
@@ -414,6 +433,15 @@ describe('seefore check', () => {
       'connections/orders-tell.yaml:1:7: error: This connection goes from the store `orders` to the system `shop`, but a store acts on nothing ' +
         'but another store. Turn it round, so that it goes from the one that reads or writes the store, and say which in its name.',
       '',
+      // The checks read the two records whose files have no error.
+      'C4 checks:',
+      '- A description: 2 things checked, 2 without.',
+      '- A technology: 1 app, store or component checked, 1 without.',
+      '- A name for a connection: 0 connections checked, 0 without.',
+      '- A name that says more than "Uses": 0 names checked, 0 that do not.',
+      '- A connection: not checked, since the directory was not read in full.',
+      '`seefore check --full` lists each.',
+      '',
       '4 records read. 3 errors, 0 warnings.',
     ]);
     expect(json(['check']).data.problems.map((problem) => `${problem.file}:${problem.line}:${problem.column} ${problem.code}`)).toEqual([
@@ -442,6 +470,14 @@ describe('seefore check', () => {
       'systems/argue.yaml:2:8: error: `owner` holds the id of a record in `owners/`. ' +
         'If who answers takes a sentence to say, leave `owner` out and put the sentence in the description.',
       '',
+      'C4 checks:',
+      '- A description: 1 thing checked, 1 without.',
+      '- A technology: 0 apps, stores and components checked, 0 without.',
+      '- A name for a connection: 0 connections checked, 0 without.',
+      '- A name that says more than "Uses": 0 names checked, 0 that do not.',
+      '- A connection: not checked, since the directory was not read in full.',
+      '`seefore check --full` lists each.',
+      '',
       // The two files YAML cannot read whole are not read at all.
       '3 records read. 4 errors, 0 warnings.',
     ]);
@@ -462,6 +498,14 @@ describe('seefore check', () => {
       `format unknown, ${root}`,
       '',
       'seefore.yaml:1:1: error: This line is a comment. The marker file holds no comments, since nothing reads them. Remove it.',
+      '',
+      'C4 checks:',
+      '- A description: 1 thing checked, 1 without.',
+      '- A technology: 0 apps, stores and components checked, 0 without.',
+      '- A name for a connection: 0 connections checked, 0 without.',
+      '- A name that says more than "Uses": 0 names checked, 0 that do not.',
+      '- A connection: not checked, since the directory was not read in full.',
+      '`seefore check --full` lists each.',
       '',
       '1 record read. 1 error, 0 warnings.',
     ]);
@@ -509,6 +553,278 @@ describe('seefore check', () => {
     expect(result.code).toBe(1);
     expect(result.out.startsWith(`Boxwick\nformat 2, ${root}\n`)).toBe(true);
     expect(result.out).toContain('seefore.yaml:1:1: error: This directory is written in format 2. This seefore reads format 1.');
+  });
+});
+
+/** These files under a folder of the temporary folder. */
+function under(folder: string, files: Readonly<Record<string, string>>): Record<string, string> {
+  return Object.fromEntries(Object.entries(files).map(([path, text]) => [`${folder}/${path}`, text]));
+}
+
+/** A shop with one of each thing the C4 checks find: a person with no description, an app with no technology, a connection with no name, one named only "Uses", and an app that no connection reaches. */
+const GAPS: Readonly<Record<string, string>> = {
+  'seefore.yaml': MARKER,
+  'people/fan.yaml': 'name: Fan\n',
+  'systems/shop.yaml': 'name: Shop\ndescription: Sells.\n',
+  'apps/api.yaml': 'name: API\nin: shop\ndescription: Takes orders.\n',
+  'apps/report.yaml': 'name: Report\nin: shop\ndescription: Sums up.\ntechnology: [go]\n',
+  'connections/fan-to-api.yaml': 'from: fan\nto: api\n',
+  'connections/fan-uses-shop.yaml': 'from: fan\nto: shop\nname: Uses\n',
+  'technologies/go.yaml': 'name: Go\n',
+};
+
+/** The same shop, lacking nothing the checks ask for. */
+const WHOLE: Readonly<Record<string, string>> = {
+  ...GAPS,
+  'people/fan.yaml': 'name: Fan\ndescription: Buys.\n',
+  'apps/api.yaml': 'name: API\nin: shop\ndescription: Takes orders.\ntechnology: [go]\n',
+  'connections/fan-to-api.yaml': 'from: fan\nto: api\nname: Orders\n',
+  'connections/fan-uses-shop.yaml': 'from: fan\nto: shop\nname: Pays\n',
+  'connections/report-reads-api.yaml': 'from: report\nto: api\nname: Reads the orders\n',
+};
+
+/** What each finding in the shop with gaps says. */
+const SAID = {
+  description: 'This person has no description. Say what it is for, when that is known.',
+  technology: 'This app names no technology. Name what it is built with, if the facts say.',
+  unnamed: 'This connection has no name. Say what the one that acts does, when that is known.',
+  vague: 'This connection is named `Uses`, which says nothing of what is done. Say what the one that acts does. If nobody knows yet, leave `name` out.',
+  unconnected: 'No connection starts or ends at this app or at anything in it, and none passes through it. That may be right: add one only for an exchange that the facts name.',
+};
+
+describe('the C4 checks of seefore check', () => {
+  it('count a model that lacks nothing, and send nobody on to --full', () => {
+    write(WHOLE);
+    const result = run(['check']);
+    expect(result.code).toBe(0);
+    expect(result.out.split('\n').slice(3)).toEqual([...block(4, 2, 3), '8 records read. No problems.']);
+  });
+
+  it('count each thing they find, after the problems and before the last line, and send the reader on to --full', () => {
+    write(GAPS);
+    const result = run(['check']);
+    expect(result.code).toBe(0);
+    expect(result.out.split('\n')).toEqual([
+      'Boxwick',
+      `format 1, ${root}`,
+      '',
+      `connections/fan-uses-shop.yaml:3:7: warning: ${SAID.vague}`,
+      '',
+      'C4 checks:',
+      '- A description: 4 things checked, 1 without.',
+      '- A technology: 2 apps, stores and components checked, 1 without.',
+      '- A name for a connection: 2 connections checked, 1 without.',
+      '- A name that says more than "Uses": 1 name checked, 1 that does not.',
+      '- A connection: 4 things checked, 1 with none.',
+      '`seefore check --full` lists each.',
+      '',
+      '7 records read. 0 errors, 1 warning.',
+    ]);
+  });
+
+  it('give the command for --full that works from where the person stands', () => {
+    write(under('arch', GAPS));
+    expect(run(['check', '--workdir=arch']).out).toContain('\n`seefore check --full --workdir=arch` lists each.\n');
+    expect(run(['check'], 'arch/people').out).toContain('\n`seefore check --full` lists each.\n');
+  });
+
+  it('list with --full what each found beneath its line, as a problem is written, with paths from where the command was run', () => {
+    write(under('arch', GAPS));
+    const result = run(['check', '--full', '--workdir=arch']);
+    expect(result.code).toBe(0);
+    expect(result.out.split('\n').slice(5)).toEqual([
+      'C4 checks:',
+      '- A description: 4 things checked, 1 without.',
+      `arch/people/fan.yaml:1:1: note: ${SAID.description}`,
+      '- A technology: 2 apps, stores and components checked, 1 without.',
+      `arch/apps/api.yaml:1:1: note: ${SAID.technology}`,
+      '- A name for a connection: 2 connections checked, 1 without.',
+      `arch/connections/fan-to-api.yaml:1:1: note: ${SAID.unnamed}`,
+      '- A name that says more than "Uses": 1 name checked, 1 that does not.',
+      `arch/connections/fan-uses-shop.yaml:3:7: warning: ${SAID.vague}`,
+      '- A connection: 4 things checked, 1 with none.',
+      `arch/apps/report.yaml:1:1: note: ${SAID.unconnected}`,
+      '',
+      '7 records read. 0 errors, 1 warning.',
+    ]);
+  });
+
+  it('list each finding of a check in order of file', () => {
+    write({ ...GAPS, 'systems/billing.yaml': 'name: Billing\n', 'components/total.yaml': 'name: Total\nin: report\n' });
+    const lines = run(['check', '--full']).out.split('\n');
+    const from = lines.indexOf('- A description: 6 things checked, 3 without.');
+    expect(lines.slice(from + 1, from + 4).map((line) => line.split(':')[0])).toEqual(['components/total.yaml', 'people/fan.yaml', 'systems/billing.yaml']);
+  });
+
+  it('say that a check looked at nothing, in a model with no connection', () => {
+    write({ 'seefore.yaml': MARKER, 'people/fan.yaml': 'name: Fan\ndescription: Watches.\n' });
+    const lines = run(['check']).out.split('\n');
+    expect(lines).toContain('- A name for a connection: 0 connections checked, 0 without.');
+    expect(lines).toContain('- A name that says more than "Uses": 0 names checked, 0 that do not.');
+    expect(lines).toContain('- A connection: 1 thing checked, 1 with none.');
+    const { c4 } = json(['check']).data;
+    expect(c4['connection-unnamed']).toEqual({ severity: 'note', checked: 0, findings: [] });
+    expect(c4['connection-vague']).toEqual({ severity: 'warning', checked: 0, findings: [] });
+  });
+
+  it('say that the check of a connection was not run when the directory was not read in full, and run the other four on what was read', () => {
+    const cases: [string, () => void][] = [
+      ['an error in the file of one connection', () => write({ ...GAPS, 'connections/fan-to-api.yaml': 'from: fan\nto: api\nlabel: Orders\n' })],
+      ['a file that is not read', () => write({ ...GAPS, 'notes/plan.yaml': 'a: 1\n' })],
+      [
+        'a link that is not followed',
+        () => {
+          write({ ...GAPS, 'elsewhere/thing.yaml': 'name: Thing\n' });
+          symlinkSync(join(root, 'elsewhere'), join(root, 'linked'));
+        },
+      ],
+    ];
+    for (const [what, make] of cases) {
+      rmSync(root, { recursive: true, force: true });
+      mkdirSync(root);
+      make();
+      const lines = run(['check']).out.split('\n');
+      expect(lines, what).toContain('- A connection: not checked, since the directory was not read in full.');
+      expect(lines, what).toContain('- A description: 4 things checked, 1 without.');
+      const { c4 } = json(['check']).data;
+      expect(c4.complete, what).toBe(false);
+      expect(c4['element-unconnected'], what).toEqual({ severity: 'note', checked: null, findings: [] });
+      expect(c4['description-missing'].findings.map((finding) => finding.file), what).toEqual(['people/fan.yaml']);
+    }
+  });
+
+  it('say that none of the five was run when the marker cannot say which format the directory is in', () => {
+    write({ ...GAPS, 'seefore.yaml': 'format: one\nname: Boxwick\n' });
+    const result = run(['check']);
+    expect(result.code).toBe(1);
+    expect(result.out.split('\n').slice(-8)).toEqual([
+      'C4 checks:',
+      '- A description: not checked, since the records were not read.',
+      '- A technology: not checked, since the records were not read.',
+      '- A name for a connection: not checked, since the records were not read.',
+      '- A name that says more than "Uses": not checked, since the records were not read.',
+      '- A connection: not checked, since the records were not read.',
+      '',
+      '0 records read. 1 error, 1 warning.',
+    ]);
+    const { c4 } = json(['check']).data;
+    expect(c4.complete).toBe(false);
+    for (const code of C4_CODES) expect(c4[code], code).toMatchObject({ checked: null, findings: [] });
+  });
+
+  it('give as data the key `c4`, after the problems: whether the directory was read in full, and for each code its kind, how many it looked at and what it found', () => {
+    write(GAPS);
+    const { code, data } = json(['check']);
+    expect(code).toBe(0);
+    expect(Object.keys(data)).toEqual(['directory', 'name', 'format', 'records', 'errors', 'warnings', 'problems', 'c4']);
+    expect(Object.keys(data.c4)).toEqual(['complete', ...C4_CODES]);
+    expect(data.c4).toEqual({
+      complete: true,
+      'description-missing': { severity: 'note', checked: 4, findings: [{ file: 'people/fan.yaml', line: 1, column: 1, message: SAID.description }] },
+      'technology-missing': { severity: 'note', checked: 2, findings: [{ file: 'apps/api.yaml', line: 1, column: 1, message: SAID.technology }] },
+      'connection-unnamed': { severity: 'note', checked: 2, findings: [{ file: 'connections/fan-to-api.yaml', line: 1, column: 1, message: SAID.unnamed }] },
+      'connection-vague': { severity: 'warning', checked: 1, findings: [{ file: 'connections/fan-uses-shop.yaml', line: 3, column: 7, message: SAID.vague }] },
+      'element-unconnected': { severity: 'note', checked: 4, findings: [{ file: 'apps/report.yaml', line: 1, column: 1, message: SAID.unconnected }] },
+    });
+    // The warning is among the problems and in their count; the notes are in `c4` alone.
+    expect(data.problems).toEqual([{ file: 'connections/fan-uses-shop.yaml', line: 3, column: 7, severity: 'warning', code: 'connection-vague', message: SAID.vague }]);
+    expect({ errors: data.errors, warnings: data.warnings }).toEqual({ errors: 0, warnings: 1 });
+    expect(data.requireNames).toBeUndefined();
+  });
+
+  it('give the same data with --full as without', () => {
+    write(GAPS);
+    expect(run(['check', '--full', '--json']).out).toBe(run(['check', '--json']).out);
+  });
+
+  it('never change the exit code: a warning of theirs is a warning, and a note is none', () => {
+    write({ ...GAPS, 'apps/broken.yaml': 'name: Broken\n' });
+    expect(run(['check']).code).toBe(1);
+    rmSync(join(root, 'apps/broken.yaml'));
+    expect(run(['check']).code).toBe(0);
+  });
+});
+
+describe('--require-names', () => {
+  /** A shop whose connections are these, by id and name: a name of `null` is left out. */
+  const named = (names: Record<string, string | null>): Record<string, string> => {
+    const files: Record<string, string> = { 'seefore.yaml': MARKER, 'people/fan.yaml': 'name: Fan\n', 'systems/shop.yaml': 'name: Shop\n' };
+    for (const [id, name] of Object.entries(names)) files[`connections/${id}.yaml`] = `from: fan\nto: shop\n${name === null ? '' : `name: ${name}\n`}`;
+    return files;
+  };
+
+  /** The line `--require-names` adds, and the exit code, in words; and what it holds as data. */
+  const required = () => {
+    const words = run(['check', '--require-names']);
+    const lines = words.out.split('\n');
+    const plain = run(['check']);
+    // The line stands on its own, after the C4 checks and before the last line, which is as it was.
+    const said = lines.length === plain.out.split('\n').length ? undefined : lines.at(-3);
+    expect(lines.at(-1)).toBe(plain.out.split('\n').at(-1));
+    const data = json(['check', '--require-names']);
+    expect(data.code).toBe(words.code);
+    return { code: words.code, said, data: data.data.requireNames, plain: plain.code };
+  };
+
+  it('ends with 0 and adds nothing when every connection has a name that says more than "Uses"', () => {
+    write(named({ 'fan-buys': 'Buys', 'fan-pays': 'Pays' }));
+    expect(required()).toEqual({ code: 0, said: undefined, data: { met: true, complete: true, connections: 2, unnamed: 0, vague: 0 }, plain: 0 });
+  });
+
+  it('ends with 1 when the directory was not read in full, and says so', () => {
+    write({ ...named({ 'fan-buys': 'Buys' }), 'notes/plan.yaml': 'a: 1\n' });
+    expect(required()).toEqual({
+      code: 1,
+      said: 'Names are required, and the directory was not read in full.',
+      data: { met: false, complete: false, connections: 1, unnamed: 0, vague: 0 },
+      plain: 0,
+    });
+  });
+
+  it('ends with 1 when there is an error, which leaves the directory not read in full', () => {
+    write({ ...named({ 'fan-buys': 'Buys' }), 'people/fan.yaml': 'name: Fan\nage: 3\n' });
+    const found = required();
+    expect(found).toMatchObject({ code: 1, said: 'Names are required, and the directory was not read in full.', plain: 1 });
+    expect(found.data).toMatchObject({ met: false, complete: false });
+  });
+
+  it('ends with 1 when there is no connection to check, and says so', () => {
+    write(named({}));
+    expect(required()).toEqual({
+      code: 1,
+      said: 'Names are required, and there is no connection to check.',
+      data: { met: false, complete: true, connections: 0, unnamed: 0, vague: 0 },
+      plain: 0,
+    });
+  });
+
+  it.each([
+    [{ 'fan-to-shop': null, 'fan-uses-shop': 'Uses', 'fan-use-shop': 'use' }, 'Names are required: 1 connection has no name, and 2 are named only "Uses".', 1, 2],
+    [{ 'fan-to-shop': null, 'fan-to-shop-too': null, 'fan-buys': 'Buys' }, 'Names are required: 2 connections have no name.', 2, 0],
+    [{ 'fan-uses-shop': 'USES', 'fan-buys': 'Buys' }, 'Names are required: 1 connection is named only "Uses".', 0, 1],
+  ])('ends with 1 when a connection has no name or is named only "Uses", and says how many: %j', (names, said, unnamed, vague) => {
+    write(named(names));
+    const connections = Object.keys(names).length;
+    expect(required()).toEqual({ code: 1, said, data: { met: false, complete: true, connections, unnamed, vague }, plain: 0 });
+  });
+
+  it('is an option of seefore check only, and a mistake in the options with any other command', () => {
+    write(named({ 'fan-buys': 'Buys' }));
+    for (const args of [['list', '--require-names'], ['uses', 'fan', '--require-names']]) {
+      const result = run(args);
+      expect(result.code, args.join(' ')).toBe(2);
+      expect(result.out).toBe('');
+      expect(result.err).toBe('seefore: `--require-names` is an option of `seefore check` only.\nRun `seefore --help` to see how it is used.');
+      const data = JSON.parse(run([...args, '--json']).out) as Failure;
+      expect(data.error).toEqual({ code: 'usage', message: '`--require-names` is an option of `seefore check` only.' });
+    }
+  });
+
+  it('is named in the help, with --full for check', () => {
+    const flat = HELP.replace(/\s+/g, ' ');
+    expect(HELP).toContain('  seefore check [--workdir=<directory>] [--full] [--require-names] [--json]\n');
+    expect(flat).toContain('--full For check: list what each C4 check found.');
+    expect(flat).toContain('--require-names For check: end with 1 unless the directory was read in full and has connections, and each has a name that is not only "Uses".');
   });
 });
 
@@ -597,6 +913,31 @@ describe('the built command', () => {
     expect(none.status).toBe(2);
     expect(none.stdout).toBe('');
     expect(none.stderr).toContain('There is no seefore.yaml');
+  });
+
+  it('counts what the C4 checks find, lists it with --full, and ends with 1 under --require-names only', () => {
+    write({ ...under('gaps', GAPS), ...under('whole', WHOLE) });
+    const runs = (...args: string[]) => spawnSync(process.execPath, [built, ...args], { cwd: root, encoding: 'utf8' });
+
+    const plain = runs('check', '--workdir=gaps');
+    expect(plain.status).toBe(0);
+    expect(plain.stdout).toContain('\n- A connection: 4 things checked, 1 with none.\n`seefore check --full --workdir=gaps` lists each.\n\n7 records read. 0 errors, 1 warning.\n');
+    const full = runs('check', '--full', '--workdir=gaps');
+    expect(full.status).toBe(0);
+    expect(full.stdout).toContain(`\n- A connection: 4 things checked, 1 with none.\ngaps/apps/report.yaml:1:1: note: ${SAID.unconnected}\n\n`);
+
+    const gate = runs('check', '--require-names', '--workdir=gaps');
+    expect(gate.status).toBe(1);
+    expect(gate.stdout).toContain('\nNames are required: 1 connection has no name, and 1 is named only "Uses".\n\n7 records read. 0 errors, 1 warning.\n');
+    const asData = runs('check', '--require-names', '--json', '--workdir=gaps');
+    expect(asData.status).toBe(1);
+    expect((JSON.parse(asData.stdout) as CheckResult).requireNames).toEqual({ met: false, complete: true, connections: 2, unnamed: 1, vague: 1 });
+    expect(runs('check', '--require-names', '--workdir=whole').status).toBe(0);
+
+    const mistake = runs('list', '--require-names', '--workdir=gaps');
+    expect(mistake.status).toBe(2);
+    expect(mistake.stdout).toBe('');
+    expect(mistake.stderr).toContain('`--require-names` is an option of `seefore check` only.');
   });
 
   // The limit is written out here, and not taken from the code, so that a limit changed by

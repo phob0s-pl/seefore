@@ -390,6 +390,28 @@ describe('a reading of the source directory', () => {
     expect(Object.keys(sent.ownership)).toEqual(['shelf']);
   });
 
+  it('gives what the C4 checks found, as seefore check does, and keeps notes out of the count of problems', () => {
+    write({ ...EXAMPLE, 'connections/customer-uses-shop.yaml': 'from: customer\nto: shop\nname: Uses\n', 'people/visitor.yaml': 'name: Visitor\n' });
+    const reading = readingOf(join(root, 'arch'));
+    const out: string[] = [];
+    main(['check', '--json', `--workdir=${join(root, 'arch')}`], { cwd: root, out: (text) => out.push(text), err: () => {} });
+    const checked = JSON.parse(out.join('\n')) as CheckResult;
+    expect(reading.c4).toEqual(checked.c4);
+    expect(reading.c4?.complete).toBe(true);
+    expect(reading.c4?.['element-unconnected'].findings.map((finding) => finding.file)).toEqual(['people/visitor.yaml']);
+    // The warning is a problem as any other; the notes are not.
+    expect(reading.problems.map((problem) => problem.code)).toEqual(['connection-vague']);
+    expect({ errors: reading.errors, warnings: reading.warnings }).toEqual({ errors: 0, warnings: 1 });
+  });
+
+  it('says that none of the C4 checks was run when the marker cannot say which format the directory is in, and gives none when the directory is gone', () => {
+    write({ ...EXAMPLE, 'seefore.yaml': 'format: one\nname: Shop\n' });
+    const unknown = readingOf(join(root, 'arch'));
+    expect(unknown.c4?.complete).toBe(false);
+    expect(Object.values(unknown.c4 ?? {}).filter((check) => typeof check === 'object').map((check) => check.checked)).toEqual([null, null, null, null, null]);
+    expect(readingOf(join(root, 'gone')).c4).toBeUndefined();
+  });
+
   it('says that the directory is gone, when it is', () => {
     const reading = readingOf(join(root, 'gone'));
     expect(reading.available).toBe(false);
@@ -439,6 +461,16 @@ describe('following the files', () => {
     const next = await waitFor(() => told.find((state) => state.model.people.some((person) => person.name === 'Shopper')));
     expect(next.revision).not.toBe(first);
     expect(source.state).toBe(told[told.length - 1]);
+  });
+
+  it('gives the counts of the C4 checks anew with each reading, as an edit takes a note away', { timeout: SLOW }, async () => {
+    write(EXAMPLE);
+    const { source, told } = following();
+    const missing = (state: ViewerState) => state.c4?.['technology-missing'].findings.map((finding) => finding.file);
+    expect(missing(source.state)).toContain('apps/shipping.yaml');
+    write({ 'apps/shipping.yaml': 'name: Shipping\nin: shop\nkind: service\ndescription: Tells the warehouse what to pack.\ntechnology: [go]\nowner: logistics-team\n' });
+    const next = await waitFor(() => told.find((state) => !missing(state)?.includes('apps/shipping.yaml')));
+    expect(next.c4?.['technology-missing'].checked).toBe(source.state.c4?.['technology-missing'].checked);
   });
 
   it('reads again when a file is replaced by a rename, as editors and Git do', { timeout: SLOW }, async () => {
@@ -809,7 +841,8 @@ describe('seefore --server', () => {
   it('refuses a command or --json with --server, and its options without it', async () => {
     const cases: [string[], string][] = [
       [['--server', 'check'], '`--server` runs on its own and takes no command or name, but got `check`. Use --workdir=<directory> to say where to look.'],
-      [['--server', '--full'], '`--full` is an option of `seefore list` only.'],
+      [['--server', '--full'], '`--full` is an option of `seefore check` and `seefore list` only.'],
+      [['--server', '--require-names'], '`--require-names` is an option of `seefore check` only.'],
       [['check', '--port=4173'], '`--port` is an option of `seefore --server` only.'],
       [['list', '--no-open'], '`--no-open` is an option of `seefore --server` only.'],
     ];
