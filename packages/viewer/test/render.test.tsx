@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { CROWDED_FROM } from '@seefore/core';
 import type { Drawn, View, ViewerState } from '@seefore/core';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
@@ -25,6 +26,7 @@ import {
   PROBLEMS,
   STATE,
 } from './fixture.ts';
+import { grid } from './grid.ts';
 
 /** The page drawn without a browser, as React's server rendering draws it. */
 
@@ -397,9 +399,9 @@ describe('the hard cases in a picture', () => {
   });
 
   it('has each new look and mark in the legend, with a sample', () => {
-    for (const key of ['system-external', 'queue-or-topic', 'infrastructure', 'route', 'passing']) expect(html).toMatch(new RegExp(`data-key="${key}"><svg class="sample"`));
-    expect(html).toMatch(/data-key="route"><svg[^]*?>via<\/text>/);
-    expect(html).toMatch(/data-key="passing"><svg[^]*?>⇢ 2<\/text>/);
+    for (const key of ['system-external', 'queue-or-topic', 'infrastructure', 'route', 'passing']) expect(html).toMatch(new RegExp(`data-key="${key}" tabindex="0"><svg class="sample"`));
+    expect(html).toMatch(/data-key="route" tabindex="0"><svg[^]*?>via<\/text>/);
+    expect(html).toMatch(/data-key="passing" tabindex="0"><svg[^]*?>⇢ 2<\/text>/);
   });
 
   it('names for a screen reader the route of an arrow and what passes through a box', () => {
@@ -698,15 +700,12 @@ describe('a condition, in the picture and the panel', () => {
 
   it('has each new mark in the legend where the view draws it, with a sample, and none told by colour alone', () => {
     const legend = html.slice(html.indexOf('aria-label="Legend"'));
-    for (const key of ['kept', 'opened', 'only', 'route-only']) expect(legend).toMatch(new RegExp(`data-key="${key}"><svg class="sample"`));
-    expect(legend).toMatch(/data-key="only"><svg[^]*?>only …<\/text>/);
-    expect(legend).toMatch(/data-key="route-only"><svg[^]*?>via \(…\)<\/text>/);
-    expect(legend).toMatch(/data-key="opened"><svg[^]*?<circle class="arrow-ring"/);
-    expect(legend).toMatch(/data-key="kept"><svg[^]*?class="sample-store-sign"/);
+    for (const key of ['kept', 'opened', 'only', 'route-only']) expect(legend).toMatch(new RegExp(`data-key="${key}" tabindex="0"><svg class="sample"`));
+    expect(legend).toMatch(/data-key="only" tabindex="0"><svg[^]*?>only …<\/text>/);
+    expect(legend).toMatch(/data-key="route-only" tabindex="0"><svg[^]*?>via \(…\)<\/text>/);
+    expect(legend).toMatch(/data-key="opened" tabindex="0"><svg[^]*?<circle class="arrow-ring"/);
+    expect(legend).toMatch(/data-key="kept" tabindex="0"><svg[^]*?class="sample-store-sign"/);
     expect(legend).not.toContain('data-key="opened-some"');
-    // The dash is a trial, behind a constant that is off.
-    expect(html).not.toContain(' dashed');
-    expect(legend).not.toContain('data-key="dashed"');
   });
 });
 
@@ -726,7 +725,7 @@ describe('a channel that the far side opened, in the picture and the panel', () 
     expect(html).not.toContain('<circle class="arrow-ring"');
     expect(html).toContain('<text class="label-opened"');
     expect(html).toContain('>far side opened on 1 of 2<');
-    expect(html).toMatch(/data-key="opened-some"><svg[^]*?>opened<\/text>/);
+    expect(html).toMatch(/data-key="opened-some" tabindex="0"><svg[^]*?>opened<\/text>/);
   });
 
   it('says it on the panel for each connection, in words', () => {
@@ -926,7 +925,7 @@ describe('the boundary of a system that has a condition', () => {
     const html = render({ page: 'view', view: view.id }, archivePicture(view), null, state);
     expect(html).toContain('>Archive [System] only in production<');
     expect(html).toContain('aria-label="Archive [System] only in production, the boundary of the system"');
-    expect(html).toMatch(/data-key="only"><svg/);
+    expect(html).toMatch(/data-key="only" tabindex="0"><svg/);
   });
 });
 
@@ -939,5 +938,102 @@ describe('the legend, with every mark of the stage', () => {
     expect(rule).toContain('overflow-y: auto;');
     // A line at its foot says there is more while there is; it is measured in the browser.
     expect(/\n\.legend-more \{[^}]*position: sticky;/.test(css)).toBe(true);
+  });
+
+  it('has each line take the focus, so that the keyboard lights what it explains as the pointer does', () => {
+    const html = render(containers, CONTAINER_PICTURE);
+    for (const entry of CONTAINERS.legend) expect(html).toContain(`<li data-key="${entry.key}" tabindex="0">`);
+  });
+});
+
+/** The rules of the style sheet, each as its selectors and its body. */
+function rulesOf(css: string): { selectors: string[]; body: string }[] {
+  const plain = css.replace(/\/\*[^]*?\*\//g, '');
+  return [...plain.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((rule) => ({ selectors: (rule[1] ?? '').split(',').map((one) => one.trim()), body: rule[2] ?? '' }));
+}
+
+describe('the dashed outline for `only`, taken out', () => {
+  const css = readFileSync(fileURLToPath(new URL('../src/styles.css', import.meta.url)), 'utf8');
+
+  it('leaves nothing dashed in the style sheet but the boundary and its sample', () => {
+    const dashed = rulesOf(css).filter((rule) => /dashed|dasharray/.test(rule.body));
+    expect(dashed.flatMap((rule) => rule.selectors).sort()).toEqual(['.boundary', '.sample-boundary']);
+  });
+
+  it('draws no box, arrow or line of the legend as dashed, whatever has an `only`', () => {
+    for (const html of [archive(), edged(), hard()]) {
+      expect(html).not.toMatch(/class="[^"]*\bdashed\b/);
+      expect(html).not.toContain('data-key="dashed"');
+      expect(html).not.toContain('Dashed outline');
+    }
+  });
+});
+
+describe('the reading line', () => {
+  it('stands under the note, which stands under the counts, and says the words of what is chosen, whole in its title', () => {
+    const html = render(containers, CONTAINER_PICTURE, { kind: 'box', id: 'order-api' });
+    expect(html).toContain('</p><p class="small-note" role="status"></p><p class="reading-line" title="Order API [App: service · Go]">Order API [App: service · Go]</p></header>');
+    const arrow = render(containers, CONTAINER_PICTURE, { kind: 'arrow', id: 'order-api~orders-database' });
+    expect(arrow).toContain(`<p class="reading-line" title="${escaped('Order API → Orders database: Writes each order · [SQL]')}">`);
+    const passed = hard(undefined, { kind: 'passed', id: 'balancer' });
+    expect(passed).toContain(`>${escaped("Load balancer: 1 of this view's connections passes through it")}</p></header>`);
+  });
+
+  it('keeps its place and says nothing when nothing is chosen, and is no live region', () => {
+    const html = render(containers, CONTAINER_PICTURE);
+    expect(html).toContain('<p class="reading-line"></p></header>');
+    expect(html).not.toMatch(/class="reading-line"[^>]*(role|aria-live)=/);
+  });
+
+  it('is one line of one height, cut with an ellipsis when too long', () => {
+    const css = readFileSync(fileURLToPath(new URL('../src/styles.css', import.meta.url)), 'utf8');
+    const rule = rulesOf(css).find((one) => one.selectors.includes('.reading-line'))?.body ?? '';
+    for (const part of ['height: 20px;', 'line-height: 20px;', 'white-space: nowrap;', 'overflow: hidden;', 'text-overflow: ellipsis;']) expect(rule).toContain(part);
+  });
+});
+
+describe('the note of a crowded view on the page', () => {
+  /** The page of a grid of so many apps. */
+  const page = (apps: number) => {
+    const { state, view, drawn } = grid(apps);
+    return render({ page: 'view', view: view.id }, drawn, null, state);
+  };
+  const words = `A crowded view: more than ${CROWDED_FROM} boxes. It opens as a map, with no words. Point at a box or a line to read it here; click it to keep it lit.`;
+
+  it('says it under the counts for a view of more boxes than the limit', () => {
+    const html = page(CROWDED_FROM + 1);
+    expect(html).toContain(`<p class="small-note" role="status">${words}</p>`);
+    expect(html).not.toContain('Too small to read');
+  });
+
+  it('is not there for a view at the limit', () => {
+    expect(page(CROWDED_FROM)).not.toContain('A crowded view');
+  });
+});
+
+describe('the light below the zoom at which names are drawn', () => {
+  const rules = rulesOf(readFileSync(fileURLToPath(new URL('../src/styles.css', import.meta.url)), 'utf8'));
+  /** The body of the rule with this selector. */
+  const body = (selector: string) => rules.find((rule) => rule.selectors.includes(selector))?.body ?? '';
+  const shapes = ".diagram[data-detail='shapes']";
+
+  it('keeps a lit line as wide on the screen as at full size, a thick one too', () => {
+    expect(body(`${shapes} .arrow.lit .arrow-line`)).toContain('stroke-width: calc(1.5px / var(--zoom, 1));');
+    expect(body(`${shapes} .arrow-many.lit .arrow-line`)).toContain('stroke-width: calc(3px / var(--zoom, 1));');
+    // At full size the lines are those widths.
+    expect(body('.arrow-line')).toContain('stroke-width: 1.5;');
+    expect(body('.arrow-many .arrow-line')).toContain('stroke-width: 3;');
+  });
+
+  it('fills a lit box with a tint of its colour, and a chosen one with a tint of the accent', () => {
+    expect(body(`${shapes} .box.lit .outline:not(.rim)`)).toMatch(/fill: color-mix\(in srgb, var\(--line-colour\) \d+%, var\(--ground\)\);/);
+    expect(body(`${shapes} .box.chosen .outline:not(.rim)`)).toMatch(/fill: color-mix\(in srgb, var\(--accent\) \d+%, var\(--ground\)\);/);
+  });
+
+  it('fades what is not lit to the lines further from the lit', () => {
+    expect(body(`${shapes} .box.faded`)).toContain('--line-colour: var(--dim-line);');
+    expect(body(`${shapes} .boundary.faded`)).toContain('border-color: var(--dim-line);');
+    expect(body(`${shapes} .arrow.faded .arrow-line`)).toContain('stroke: var(--dim-line);');
+    expect(body(`${shapes} .arrow.faded .arrow-head`)).toContain('fill: var(--dim-line);');
   });
 });

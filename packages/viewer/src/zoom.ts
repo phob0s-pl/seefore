@@ -1,9 +1,11 @@
-import type { Drawn, Rect } from '@seefore/core';
-import type { Lit } from './light.ts';
+import { CROWDED_FROM } from '@seefore/core';
+import type { Drawn, Rect, View } from '@seefore/core';
+import type { Lit, Target } from './light.ts';
 
 /**
  * What the zoom decides: how much text a picture shows, how it is fitted to the room it has,
- * and when to say that it is too small to read. The numbers are those of
+ * where it stands when a new picture of it comes, and the note under the counts: that it is too
+ * small to read, or that the view is crowded. The numbers are those of
  * `research/diagrams/recommendations.md`, section 4: names stay at 9 pixels or more.
  */
 
@@ -129,4 +131,42 @@ export function smallNote(drawn: Drawn, zoom: number): string | undefined {
   const boxes = count(drawn.boxes.length, 'box', 'boxes');
   const arrows = count(drawn.arrows.length, 'arrow', 'arrows');
   return `Too small to read at ${percent(zoom)}: ${boxes} and ${arrows}. Names can be read from ${percent(READABLE_FROM)}. Zoom in, or point at a box to follow it.`;
+}
+
+/**
+ * The note for a crowded view, one of more boxes than `CROWDED_FROM`, at any zoom. Missing for
+ * a view under the limit.
+ */
+export function crowdedNote(view: View): string | undefined {
+  if (view.boxes.length <= CROWDED_FROM) return undefined;
+  return `A crowded view: more than ${CROWDED_FROM} boxes. It opens as a map, with no words. Point at a box or a line to read it here; click it to keep it lit.`;
+}
+
+/**
+ * The note under the counts of a view: for a crowded view the crowded note, which says how to
+ * read it and so stands in place of the note that it is too small; for a view under the limit,
+ * the note that it is too small to read at this zoom, when it is.
+ */
+export function noteFor(view: View, drawn: Drawn, zoom: number): string | undefined {
+  return crowdedNote(view) ?? smallNote(drawn, zoom);
+}
+
+/** The place of a box, or of the boundary, in a picture. Missing when the picture does not draw it. */
+function placeOf(drawn: Drawn, id: string): Rect | undefined {
+  return drawn.boxes.find((box) => box.id === id) ?? (drawn.boundary?.id === id ? drawn.boundary : undefined);
+}
+
+/**
+ * Where the canvas looks when a new picture of the same view comes, the one before shown at
+ * `viewport`. A chosen box, or the boundary, that both pictures draw keeps its top left where it
+ * stood on the screen, at the same zoom, so that a reader who watches the page while the files
+ * change keeps the place: that wins over fitting again. Else a picture the reader has not moved
+ * is fitted again to the room. Else it stays where it is: missing.
+ */
+export function viewportAfter(before: Drawn, after: Drawn, chosen: Target | null, viewport: Viewport, moved: boolean, room: Room | null): Viewport | undefined {
+  const was = chosen?.kind === 'box' ? placeOf(before, chosen.id) : undefined;
+  const is = chosen?.kind === 'box' ? placeOf(after, chosen.id) : undefined;
+  if (was !== undefined && is !== undefined) return { x: viewport.x + (was.x - is.x) * viewport.zoom, y: viewport.y + (was.y - is.y) * viewport.zoom, zoom: viewport.zoom };
+  if (!moved && room !== null) return fitViewport(whole(after), room);
+  return undefined;
 }

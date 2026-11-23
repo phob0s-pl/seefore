@@ -199,6 +199,22 @@ summary:focus-visible,
   color: var(--text);
 }
 
+/*
+ * The reading line: the words of what is pointed at, focused or chosen, at reading size. One
+ * line of one height whether it speaks or not, so that the canvas does not move; what does not
+ * fit is cut with an ellipsis.
+ */
+.reading-line {
+  margin: 4px 0 0;
+  height: 20px;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .buttons {
   display: flex;
   flex: none;
@@ -246,7 +262,7 @@ summary:focus-visible,
   bottom: -8px;
   margin: 6px -16px -8px;
   padding: 3px 16px 5px;
-  border-top: 1px dashed var(--rule);
+  border-top: 1px solid var(--rule);
   background: var(--side);
   font-size: 12px;
   font-style: italic;
@@ -266,6 +282,14 @@ summary:focus-visible,
   align-items: center;
   gap: 8px;
   font-size: 13px;
+  /* A line lights what it explains while it is pointed at: its ground says which one. */
+  margin: -2px -4px;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+.legend li:hover {
+  background: var(--side);
 }
 
 /* The canvas: React Flow's, with nothing of its own look left. */
@@ -434,11 +458,6 @@ summary:focus-visible,
   stroke-width: 1.2;
 }
 
-/* The trial of the dash, behind a constant that is off: the outline of a box that has its own `only`. */
-.box.dashed .outline {
-  stroke-dasharray: 7 4;
-}
-
 .box.chosen::after,
 .boundary.chosen::after {
   content: '';
@@ -506,11 +525,6 @@ summary:focus-visible,
   fill: var(--ground);
   stroke: var(--arrow);
   stroke-width: 1.5;
-}
-
-/* The trial of the dash, behind a constant that is off: the line of an arrow whose every connection has its own `only`. */
-.arrow.dashed .arrow-line {
-  stroke-dasharray: 7 4;
 }
 
 .arrow-label {
@@ -632,13 +646,6 @@ summary:focus-visible,
   stroke-width: 1.2;
 }
 
-.sample-dashed {
-  fill: var(--ground);
-  stroke: var(--app);
-  stroke-width: 2;
-  stroke-dasharray: 7 4;
-}
-
 /* Under the legend: what the arrows pass through that has no box, each a button that lights its arrows. */
 
 .passes-through {
@@ -697,6 +704,54 @@ summary:focus-visible,
 .diagram[data-detail='shapes'] .boundary-title,
 .diagram[data-detail='shapes'] .mark:not(.mark-kept) {
   visibility: hidden;
+}
+
+/*
+ * Below the zoom at which names are drawn the light keeps its strength. A lit line is as wide on
+ * the screen as at full size: React Flow scales the canvas in CSS, which `vector-effect` does not
+ * see, so the page sets the zoom as --zoom. A lit box is filled with a tint of its colour, and a
+ * chosen one with a tint of the accent. What is not lit fades to lines further from the lit,
+ * still 3 to 1 on their ground.
+ */
+.diagram[data-detail='shapes'] .arrow.lit .arrow-line {
+  stroke-width: calc(1.5px / var(--zoom, 1));
+}
+
+.diagram[data-detail='shapes'] .arrow-many.lit .arrow-line {
+  stroke-width: calc(3px / var(--zoom, 1));
+}
+
+.diagram[data-detail='shapes'] .box.lit .outline:not(.rim) {
+  fill: color-mix(in srgb, var(--line-colour) 25%, var(--ground));
+}
+
+.diagram[data-detail='shapes'] .box.chosen .outline:not(.rim) {
+  fill: color-mix(in srgb, var(--accent) 55%, var(--ground));
+}
+
+/* The ring of what is chosen keeps its width on the screen too, closer in, so that it is told from a lit box of the same colour. */
+.diagram[data-detail='shapes'] .box.chosen::after,
+.diagram[data-detail='shapes'] .boundary.chosen::after {
+  inset: calc(-3px / var(--zoom, 1));
+  border-width: calc(2px / var(--zoom, 1));
+  border-radius: calc(4px / var(--zoom, 1));
+}
+
+.diagram[data-detail='shapes'] .box.faded {
+  --line-colour: var(--dim-line);
+}
+
+.diagram[data-detail='shapes'] .boundary.faded {
+  border-color: var(--dim-line);
+}
+
+.diagram[data-detail='shapes'] .arrow.faded .arrow-line,
+.diagram[data-detail='shapes'] .arrow.faded .arrow-ring {
+  stroke: var(--dim-line);
+}
+
+.diagram[data-detail='shapes'] .arrow.faded .arrow-head {
+  fill: var(--dim-line);
 }
 
 /* The panel of details. */

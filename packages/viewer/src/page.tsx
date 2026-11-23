@@ -6,7 +6,7 @@ import type { Light } from './diagram.tsx';
 import { keptSelection, viewOf } from './follow.ts';
 import type { Selection } from './follow.ts';
 import { holds, holdsBox, litBy, litByKept } from './light.ts';
-import type { Target } from './light.ts';
+import type { Pointed } from './light.ts';
 import { Listing } from './listing.tsx';
 import type { Shown } from './live.ts';
 import { Panel } from './panel.tsx';
@@ -54,8 +54,8 @@ function elementOf(target: Selection): HTMLElement | null {
 export function Page({ shown, room, initialSelection = null }: PageProps) {
   const { state, route, picture, trouble } = shown;
   const [selection, setSelection] = useState<Selection | null>(initialSelection);
-  const [pointed, setPointed] = useState<Target | null>(null);
-  const [focused, setFocused] = useState<Target | null>(null);
+  const [pointed, setPointed] = useState<Pointed | null>(null);
+  const [focused, setFocused] = useState<Pointed | null>(null);
   const [focusPanel, setFocusPanel] = useState(false);
   // Where the focus was when the keyboard opened the panel, to give it back there.
   const returnTo = useRef<HTMLElement | null>(null);
@@ -108,6 +108,7 @@ export function Page({ shown, room, initialSelection = null }: PageProps) {
   // A store that an app keeps is drawn at its app: chosen on a panel, it lights the app and the arrows of its own connections.
   const keeper = state !== null && kept?.kind === 'record' ? keepersOf(state.outline).get(kept.id) : undefined;
   const keptLit = state !== null && kept !== null && keeper !== undefined && view !== undefined && holdsBox(view, keeper) ? litByKept(view, keeper, connectionsOf(state, kept.id)) : null;
+  // What is pointed at wins over what has the focus, and both over what is chosen, which lights and speaks again once they leave.
   const pointer = pointed ?? focused ?? chosen;
   const light: Light = { lit: view !== undefined && pointer !== null && holds(view, pointer) ? litBy(view, pointer) : keptLit, chosen };
 
@@ -132,6 +133,7 @@ export function Page({ shown, room, initialSelection = null }: PageProps) {
           view={view}
           drawn={picture}
           chosen={chosen}
+          speaking={pointer}
           {...(room === undefined ? {} : { room })}
           onPoint={setPointed}
           onFocusTarget={setFocused}

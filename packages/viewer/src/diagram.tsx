@@ -1,16 +1,17 @@
 import type { Drawn, PlacedLabel, View, ViewPassed } from '@seefore/core';
 import { Handle, Position, ReactFlow, ReactFlowProvider, useReactFlow, useViewportStore } from '@xyflow/react';
 import type { AriaLabelConfig, EdgeProps, EdgeTypes, NodeProps, NodeTypes } from '@xyflow/react';
-import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import type { FocusEvent, KeyboardEvent, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import type { FocusEvent, KeyboardEvent, ReactNode, RefObject } from 'react';
 import { HANDLE_IN, HANDLE_OUT, RING_RADIUS, headOf, labelLines, passedSaid, pathOf, ringOf, toFlow } from './flow.ts';
 import type { ArrowEdge, BoundaryNode, BoxNode, PictureNode } from './flow.ts';
 import { litBy } from './light.ts';
+import { readingOf } from './reading.ts';
 import { passingWords } from './records.ts';
-import type { Lit, Target } from './light.ts';
+import type { Lit, Pointed, Target } from './light.ts';
 import { LOOP_MARK, PASSING_MARK, Sample, Shape, StoreSign } from './shapes.tsx';
-import { DASHED_CONDITIONS, TEXT_SLACK } from './theme.ts';
-import { MAX_ZOOM, MOVE_MS, detailAt, fitViewport, litBounds, minZoomFor, percent, smallNote, whole } from './zoom.ts';
+import { TEXT_SLACK } from './theme.ts';
+import { MAX_ZOOM, MOVE_MS, detailAt, fitViewport, litBounds, minZoomFor, noteFor, percent, viewportAfter, whole } from './zoom.ts';
 import type { Room } from './zoom.ts';
 
 /**
@@ -60,9 +61,8 @@ function BoxView({ id, data }: NodeProps<BoxNode>) {
   const loops = box.loops.length;
   const passing = box.passing.length;
   const kept = box.kept.length;
-  const dashed = DASHED_CONDITIONS && box.only !== undefined ? ' dashed' : '';
   return (
-    <div className={`box family-${box.family}${box.scope ? ' scope' : ''}${dashed} ${standing(light, 'box', id)}`} data-look={box.look} style={{ width: placed.width, height: placed.height }}>
+    <div className={`box family-${box.family}${box.scope ? ' scope' : ''} ${standing(light, 'box', id)}`} data-look={box.look} style={{ width: placed.width, height: placed.height }}>
       <Handles />
       <svg className="shape" width={placed.width} height={placed.height} aria-hidden="true">
         <Shape look={box.look} scope={box.scope} width={placed.width} height={placed.height} />
@@ -149,9 +149,8 @@ function ArrowView({ id, data }: EdgeProps<ArrowEdge>) {
   const path = pathOf(placed.sections);
   const head = headOf(placed.sections);
   const ring = arrow.opened?.all === true ? ringOf(placed.sections) : undefined;
-  const dashed = DASHED_CONDITIONS && arrow.only?.all === true ? ' dashed' : '';
   return (
-    <g className={`arrow${arrow.connections.length > 1 ? ' arrow-many' : ''}${dashed} ${standing(light, 'arrow', id)}`}>
+    <g className={`arrow${arrow.connections.length > 1 ? ' arrow-many' : ''} ${standing(light, 'arrow', id)}`}>
       <path className="arrow-hit" d={path} />
       <path className="arrow-line" d={path} />
       {ring !== undefined && <circle className="arrow-ring" cx={ring.x} cy={ring.y} r={RING_RADIUS} />}
@@ -173,10 +172,10 @@ const HOW_TO: Partial<AriaLabelConfig> = {
 
 /** What the picture does when the reader points, focuses, chooses or clears. */
 export interface DiagramActions {
-  /** The pointer is over a box or an arrow, or over nothing. */
-  onPoint(target: Target | null): void;
-  /** The keyboard's focus is on a box or an arrow, or on neither. */
-  onFocusTarget(target: Target | null): void;
+  /** The pointer is over a box, an arrow, a thing passed through or a line of the legend, or over nothing. */
+  onPoint(target: Pointed | null): void;
+  /** The keyboard's focus is on a box, an arrow, a thing passed through or a line of the legend, or on none. */
+  onFocusTarget(target: Pointed | null): void;
   /** A click, or Enter or Space, chose a box or an arrow. */
   onChoose(target: Target, byKeyboard: boolean): void;
   /** A click on the empty canvas. */
@@ -188,6 +187,8 @@ export interface DiagramProps extends DiagramActions {
   drawn: Drawn;
   /** What the panel shows, when it is a box or an arrow of this picture. */
   chosen: Target | null;
+  /** What the reading line speaks for: what is pointed at, else what has the focus, else what is chosen. */
+  speaking: Pointed | null;
   /** The room to draw in, when it is known before the page is laid out, as on the server. */
   room?: Room;
 }
@@ -258,17 +259,45 @@ function Counts({ view, drawn }: { view: View; drawn: Drawn }) {
 }
 
 /**
- * The note for a picture too small to read at the zoom it is shown at. Its line is there when
- * empty too, so that the canvas does not move when the note comes and goes, and so that a
- * screen reader hears it come.
+ * The note under the counts: that a view is crowded, or that its picture is too small to read at
+ * the zoom it is shown at. Its line is there when empty too, so that the canvas does not move
+ * when the note comes and goes, and so that a screen reader hears it come.
  */
-function SmallNote({ drawn }: { drawn: Drawn }) {
+function Note({ view, drawn }: { view: View; drawn: Drawn }) {
   const zoom = useViewportStore((state) => state.transform[2]);
   return (
     <p className="small-note" role="status">
-      {smallNote(drawn, zoom) ?? ''}
+      {noteFor(view, drawn, zoom) ?? ''}
     </p>
   );
+}
+
+/**
+ * The reading line, under the note: the words of what is pointed at, focused or chosen, at
+ * reading size whatever the zoom. It has its place and its height when it says nothing, so that
+ * the canvas does not move; too long, it is cut with an ellipsis, and its title holds the whole.
+ * It is no live region: a screen reader hears what has the focus by its own name, and is not
+ * told of every box the pointer crosses.
+ */
+function ReadingLine({ words }: { words: string }) {
+  return (
+    <p className="reading-line" {...(words === '' ? {} : { title: words })}>
+      {words}
+    </p>
+  );
+}
+
+/**
+ * Sets the zoom on the picture's element as `--zoom`, for the lines that keep their width on
+ * the screen: React Flow scales the canvas in CSS, which `vector-effect` does not see. Only
+ * this draws again as the zoom moves; the boxes and arrows do not.
+ */
+function ZoomProperty({ element }: { element: RefObject<HTMLDivElement | null> }) {
+  const zoom = useViewportStore((state) => state.transform[2]);
+  useLayoutEffect(() => {
+    element.current?.style.setProperty('--zoom', String(zoom));
+  }, [element, zoom]);
+  return null;
 }
 
 /** The zoom as a share of full size. */
@@ -282,12 +311,14 @@ function ZoomShown() {
 }
 
 /** The canvas and all around it, inside React Flow's store. */
-function Inside({ view, drawn, room: given, chosen, onPoint, onFocusTarget, onChoose, onClear, nodes, edges }: DiagramProps & { nodes: PictureNode[]; edges: ArrowEdge[] }) {
+function Inside({ view, drawn, room: given, chosen, speaking, onPoint, onFocusTarget, onChoose, onClear, nodes, edges }: DiagramProps & { nodes: PictureNode[]; edges: ArrowEdge[] }) {
   const canvas = useRef<HTMLDivElement>(null);
+  const diagram = useRef<HTMLDivElement>(null);
   const [room, setRoom] = useState<Room | null>(given ?? null);
   // Whether the reader has moved the picture since it was last fitted. A new picture is fitted again only when not.
   const moved = useRef(false);
-  const first = useRef(true);
+  // The picture shown before, to hold the chosen box where it stood when a new one comes.
+  const shown = useRef(drawn);
   const flow = useReactFlow();
   const detail = useViewportStore((state) => detailAt(state.transform[2]));
 
@@ -305,14 +336,16 @@ function Inside({ view, drawn, room: given, chosen, onPoint, onFocusTarget, onCh
     return () => observer.disconnect();
   }, []);
 
-  // A new picture of the same view: fitted again only when the reader has not moved.
+  // A new picture of the same view: moved once, so that a chosen box keeps its place on the
+  // screen, else fitted again when the reader has not moved it. React Flow takes the new nodes
+  // in an effect of its own, which runs before this one, so the two show in the same frame.
   useEffect(() => {
-    if (first.current) {
-      first.current = false;
-      return;
-    }
-    if (!moved.current && room !== null) void flow.setViewport(fitViewport(whole(drawn), room));
-    // Only a new picture fits again; a new room does not, so the room is not asked after.
+    const before = shown.current;
+    shown.current = drawn;
+    if (before === drawn) return;
+    const next = viewportAfter(before, drawn, chosen, flow.getViewport(), moved.current, room);
+    if (next !== undefined) void flow.setViewport(next);
+    // Only a new picture moves it; a new room or a new choice does not, so they are not asked after.
   }, [drawn]);
 
   const duration = () => (still() ? 0 : MOVE_MS);
@@ -346,7 +379,8 @@ function Inside({ view, drawn, room: given, chosen, onPoint, onFocusTarget, onCh
   const onFocus = (event: FocusEvent) => onFocusTarget(targetOf(event.target));
 
   return (
-    <div className="diagram" data-detail={detail}>
+    <div className="diagram" data-detail={detail} ref={diagram}>
+      <ZoomProperty element={diagram} />
       <header className="diagram-head">
         <div className="diagram-top">
           <h1 className="view-title">{view.title}</h1>
@@ -367,7 +401,8 @@ function Inside({ view, drawn, room: given, chosen, onPoint, onFocusTarget, onCh
           </div>
         </div>
         <Counts view={view} drawn={drawn} />
-        <SmallNote drawn={drawn} />
+        <Note view={view} drawn={drawn} />
+        <ReadingLine words={readingOf(view, speaking)} />
       </header>
       <div className="canvas" ref={canvas}>
         {room !== null && (
@@ -410,39 +445,43 @@ function Inside({ view, drawn, room: given, chosen, onPoint, onFocusTarget, onCh
           />
         )}
       </div>
-      <Legend view={view}>
+      <Legend view={view} onPoint={onPoint} onFocusTarget={onFocusTarget}>
         <PassesThrough view={view} chosen={chosen} onPoint={onPoint} onFocusTarget={onFocusTarget} onChoose={onChoose} />
       </Legend>
     </div>
   );
 }
 
-/** What the legend says of the dash, while the trial of it is on: what the outline of a box and the line of an arrow mean when dashed. */
-export const DASH_WORDS = 'Dashed outline or line: there only sometimes, as its own “only …” says; the boundary is the tinted one';
-
 /**
  * The legend: a sample of each kind of box, line and mark this view draws, and no other; and
- * under it what is given. While the dash is tried, a view that draws an `only` line says what
- * the dash means too.
+ * under it what is given. Pointing at a line, or moving the focus to it, lights every box and
+ * arrow it explains, and leaving it gives the light back to what is chosen. A click does not
+ * keep the focus on a line, so that leaving it with the pointer clears its light; on a touch
+ * screen a tap lights it until the next tap elsewhere.
  */
-export function Legend({ view, children }: { view: View; children?: ReactNode }) {
-  const dash = DASHED_CONDITIONS && view.legend.some((entry) => entry.key === 'only');
+export function Legend({ view, children, onPoint, onFocusTarget }: { view: View; children?: ReactNode } & Pick<DiagramActions, 'onPoint' | 'onFocusTarget'>) {
   const more = useMore();
   return (
     <section className="legend" aria-label="Legend" ref={more.ref} onScroll={more.measure} {...(more.hidden ? { tabIndex: 0 } : {})}>
       <ul>
-        {view.legend.map((entry) => (
-          <li key={entry.key} data-key={entry.key}>
-            <Sample name={entry.key} />
-            <span>{entry.text}</span>
-          </li>
-        ))}
-        {dash && (
-          <li data-key="dashed">
-            <Sample name="dashed" />
-            <span>{DASH_WORDS}</span>
-          </li>
-        )}
+        {view.legend.map((entry) => {
+          const line: Pointed = { kind: 'legend', id: entry.key };
+          return (
+            <li
+              key={entry.key}
+              data-key={entry.key}
+              tabIndex={0}
+              onMouseEnter={() => onPoint(line)}
+              onMouseLeave={() => onPoint(null)}
+              onMouseDown={(event) => event.preventDefault()}
+              onFocus={() => onFocusTarget(line)}
+              onBlur={() => onFocusTarget(null)}
+            >
+              <Sample name={entry.key} />
+              <span>{entry.text}</span>
+            </li>
+          );
+        })}
       </ul>
       {children}
       {more.hidden && (

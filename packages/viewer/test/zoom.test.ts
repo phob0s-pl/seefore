@@ -1,9 +1,14 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { CROWDED_FROM } from '@seefore/core';
+import type { Drawn } from '@seefore/core';
 import { describe, expect, it } from 'vitest';
 import { litBy } from '../src/light.ts';
-import { FIT_PADDING, MIN_ZOOM, boundsOf, detailAt, fitViewport, litBounds, minZoomFor, percent, smallNote, whole } from '../src/zoom.ts';
+import type { Target } from '../src/light.ts';
+import { FIT_PADDING, MIN_ZOOM, boundsOf, crowdedNote, detailAt, fitViewport, litBounds, minZoomFor, noteFor, percent, smallNote, viewportAfter, whole } from '../src/zoom.ts';
+import type { Viewport } from '../src/zoom.ts';
 import { CONTAINERS, CONTAINER_PICTURE } from './fixture.ts';
+import { grid } from './grid.ts';
 
 /** What the zoom hides, how a picture is fitted, and when it says it is too small to read. */
 
@@ -129,5 +134,88 @@ describe('the note for a picture too small to read', () => {
 
   it('writes a zoom as a share', () => {
     expect(percent(0.134)).toBe('13 %');
+  });
+});
+
+describe('the note of a crowded view', () => {
+  const words = `A crowded view: more than ${CROWDED_FROM} boxes. It opens as a map, with no words. Point at a box or a line to read it here; click it to keep it lit.`;
+
+  it('is there for a view of one box more than the limit, at any zoom', () => {
+    const { view, drawn } = grid(CROWDED_FROM + 1);
+    expect(view.boxes).toHaveLength(CROWDED_FROM + 1);
+    expect(crowdedNote(view)).toBe(words);
+    expect(noteFor(view, drawn, 1)).toBe(words);
+  });
+
+  it('is not there for a view at the limit, which keeps the note that it is too small', () => {
+    const { view, drawn } = grid(CROWDED_FROM);
+    expect(view.boxes).toHaveLength(CROWDED_FROM);
+    expect(crowdedNote(view)).toBeUndefined();
+    expect(noteFor(view, drawn, 0.2)).toBe(smallNote(drawn, 0.2));
+    expect(noteFor(view, drawn, 0.2)).toContain('Too small to read at 20 %');
+    expect(noteFor(view, drawn, 1)).toBeUndefined();
+  });
+
+  it('stands in place of the note that a crowded view is too small, and does not join it', () => {
+    const { view, drawn } = grid(CROWDED_FROM + 1);
+    expect(noteFor(view, drawn, 0.1)).toBe(words);
+    expect(noteFor(view, drawn, 0.1)).not.toContain('Too small');
+  });
+});
+
+describe('where the picture stands when a new one comes', () => {
+  const room = { width: 1600, height: 1000 };
+  const viewport = { x: 120, y: -40, zoom: 0.5 };
+  const chosen = { kind: 'box' as const, id: 'order-api' };
+  /** The container picture with the order API moved by so much, and the picture grown by as much. */
+  const moved = (dx: number, dy: number): Drawn => ({
+    ...CONTAINER_PICTURE,
+    width: CONTAINER_PICTURE.width + dx,
+    height: CONTAINER_PICTURE.height + dy,
+    boxes: CONTAINER_PICTURE.boxes.map((box) => (box.id === 'order-api' ? { ...box, x: box.x + dx, y: box.y + dy } : box)),
+  });
+  /** Where the top left of a box, or of the boundary, stands on the screen at a viewport. */
+  const onScreen = (drawn: Drawn, id: string, at: Viewport) => {
+    const place = drawn.boxes.find((box) => box.id === id) ?? drawn.boundary;
+    return { x: (place?.x ?? 0) * at.zoom + at.x, y: (place?.y ?? 0) * at.zoom + at.y };
+  };
+
+  it('keeps a chosen box’s top left at the same point of the screen, at the same zoom', () => {
+    const after = moved(300, 180);
+    const next = viewportAfter(CONTAINER_PICTURE, after, chosen, viewport, false, room);
+    expect(next?.zoom).toBe(viewport.zoom);
+    expect(onScreen(after, 'order-api', next ?? viewport)).toEqual(onScreen(CONTAINER_PICTURE, 'order-api', viewport));
+  });
+
+  it('holds the chosen box over fitting again, whether the reader has moved the picture or not', () => {
+    const after = moved(300, 180);
+    expect(viewportAfter(CONTAINER_PICTURE, after, chosen, viewport, true, room)).toEqual(viewportAfter(CONTAINER_PICTURE, after, chosen, viewport, false, room));
+    expect(viewportAfter(CONTAINER_PICTURE, after, chosen, viewport, false, room)).not.toEqual(fitViewport(whole(after), room));
+  });
+
+  it('holds the boundary when it is what is chosen', () => {
+    const boundary = CONTAINER_PICTURE.boundary;
+    if (boundary === undefined) throw new Error('The container picture has a boundary.');
+    const after: Drawn = { ...CONTAINER_PICTURE, boundary: { ...boundary, x: 500, y: 90 } };
+    const next = viewportAfter(CONTAINER_PICTURE, after, { kind: 'box', id: 'shop' }, viewport, false, room);
+    expect(onScreen(after, 'shop', next ?? viewport)).toEqual(onScreen(CONTAINER_PICTURE, 'shop', viewport));
+  });
+
+  it('does as before for an arrow chosen, nothing chosen, or a chosen box that is gone: fits again when the reader has not moved, else stays', () => {
+    const after = moved(300, 180);
+    const gone: Drawn = { ...after, boxes: after.boxes.filter((box) => box.id !== 'order-api') };
+    const cases: [Drawn, Target | null][] = [
+      [after, { kind: 'arrow', id: 'order-api~card-provider' }],
+      [after, null],
+      [gone, chosen],
+    ];
+    for (const [picture, target] of cases) {
+      expect(viewportAfter(CONTAINER_PICTURE, picture, target, viewport, false, room)).toEqual(fitViewport(whole(picture), room));
+      expect(viewportAfter(CONTAINER_PICTURE, picture, target, viewport, true, room)).toBeUndefined();
+    }
+  });
+
+  it('moves nothing for a chosen box that stands where it stood', () => {
+    expect(viewportAfter(CONTAINER_PICTURE, moved(0, 0), chosen, viewport, false, room)).toEqual(viewport);
   });
 });

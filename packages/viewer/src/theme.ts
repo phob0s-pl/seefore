@@ -31,6 +31,11 @@ export interface Colours {
   fadedText: string;
   /** Lines that a hover or a selection does not light. */
   fadedLine: string;
+  /**
+   * Lines that a hover or a selection does not light, below the zoom at which names are drawn:
+   * further from the lit than `fadedLine`, and still 3 to 1 on their ground.
+   */
+  dimLine: string;
   /** The ring of what is chosen, and of what has the keyboard's focus. */
   accent: string;
   /** Lines between parts of the page. */
@@ -55,6 +60,7 @@ export const LIGHT: Colours = {
   boundary: '#5a6472', // 5.6 on the tint
   fadedText: '#707070', // 4.95 on white, 4.65 on the tint
   fadedLine: '#858585', // 3.47 on the tint
+  dimLine: '#8e8e8e', // 3.08 on the tint
   accent: '#0b57d0', // 6.0 on the tint
   rule: '#d0d4da',
   error: '#b3261e',
@@ -76,6 +82,7 @@ export const DARK: Colours = {
   boundary: '#8a93a0', // 5.3 on the tint
   fadedText: '#8b9098', // 5.1 on the tint
   fadedLine: '#6b7280', // 3.4 on the tint
+  dimLine: '#666c76', // 3.1 on the tint
   accent: '#8ab4f8', // 7.8 on the tint
   rule: '#343a44',
   error: '#f2b8b5',
@@ -117,14 +124,6 @@ export const LINE_HEIGHT = {
   route: 14,
   condition: 14,
 } as const;
-
-/**
- * Whether a condition is also drawn as a dash: the outline of a box that has an `only` of its
- * own, and the line of an arrow whose every connection has one. Off. It is a trial only: the
- * boundary of a system is dashed already, and whether the two can be told apart at the zoom the
- * largest views open at is not yet known. The words of the `only` line are drawn either way.
- */
-export const DASHED_CONDITIONS = false;
 
 /**
  * How much more room the page gives a box's text on each side than the layout broke its lines
