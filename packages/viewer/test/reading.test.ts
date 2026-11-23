@@ -1,7 +1,7 @@
 import type { View } from '@seefore/core';
 import { describe, expect, it } from 'vitest';
-import { READING_NAMES, readingOf } from '../src/reading.ts';
-import { archiveView } from './archive.ts';
+import { READING_NAMES, keptReading, readingOf } from '../src/reading.ts';
+import { ARCHIVE_FILES, ARCHIVE_STATE, archiveView, stateOf } from './archive.ts';
 import { CONTAINERS, HARD_CONTAINERS } from './fixture.ts';
 import { studioView } from './studio.ts';
 
@@ -38,11 +38,14 @@ describe('the reading line of an arrow', () => {
     expect(readingOf(CONTAINERS, { kind: 'arrow', id: 'order-api~card-provider' })).toBe('Order API → Card provider: Refunds a payment; Takes the payment; Asks for its state · [HTTPS]');
   });
 
-  it('says after three names how many more there are', () => {
+  it('says, for more than three, how many of how many it names', () => {
     const names = ['Asks', 'Tells', 'Sends', 'Takes', 'Reads'];
-    const many: View = { ...CONTAINERS, arrows: CONTAINERS.arrows.map((arrow) => (arrow.id === 'customer~shop' ? { ...arrow, connections: names.map((name) => name.toLowerCase()), names } : arrow)) };
+    const many: View = {
+      ...CONTAINERS,
+      arrows: CONTAINERS.arrows.map((arrow) => (arrow.id === 'customer~shop' ? { ...arrow, connections: names.map((name) => name.toLowerCase()), names, technology: ['HTTPS'] } : arrow)),
+    };
     expect(READING_NAMES).toBe(3);
-    expect(readingOf(many, { kind: 'arrow', id: 'customer~shop' })).toBe('Customer → Shop: Asks; Tells; Sends; + 2 more');
+    expect(readingOf(many, { kind: 'arrow', id: 'customer~shop' })).toBe('Customer → Shop, 3 of its 5 connections: Asks; Tells; Sends · [HTTPS]');
   });
 
   it('says its route with the brackets as its label has them', () => {
@@ -73,9 +76,32 @@ describe('the reading line of a line of the legend', () => {
     expect(readingOf(studio, { kind: 'legend', id: 'app' })).toBe('Lights every app: 3 boxes');
     expect(readingOf(studio, { kind: 'legend', id: 'route' })).toBe('Lights every arrow with a route: 2 arrows');
     expect(readingOf(studio, { kind: 'legend', id: 'opened' })).toBe('Lights every arrow with a ring before its head: 1 arrow');
-    expect(readingOf(studio, { kind: 'legend', id: 'only' })).toBe('Lights every “only …”: 1 box, the boundary and 1 arrow');
+    expect(readingOf(studio, { kind: 'legend', id: 'only' })).toBe('Lights every box, boundary and arrow that has an “only …” line: 1 box, the boundary and 1 arrow');
     expect(readingOf(studio, { kind: 'legend', id: 'kept' })).toBe('Lights every app that keeps stores: 1 box');
     expect(readingOf(studio, { kind: 'legend', id: 'boundary' })).toBe('Lights the boundary of Studio');
+  });
+
+  it('names the shapes each line lights and no others: other systems but the external ones, stores but queues and topics', () => {
+    expect(readingOf(studio, { kind: 'legend', id: 'system' })).toBe('Lights every other system that is not external: 1 box');
+    expect(readingOf(studio, { kind: 'legend', id: 'system-external' })).toBe('Lights every external system: 1 box');
+    expect(readingOf(studio, { kind: 'legend', id: 'store' })).toBe('Lights every store that is not a queue or a topic: 1 box');
+    expect(readingOf(studio, { kind: 'legend', id: 'queue-or-topic' })).toBe('Lights every queue and topic: 1 box');
+  });
+
+  it('counts the things in the list under the legend that it lights', () => {
+    expect(readingOf(studio, { kind: 'legend', id: 'route-only' })).toBe(
+      'Lights every arrow and box whose connections pass through a thing in brackets, and each such thing in the list: 1 arrow and 1 thing in the list',
+    );
+  });
+});
+
+describe('the reading line of a store that an app keeps, chosen in the listing or on a panel', () => {
+  it('says its name, its kind line as a box would have it, its own `only`, and the app that keeps it', () => {
+    expect(keptReading(ARCHIVE_STATE, 'drafts', 'desk')).toBe('Drafts [Store: files], kept by Desk');
+    expect(keptReading(ARCHIVE_STATE, 'cache', 'desk')).toBe('Cache [Store: cache] only when caching is on, kept by Desk');
+    const tech = stateOf({ ...ARCHIVE_FILES, 'technologies/quill.yaml': 'name: Quill\n', 'technologies/inkpot.yaml': 'name: Inkpot\n', 'stores/drafts.yaml': 'name: Drafts\nin: desk\nkind: files\ntechnology: [quill, inkpot]\n' });
+    expect(keptReading(tech, 'drafts', 'desk')).toBe('Drafts [Store: files · Inkpot, Quill], kept by Desk');
+    expect(keptReading(ARCHIVE_STATE, 'nothing', 'desk')).toBe('');
   });
 });
 

@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { holds, litBy, litByKept, litByLegend } from '../src/light.ts';
+import { holds, litBy, litByKept, litByLegend, speakingOf } from '../src/light.ts';
+import type { Act } from '../src/light.ts';
+import { legendWords } from '../src/reading.ts';
 import type { LegendKey, View, ViewBox } from '@seefore/core';
-import { ARCHIVE_STATE, archiveView } from './archive.ts';
-import { CONTAINERS, CONTEXT, HARD_CONTAINERS } from './fixture.ts';
-import { studioView } from './studio.ts';
+import { ARCHIVE_FILES, ARCHIVE_STATE, archiveView, stateOf } from './archive.ts';
+import { CONTAINERS, CONTEXT, HARD_CONTAINERS, STATE } from './fixture.ts';
+import { STUDIO_STATE, studioView } from './studio.ts';
 
 /** Which boxes and arrows a hover, the focus or a choice lights. */
 
@@ -66,6 +68,14 @@ describe('what passes through', () => {
   it('lights, for what has no box, the arrows that pass through it and their ends', () => {
     expect(lit({ kind: 'passed', id: 'balancer' }, HARD_CONTAINERS)).toEqual({ boxes: ['cards', 'web'], arrows: ['web~cards'] });
     expect(lit({ kind: 'passed', id: 'nothing' }, HARD_CONTAINERS)).toEqual({ boxes: [], arrows: [] });
+  });
+
+  it('lights in the list under the legend what has no box: itself, and what an arrow passes through', () => {
+    expect([...litBy(HARD_CONTAINERS, { kind: 'passed', id: 'balancer' }).passed]).toEqual(['balancer']);
+    expect([...litBy(HARD_CONTAINERS, { kind: 'arrow', id: 'web~cards' }).passed]).toEqual(['balancer']);
+    // A box lights no entry of the list, as it lights no box its arrows pass through.
+    expect([...litBy(HARD_CONTAINERS, { kind: 'box', id: 'web' }).passed]).toEqual([]);
+    expect([...litBy(HARD_CONTAINERS, { kind: 'passed', id: 'nothing' }).passed]).toEqual([]);
   });
 });
 
@@ -203,9 +213,84 @@ describe('what a line of the legend lights', () => {
     }
   });
 
+  it('lights something for every line of every view of every reading the tests make', () => {
+    const states = [STUDIO_STATE, ARCHIVE_STATE, HELD_STATE, STATE, stateOf({ ...ARCHIVE_FILES, 'systems/edge.yaml': 'name: Edge\nonly: in production\n', 'infrastructure/edge-gate.yaml': 'name: Edge gate\nin: edge\n' })];
+    for (const state of states) {
+      for (const view of state.views) {
+        for (const { key } of view.legend) {
+          const { boxes, arrows, passed } = litByLegend(view, key);
+          expect(boxes.size + arrows.size + passed.size, `${key} in ${view.id}`).toBeGreaterThan(0);
+          expect(legendWords(view, key), `${key} in ${view.id}`).not.toContain('nothing in the picture');
+        }
+      }
+    }
+  });
+
   it('lights nothing for a line the view’s legend does not have', () => {
     expect(holds(CONTAINERS, { kind: 'legend', id: 'kept' })).toBe(false);
     expect(lit({ kind: 'legend', id: 'kept' })).toEqual({ boxes: [], arrows: [] });
     expect(holds(containers, { kind: 'legend', id: 'kept' })).toBe(true);
+  });
+});
+
+/**
+ * The review of stage 7, finding 6: a ferry whose two apps speak to each other through an
+ * outbound proxy that is there only when one is set, and has no box. In the ferry's context view
+ * that connection is held inside the ferry's box, so no arrow passes through the proxy.
+ */
+const HELD_STATE = stateOf({
+  'seefore.yaml': 'format: 1\nname: Ferry\n',
+  'people/owner.yaml': 'name: Owner\n',
+  'systems/ferry.yaml': 'name: Ferry\n',
+  'apps/dock.yaml': 'name: Dock\nin: ferry\n',
+  'apps/hold.yaml': 'name: Hold\nin: ferry\n',
+  'infrastructure/outbound.yaml': 'name: Outbound proxy\nonly: when a proxy is set\n',
+  'connections/owner-uses-dock.yaml': 'from: owner\nto: dock\nname: Uses it\n',
+  'connections/dock-asks-hold.yaml': 'from: dock\nto: hold\nvia: [outbound]\nname: Asks\n',
+});
+
+describe('the line for a thing in brackets on a route, when its connection is held in a box', () => {
+  const view = HELD_STATE.views.find((each) => each.id === 'ferry.context');
+  if (view === undefined) throw new Error('The ferry has a context view.');
+
+  it('is in the legend though no arrow passes through the thing, which only the list under the legend shows', () => {
+    expect(view.legend.map((entry) => entry.key)).toContain('route-only');
+    expect(view.passed).toEqual([expect.objectContaining({ id: 'outbound', conditions: ['when a proxy is set'], arrows: [] })]);
+  });
+
+  it('lights the box that holds the connection, as the thing itself does, and the thing in the list', () => {
+    const line = litByLegend(view, 'route-only');
+    expect({ boxes: [...line.boxes], arrows: [...line.arrows], passed: [...line.passed] }).toEqual({ boxes: ['ferry'], arrows: [], passed: ['outbound'] });
+    expect([...litBy(view, { kind: 'passed', id: 'outbound' }).boxes]).toEqual([...line.boxes]);
+  });
+
+  it('counts for the reading line what it lights', () => {
+    expect(legendWords(view, 'route-only')).toBe('Lights every arrow and box whose connections pass through a thing in brackets, and each such thing in the list: 1 box and 1 thing in the list');
+  });
+});
+
+describe('what speaks and lights', () => {
+  const view = studioView('studio.containers');
+  const act = (target: Act['target'], at: number, whole = false): Act => ({ target, at, whole });
+  const box = { kind: 'box' as const, id: 'api' };
+  const line = { kind: 'legend' as const, id: 'route' as const };
+
+  it('is what the reader acted on last: the focus that came after a resting pointer, and the other way round', () => {
+    expect(speakingOf(view, [act(box, 1), act(line, 2, true), null], null)).toEqual({ target: line, whole: true });
+    expect(speakingOf(view, [act(box, 3), act(line, 2, true), null], null)).toEqual({ target: box, whole: false });
+    // A tap is an act too.
+    expect(speakingOf(view, [act(box, 1), null, act(line, 4, true)], null)?.target).toEqual(line);
+  });
+
+  it('is what is chosen when the reader acts on nothing', () => {
+    expect(speakingOf(view, [null, null, null], { kind: 'arrow', id: 'web~api' })).toEqual({ target: { kind: 'arrow', id: 'web~api' }, whole: false });
+    expect(speakingOf(view, [null, null, null], null)).toBeNull();
+  });
+
+  it('drops a target the view no longer holds before it chooses, so that a box gone on a reload hides nothing', () => {
+    const gone = { kind: 'box' as const, id: 'gone-on-reload' };
+    expect(speakingOf(view, [act(gone, 5), act(line, 2), null], null)?.target).toEqual(line);
+    expect(speakingOf(view, [act(gone, 5), null, null], box)?.target).toEqual(box);
+    expect(speakingOf(view, [act(gone, 5), null, null], { kind: 'box', id: 'gone-too' })).toBeNull();
   });
 });

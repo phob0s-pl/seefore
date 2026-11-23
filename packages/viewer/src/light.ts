@@ -17,20 +17,36 @@ export interface Lit {
   /** Boxes, and the boundary, by id. */
   boxes: Set<string>;
   arrows: Set<string>;
+  /** Things in the list under the legend, which are passed through and have no box, by id. */
+  passed: Set<string>;
+}
+
+/** Nothing lit. */
+function none(): Lit {
+  return { boxes: new Set(), arrows: new Set(), passed: new Set() };
+}
+
+/**
+ * The boxes of a view that hold, inside them or between their copies, one of these connections.
+ * Such a connection has no arrow, so the box that holds it lights in its place.
+ */
+function holdersOf(view: View, connections: ReadonlySet<string>): string[] {
+  return view.boxes.filter((box) => [...box.within, ...box.loops].some((id) => connections.has(id))).map((box) => box.id);
 }
 
 /**
  * What lights when the reader points at a target. A box lights itself, every arrow that starts
  * or ends at it or passes through it, and the boxes at the ends of each, and every box that
  * holds, inside it or between its copies, a connection that passes through it. An arrow lights
- * itself, its two ends and the boxes it passes through. Something with no box lights the arrows
- * that pass through it and their ends, and the boxes that hold a connection that passes through
- * it. A line of the legend lights what it explains: see `litByLegend`. A target the view does
- * not hold lights nothing.
+ * itself, its two ends and the boxes it passes through, and in the list under the legend what
+ * it passes through that has no box. Something with no box lights itself in that list, the
+ * arrows that pass through it and their ends, and the boxes that hold a connection that passes
+ * through it. A line of the legend lights what it explains: see `litByLegend`. A target the view
+ * does not hold lights nothing.
  */
 export function litBy(view: View, target: Pointed): Lit {
-  if (target.kind === 'legend') return holds(view, target) ? litByLegend(view, target.id) : { boxes: new Set(), arrows: new Set() };
-  const lit: Lit = { boxes: new Set(), arrows: new Set() };
+  if (target.kind === 'legend') return holds(view, target) ? litByLegend(view, target.id) : none();
+  const lit = none();
   const light = (arrows: ReadonlySet<string>) => {
     for (const arrow of view.arrows) {
       if (!arrows.has(arrow.id)) continue;
@@ -39,20 +55,23 @@ export function litBy(view: View, target: Pointed): Lit {
       lit.boxes.add(arrow.to);
     }
   };
-  // A connection held in a box has no arrow: the box that holds it lights in its place.
   const lightHolders = (connections: ReadonlySet<string>) => {
-    for (const box of view.boxes) if ([...box.within, ...box.loops].some((id) => connections.has(id))) lit.boxes.add(box.id);
+    for (const id of holdersOf(view, connections)) lit.boxes.add(id);
   };
   if (target.kind === 'arrow') {
+    if (!holds(view, target)) return lit;
     light(new Set([target.id]));
     const connections = new Set(view.arrows.find((arrow) => arrow.id === target.id)?.connections ?? []);
     for (const box of view.boxes) if (box.passing.some((id) => connections.has(id))) lit.boxes.add(box.id);
+    for (const each of view.passed) if (each.arrows.includes(target.id)) lit.passed.add(each.id);
     return lit;
   }
   if (target.kind === 'passed') {
     const passed = view.passed.find((each) => each.id === target.id);
-    light(new Set(passed?.arrows ?? []));
-    lightHolders(new Set(passed?.connections ?? []));
+    if (passed === undefined) return lit;
+    lit.passed.add(passed.id);
+    light(new Set(passed.arrows));
+    lightHolders(new Set(passed.connections));
     return lit;
   }
   if (!holdsBox(view, target.id)) return lit;
@@ -72,7 +91,7 @@ export function litBy(view: View, target: Pointed): Lit {
  * does not draw the app.
  */
 export function litByKept(view: View, keeper: string, connections: ReadonlySet<string>): Lit {
-  const lit: Lit = { boxes: new Set(), arrows: new Set() };
+  const lit = none();
   if (!holdsBox(view, keeper)) return lit;
   lit.boxes.add(keeper);
   for (const arrow of view.arrows) {
@@ -96,15 +115,20 @@ export function litByKept(view: View, keeper: string, connections: ReadonlySet<s
  * - The boundary lights the boundary; an arrow, every arrow; an arrow for several connections,
  *   each that stands for more than one.
  * - A route lights every arrow with a route line. A name in brackets on a route lights every
- *   arrow whose route has one, and every arrow that passes through something in the list under
- *   the legend that has a condition, though its line may only say on how many.
+ *   arrow whose route has one; and for each thing in the list under the legend that has a
+ *   condition, that thing in the list, every arrow that passes through it, though its line may
+ *   only say on how many, and every box that holds a connection that passes through it, which
+ *   has no arrow. So the line lights something wherever the core puts it in the legend.
  * - The ring lights every arrow that has it; the line that says on how many the far side opened
  *   lights every arrow that has that line.
  * - `only` lights every box, the boundary and every arrow that has an `only` line.
  * - Copies, passing through and kept stores light every box that carries that mark.
+ *
+ * No other line can be about a thing held inside a box or only in the list: the core puts each
+ * of them in the legend only for a box, the boundary or an arrow that the view has.
  */
 export function litByLegend(view: View, key: LegendKey): Lit {
-  const lit: Lit = { boxes: new Set(), arrows: new Set() };
+  const lit = none();
   const boxes = (keep: (box: ViewBox) => boolean) => {
     for (const box of view.boxes) if (keep(box)) lit.boxes.add(box.id);
   };
@@ -138,8 +162,11 @@ export function litByLegend(view: View, key: LegendKey): Lit {
       arrows((arrow) => arrow.route !== undefined);
       break;
     case 'route-only': {
-      const through = new Set(view.passed.filter((each) => each.conditions.length > 0).flatMap((each) => each.arrows));
+      const bracketed = view.passed.filter((each) => each.conditions.length > 0);
+      const through = new Set(bracketed.flatMap((each) => each.arrows));
       arrows((arrow) => arrow.route?.bracketed === true || through.has(arrow.id));
+      for (const id of holdersOf(view, new Set(bracketed.flatMap((each) => each.connections)))) lit.boxes.add(id);
+      for (const each of bracketed) lit.passed.add(each.id);
       break;
     }
     case 'opened':
@@ -169,6 +196,31 @@ export function litByLegend(view: View, key: LegendKey): Lit {
     }
   }
   return lit;
+}
+
+/** What speaks on the reading line and lights, and whether its words unfold whole. */
+export interface Speaking {
+  target: Pointed;
+  /** True for what the keyboard's focus came to, or a finger tapped: the reader has no pointer to rest on it and read its title. */
+  whole: boolean;
+}
+
+/** Something the reader did to a target: pointed at it, moved the focus to it, or tapped it. `at` grows with each act. */
+export interface Act extends Speaking {
+  at: number;
+}
+
+/**
+ * What speaks on the reading line and lights: of what the reader points at, has the focus on and
+ * last tapped, the one acted on last, so that a pointer that rests on a box does not silence the
+ * focus that came after it, nor the other way round; else what is chosen. A target the view no
+ * longer holds, as after a reload took its box, is dropped before the choice is made.
+ */
+export function speakingOf(view: View, acts: readonly (Act | null)[], chosen: Target | null): Speaking | null {
+  const held = acts.filter((act): act is Act => act !== null && holds(view, act.target));
+  const last = held.reduce<Act | undefined>((latest, act) => (latest === undefined || act.at > latest.at ? act : latest), undefined);
+  if (last !== undefined) return { target: last.target, whole: last.whole };
+  return chosen !== null && holds(view, chosen) ? { target: chosen, whole: false } : null;
 }
 
 /** True when a view draws a box, or its boundary, with this id. */

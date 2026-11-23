@@ -202,17 +202,33 @@ summary:focus-visible,
 /*
  * The reading line: the words of what is pointed at, focused or chosen, at reading size. One
  * line of one height whether it speaks or not, so that the canvas does not move; what does not
- * fit is cut with an ellipsis.
+ * fit is cut with an ellipsis. For what has the keyboard's focus, or a finger tapped, the words
+ * unfold whole over the top of the canvas, on the ground, and the line keeps its height.
  */
 .reading-line {
+  position: relative;
   margin: 4px 0 0;
   height: 20px;
   font-size: 14px;
   line-height: 20px;
   color: var(--text);
+}
+
+.reading-line > span {
+  position: absolute;
+  inset: 0 0 auto;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.reading-line.whole > span {
+  z-index: 10;
+  white-space: normal;
+  overflow: visible;
+  padding-bottom: 4px;
+  background: var(--ground);
+  box-shadow: 0 1px 0 var(--rule);
 }
 
 .buttons {
@@ -288,8 +304,14 @@ summary:focus-visible,
   border-radius: 4px;
 }
 
-.legend li:hover {
+.legend li:hover,
+.legend li.lit {
   background: var(--side);
+}
+
+/* The line that lights, as a tap leaves it: marked by a rule at its left too, not by its ground alone. */
+.legend li.lit {
+  box-shadow: inset 3px 0 0 var(--accent);
 }
 
 /* The canvas: React Flow's, with nothing of its own look left. */
@@ -488,6 +510,26 @@ summary:focus-visible,
   cursor: pointer;
 }
 
+/*
+ * The strip along the boundary's line that takes the pointer: 12 pixels wide on the screen at any
+ * zoom, half inside and half out, unseen. The boxes inside, and the arrows, lie over it.
+ */
+.boundary-edge {
+  position: absolute;
+  left: -1.5px;
+  top: -1.5px;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.boundary-edge rect {
+  fill: none;
+  stroke: transparent;
+  stroke-width: calc(12px / var(--zoom, 1));
+  pointer-events: stroke;
+  cursor: pointer;
+}
+
 .boundary.faded {
   border-color: var(--faded-line);
 }
@@ -496,13 +538,21 @@ summary:focus-visible,
   color: var(--faded-text);
 }
 
-/* An arrow. One for several connections has a thicker line. */
+/*
+ * An arrow. One for several connections has a thicker line. Its unseen target is 14 wide in the
+ * picture; on the empty canvas around it the page finds the arrow nearest the pointer, within a
+ * reach that keeps its size on the screen, and shows the hand there too.
+ */
 
 .arrow-hit {
   fill: none;
   stroke: transparent;
   stroke-width: 14;
   pointer-events: stroke;
+  cursor: pointer;
+}
+
+.diagram[data-near] .react-flow__pane {
   cursor: pointer;
 }
 
@@ -679,6 +729,12 @@ summary:focus-visible,
   border-radius: 10px;
 }
 
+/* One that is lit has a line of the colour of text, twice as thick; one that is chosen, of the accent. */
+.passes-through button.lit {
+  border-color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--text);
+}
+
 .passes-through button.chosen {
   border-color: var(--accent);
   box-shadow: inset 0 0 0 1px var(--accent);
@@ -709,11 +765,13 @@ summary:focus-visible,
 /*
  * Below the zoom at which names are drawn the light keeps its strength. A lit line is as wide on
  * the screen as at full size: React Flow scales the canvas in CSS, which `vector-effect` does not
- * see, so the page sets the zoom as --zoom. A lit box is filled with a tint of its colour, and a
- * chosen one with a tint of the accent. What is not lit fades to lines further from the lit,
- * still 3 to 1 on their ground.
+ * see, so the page sets the zoom as --zoom. Its head and ring are drawn as large as at full size
+ * too, by the page, and the ring's line keeps its width here. A lit box is filled with a tint of
+ * its colour, and a chosen one with a tint of the accent. What is not lit fades to lines further
+ * from the lit, still 3 to 1 on their ground.
  */
-.diagram[data-detail='shapes'] .arrow.lit .arrow-line {
+.diagram[data-detail='shapes'] .arrow.lit .arrow-line,
+.diagram[data-detail='shapes'] .arrow.lit .arrow-ring {
   stroke-width: calc(1.5px / var(--zoom, 1));
 }
 

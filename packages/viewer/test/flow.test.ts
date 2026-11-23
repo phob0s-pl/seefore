@@ -1,6 +1,25 @@
 import type { Drawn } from '@seefore/core';
 import { describe, expect, it } from 'vitest';
-import { HANDLE_IN, HANDLE_OUT, HEAD_LENGTH, RING_GAP, RING_RADIUS, arrowSaid, boxSaid, headOf, labelLines, pathOf, relativeTo, ringOf, toFlow } from '../src/flow.ts';
+import {
+  HANDLE_IN,
+  HANDLE_OUT,
+  HEAD_HALF_WIDTH,
+  HEAD_LENGTH,
+  RING_GAP,
+  RING_RADIUS,
+  arrowSaid,
+  boxSaid,
+  distanceTo,
+  headOf,
+  labelLines,
+  lengthOf,
+  nearestArrow,
+  pathOf,
+  relativeTo,
+  ringOf,
+  ringScale,
+  toFlow,
+} from '../src/flow.ts';
 import { LINE_HEIGHT } from '../src/theme.ts';
 import { CONTAINERS, CONTAINER_PICTURE, CONTEXT, CONTEXT_PICTURE, HARD_CONTAINERS, HARD_PICTURE } from './fixture.ts';
 
@@ -105,6 +124,15 @@ describe('the head of an arrow', () => {
     expect(headOf([])).toBeUndefined();
     expect(headOf([[{ x: 1, y: 1 }]])).toBeUndefined();
   });
+
+  it('is drawn so many times its size about its tip, for a lit arrow at a map’s zoom', () => {
+    // At 7.36 %, the zoom of the review's largest view, a head of 10 is 0.74 pixels long: drawn 1 / 0.0736 times its size it is 10 on the screen.
+    const scale = 1 / 0.0736;
+    const [tip, left, right] = points(headOf([[{ x: 0, y: 0 }, { x: 1000, y: 0 }]], scale));
+    expect(tip).toEqual([1000, 0]);
+    expect(((tip?.[0] ?? 0) - (left?.[0] ?? 0)) * 0.0736).toBeCloseTo(HEAD_LENGTH, 1);
+    expect(((left?.[1] ?? 0) - (right?.[1] ?? 0)) * 0.0736).toBeCloseTo(2 * HEAD_HALF_WIDTH, 1);
+  });
 });
 
 describe('the lines of a label', () => {
@@ -174,6 +202,53 @@ describe('the ring of a channel the far side opened', () => {
 
   it('is missing on a route too short to hold it', () => {
     expect(ringOf([[{ x: 0, y: 0 }, { x: 10, y: 0 }]])).toBeUndefined();
+  });
+
+  it('stands as far again back along the route, round a bend, for a head and ring drawn so many times their size', () => {
+    const far = (HEAD_LENGTH + RING_GAP + RING_RADIUS) * 5;
+    expect(ringOf([[{ x: 0, y: 500 }, { x: 1000, y: 500 }]], 5)).toEqual({ x: 1000 - far, y: 500 });
+    expect(ringOf([[{ x: 0, y: 0 }, { x: 0, y: 400 }, { x: 40, y: 400 }]], 5)).toEqual({ x: 0, y: 400 - (far - 40) });
+    expect(ringOf([[{ x: 0, y: 0 }, { x: 80, y: 0 }]], 5)).toBeUndefined();
+  });
+
+  it('is drawn, with the head, only as many times its size as the route has room for, and never under its size', () => {
+    const back = HEAD_LENGTH + RING_GAP + RING_RADIUS;
+    expect(lengthOf([[{ x: 0, y: 0 }, { x: 30, y: 0 }, { x: 30, y: 40 }]])).toBe(70);
+    expect(ringScale([[{ x: 0, y: 0 }, { x: 1000, y: 0 }]], 5)).toBe(5);
+    expect(ringScale([[{ x: 0, y: 0 }, { x: 4 * back, y: 0 }]], 5)).toBe(4);
+    expect(ringScale([[{ x: 0, y: 0 }, { x: 10, y: 0 }]], 5)).toBe(1);
+    // At the scale it gives the ring stands on the route.
+    const short = [[{ x: 0, y: 0 }, { x: 0, y: 30 }, { x: 40, y: 30 }]];
+    expect(ringOf(short, ringScale(short, 9))).toEqual({ x: 0, y: 0 });
+  });
+});
+
+describe('the arrow nearest the pointer', () => {
+  const arrows = [
+    { id: 'across', sections: [[{ x: 0, y: 0 }, { x: 100, y: 0 }]] },
+    { id: 'down', sections: [[{ x: 50, y: 10 }, { x: 50, y: 100 }]] },
+    { id: 'bent', sections: [[{ x: 200, y: 0 }, { x: 200, y: 50 }], [{ x: 200, y: 50 }, { x: 300, y: 50 }]] },
+  ];
+
+  it('measures to the nearest point of a route, its stretches held to their ends', () => {
+    expect(distanceTo(arrows[0]?.sections ?? [], { x: 30, y: 4 })).toBe(4);
+    expect(distanceTo(arrows[0]?.sections ?? [], { x: 103, y: 4 })).toBe(5);
+    expect(distanceTo(arrows[2]?.sections ?? [], { x: 250, y: 47 })).toBe(3);
+    expect(distanceTo([], { x: 0, y: 0 })).toBe(Number.POSITIVE_INFINITY);
+  });
+
+  it('finds the arrow whose route passes nearest, within reach, and the nearest where several are within it', () => {
+    expect(nearestArrow(arrows, { x: 30, y: 5 }, 6)).toBe('across');
+    expect(nearestArrow(arrows, { x: 47, y: 9 }, 6)).toBe('down');
+    // 6 from the line across and 5 from the end of the line down: the nearer wins.
+    expect(nearestArrow(arrows, { x: 47, y: 6 }, 6)).toBe('down');
+    expect(nearestArrow(arrows, { x: 47, y: 3 }, 6)).toBe('across');
+    expect(nearestArrow(arrows, { x: 30, y: 7 }, 6)).toBeNull();
+    expect(nearestArrow(arrows, { x: 205, y: 45 }, 6)).toBe('bent');
+  });
+
+  it('takes the first given of two as near', () => {
+    expect(nearestArrow([...arrows, { id: 'again', sections: arrows[0]?.sections ?? [] }], { x: 30, y: 2 }, 6)).toBe('across');
   });
 });
 
