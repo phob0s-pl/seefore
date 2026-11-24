@@ -41,11 +41,16 @@ export type Box = {
 /**
  * One arrow from a drawn box to another, for every connection whose ends fall there. When there
  * are connections the other way too, it is one arrow with a head at each end: `back` names them.
+ * `reads` marks an arrow that only takes from a queue or a topic: one head, at such a store drawn
+ * as a box, and every connection of it reads. What is taken flows the other way than it points.
  */
-export type Arrow = { id: string; from: string; to: string; connections: string[]; back?: string[] };
+export type Arrow = { id: string; from: string; to: string; connections: string[]; back?: string[]; reads?: true };
 
 /** What a view shows: its boxes, each frame before what it holds, and its arrows. */
 export type View = { boxes: Box[]; arrows: Arrow[] };
+
+/** The stores that hold messages on their way: what is read from one flows on to its reader. */
+const PASSING: readonly unknown[] = ['queue', 'topic'];
 
 /** The folders whose records are drawn. Owners and technologies never are. */
 const DRAWN: readonly string[] = ['people', 'systems', 'apps', 'stores', 'components', 'infrastructure'];
@@ -178,6 +183,13 @@ export function viewOf(records: readonly ModelRecord[], depth: Depth, focus?: st
     if (arrow) arrow.connections.push(record.id);
     else arrows.set(id, { id, from, to, connections: [record.id] });
   }
+  // An arrow only reads when it ends at a queue or a topic that is itself drawn, and each of its
+  // connections reads. A pair with arrows both ways never does.
+  const access = new Map(sorted.filter((record) => record.kind === 'connections').map((record) => [record.id, record.fields.access]));
+  const reads = (arrow: Arrow): boolean => {
+    const store = things.get(arrow.to);
+    return store?.kind === 'stores' && PASSING.includes(store.fields.kind) && arrow.connections.every((id) => access.get(id) === 'read');
+  };
   const place = new Map(drawn.map((id, index) => [id, index]));
   const at = (id: string): number => place.get(id) ?? 0;
   // A pair of boxes with arrows both ways is one arrow, from the box of the one that comes first.
@@ -187,7 +199,7 @@ export function viewOf(records: readonly ModelRecord[], depth: Depth, focus?: st
     if (taken.has(arrow.id)) continue;
     const back = arrows.get(`${arrow.to}->${arrow.from}`);
     if (back !== undefined) taken.add(back.id);
-    both.push(back !== undefined ? { ...arrow, back: back.connections } : arrow);
+    both.push(back !== undefined ? { ...arrow, back: back.connections } : reads(arrow) ? { ...arrow, reads: true } : arrow);
   }
   // A box around a focus is drawn only when an arrow touches it.
   const touched = new Set(both.flatMap((arrow) => [arrow.from, arrow.to]));

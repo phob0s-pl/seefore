@@ -93,7 +93,10 @@ function graphOf(view: View, partition: Partition): ElkNode {
       'elk.separateConnectedComponents': 'false',
     },
     children: (inside.get(undefined) ?? []).map(node),
-    edges: view.arrows.map((arrow): ElkExtendedEdge => ({ id: arrow.id, sources: [arrow.from], targets: [arrow.to] })),
+    // The store rule: an arrow that only reads a queue or a topic is laid out as what it takes
+    // flows, from the store to the reader, so that the store stands between those who write it
+    // and those who read it.
+    edges: view.arrows.map((arrow): ElkExtendedEdge => (arrow.reads ? { id: arrow.id, sources: [arrow.to], targets: [arrow.from] } : { id: arrow.id, sources: [arrow.from], targets: [arrow.to] })),
   };
 }
 
@@ -118,14 +121,14 @@ async function place(view: View, partition: Partition, elk: Engine): Promise<Pic
     }
   };
   walk(done, { x: 0, y: 0 });
+  // An arrow laid out turned round is drawn as it is in the model: its route runs from the
+  // reader to the store again, so that its head stands at the store.
+  const turned = new Set(view.arrows.filter((arrow) => arrow.reads).map((arrow) => arrow.id));
   const routes = new Map<string, ElkPoint[]>();
   for (const edge of edges) {
     const origin = corners.get(edge.container ?? ROOT) ?? { x: 0, y: 0 };
-    const points = (edge.sections ?? []).flatMap((section) => [section.startPoint, ...(section.bendPoints ?? []), section.endPoint]);
-    routes.set(
-      edge.id,
-      points.map((point) => ({ x: origin.x + point.x, y: origin.y + point.y })),
-    );
+    const points = (edge.sections ?? []).flatMap((section) => [section.startPoint, ...(section.bendPoints ?? []), section.endPoint]).map((point) => ({ x: origin.x + point.x, y: origin.y + point.y }));
+    routes.set(edge.id, turned.has(edge.id) ? points.reverse() : points);
   }
   return { placed, corners, routes, bands: [] };
 }

@@ -216,3 +216,36 @@ test('the focus in the address: a choice itself, at Containers the system a thin
   expect([focusFor(all, 'components', 'shop'), focusFor(all, 'components', 'checkout'), focusFor(all, 'containers', 'partner'), focusFor(all, 'containers', 'dns')]).toEqual([undefined, undefined, undefined, undefined]);
   expect([focusFor(all, 'systems', 'shop'), focusFor(all, 'containers', null), focusFor(all, 'containers', 'nowhere')]).toEqual([undefined, undefined, undefined]);
 });
+
+/** A queue, a topic and what uses them, beside the shop's database. */
+const JOBS = file('stores/jobs.yaml', 'name: Jobs\nin: shop\nkind: queue\n');
+const NEWS = file('stores/news.yaml', 'name: News\nin: shop\nkind: topic\n');
+const reading = (depth: Depth, ...files: SourceFile[]) =>
+  view(depth, JOBS, NEWS, ...files)
+    .arrows.filter((arrow) => arrow.reads)
+    .map((arrow) => arrow.id);
+
+test('an arrow that only reads a queue or a topic is marked, and one that writes it, or says nothing of it, is not', () => {
+  expect(
+    reading(
+      'containers',
+      connection('api-puts-jobs', 'api', 'jobs', 'access: write\n'),
+      connection('web-takes-jobs', 'web', 'jobs', 'access: read\n'),
+      connection('partner-hears-news', 'partner', 'news', 'access: read\n'),
+      connection('api-uses-news', 'api', 'news', 'access: read-write\n'),
+      connection('gateway-meets-news', 'gateway', 'news'),
+    ),
+  ).toEqual(['partner->news', 'web->jobs']);
+});
+
+test('an arrow is not marked when it reads another kind of store, when one of its connections writes, or when the store is not drawn', () => {
+  expect(reading('containers', connection('web-reads-orders', 'web', 'orders', 'access: read\n'))).toEqual([]);
+  expect(reading('containers', connection('web-takes-jobs', 'web', 'jobs', 'access: read\n'), connection('web-puts-jobs', 'web', 'jobs', 'access: write\n'))).toEqual([]);
+  // At the Systems depth the queue is inside its system: the arrow ends at the system.
+  expect(reading('systems', connection('partner-takes-jobs', 'partner', 'jobs', 'access: read\n'))).toEqual([]);
+});
+
+test('a pair with arrows both ways is never marked', () => {
+  const both = view('containers', JOBS, connection('web-takes-jobs', 'web', 'jobs', 'access: read\n'), connection('jobs-wakes-web', 'jobs', 'web'));
+  expect(both.arrows.map((arrow) => [arrow.id, arrow.back, arrow.reads])).toEqual([['web->jobs', ['jobs-wakes-web'], undefined]]);
+});
