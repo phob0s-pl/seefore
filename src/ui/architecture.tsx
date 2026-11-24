@@ -23,5 +23,5 @@ export function Architecture() {
     );
   }
   // A new depth is a new diagram, laid out and fitted afresh.
-  return <Diagram key={depth} view={view} />;
+  return <Diagram key={depth} view={view} depth={depth} />;
 }

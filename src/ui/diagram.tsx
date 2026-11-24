@@ -4,12 +4,14 @@ import type { Edge, EdgeProps, Node, NodeProps } from '@xyflow/react';
 import { AppWindow, Boxes, Database, Network, Router, Scan, UserRound } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { ElkPoint } from 'elkjs/lib/elk-api.js';
-import type { Box, View } from '../model/view.ts';
+import type { Box, Depth, View } from '../model/view.ts';
+import { engine } from './elk.ts';
 import { layOut } from './layout.ts';
-import type { Layout } from './layout.ts';
+import type { Band, Layout } from './layout.ts';
 import { CanvasFrame } from './ui.tsx';
 
 type BoxNode = Node<{ box: Box }, 'box' | 'frame'>;
+type BandNode = Node<{ band: Band }, 'band'>;
 type RouteEdge = Edge<{ points: ElkPoint[] }, 'route'>;
 
 /** What each kind of box is called on it, and its icon. */
@@ -82,20 +84,30 @@ function FrameCard({ data: { box } }: NodeProps<BoxNode>) {
   );
 }
 
-/** An arrow along the route ELK gave it, on a halo in the field's colour, its head at the far end. */
-function RouteLine({ id, data, markerEnd }: EdgeProps<RouteEdge>) {
+/** A zone at the Systems depth: a quiet band behind its boxes, its title at the top left. */
+function BandCard({ data: { band } }: NodeProps<BandNode>) {
+  return (
+    <div className="diagram-band">
+      <span className="diagram-band-title">{band.title}</span>
+    </div>
+  );
+}
+
+/** An arrow along the route ELK gave it, on a halo in the field's colour, its head at the far end, and at the start too when it goes both ways. */
+function RouteLine({ id, data, markerStart, markerEnd }: EdgeProps<RouteEdge>) {
   const points = data?.points ?? [];
   if (points.length < 2) return null;
   const path = points.map((point, index) => `${index === 0 ? 'M' : 'L'}${point.x},${point.y}`).join(' ');
   return (
     <>
       <path className="diagram-edge-halo" d={path} fill="none" stroke="var(--surface-canvas)" strokeWidth={6} />
-      <BaseEdge id={id} path={path} markerEnd={markerEnd} />
+      <BaseEdge id={id} path={path} markerStart={markerStart} markerEnd={markerEnd} />
     </>
   );
 }
 
-const nodeTypes = { box: BoxCard, frame: FrameCard };
+const nodeTypes = { box: BoxCard, frame: FrameCard, band: BandCard };
+const HEAD = { type: MarkerType.ArrowClosed, color: 'var(--graph-edge)' };
 const edgeTypes = { route: RouteLine };
 
 function FitButton() {
@@ -108,23 +120,40 @@ function FitButton() {
 }
 
 /** The diagram of a view: laid out by ELK, then drawn by React Flow on the hatched field. */
-export function Diagram({ view }: { view: View }) {
+export function Diagram({ view, depth }: { view: View; depth: Depth }) {
   const [layout, setLayout] = useState<Layout>();
   const [failed, setFailed] = useState(false);
   useEffect(() => {
     let current = true;
-    layOut(view).then(
+    layOut(view, depth, engine()).then(
       (done) => current && setLayout(done),
       () => current && setFailed(true),
     );
     return () => {
       current = false;
     };
-  }, [view]);
+  }, [view, depth]);
 
   const nodes = useMemo(
-    () =>
-      (layout?.placed ?? []).map(
+    () => [
+      // The bands first, under the lines and the boxes.
+      ...(layout?.bands ?? []).map(
+        (band): BandNode => ({
+          id: `#band-${band.zone}`,
+          type: 'band',
+          className: 'diagram-band-node',
+          position: { x: band.x, y: band.y },
+          width: band.width,
+          height: band.height,
+          zIndex: -1,
+          data: { band },
+          draggable: false,
+          selectable: false,
+          connectable: false,
+          focusable: false,
+        }),
+      ),
+      ...(layout?.placed ?? []).map(
         ({ box, x, y, width, height }): BoxNode => ({
           id: box.id,
           type: box.frame ? 'frame' : 'box',
@@ -139,6 +168,7 @@ export function Diagram({ view }: { view: View }) {
           focusable: false,
         }),
       ),
+    ],
     [layout],
   );
   const edges = useMemo(
@@ -150,7 +180,8 @@ export function Diagram({ view }: { view: View }) {
           target: arrow.to,
           type: 'route',
           data: { points: layout?.routes.get(arrow.id) ?? [] },
-          markerEnd: { type: MarkerType.ArrowClosed, color: 'var(--graph-edge)' },
+          ...(arrow.back !== undefined ? { markerStart: HEAD } : {}),
+          markerEnd: HEAD,
           selectable: false,
           focusable: false,
         }),
@@ -165,7 +196,7 @@ export function Diagram({ view }: { view: View }) {
           <span className={`canvas-caption${failed ? ' failed' : ''}`}>{failed ? 'The diagram could not be laid out.' : 'Laying out…'}</span>
         </div>
       ) : (
-        <ReactFlow<BoxNode, RouteEdge>
+        <ReactFlow<BoxNode | BandNode, RouteEdge>
           proOptions={{ hideAttribution: true }}
           nodes={nodes}
           edges={edges}

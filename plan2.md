@@ -64,6 +64,7 @@ and B3 use are in `research/paths.md`, out of Git.
 | B2 | Modelling rules | Every rule on one page, such as "no store in a store", each one a check | Fable defines, Sonnet builds |
 | B3 | Basic UI | What we need of the owner's present UI, and its basic version | Fable defines, Opus builds |
 | B4 | Architecture diagram | The model as one diagram | Opus |
+| B4b | Layout of the diagram | Three zones at the Systems depth, people on the left below it, and a diagram small enough to read | Opus |
 | B5 | Model UI | The records of the model, read on the page | Sonnet |
 
 ### 3 Flows and features

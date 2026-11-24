@@ -12,6 +12,12 @@ export function depthOf(text: string | null | undefined): Depth {
   return DEPTHS.find((depth) => depth === text) ?? 'systems';
 }
 
+/**
+ * Where a box at the top of a view stands at the Systems depth: with the people (a person, or an
+ * external system that only calls ours), with our systems, or with the other external systems.
+ */
+export type Zone = 'people' | 'ours' | 'external';
+
 /** One thing drawn: a box, or a frame that holds other boxes. */
 export type Box = {
   id: string;
@@ -26,10 +32,17 @@ export type Box = {
   external?: true;
   /** The record's own `kind`: how an app runs, or what a store holds. */
   type?: string;
+  /** Its zone, for a box at the top of the view: the same at every depth. */
+  zone?: Zone;
+  /** An external system in the people's zone, since it only calls ours. */
+  caller?: true;
 };
 
-/** One arrow from a drawn box to another, for every connection whose ends fall there. */
-export type Arrow = { id: string; from: string; to: string; connections: string[] };
+/**
+ * One arrow from a drawn box to another, for every connection whose ends fall there. When there
+ * are connections the other way too, it is one arrow with a head at each end: `back` names them.
+ */
+export type Arrow = { id: string; from: string; to: string; connections: string[]; back?: string[] };
 
 /** What a view shows: its boxes, each frame before what it holds, and its arrows. */
 export type View = { boxes: Box[]; arrows: Arrow[] };
@@ -68,6 +81,29 @@ export function viewOf(records: readonly ModelRecord[], depth: Depth): View {
     chains.set(id, whole ? chain : undefined);
   }
 
+  // The zone of each thing at the top, worked out on the connections themselves, so that it is
+  // the same at every depth. "Ours" is a system that is not external, or anything in one.
+  const top = (end: unknown): ModelRecord | undefined => {
+    const chain = typeof end === 'string' ? chains.get(end) : undefined;
+    return chain === undefined ? undefined : things.get(chain.at(-1) ?? (end as string));
+  };
+  const ours = (thing: ModelRecord | undefined): boolean => thing?.kind === 'systems' && thing.fields.external !== true;
+  const calls = new Set<string>();
+  const called = new Set<string>();
+  for (const record of sorted) {
+    if (record.kind !== 'connections') continue;
+    const from = top(record.fields.from);
+    const to = top(record.fields.to);
+    if (from === undefined || to === undefined) continue;
+    if (ours(to)) calls.add(from.id);
+    if (ours(from)) called.add(to.id);
+  }
+  const zoneOf = ({ id, kind, fields }: ModelRecord): { zone: Zone; caller?: true } => {
+    if (kind === 'people') return { zone: 'people' };
+    if (kind !== 'systems' || fields.external !== true) return { zone: 'ours' };
+    return calls.has(id) && !called.has(id) ? { zone: 'people', caller: true } : { zone: 'external' };
+  };
+
   const deepest = DEPTHS.indexOf(depth);
   const drawn = [...things.keys()].filter((id) => {
     const chain = chains.get(id);
@@ -77,7 +113,8 @@ export function viewOf(records: readonly ModelRecord[], depth: Depth): View {
   const parents = new Set(drawn.map((id) => chains.get(id)?.[0]));
 
   const boxes = drawn.map((id): Box => {
-    const { kind, fields } = things.get(id) as ModelRecord;
+    const thing = things.get(id) as ModelRecord;
+    const { kind, fields } = thing;
     const parent = chains.get(id)?.[0];
     return {
       id,
@@ -87,6 +124,7 @@ export function viewOf(records: readonly ModelRecord[], depth: Depth): View {
       frame: parents.has(id),
       ...(fields.external === true ? { external: true as const } : {}),
       ...(typeof fields.kind === 'string' ? { type: fields.kind } : {}),
+      ...(parent === undefined ? zoneOf(thing) : {}),
     };
   });
 
@@ -111,5 +149,14 @@ export function viewOf(records: readonly ModelRecord[], depth: Depth): View {
   }
   const place = new Map(drawn.map((id, index) => [id, index]));
   const at = (id: string): number => place.get(id) ?? 0;
-  return { boxes, arrows: [...arrows.values()].sort((a, b) => at(a.from) - at(b.from) || at(a.to) - at(b.to)) };
+  // A pair of boxes with arrows both ways is one arrow, from the box of the one that comes first.
+  const both: Arrow[] = [];
+  const taken = new Set<string>();
+  for (const arrow of [...arrows.values()].sort((a, b) => at(a.from) - at(b.from) || at(a.to) - at(b.to))) {
+    if (taken.has(arrow.id)) continue;
+    const back = arrows.get(`${arrow.to}->${arrow.from}`);
+    if (back !== undefined) taken.add(back.id);
+    both.push(back !== undefined ? { ...arrow, back: back.connections } : arrow);
+  }
+  return { boxes, arrows: both };
 }
