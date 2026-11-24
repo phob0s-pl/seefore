@@ -30,14 +30,15 @@ async function debugPort(profile: string): Promise<string> {
   throw new Error('Chrome did not start.');
 }
 
-/** What the page has drawn: the names on its boxes and the number of lines with a route. */
+/** What the page has drawn: the names on its boxes, the number of lines with a route, and the titles of its bands. */
 const DRAWN = `(() => ({
   names: [...document.querySelectorAll('.architecture-node[data-id] strong')].map((name) => name.textContent),
   arrows: [...document.querySelectorAll('.react-flow__edge-path')].filter((path) => (path.getAttribute('d') ?? '').startsWith('M')).length,
+  bands: [...document.querySelectorAll('.diagram-band-title')].map((title) => title.textContent),
 }))()`;
 
 test.skipIf(!HAS_CHROME)(
-  HAS_CHROME ? 'the built page, served by the command, draws a known box and an arrow in Chrome' : `skipped: there is no Chrome at ${CHROME}`,
+  HAS_CHROME ? 'the built page, served by the command, draws a known box, an arrow and a band in Chrome' : `skipped: there is no Chrome at ${CHROME}`,
   async () => {
     expect(existsSync(join(PAGE, 'index.html')), 'the page is built: run "npm run build" first').toBe(true);
     const profile = await mkdtemp(join(tmpdir(), 'seefore-chrome-'));
@@ -77,13 +78,14 @@ test.skipIf(!HAS_CHROME)(
 
       await send('Page.enable');
       await send('Page.navigate', { url: `${address}/` });
-      let drawn: { names: string[]; arrows: number } = { names: [], arrows: 0 };
+      let drawn: { names: string[]; arrows: number; bands: string[] } = { names: [], arrows: 0, bands: [] };
       for (let tries = 0; tries < 100 && drawn.arrows === 0; tries++) {
         await pause(100);
         drawn = ((await send('Runtime.evaluate', { expression: DRAWN, returnByValue: true })).result?.result?.value as typeof drawn | undefined) ?? drawn;
       }
       expect(drawn.names).toEqual(expect.arrayContaining(['Customer', 'Shop']));
       expect(drawn.arrows).toBeGreaterThanOrEqual(1);
+      expect(drawn.bands).toContain('Our systems');
     } finally {
       socket?.close();
       if (chrome !== undefined && chrome.exitCode === null && chrome.signalCode === null) {

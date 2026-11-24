@@ -155,3 +155,22 @@
 .diagram-edge-halo {
   pointer-events: none;
 }
+
+/* A zone at the Systems depth: a quiet band behind its boxes and lines. It is no frame of the
+   model, so it has no border, only a faint fill and its title at the top left. */
+.react-flow__node.diagram-band-node {
+  pointer-events: none;
+}
+.diagram-band {
+  width: 100%;
+  height: 100%;
+  padding: 12px 16px;
+  border-radius: var(--radius-panel);
+  background: var(--surface-soft);
+}
+.diagram-band-title {
+  font-size: var(--fs-title3);
+  line-height: var(--lh-title3);
+  font-weight: 600;
+  color: var(--text-tertiary);
+}
