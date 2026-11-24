@@ -407,7 +407,7 @@ test.skipIf(!HAS_CHROME).concurrent(
     inChrome(async (send, address) => {
       await send('Page.navigate', { url: `${address}/flows` });
       expect(await waitFor(send, `[...document.querySelectorAll('.section-label')].map((label) => label.textContent).join()`)).toBe('Ordering');
-      expect(await waitFor(send, `document.querySelector('a[href="/flows/placing-an-order"]')?.textContent`)).toBe('Placing an order3 steps');
+      expect(await waitFor(send, `document.querySelector('a[href="/flows/placing-an-order"]')?.textContent`)).toBe('Placing an order');
       await click(send, await centreOf(send, 'a[href="/flows/placing-an-order"]'));
       await flowAt(send, '');
       await click(send, await centreOf(send, '[data-row="step"][data-step="places"]'));

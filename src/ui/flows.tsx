@@ -5,10 +5,10 @@ import { KindTile } from './models.tsx';
 import type { ModelState } from './shell.tsx';
 import { EmptyState, GridRow, LargeTitle, Panel, RowList, Section, SectionStack, useTitle } from './ui.tsx';
 
-/** The name, the condition, and the number of steps. */
-const COLS = 'minmax(0, 1fr) minmax(0, 1fr) 80px';
+/** The name and the condition. */
+const COLS = 'minmax(0, 1fr) minmax(0, 1fr)';
 
-/** "1 step", "20 steps". */
+/** "1 step", "20 steps": for a feature's page. The list of flows shows no count. */
 export const stepCount = (count: number): string => `${count} ${count === 1 ? 'step' : 'steps'}`;
 
 /** The list of flows, `/flows`: every flow under the name of its feature, each a link to its page. */
@@ -36,7 +36,7 @@ export function FlowsList() {
                       cols={COLS}
                       tile={<KindTile kind="flows" size="sm" />}
                       name={flow.name}
-                      cells={[flow.only !== undefined ? `Only ${flow.only}` : '', stepCount(flow.steps)]}
+                      cells={[flow.only !== undefined ? `Only ${flow.only}` : '']}
                     />
                   ))}
                 </RowList>
