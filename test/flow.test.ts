@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { flowSteps, flowsByFeature, flowView, litByStep } from '../src/model/flow.ts';
+import { flowSteps, flowView, litByStep } from '../src/model/flow.ts';
 import type { FlowStep } from '../src/model/flow.ts';
 import { readModel } from '../src/model/read.ts';
 import type { SourceFile } from '../src/model/read.ts';
@@ -143,20 +143,9 @@ test('a step in a part, one with no place and one that runs a flow read as such;
   expect(litByStep(view, { arrow: 'fan->web', back: false })).toEqual({ boxes: ['fan', 'shop', 'web'], arrows: ['fan->web'] });
 });
 
-test('the head of a flow, and the list of flows by feature, each with its number of steps', () => {
+test('the head of a flow, with its feature', () => {
   expect(flowSteps(records(), 'pays')).toMatchObject({ name: 'Paying for an order', starts: 'A fan pays', ends: 'The order is paid', only: 'in Europe', feature: { id: 'paying', name: 'Paying' } });
   expect(flowSteps(records(), 'shop')).toBeUndefined();
-  // Accounts has no flow.
-  expect(flowsByFeature(records())).toEqual([
-    {
-      id: 'paying',
-      name: 'Paying',
-      flows: [
-        { id: 'pays', name: 'Paying for an order', only: 'in Europe', steps: 8 },
-        { id: 'receipt', name: 'Sending a receipt', steps: 1 },
-      ],
-    },
-  ]);
 });
 
 test('a step whose `does` names nothing, and a reply to a step that is not there, say what can be said', () => {
@@ -174,5 +163,4 @@ test('a step whose `does` names nothing, and a reply to a step that is not there
     ],
   });
   expect(flowView(read.records, 'broken')).toEqual({ boxes: [], arrows: [] });
-  expect(flowsByFeature(read.records).map((feature) => feature.name)).toEqual(['lost', 'Paying']);
 });

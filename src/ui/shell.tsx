@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { Boxes, Check, ChevronDown, ChevronLeft, ChevronRight, GitBranch, Puzzle, Waypoints } from 'lucide-react';
+import { Boxes, Check, ChevronDown, ChevronLeft, ChevronRight, Puzzle, Waypoints } from 'lucide-react';
 import { Link, NavLink, Outlet, useLocation, useMatch, useNavigate, useSearchParams } from 'react-router-dom';
 import type { ModelAnswer } from '../model/answer.ts';
 import { catalogueOf } from '../model/catalogue.ts';
@@ -179,10 +179,6 @@ export function Shell() {
             <NavLink to="/features" className="nav-link">
               <Puzzle />
               <span className="nav-text">Features</span>
-            </NavLink>
-            <NavLink to="/flows" className="nav-link">
-              <GitBranch />
-              <span className="nav-text">Flows</span>
             </NavLink>
             <Link to="/models" className={`nav-link${inModels ? ' active' : ''}`} aria-current={inModels ? 'page' : undefined}>
               <Boxes />

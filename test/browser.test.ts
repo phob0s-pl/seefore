@@ -402,11 +402,13 @@ test.skipIf(!HAS_CHROME).concurrent(
 );
 
 test.skipIf(!HAS_CHROME).concurrent(
-  HAS_CHROME ? 'the list of flows opens a flow under its feature, and the back arrow leaves the flow in one go' : `skipped: there is no Chrome at ${CHROME}`,
+  HAS_CHROME ? 'the list of features has each flow under its feature and opens it, the old list of flows leads there, and the back arrow leaves the flow in one go' : `skipped: there is no Chrome at ${CHROME}`,
   () =>
     inChrome(async (send, address) => {
+      // There is no list of flows apart: its old address leads to the features.
       await send('Page.navigate', { url: `${address}/flows` });
-      expect(await waitFor(send, `[...document.querySelectorAll('.section-label')].map((label) => label.textContent).join()`)).toBe('Ordering');
+      expect(await waitFor(send, `location.pathname === '/features' && [...document.querySelectorAll('main a')].map((link) => link.getAttribute('href')).join()`)).toBe('/features/ordering,/flows/placing-an-order');
+      expect(await waitFor(send, `document.querySelector('nav[aria-label="Main navigation"]')?.innerText.replace(/\\s+/g, ' ')`)).toBe('Architecture Features Models');
       expect(await waitFor(send, `document.querySelector('a[href="/flows/placing-an-order"]')?.textContent`)).toBe('Placing an order');
       await click(send, await centreOf(send, 'a[href="/flows/placing-an-order"]'));
       await flowAt(send, '');
@@ -414,7 +416,7 @@ test.skipIf(!HAS_CHROME).concurrent(
       await press(send, 'ArrowDown', 40);
       expect((await flowAt(send, '#saves')).current).toBe('saves');
       await click(send, await centreOf(send, 'button[aria-label="Go back"]'));
-      expect(await waitFor(send, `location.pathname === '/flows' && location.pathname`)).toBe('/flows');
+      expect(await waitFor(send, `location.pathname === '/features' && location.pathname`)).toBe('/features');
     }),
   20_000,
 );
@@ -424,7 +426,7 @@ test.skipIf(!HAS_CHROME).concurrent(
   () =>
     inChrome(async (send, address) => {
       await send('Page.navigate', { url: `${address}/features` });
-      expect(await waitFor(send, `document.querySelector('a[href="/features/ordering"]')?.innerText.replace(/\\s+/g, ' ')`)).toBe('Ordering 1 flow');
+      expect(await waitFor(send, `document.querySelector('a[href="/features/ordering"]')?.innerText.replace(/\\s+/g, ' ')`)).toBe('Ordering');
       await click(send, await centreOf(send, 'a[href="/features/ordering"]'));
       const page = `location.pathname === '/features/ordering' && document.title === 'Ordering · seefore' && [...document.querySelectorAll('.section-label')].map((label) => label.textContent)`;
       expect(await waitFor(send, page)).toEqual(['Flows', 'From its flows', 'Data']);

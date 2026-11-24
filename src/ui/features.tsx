@@ -4,7 +4,6 @@ import { useOutletContext, useParams } from 'react-router-dom';
 import type { ModelRecord } from '../model/answer.ts';
 import type { Catalogue } from '../model/catalogue.ts';
 import type { Travel } from '../model/travel.ts';
-import { stepCount } from './flows.tsx';
 import { typeWords } from './kinds.tsx';
 import { KindTile, Missing, NameOf, RecordLink } from './models.tsx';
 import { Named, OwnerOf, Related } from './record.tsx';
@@ -12,11 +11,14 @@ import type { Fact, Row } from './record.tsx';
 import type { ModelState } from './shell.tsx';
 import { EmptyState, Facts, GridRow, LargeTitle, Panel, RowList, SectionStack, TextPanel, useTitle } from './ui.tsx';
 
-/** The name, the condition, and the number of flows. */
-const COLS = 'minmax(0, 1fr) minmax(0, 1fr) 80px';
+/** The name and the condition. */
+const COLS = 'minmax(0, 1fr) minmax(0, 1fr)';
 
-/** "No flow", "1 flow", "3 flows". */
-const flowCount = (count: number): string => (count === 0 ? 'No flow' : `${count} ${count === 1 ? 'flow' : 'flows'}`);
+/** "1 step", "20 steps": beside a flow on its feature's page. */
+const stepCount = (count: number): string => `${count} ${count === 1 ? 'step' : 'steps'}`;
+
+/** The condition of a record as the lists say it, or nothing. */
+const onlyOf = (record: ModelRecord | undefined): string => (typeof record?.fields.only === 'string' ? `Only ${record.fields.only}` : '');
 
 const LIST = { to: '/features', title: 'Features' };
 
@@ -28,7 +30,10 @@ function useModel(): { catalogue?: Catalogue; travel?: Travel; line?: ReactNode 
   return { catalogue, travel };
 }
 
-/** The list of features, `/features`: one flat list by name, each with its condition and the number of its flows. */
+/**
+ * The list of features, `/features`: each feature by name with its condition, and its flows under
+ * it, each a link to its page. It is the one way to a flow: there is no list of flows apart.
+ */
 export function FeaturesList() {
   useTitle('Features');
   const { catalogue, travel, line } = useModel();
@@ -41,19 +46,25 @@ export function FeaturesList() {
       ) : (
         <Panel lift>
           <RowList label="Features">
-            {catalogue.features.map((feature) => {
-              const { only } = feature.fields;
-              return (
-                <GridRow
-                  key={feature.id}
-                  to={`/features/${feature.id}`}
-                  cols={COLS}
-                  tile={<KindTile kind="features" size="sm" />}
-                  name={<NameOf record={feature} />}
-                  cells={[typeof only === 'string' ? `Only ${only}` : '', flowCount(travel.feature(feature.id).flows.length)]}
-                />
-              );
-            })}
+            {catalogue.features.map((feature) => (
+              <Fragment key={feature.id}>
+                <GridRow to={`/features/${feature.id}`} cols={COLS} tile={<KindTile kind="features" size="sm" />} name={<NameOf record={feature} />} cells={[onlyOf(feature)]} strong />
+                {travel.feature(feature.id).flows.map((flow) => {
+                  const record = catalogue.record(flow.id);
+                  return (
+                    <GridRow
+                      key={flow.id}
+                      to={`/flows/${flow.id}`}
+                      cols={COLS}
+                      tile={<KindTile kind="flows" size="sm" />}
+                      name={record ? <NameOf record={record} /> : flow.id}
+                      cells={[onlyOf(record)]}
+                      depth={1}
+                    />
+                  );
+                })}
+              </Fragment>
+            ))}
           </RowList>
         </Panel>
       )}

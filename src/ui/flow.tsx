@@ -49,8 +49,8 @@ export function FlowPage() {
   if (flow === undefined) {
     return (
       <EmptyState title="No such flow.">
-        <Link className="text-link" to="/flows">
-          All flows
+        <Link className="text-link" to="/features">
+          Features
         </Link>
       </EmptyState>
     );
@@ -201,7 +201,7 @@ function FlowBody({ flow, records, catalogue, slots }: { flow: FlowRead; records
 
   const crumbs = (
     <nav aria-label="Breadcrumb" className="breadcrumb">
-      <Link to="/flows">All flows</Link>
+      <Link to="/features">Features</Link>
       {flow.feature !== undefined && (
         <>
           <span className="breadcrumb-gap" aria-hidden="true">

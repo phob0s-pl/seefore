@@ -1,5 +1,5 @@
 import type { ModelRecord } from './answer.ts';
-import { byName } from './catalogue.ts';
+
 import { stepsOf } from './model.ts';
 import type { Step } from './model.ts';
 import { drawingOf, litBy, thingsOf } from './view.ts';
@@ -67,8 +67,6 @@ export type FlowRead = {
   steps: FlowStep[];
 };
 
-/** A feature with its flows, by name, for the list of flows. */
-export type FeatureFlows = { id: string; name: string; flows: { id: string; name: string; only?: string; steps: number }[] };
 
 const text = (value: unknown): string | undefined => (typeof value === 'string' ? value : undefined);
 
@@ -239,22 +237,4 @@ export function flowSteps(records: readonly ModelRecord[], flowId: string): Flow
     ...(feature !== undefined ? { feature: { id: feature, name: nameOf(feature) } } : {}),
     steps: read,
   };
-}
-
-/** Every feature that has a flow, by name, each with its flows by name and the number of steps of each. */
-export function flowsByFeature(records: readonly ModelRecord[]): FeatureFlows[] {
-  const byId = byIdOf(records);
-  const flows = [...byId.values()].filter((record) => record.kind === 'flows').sort(byName);
-  const features = new Map<string, FeatureFlows>();
-  for (const flow of flows) {
-    const id = text(flow.fields.feature);
-    if (id === undefined) continue;
-    const feature = byId.get(id);
-    const into = features.get(id) ?? { id, name: (feature?.kind === 'features' ? text(feature.fields.name) : undefined) ?? id, flows: [] };
-    features.set(id, into);
-    const only = text(flow.fields.only);
-    into.flows.push({ id: flow.id, name: text(flow.fields.name) ?? flow.id, ...(only !== undefined ? { only } : {}), steps: stepsOfRecord(flow).length });
-  }
-  const order = (a: FeatureFlows, b: FeatureFlows) => byName({ kind: '', id: a.id, file: '', fields: { name: a.name } }, { kind: '', id: b.id, file: '', fields: { name: b.name } });
-  return [...features.values()].sort(order);
 }
