@@ -177,6 +177,17 @@ type Read = { kind?: string; name?: string; text?: string; button?: string; path
 
 const closed = (send: Send) => waitFor(send, `document.querySelector('aside[aria-label="Diagram inspector"]') === null`);
 
+/** The mouse moves to a point, as a hand moves it. */
+const move = (send: Send, { x, y }: Point) => send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
+
+/** The ids of the faded boxes and lines, or false while none is faded. */
+const FADED = `(() => {
+  const ids = [...document.querySelectorAll('.react-flow__node.faded, .react-flow__edge.faded')].map((each) => each.getAttribute('data-id'));
+  return ids.length > 0 && ids;
+})()`;
+const unfaded = (send: Send) => waitFor(send, `document.querySelector('.faded') === null`);
+const SHOP_BOX = '.react-flow__node[data-id="shop"]';
+
 test.skipIf(!HAS_CHROME).concurrent(
   HAS_CHROME ? 'the built page, served by the command, draws a known box, an arrow and a band in Chrome' : `skipped: there is no Chrome at ${CHROME}`,
   () =>
@@ -265,6 +276,50 @@ test.skipIf(!HAS_CHROME).concurrent(
       expect(await waitFor(send, PANEL)).toMatchObject({ name: 'Order API' });
       await click(send, await settled(send, EMPTY));
       expect(await closed(send)).toBe(true);
+    }),
+  20_000,
+);
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME ? 'the mouse on a box fades a box it does not join and not one it joins, and on the empty field nothing' : `skipped: there is no Chrome at ${CHROME}`,
+  () =>
+    inChrome(async (send, address) => {
+      await send('Page.navigate', { url: `${address}/` });
+      await move(send, await centreOf(send, SHOP_BOX));
+      // The shop joins the customer; the clerk joins nothing.
+      expect(await waitFor(send, FADED)).toEqual(['clerk']);
+      await move(send, await settled(send, EMPTY));
+      expect(await unfaded(send)).toBe(true);
+    }),
+  20_000,
+);
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME ? 'a pick holds the fade while the mouse is on the empty field, and Escape ends it' : `skipped: there is no Chrome at ${CHROME}`,
+  () =>
+    inChrome(async (send, address) => {
+      await send('Page.navigate', { url: `${address}/` });
+      await click(send, await centreOf(send, SHOP_BOX));
+      expect(await waitFor(send, PANEL)).toMatchObject({ name: 'Shop' });
+      await move(send, await settled(send, EMPTY));
+      // Past the wait, the hover is none and the pick's highlight holds.
+      await pause(400);
+      expect((await send('Runtime.evaluate', { expression: FADED, returnByValue: true })).result?.result?.value).toEqual(['clerk']);
+      await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
+      await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
+      expect(await unfaded(send)).toBe(true);
+    }),
+  20_000,
+);
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME ? 'the mouse on a line shows the label with the two boxes it joins' : `skipped: there is no Chrome at ${CHROME}`,
+  () =>
+    inChrome(async (send, address) => {
+      await send('Page.navigate', { url: `${address}/` });
+      await move(send, await middleOf(send, 'customer->shop'));
+      expect(await waitFor(send, `document.querySelector('.diagram-hover-label[role="tooltip"]')?.textContent`)).toBe('Customer → Shop');
+      expect(await waitFor(send, FADED)).toEqual(['clerk']);
     }),
   20_000,
 );

@@ -160,3 +160,26 @@ export function viewOf(records: readonly ModelRecord[], depth: Depth): View {
   }
   return { boxes, arrows: both };
 }
+
+/**
+ * What stays bright while a box or an arrow of a view is in focus, and the rest fades. For a box:
+ * the box, its arrows and the boxes at their other ends; for an arrow: the arrow and its two ends;
+ * and for both, every frame those boxes are in. A frame, or an id the view does not have, fades
+ * nothing. An end that is a frame is bright itself, and what it holds is not because of that.
+ */
+export function litBy(view: View, id: string): { boxes: string[]; arrows: string[] } | undefined {
+  const boxes = new Map(view.boxes.map((box) => [box.id, box]));
+  const box = boxes.get(id);
+  const arrow = view.arrows.find((each) => each.id === id);
+  if (box?.frame === true || (box === undefined && arrow === undefined)) return undefined;
+  const arrows = box !== undefined ? view.arrows.filter((each) => each.from === id || each.to === id) : arrow !== undefined ? [arrow] : [];
+  const bright = new Set(box !== undefined ? [id] : []);
+  for (const each of arrows) {
+    for (const end of [each.from, each.to]) {
+      // The end, and the frames it is in, up to the top.
+      for (let at: string | undefined = end; at !== undefined && !bright.has(at); at = boxes.get(at)?.in) bright.add(at);
+    }
+  }
+  for (let at = box?.in; at !== undefined && !bright.has(at); at = boxes.get(at)?.in) bright.add(at);
+  return { boxes: view.boxes.filter((each) => bright.has(each.id)).map((each) => each.id), arrows: arrows.map((each) => each.id) };
+}

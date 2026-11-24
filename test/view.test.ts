@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest';
 import { readModel } from '../src/model/read.ts';
 import type { SourceFile } from '../src/model/read.ts';
-import { depthOf, viewOf } from '../src/model/view.ts';
+import { depthOf, litBy, viewOf } from '../src/model/view.ts';
 import type { Depth } from '../src/model/view.ts';
 
 /** A shop and a partner: one system with parts, one with none, and an app with parts of its own. */
@@ -118,6 +118,38 @@ test('no arrow is drawn inside one box, nor between a frame and what it holds, a
 test('a connection with an end that names nothing drawable is skipped', () => {
   const read = readModel([...SHOP, connection('lost', 'customer', 'nowhere'), connection('owned', 'customer', 'sales')]);
   expect(viewOf(read.records, 'components').arrows).toEqual([]);
+});
+
+test('a box lights itself, its arrows and the boxes at their other ends, and nothing else', () => {
+  const files = [connection('looks', 'customer', 'web'), connection('pays', 'checkout', 'partner')];
+  expect(litBy(view('systems', ...files), 'customer')).toEqual({ boxes: ['customer', 'shop'], arrows: ['customer->shop'] });
+  expect(litBy(view('systems', ...files), 'dns')).toEqual({ boxes: ['dns'], arrows: [] });
+});
+
+test('an arrow lights itself and its two ends', () => {
+  const files = [connection('looks', 'customer', 'web'), connection('pays', 'checkout', 'partner')];
+  expect(litBy(view('systems', ...files), 'shop->partner')).toEqual({ boxes: ['partner', 'shop'], arrows: ['shop->partner'] });
+});
+
+test('the frames a bright box is in are bright, at any depth, and the other boxes in them are not, nor what an end that is a frame holds', () => {
+  const files = [connection('looks', 'customer', 'web'), connection('pays', 'checkout', 'partner'), connection('asks', 'dns', 'shop')];
+  expect(litBy(view('containers', ...files), 'customer')).toEqual({ boxes: ['customer', 'shop', 'web'], arrows: ['customer->web'] });
+  expect(litBy(view('components', ...files), 'partner')).toEqual({ boxes: ['partner', 'shop', 'api', 'checkout'], arrows: ['checkout->partner'] });
+  expect(litBy(view('containers', ...files), 'dns')).toEqual({ boxes: ['shop', 'dns'], arrows: ['dns->shop'] });
+});
+
+test('a frame lights nothing', () => {
+  const files = [connection('looks', 'customer', 'web')];
+  expect(litBy(view('containers', ...files), 'shop')).toBeUndefined();
+  expect(litBy(view('components', ...files), 'api')).toBeUndefined();
+});
+
+test('an id that is neither a box nor an arrow of the view lights nothing', () => {
+  const files = [connection('looks', 'customer', 'web')];
+  expect(litBy(view('systems', ...files), 'nowhere')).toBeUndefined();
+  // Drawn at a deeper depth only, and an arrow of another depth.
+  expect(litBy(view('systems', ...files), 'web')).toBeUndefined();
+  expect(litBy(view('systems', ...files), 'customer->web')).toBeUndefined();
 });
 
 test('the depth in the address is Systems when none is given or it is not known', () => {

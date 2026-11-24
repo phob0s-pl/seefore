@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
-import type { ReactNode } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import type { MouseEvent, ReactNode, RefObject } from 'react';
 import { BaseEdge, ControlButton, Controls, Handle, MarkerType, Position, ReactFlow, useReactFlow, useViewportStore } from '@xyflow/react';
 import type { Edge, EdgeProps, Node, NodeProps, ReactFlowInstance } from '@xyflow/react';
 import { Scan } from 'lucide-react';
 import type { ElkPoint } from 'elkjs/lib/elk-api.js';
+import { litBy } from '../model/view.ts';
 import type { Box, Depth, View } from '../model/view.ts';
 import { engine } from './elk.ts';
 import { iconOf, KIND, typeWords } from './kinds.tsx';
@@ -43,8 +44,8 @@ function Ends() {
   );
 }
 
-/** A box: its icon, its name and, small, its kind. */
-function BoxCard({ data: { box } }: NodeProps<BoxNode>) {
+/** A box: its icon, its name and, small, its kind. It is drawn again only when its box changes, not when its class does. */
+const BoxCard = memo(function BoxCard({ data: { box } }: NodeProps<BoxNode>) {
   return (
     <div className={`architecture-node architecture-node-${box.kind}`} data-id={box.id}>
       <Ends />
@@ -57,10 +58,10 @@ function BoxCard({ data: { box } }: NodeProps<BoxNode>) {
       </div>
     </div>
   );
-}
+});
 
 /** An opened system or app: a dashed outline that names itself and holds its boxes. */
-function FrameCard({ data: { box } }: NodeProps<BoxNode>) {
+const FrameCard = memo(function FrameCard({ data: { box } }: NodeProps<BoxNode>) {
   return (
     <div className="architecture-node architecture-boundary" data-id={box.id}>
       <Ends />
@@ -72,7 +73,7 @@ function FrameCard({ data: { box } }: NodeProps<BoxNode>) {
       </div>
     </div>
   );
-}
+});
 
 /** A zone at the Systems depth: a quiet band behind its boxes, its title at the top left. */
 function BandCard({ data: { band } }: NodeProps<BandNode>) {
@@ -84,7 +85,7 @@ function BandCard({ data: { band } }: NodeProps<BandNode>) {
 }
 
 /** An arrow along the route ELK gave it, on a halo in the field's colour, its head at the far end, and at the start too when it goes both ways. */
-function RouteLine({ id, data, markerStart, markerEnd }: EdgeProps<RouteEdge>) {
+const RouteLine = memo(function RouteLine({ id, data, markerStart, markerEnd }: EdgeProps<RouteEdge>) {
   const points = data?.points ?? [];
   if (points.length < 2) return null;
   const path = points.map((point, index) => `${index === 0 ? 'M' : 'L'}${point.x},${point.y}`).join(' ');
@@ -94,7 +95,7 @@ function RouteLine({ id, data, markerStart, markerEnd }: EdgeProps<RouteEdge>) {
       <BaseEdge id={id} path={path} markerStart={markerStart} markerEnd={markerEnd} interactionWidth={24} />
     </>
   );
-}
+});
 
 const nodeTypes = { box: BoxCard, frame: FrameCard, band: BandCard };
 const HEAD = { type: MarkerType.ArrowClosed, color: 'var(--graph-edge)' };
@@ -137,10 +138,64 @@ function KeepClear({ picked, routes }: { picked: string | undefined; routes: Lay
   return null;
 }
 
+/** How long the mouse rests on a box, a line or nothing before the highlight follows it, in milliseconds. */
+const REST = 100;
+/** The zoom below which the names on the boxes are too small to read, and the label says a box's name. */
+const SMALL = 0.6;
+/**
+ * The lift of a bright line over the faded ones. React Flow lifts a line by the depth of the boxes
+ * it joins, which are at most two frames deep, so a bright line lies over every faded one.
+ */
+const LIFT = 3;
+/** The label stands this far right of and below the mouse, and this far inside the field's edge. */
+const LABEL = { offset: 14, edge: 8 };
+
+/**
+ * One object for each node or line and each look of it, made once: a change of focus gives a new
+ * object only to what changes its look, and React Flow passes over the rest.
+ */
+function looks<T>(): (key: string, make: () => T) => T {
+  const made = new Map<string, T>();
+  return (key, make) => {
+    let found = made.get(key);
+    if (found === undefined) {
+      found = make();
+      made.set(key, found);
+    }
+    return found;
+  };
+}
+
+/**
+ * The label at the mouse: over a line, the two boxes it joins; over a box, its name and its type,
+ * but only while the names on the boxes are too small to read. It moves with the mouse by `place`,
+ * without a render.
+ */
+function HoverLabel({ hovered, view, label, place }: { hovered: string | undefined; view: View; label: RefObject<HTMLDivElement | null>; place: () => void }) {
+  const small = useViewportStore((state) => state.transform[2] < SMALL);
+  const boxes = useMemo(() => new Map(view.boxes.map((box) => [box.id, box])), [view]);
+  const arrow = view.arrows.find((each) => each.id === hovered);
+  const box = hovered === undefined ? undefined : boxes.get(hovered);
+  const name = (id: string) => boxes.get(id)?.name ?? id;
+  const words: [string, string?] | undefined =
+    arrow !== undefined ? [`${name(arrow.from)} ${arrow.back !== undefined ? '↔' : '→'} ${name(arrow.to)}`] : box !== undefined && !box.frame && small ? [box.name, kindWords(box)] : undefined;
+  const text = words?.join('\n');
+  useLayoutEffect(() => place(), [text, place]);
+  if (words === undefined) return null;
+  return (
+    <div ref={label} role="tooltip" className="diagram-hover-label">
+      <strong>{words[0]}</strong>
+      {words[1] !== undefined && <small>{words[1]}</small>}
+    </div>
+  );
+}
+
 /**
  * The diagram of a view: laid out by ELK, then drawn by React Flow on the hatched field. A click
  * on a box, a frame or a line picks it, and a click on the empty field or a band clears the
- * pick; the page holds it, and puts the panel that reads it in the field as `children`.
+ * pick; the page holds it, and puts the panel that reads it in the field as `children`. The mouse
+ * over a box or a line, or else the pick, fades all but it and what it joins, and a label at the
+ * mouse says what is under it.
  */
 export function Diagram({
   view,
@@ -169,7 +224,8 @@ export function Diagram({
     };
   }, [view, depth]);
 
-  const nodes = useMemo(
+  // The nodes and lines as laid out, with nothing in focus.
+  const placed = useMemo(
     () => [
       // The bands first, under the lines and the boxes.
       ...(layout?.bands ?? []).map(
@@ -195,9 +251,11 @@ export function Diagram({
           type: box.frame ? 'frame' : 'box',
           position: { x, y },
           ...(box.in !== undefined ? { parentId: box.in } : {}),
-          ...(box.id === picked ? { className: 'picked' } : {}),
           width,
           height,
+          // Its size is known, so that a node given anew for a change of class keeps where its
+          // lines end, and its lines do not blink out while it is measured again.
+          measured: { width, height },
           data: { box },
           draggable: false,
           selectable: false,
@@ -206,27 +264,99 @@ export function Diagram({
         }),
       ),
     ],
-    [layout, picked],
+    [layout],
   );
-  const edges = useMemo(
+  const lines = useMemo(
     () =>
-      view.arrows.map((arrow): RouteEdge => {
-        const head = arrow.id === picked ? PICKED_HEAD : HEAD;
-        return {
+      view.arrows.map(
+        (arrow): RouteEdge => ({
           id: arrow.id,
           source: arrow.from,
           target: arrow.to,
           type: 'route',
           data: { points: layout?.routes.get(arrow.id) ?? [] },
-          ...(arrow.id === picked ? { className: 'picked' } : {}),
-          ...(arrow.back !== undefined ? { markerStart: head } : {}),
-          markerEnd: head,
+          ...(arrow.back !== undefined ? { markerStart: HEAD } : {}),
+          markerEnd: HEAD,
           selectable: false,
           focusable: false,
-        };
-      }),
-    [view, layout, picked],
+        }),
+      ),
+    [view, layout],
   );
+  // The looks last as long as the nodes and lines they are made from.
+  const nodeLook = useMemo(() => looks<BoxNode | BandNode>(), [placed]);
+  const lineLook = useMemo(() => looks<RouteEdge>(), [lines]);
+
+  // What the mouse is over, a box or a line, as it moves. It becomes the hover once it has stayed
+  // the same for a moment, and not while the field is dragged or zoomed. The hover shows over the
+  // pick, and when there is none the pick's highlight holds.
+  const [hovered, setHovered] = useState<string>();
+  const [moving, setMoving] = useState(false);
+  const under = useRef<string | undefined>(undefined);
+  const still = useRef(true);
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  const settle = () => {
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => setHovered(under.current), REST);
+  };
+  const over = (id: string | undefined) => {
+    if (id === under.current) return;
+    under.current = id;
+    if (still.current) settle();
+  };
+  const focus = hovered ?? picked;
+  const lit = useMemo(() => (focus === undefined ? undefined : litBy(view, focus)), [view, focus]);
+
+  const nodes = useMemo(() => {
+    const bright = lit && new Set(lit.boxes);
+    return placed.map((node) => {
+      if (node.type === 'band') return node;
+      const className = [node.id === picked ? 'picked' : '', bright && !bright.has(node.id) ? 'faded' : ''].join(' ').trim();
+      return className === '' ? node : nodeLook(`${node.id} ${className}`, () => ({ ...node, className }));
+    });
+  }, [placed, nodeLook, lit, picked]);
+  const edges = useMemo(() => {
+    const bright = lit && new Set(lit.arrows);
+    return lines.map((line) => {
+      const chosen = line.id === picked;
+      const faded = bright !== undefined && !bright.has(line.id);
+      const lifted = bright !== undefined && !faded;
+      if (!chosen && !faded && !lifted) return line;
+      return lineLook(`${line.id} ${chosen} ${faded}`, () => ({
+        ...line,
+        className: [chosen ? 'picked' : '', faded ? 'faded' : ''].join(' ').trim(),
+        ...(lifted ? { zIndex: LIFT } : {}),
+        ...(chosen ? { markerEnd: PICKED_HEAD, ...(line.markerStart !== undefined ? { markerStart: PICKED_HEAD } : {}) } : {}),
+      }));
+    });
+  }, [lines, lineLook, lit, picked]);
+
+  // The label follows the mouse: each move writes where it stands, and no render is made for it.
+  // It keeps inside the field, and clear of the panel while one is open; where there is no room
+  // right of or below the mouse, it stands left of or above it.
+  const label = useRef<HTMLDivElement>(null);
+  const mouse = useRef<{ x: number; y: number }>(undefined);
+  const open = picked !== undefined;
+  const place = useCallback(() => {
+    const tag = label.current;
+    const field = tag?.offsetParent?.getBoundingClientRect();
+    if (tag === null || field === undefined || mouse.current === undefined) return;
+    const right = field.width - (open ? Math.min(PANEL.width, field.width - 2 * PANEL.margin) + PANEL.margin : 0) - LABEL.edge;
+    const bottom = field.height - LABEL.edge;
+    const x = mouse.current.x - field.left;
+    const y = mouse.current.y - field.top;
+    const left = x + LABEL.offset + tag.offsetWidth <= right ? x + LABEL.offset : x - LABEL.offset - tag.offsetWidth;
+    const top = y + LABEL.offset + tag.offsetHeight <= bottom ? y + LABEL.offset : y - LABEL.offset - tag.offsetHeight;
+    tag.style.transform = `translate(${Math.round(Math.max(LABEL.edge, left))}px, ${Math.round(Math.max(LABEL.edge, top))}px)`;
+  }, [open]);
+  const follow = (event: MouseEvent) => {
+    mouse.current = { x: event.clientX, y: event.clientY };
+    if (label.current !== null) place();
+  };
+
+  /** The line a click or the mouse at an event means: the nearest to it, by the rule of B6. */
+  const lineAt = (event: MouseEvent, edge: RouteEdge): string => (flow && layout && nearestRoute(layout.routes, flow.screenToFlowPosition({ x: event.clientX, y: event.clientY }))) ?? edge.id;
 
   return (
     <CanvasFrame label="Architecture diagram">
@@ -255,13 +385,31 @@ export function Diagram({
           onInit={setFlow}
           // Where lines run close, the reach of one lies on its neighbour: the click means the
           // line nearest to the mouse, not the one whose reach is on top.
-          onEdgeClick={(event, edge) => onPick((flow && nearestRoute(layout.routes, flow.screenToFlowPosition({ x: event.clientX, y: event.clientY }))) ?? edge.id)}
+          onEdgeClick={(event, edge) => onPick(lineAt(event, edge))}
           onPaneClick={() => onPick()}
+          // A frame holds other boxes and a band is no thing of the model: over them the hover is none.
+          onNodeMouseEnter={(_event, node) => node.type === 'box' && over(node.id)}
+          onNodeMouseLeave={(_event, node) => node.type === 'box' && over(undefined)}
+          onEdgeMouseEnter={(event, edge) => over(lineAt(event, edge))}
+          onEdgeMouseMove={(event, edge) => over(lineAt(event, edge))}
+          onEdgeMouseLeave={() => over(undefined)}
+          onMoveStart={() => {
+            still.current = false;
+            clearTimeout(timer.current);
+            setMoving(true);
+          }}
+          onMoveEnd={() => {
+            still.current = true;
+            setMoving(false);
+            settle();
+          }}
+          onMouseMove={follow}
         >
           <Controls className="glass-group glass-group-column" position="bottom-left" showInteractive={false} showFitView={false}>
             <FitButton />
           </Controls>
           <KeepClear picked={picked} routes={layout.routes} />
+          <HoverLabel hovered={moving ? undefined : hovered} view={view} label={label} place={place} />
         </ReactFlow>
       )}
       {children}
