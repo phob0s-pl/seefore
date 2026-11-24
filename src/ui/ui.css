@@ -86,8 +86,8 @@
   padding: 3px;
   border-radius: var(--radius-full);
   background: var(--surface-glass);
-  backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
   border: 1px solid var(--border-glass);
   box-shadow: var(--shadow-pill);
 }
