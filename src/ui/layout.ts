@@ -26,11 +26,11 @@ const SIZES: Record<string, { width: number; height: number }> = {
 /** Set on the diagram and on every frame: tight gaps, a thorough search, the same answer each time. */
 const COMMON: LayoutOptions = {
   'elk.spacing.nodeNode': '8',
-  'elk.layered.spacing.nodeNodeBetweenLayers': '24',
+  'elk.layered.spacing.nodeNodeBetweenLayers': '120',
   'elk.spacing.edgeEdge': '6',
-  'elk.layered.spacing.edgeEdgeBetweenLayers': '6',
+  'elk.layered.spacing.edgeEdgeBetweenLayers': '24',
   'elk.spacing.edgeNode': '8',
-  'elk.layered.spacing.edgeNodeBetweenLayers': '8',
+  'elk.layered.spacing.edgeNodeBetweenLayers': '28',
   'elk.randomSeed': '1',
   'elk.layered.thoroughness': '50',
   'elk.layered.nodePlacement.strategy': 'NETWORK_SIMPLEX',
@@ -65,7 +65,7 @@ function graphOf(view: View, partition: Partition): ElkNode {
       return {
         id: box.id,
         // Room at the top for the frame's name.
-        layoutOptions: { ...COMMON, 'elk.padding': '[top=56,left=20,bottom=20,right=20]', ...column },
+        layoutOptions: { ...COMMON, 'elk.padding': '[top=56,left=60,bottom=20,right=60]', ...column },
         children: (inside.get(box.id) ?? []).map(node),
       };
     }

@@ -17,9 +17,12 @@ At the two deeper depths, find the people on the left and pan through far less.
    together with what is around them.
 2. **Options, set on the diagram and on every frame**: thoroughness 50, the network simplex
    placement of boxes, random seed 1.
-3. **Gaps**, on the diagram and on every frame: 8 pixels between boxes in a column, 24
-   between columns, 6 between lines, 8 from a line to a box. A frame has 56 at its top and 20
-   on its other sides.
+3. **Gaps**, on the diagram and on every frame: 8 pixels between boxes in a column and 120
+   between columns. Lines that run between columns stand 24 apart and keep 28 from a box;
+   lines that run beside the boxes of a column stand 6 apart and keep 8. A frame has 56 at
+   its top, 60 at its sides and 20 at its foot. The horizontal gaps are those of the owner's
+   earlier tool: the owner chose them on 2026-11-24 over the tight ones of the study (24, 6, 8
+   and 20), which fit more on a screen.
 4. **A box with many lines grows taller**, so that its line ends stand 12 pixels apart. The
    page draws a box at the size the layout gives.
 5. **A pair of boxes with arrows both ways is one line with a head at each end.** It stands
@@ -72,18 +75,20 @@ The browser test of B4 still passes, and also finds a band's title.
 ## The try
 
 The study measured this layout on 21 cases, seven public models at three depths. The built
-layout is measured the same way, and on the private model, and must come to:
+layout was measured the same way, and on the private model. With the study's tight gaps it
+gave the study's numbers exactly. The last column is what is built now, with the wider
+horizontal gaps the owner chose.
 
-| What is measured | The page of B4 | The study | It passes at |
-| --- | ---: | ---: | --- |
-| Crossings, all cases | 4,718 | 4,169 | 4,300 or fewer |
-| Cases whose names can be read at fit | 1 | 6 | 6 or more |
-| Screens at reading size, all cases | 263 | 78 | 82 or fewer |
+| What is measured | The page of B4 | The study, tight gaps | Built, wider gaps |
+| --- | ---: | ---: | ---: |
+| Crossings, all cases | 4,718 | 4,169 | 4,259 |
+| Cases whose names can be read at fit | 1 | 6 | 4 |
+| Screens at reading size, all cases | 263 | 78 | 124 |
 | Systems views with every box in its zone's order | no zones | 7 of 7 | 7 of 7 |
 | An arrow's end off its box, boxes that overlap, a box outside its frame | 0 | 0 | 0 |
-| The slowest layout, in the browser | under 1 s | not measured | 2 seconds |
+| The slowest layout, in the browser | under 1 s | about half a second | not timed again |
 
-A picture of each depth is read on the private model and on two public ones.
+A picture of each depth was read on the private model and on two public ones.
 
 ## Choices, as the owner took them
 
