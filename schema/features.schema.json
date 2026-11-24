@@ -1,0 +1,48 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100,
+      "pattern": "^\\S(?:[^\\n\\r\\u0085\\u2028\\u2029]*\\S)?$",
+      "description": "What people call it: one line of 1 to 100 characters, with no space at either end."
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000,
+      "pattern": "\\S",
+      "description": "What somebody gets from it, and who, in 1 to 2,000 characters. What is known to be missing is said here too."
+    },
+    "only": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100,
+      "pattern": "^\\S(?:[^\\n\\r\\u0085\\u2028\\u2029]*\\S)?$",
+      "description": "When the thing is there at all: the words that read after \"only\", one line of at most 100 characters. Left out when it is always there."
+    },
+    "owner": {
+      "type": "string",
+      "maxLength": 80,
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+      "description": "The id of the owner, a record in owners/, who is responsible for the feature. It is written on the feature and never taken from its parts."
+    },
+    "touches": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 80,
+        "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+      },
+      "description": "The ids of the parts and connections that are the feature's own and that no flow of it reaches: a person, a system, an app, a store, a component, a piece of infrastructure or a connection. A list with no id twice."
+    }
+  },
+  "required": [
+    "name"
+  ],
+  "additionalProperties": false,
+  "description": "A thing the software does for somebody, under the name its own people already use for it, as it is today."
+}
