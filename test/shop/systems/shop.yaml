@@ -1,2 +1,7 @@
 name: Shop
 description: Sells things online.
+context:
+  - must: An order is never lost once the customer has been told it is placed.
+    why: It is what the shop promises its customers.
+  - prefer: A new feature goes into the Order API.
+    why: One team runs it. It yields where another team must own the feature.

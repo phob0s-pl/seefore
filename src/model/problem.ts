@@ -33,6 +33,7 @@ const FIXES: Record<string, string> = {
   'value-invalid': 'Change the value as the message says, or delete the key if it is optional.',
   'id-invalid': 'Rename the file so that its name, without `.yaml`, is a good id: lowercase letters and digits in groups joined by single hyphens, a letter first, at most 80 characters. Change every field that names the old id.',
   'field-twice': 'Keep one of the two fields, or give each a name of its own.',
+  'context-line': 'Give the line one of `must` and `prefer`, and a `why`. A line that says what another says is taken out.',
   'record-extension': 'Rename the file so that it ends in `.yaml`, in lowercase.',
   'format-not-readable': 'Set `format: 1` in seefore.yaml, if the directory is written in format 1. Otherwise read it with a seefore that knows its format.',
   'marker-missing': 'Add a file seefore.yaml at the top of the folder, holding `format: 1` and a `name` of one line.',

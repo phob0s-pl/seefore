@@ -34,6 +34,9 @@ export function checkShape<T>(file: string, yaml: YamlFile, schema: z.ZodType<T>
     const issue = issues[index] as z.core.$ZodIssue;
     const path: Path = issue.path;
     const first = problems.length;
+    // A value of the wrong kind is one fault: its length or its size is not told as a second.
+    const sameSpot = (other: z.core.$ZodIssue) => other !== issue && other.code === 'invalid_type' && other.path.length === path.length && other.path.every((part, at) => part === path[at]);
+    if ((issue.code === 'too_big' || issue.code === 'too_small') && issues.some(sameSpot)) continue;
     // A value that may be a word or a mapping, and is a mapping: its own faults are told, at their places.
     if (issue.code === 'invalid_union' && isMap(nodeAt(doc, path))) {
       const inner = mappingIssues(schema, path, doc.toJS());
@@ -169,7 +172,7 @@ function written(path: Path): string | undefined {
 const ORDINALS = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth', 'tenth'];
 
 /** The lists whose items are mappings, and what one item is called. */
-const ITEMS: Record<string, string> = { steps: 'step', fields: 'field' };
+const ITEMS: Record<string, string> = { steps: 'step', fields: 'field', context: 'line of `context`' };
 
 /** An item of a list in words: "the third step", or "step 12" past the tenth. */
 function nth(index: number, item: string): string {

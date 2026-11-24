@@ -124,8 +124,78 @@ export const PersonSchema = z
   .strictObject({ name: Name, only: Only.optional(), description: Description.optional() })
   .meta({ description: 'A kind of person who uses the software, runs it or takes part in an exchange. A role, not an individual.' });
 
+/** The most lines of a system's `context`: a dozen sentences, not a handbook. */
+export const CONTEXT_MAX = 12;
+
+/** One text of a line of `context`: a sentence or two on one line, 1 to 300 characters. `key` is named in the messages. */
+function contextText(key: string) {
+  return z
+    .string()
+    .min(1, { error: (issue) => `${subject(issue.path, key)} is empty.` })
+    .max(NOTE_MAX)
+    .regex(ONE_LINE, {
+      error: (issue) => {
+        const text = String(issue.input);
+        const which = subject(issue.path, key);
+        if (!/\S/.test(text)) return `${which} is empty.`;
+        if (LINE_BREAK.test(text)) return `${which} must be on one line. A text that is folded with \`>-\` is one line.`;
+        return `${which} starts or ends with a space. Take the space off.`;
+      },
+    });
+}
+
+/**
+ * One line of a system's context: a sentence that binds (`must`) or one that decides between
+ * designs that are allowed (`prefer`), and its reason. The key says how strong the line is.
+ */
+const ContextLineSchema = z
+  .strictObject({
+    must: contextText('must').meta({ description: 'A line that binds: a design that goes against it is wrong. A sentence or two on one line, 1 to 300 characters. Never with `prefer`.' }).optional(),
+    prefer: contextText('prefer')
+      .meta({ description: 'A line that decides between designs that are allowed. It may yield, and its `why` says when. A sentence or two on one line, 1 to 300 characters. Never with `must`.' })
+      .optional(),
+    why: contextText('why').meta({ description: 'Its reason, and where it comes from: a contract, a decision, a person who can vouch. One line of 1 to 300 characters.' }),
+  })
+  .meta({
+    description: 'One line of context: `must` or `prefer`, and `why`.',
+    oneOf: [{ required: ['must'] }, { required: ['prefer'] }],
+  });
+
+const Context = z
+  .array(ContextLineSchema)
+  .min(1)
+  .max(CONTEXT_MAX)
+  .superRefine((lines, context) => {
+    const first = new Map<string, number>();
+    lines.forEach((line, index) => {
+      const which = capital(label(['context', index]));
+      if (line.must !== undefined && line.prefer !== undefined) {
+        context.addIssue({ code: 'custom', path: [index, 'prefer'], params: { code: 'context-line' }, message: `${which} has both \`must\` and \`prefer\`. A line binds or it decides between designs: keep one of the two, or write two lines.` });
+        return;
+      }
+      const says = line.must ?? line.prefer;
+      if (says === undefined) {
+        context.addIssue({ code: 'custom', path: [index], params: { code: 'context-line' }, message: `${which} has neither \`must\` nor \`prefer\`. Write the sentence under \`must\` if it binds, under \`prefer\` if it may yield.` });
+        return;
+      }
+      const before = first.get(says);
+      if (before === undefined) first.set(says, index);
+      else
+        context.addIssue({
+          code: 'custom',
+          path: [index],
+          params: { code: 'context-line' },
+          message: `${capital(label(['context', index]))} says the same as ${label(['context', before])}. Keep one.`,
+        });
+    });
+  })
+  .meta({
+    description:
+      'What is true of this system and its team and that no other record holds: 1 to 12 lines, each `must` or `prefer` with its `why`. A limit with its reason, never a description. Left out when there is nothing to say.',
+  });
+
 export const SystemSchema = z
-  .strictObject({ name: Name, only: Only.optional(), description: Description.optional(), external: External.optional(), owner: Owner.optional() })
+  .strictObject({ name: Name, only: Only.optional(), description: Description.optional(), external: External.optional(), owner: Owner.optional(), context: Context.optional() })
   .meta({ description: 'Software its users see as one whole, ours or somebody else\'s. Nothing is above it. C4 calls it a software system.' });
 
 export const AppSchema = z
