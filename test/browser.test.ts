@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { cp, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -42,17 +42,17 @@ const DRAWN = `(() => ({
 type Send = (method: string, params?: object) => Promise<{ result?: { result?: { value?: unknown } } }>;
 
 /**
- * Serves the shop with the built page, starts Chrome, and gives `run` a way to send it commands
- * and the page's address. Chrome and the server are stopped whatever happens.
+ * Serves the shop, or another folder, with the built page, starts Chrome, and gives `run` a way
+ * to send it commands and the page's address. Chrome and the server are stopped whatever happens.
  */
-async function inChrome(run: (send: Send, address: string) => Promise<void>) {
+async function inChrome(run: (send: Send, address: string) => Promise<void>, folder = SHOP) {
   expect(existsSync(join(PAGE, 'index.html')), 'the page is built: run "npm run build" first').toBe(true);
   const profile = await mkdtemp(join(tmpdir(), 'seefore-chrome-'));
   let server: Server | undefined;
   let chrome: ChildProcess | undefined;
   let socket: WebSocket | undefined;
   try {
-    server = await startServer(SHOP, PAGE, 0);
+    server = await startServer(folder, PAGE, 0);
     const address = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
     chrome = spawn(CHROME, ['--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check', `--user-data-dir=${profile}`, '--remote-debugging-port=0', '--window-size=1280,800', 'about:blank'], {
       stdio: 'ignore',
@@ -94,7 +94,8 @@ async function inChrome(run: (send: Send, address: string) => Promise<void>) {
       await ended;
     }
     await new Promise((done) => (server ? server.close(done) : done(undefined)));
-    await rm(profile, { recursive: true, force: true });
+    // Chrome's helpers may still write to the profile for a moment after it is killed.
+    await rm(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
   }
 }
 
@@ -408,7 +409,7 @@ test.skipIf(!HAS_CHROME).concurrent(
       // There is no list of flows apart: its old address leads to the features.
       await send('Page.navigate', { url: `${address}/flows` });
       expect(await waitFor(send, `location.pathname === '/features' && [...document.querySelectorAll('main a')].map((link) => link.getAttribute('href')).join()`)).toBe('/features/ordering,/flows/placing-an-order');
-      expect(await waitFor(send, `document.querySelector('nav[aria-label="Main navigation"]')?.innerText.replace(/\\s+/g, ' ')`)).toBe('Architecture Features Models');
+      expect(await waitFor(send, `document.querySelector('nav[aria-label="Main navigation"]')?.innerText.replace(/\\s+/g, ' ')`)).toBe('Architecture Features Models Rules');
       expect(await waitFor(send, `document.querySelector('a[href="/flows/placing-an-order"]')?.textContent`)).toBe('Placing an order');
       await click(send, await centreOf(send, 'a[href="/flows/placing-an-order"]'));
       await flowAt(send, '');
@@ -456,5 +457,82 @@ test.skipIf(!HAS_CHROME).concurrent(
       await click(send, await centreOf(send, 'section[aria-label="Steps"] a[href="/flows/placing-an-order#saves"]'));
       expect(await waitFor(send, `location.hash === '#saves' && document.querySelector('[aria-current="step"]')?.getAttribute('data-step')`)).toBe('saves');
     }),
+  20_000,
+);
+
+/** The text of what a selector finds, each with its spaces made one. */
+const texts = (selector: string) => `[...document.querySelectorAll(${JSON.stringify(selector)})].map((each) => each.innerText.replace(/\\s+/g, ' ').trim())`;
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME ? 'Rules lists the rules with the check’s line, and a row opens its rule, as written and with what it looked at' : `skipped: there is no Chrome at ${CHROME}`,
+  () =>
+    inChrome(async (send, address) => {
+      await send('Page.navigate', { url: `${address}/rules` });
+      const list = `document.querySelector('.rules-line') !== null && {
+        line: document.querySelector('.rules-line').textContent,
+        rows: ${texts('ul[aria-label="Rules"] > li')},
+        lit: document.querySelector('nav[aria-label="Main navigation"] a.active')?.textContent,
+        dot: document.querySelector('.nav-dot') !== null,
+      }`;
+      expect(await waitFor(send, list)).toEqual({
+        line: '1 rule of your own: 1 holds.',
+        rows: ['The orders are written only by the Order API Holds'],
+        lit: 'Rules',
+        dot: false,
+      });
+      await click(send, await centreOf(send, 'a[href="/rules/orders-written-by-the-api"]'));
+      const page = `location.pathname === '/rules/orders-written-by-the-api' && document.title === 'The orders are written only by the Order API · seefore' && document.querySelector('section[aria-label="Looked at"]') !== null && {
+        crumbs: document.querySelector('nav[aria-label="Breadcrumb"]')?.innerText.replace(/\\s+/g, ' '),
+        pills: ${texts('.record-marks .pill')},
+        sections: ${texts('.section-label')},
+        rule: ${texts('.rule-written > div')},
+        looked: ${texts('section[aria-label="Looked at"] li')},
+        lit: document.querySelector('nav[aria-label="Main navigation"] a.active')?.textContent,
+      }`;
+      expect(await waitFor(send, page)).toEqual({
+        crumbs: 'Rules / The orders are written only by the Order API',
+        pills: ['Holds'],
+        sections: ['The rule', 'Looked at'],
+        rule: ['Each to · id Orders', 'access write, read-write', 'Must from · id Order API', 'File rules/orders-written-by-the-api.yaml'],
+        looked: ['No name Order API → Orders'],
+        lit: 'Rules',
+      });
+    }),
+  20_000,
+);
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME ? 'a break opens its record, whose page names the rule' : `skipped: there is no Chrome at ${CHROME}`,
+  async () => {
+    // A copy of the shop with one rule more, which its store of orders breaks.
+    const folder = await mkdtemp(join(tmpdir(), 'seefore-shop-'));
+    try {
+      await cp(SHOP, folder, { recursive: true });
+      await writeFile(join(folder, 'rules', 'stores-name-technology.yaml'), 'name: Every store names its technology\neach: {kind: stores}\nmust: {technology: any}\n');
+      await inChrome(async (send, address) => {
+        await send('Page.navigate', { url: `${address}/rules` });
+        const list = `document.querySelector('.nav-dot') !== null && {
+          dot: document.querySelector('.nav-dot').getAttribute('aria-label'),
+          rows: ${texts('ul[aria-label="Rules"] > li')},
+        }`;
+        expect(await waitFor(send, list)).toEqual({
+          dot: 'A rule is broken',
+          rows: ['Every store names its technology 1 record breaks it Broken', 'The orders are written only by the Order API Holds'],
+        });
+        await click(send, await centreOf(send, 'a[href="/rules/stores-name-technology"]'));
+        const breaks = `location.pathname === '/rules/stores-name-technology' && ${texts('section[aria-label="Breaks it"] li')}.join()`;
+        expect(await waitFor(send, breaks)).toBe('Orders Store · database');
+        await click(send, await centreOf(send, 'section[aria-label="Breaks it"] a[href="/models/orders"]'));
+        const record = `location.pathname === '/models/orders' && document.querySelector('section[aria-label="Rules"]') !== null && {
+          last: [...document.querySelectorAll('.section-label')].at(-1)?.textContent,
+          rules: ${texts('section[aria-label="Rules"] tr')},
+          link: document.querySelector('section[aria-label="Rules"] a')?.getAttribute('href'),
+        }`;
+        expect(await waitFor(send, record)).toEqual({ last: 'Rules', rules: ['Every store names its technology Breaks it'], link: '/rules/stores-name-technology' });
+      }, folder);
+    } finally {
+      await rm(folder, { recursive: true, force: true });
+    }
+  },
   20_000,
 );

@@ -135,6 +135,21 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* The dot at the right end of an entry: red when a rule is broken, orange when one is not judged. */
+.nav-dot {
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: var(--radius-full);
+}
+.nav-dot-broken {
+  background: var(--danger-solid);
+  box-shadow: var(--glow-danger);
+}
+.nav-dot-not-judged {
+  background: var(--warning-solid);
+  box-shadow: var(--glow-warning);
+}
 
 /* The page beside the sidebar and its toolbar row. */
 .app-inset {

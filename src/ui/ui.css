@@ -177,6 +177,19 @@
 :is(.tile, .pill)[class*='kind-'] {
   --tone-tint: color-mix(in srgb, var(--tone) 16%, transparent);
 }
+/* The tones of a state, as the rules have them: broken, not judged, holds. */
+.tone-danger {
+  --tone: var(--danger);
+  --tone-tint: var(--danger-tint);
+}
+.tone-warning {
+  --tone: var(--warning);
+  --tone-tint: var(--warning-tint);
+}
+.tone-success {
+  --tone: var(--success);
+  --tone-tint: var(--success-tint);
+}
 
 .text-link {
   display: inline-flex;

@@ -3,10 +3,11 @@ import type { ReactNode } from 'react';
 import { useOutletContext, useParams } from 'react-router-dom';
 import type { ModelRecord } from '../model/answer.ts';
 import type { Catalogue } from '../model/catalogue.ts';
+import type { Rulebook } from '../model/rulebook.ts';
 import type { Travel } from '../model/travel.ts';
 import { typeWords } from './kinds.tsx';
 import { KindTile, Missing, NameOf, RecordLink } from './models.tsx';
-import { Named, OwnerOf, Related } from './record.tsx';
+import { Named, OwnerOf, Related, RulesOf } from './record.tsx';
 import type { Fact, Row } from './record.tsx';
 import type { ModelState } from './shell.tsx';
 import { EmptyState, Facts, GridRow, LargeTitle, Panel, RowList, SectionStack, TextPanel, useTitle } from './ui.tsx';
@@ -23,11 +24,11 @@ const onlyOf = (record: ModelRecord | undefined): string => (typeof record?.fiel
 const LIST = { to: '/features', title: 'Features' };
 
 /** What a page of features shows while the model is read, or why it cannot be. */
-function useModel(): { catalogue?: Catalogue; travel?: Travel; line?: ReactNode } {
-  const { catalogue, travel, failed } = useOutletContext<ModelState>();
+function useModel(): { catalogue?: Catalogue; travel?: Travel; rulebook?: Rulebook; line?: ReactNode } {
+  const { catalogue, travel, rulebook, failed } = useOutletContext<ModelState>();
   if (failed !== undefined) return { line: <p className="page-line failed">{failed}</p> };
   if (catalogue === undefined || travel === undefined) return { line: <p className="page-line">Reading…</p> };
-  return { catalogue, travel };
+  return { catalogue, travel, rulebook };
 }
 
 /**
@@ -75,18 +76,18 @@ export function FeaturesList() {
 /** The page of a feature, `/features/<id>`; an id that names no feature is missing. */
 export function FeaturePage() {
   const { id = '' } = useParams();
-  const { catalogue, travel, line } = useModel();
+  const { catalogue, travel, rulebook, line } = useModel();
   const found = catalogue?.record(id);
   const record = found?.kind === 'features' ? found : undefined;
   const name = record?.fields.name;
   useTitle(typeof name === 'string' ? name : (record?.id ?? 'Features'));
   if (catalogue === undefined || travel === undefined) return line;
   if (record === undefined) return <Missing list={LIST} />;
-  return <FeatureBody record={record} catalogue={catalogue} travel={travel} />;
+  return <FeatureBody record={record} catalogue={catalogue} travel={travel} rulebook={rulebook} />;
 }
 
 /** A feature: its facts, its flows, its parts from its flows and those stated on it, and the data of its flows. */
-function FeatureBody({ record, catalogue, travel }: { record: ModelRecord; catalogue: Catalogue; travel: Travel }) {
+function FeatureBody({ record, catalogue, travel, rulebook }: { record: ModelRecord; catalogue: Catalogue; travel: Travel; rulebook: Rulebook | undefined }) {
   const { fields } = record;
   const read = travel.feature(record.id);
   const facts: Fact[] = [
@@ -149,6 +150,7 @@ function FeatureBody({ record, catalogue, travel }: { record: ModelRecord; catal
             <Related title="Data" rows={data} />
           </>
         )}
+        <RulesOf rulebook={rulebook} id={record.id} />
       </SectionStack>
     </>
   );
