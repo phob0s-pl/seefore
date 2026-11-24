@@ -12,8 +12,13 @@ import './base.css';
 import './ui.css';
 import './shell.css';
 import './diagram.css';
+import './records.css';
 import { Architecture } from './architecture.tsx';
+import { ActorsList, ConnectionsList, OwnersList, SoftwareList, TABS, TechnologiesList } from './models.tsx';
+import { RecordPage } from './record.tsx';
 import { Shell } from './shell.tsx';
+
+const [software, actors, connections, technologies, owners] = TABS;
 
 const root = document.getElementById('root');
 if (root !== null) {
@@ -23,6 +28,16 @@ if (root !== null) {
         <Routes>
           <Route element={<Shell />}>
             <Route index element={<Architecture />} />
+            <Route path="models" element={<SoftwareList />} />
+            <Route path="models/:id" element={<RecordPage tab={software} />} />
+            <Route path="actors" element={<ActorsList />} />
+            <Route path="actors/:id" element={<RecordPage tab={actors} />} />
+            <Route path="connections" element={<ConnectionsList />} />
+            <Route path="connections/:id" element={<RecordPage tab={connections} />} />
+            <Route path="technologies" element={<TechnologiesList />} />
+            <Route path="technologies/:id" element={<RecordPage tab={technologies} />} />
+            <Route path="owners" element={<OwnersList />} />
+            <Route path="owners/:id" element={<RecordPage tab={owners} />} />
           </Route>
         </Routes>
       </BrowserRouter>

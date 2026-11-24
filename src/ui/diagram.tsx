@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { BaseEdge, ControlButton, Controls, Handle, MarkerType, Position, ReactFlow, useReactFlow } from '@xyflow/react';
 import type { Edge, EdgeProps, Node, NodeProps } from '@xyflow/react';
-import { AppWindow, Boxes, Database, Network, Router, Scan, UserRound } from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
+import { Scan } from 'lucide-react';
 import type { ElkPoint } from 'elkjs/lib/elk-api.js';
 import type { Box, Depth, View } from '../model/view.ts';
 import { engine } from './elk.ts';
+import { iconOf, KIND, typeWords } from './kinds.tsx';
 import { layOut } from './layout.ts';
 import type { Band, Layout } from './layout.ts';
 import { CanvasFrame } from './ui.tsx';
@@ -14,28 +14,17 @@ type BoxNode = Node<{ box: Box }, 'box' | 'frame'>;
 type BandNode = Node<{ band: Band }, 'band'>;
 type RouteEdge = Edge<{ points: ElkPoint[] }, 'route'>;
 
-/** What each kind of box is called on it, and its icon. */
-const KIND: Record<string, { word: string; icon: LucideIcon }> = {
-  people: { word: 'Person', icon: UserRound },
-  systems: { word: 'System', icon: Network },
-  apps: { word: 'App', icon: AppWindow },
-  stores: { word: 'Store', icon: Database },
-  components: { word: 'Component', icon: Boxes },
-  infrastructure: { word: 'Infrastructure', icon: Router },
-};
-
 /** The room a fitted diagram leaves at each edge of the field, in pixels. */
 const FIT = { padding: 40 };
 
 /** The kind of a box in words: "External system", or "Store · database". */
 function kindWords(box: Box): string {
-  const word = KIND[box.kind]?.word ?? box.kind;
-  if (box.external) return `External ${word.toLowerCase()}`;
-  return box.type !== undefined ? `${word} · ${box.type}` : word;
+  if (box.external) return `External ${(KIND[box.kind]?.word ?? box.kind).toLowerCase()}`;
+  return typeWords(box.kind, box.type);
 }
 
 function KindIcon({ kind }: { kind: string }) {
-  const Icon = KIND[kind]?.icon ?? Boxes;
+  const Icon = iconOf(kind);
   return (
     <span className="model-symbol" aria-hidden="true">
       <Icon />

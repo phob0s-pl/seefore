@@ -1,26 +1,36 @@
-import { useEffect, useState } from 'react';
-import { ChevronLeft, ChevronRight, Waypoints } from 'lucide-react';
-import { Link, NavLink, Outlet, useNavigate, useSearchParams } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { Boxes, ChevronLeft, ChevronRight, Waypoints } from 'lucide-react';
+import { Link, NavLink, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import type { ModelAnswer } from '../model/answer.ts';
+import { catalogueOf } from '../model/catalogue.ts';
+import type { Catalogue } from '../model/catalogue.ts';
 import { DEPTHS, depthOf } from '../model/view.ts';
 import type { Depth } from '../model/view.ts';
+import { TABS } from './models.tsx';
 import { Button, GlassGroup } from './ui.tsx';
 
-/** What the shell knows of the model, and hands to the page: the answer, or why there is none. */
-export type ModelState = { answer?: ModelAnswer; failed?: string };
+/**
+ * What the shell knows of the model, and hands to the page: the answer and what the pages of
+ * the records ask of it, worked out once, or why there is none.
+ */
+export type ModelState = { answer?: ModelAnswer; catalogue?: Catalogue; failed?: string };
 
 /** The depths as the top bar names them. */
 const DEPTH_WORDS: Record<Depth, string> = { systems: 'Systems', containers: 'Containers', components: 'Components' };
 
 /**
- * The window: the sidebar with the name and the one entry, the top bar with a back and a
- * forward arrow and the choice of depth, and the page beside them.
+ * The window: the sidebar with the name and its two entries, the top bar with a back and a
+ * forward arrow and, on the Architecture page, the choice of depth, and the page beside them.
  */
 export function Shell() {
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const [params] = useSearchParams();
   const depth = depthOf(params.get('depth'));
-  const [model, setModel] = useState<ModelState>({});
+  const [model, setModel] = useState<{ answer?: ModelAnswer; failed?: string }>({});
+  const state = useMemo((): ModelState => (model.answer ? { ...model, catalogue: catalogueOf(model.answer.records) } : model), [model]);
+  // Models is current on each of its lists and on the page of every record.
+  const inModels = TABS.some((tab) => pathname === tab.to || pathname.startsWith(`${tab.to}/`));
 
   useEffect(() => {
     fetch('/api/model')
@@ -59,6 +69,10 @@ export function Shell() {
             <Waypoints />
             <span className="nav-text">Architecture</span>
           </NavLink>
+          <Link to="/models" className={`nav-link${inModels ? ' active' : ''}`} aria-current={inModels ? 'page' : undefined}>
+            <Boxes />
+            <span className="nav-text">Models</span>
+          </Link>
         </nav>
       </aside>
       <div className="app-inset">
@@ -71,16 +85,18 @@ export function Shell() {
               <ChevronRight />
             </Button>
           </GlassGroup>
-          <nav className="page-tabs" aria-label="Depth">
-            {DEPTHS.map((item) => (
-              <Link key={item} to={item === 'systems' ? '/' : `/?depth=${item}`} aria-current={item === depth ? 'page' : undefined}>
-                {DEPTH_WORDS[item]}
-              </Link>
-            ))}
-          </nav>
+          {pathname === '/' && (
+            <nav className="page-tabs" aria-label="Depth">
+              {DEPTHS.map((item) => (
+                <Link key={item} to={item === 'systems' ? '/' : `/?depth=${item}`} aria-current={item === depth ? 'page' : undefined}>
+                  {DEPTH_WORDS[item]}
+                </Link>
+              ))}
+            </nav>
+          )}
         </header>
         <main id="main-content" tabIndex={-1} className="page-content">
-          <Outlet context={model} />
+          <Outlet context={state} />
         </main>
       </div>
     </div>

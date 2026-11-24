@@ -1,0 +1,146 @@
+/* Models: the row of tabs over its lists and record pages, a record's title, the names in its
+   cells and facts, and a connection's two ends. The panels, rows, facts and tables are ui.css's. */
+
+/* The tabs: one segmented control, the current tab lit. */
+.models-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 0 20px;
+  padding: 2px;
+  border-radius: 9px;
+  background: var(--neutral-tint);
+  box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.08);
+}
+.models-tabs a {
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 14px;
+  border-radius: 7px;
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.6);
+  white-space: nowrap;
+}
+.models-tabs a:hover:not(.active) {
+  color: var(--text-strong);
+}
+.models-tabs a.active {
+  background: var(--surface-selected-tab);
+  color: var(--text-strong);
+  font-weight: 600;
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.3),
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.15);
+}
+
+/* A record's title: the tile of its kind, its name as the large title, and its marks. */
+.record-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  margin: 0 0 20px;
+  padding: 0 4px;
+}
+.record-title > .large-title {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  overflow-wrap: anywhere;
+}
+.record-marks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* A name in a list or a cell: a connection with none, and an id that names no record. */
+.quiet {
+  color: var(--text-tertiary);
+  font-weight: 400;
+}
+.dangling {
+  color: var(--text-secondary);
+}
+.record-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 100%;
+  vertical-align: middle;
+}
+.record-cell > a,
+.record-cell > span:last-child {
+  min-width: 0;
+}
+.step-number {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-tertiary);
+}
+
+/* Where a fact is taken from, after its value; each condition on its own line. */
+.fact-from {
+  color: var(--text-secondary);
+}
+.fact-line {
+  display: block;
+}
+
+/* A connection's two ends: a stack of rows that open the things, an arrow between them. */
+.connection-path {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  max-width: var(--reading-width);
+}
+.connection-path > li {
+  display: flex;
+  min-width: 0;
+}
+.connection-path-arrow {
+  justify-content: center;
+  width: 44px;
+  color: var(--text-faint);
+}
+.connection-path-arrow svg {
+  width: 15px;
+  height: 15px;
+}
+.connection-path a,
+.connection-end {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--radius-note);
+  background: var(--surface-note);
+  box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.08);
+}
+.connection-path a:hover {
+  background: var(--surface-hover);
+}
+.connection-path a > span,
+.connection-end > span {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.connection-path small {
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+.connection-path strong {
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.92);
+  overflow-wrap: anywhere;
+}
