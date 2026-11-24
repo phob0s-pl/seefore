@@ -14,8 +14,8 @@ export type RuleState = Ruling['state'];
 /** The states in the order the list shows them: broken first, then not judged, then looks at nothing, then holds. */
 export const STATES: readonly RuleState[] = ['broken', 'not-judged', 'nothing', 'holds'];
 
-/** One row of the list: the rule's id, its name when its file has a record, its state and what was found. */
-export type RuleRow = { id: string; name?: string; state: RuleState; found: string };
+/** One row of the list: the rule's id, its name when its file has a record, and its state. */
+export type RuleRow = { id: string; name?: string; state: RuleState };
 
 /** The dot of the sidebar's entry: a rule is broken, or none is and one is not judged. */
 export type Dot = 'broken' | 'not-judged' | undefined;
@@ -47,8 +47,12 @@ export type RuleRead = {
   problems: Problem[];
   /** It is not judged, and its own file has no error: another file has one. */
   elsewhere: boolean;
+  /** Where it breaks, in one sentence; nothing when it is not broken. */
+  where?: string;
   /** The records that break it and are not in `debt`, by name. */
   breaks: string[];
+  /** For a record that breaks it: the lines of `must` that the record does not match. None where the answer does not say. */
+  misses: Record<string, SelectorLine[]>;
   /** Its selectors as written: none when it has no record. */
   written: Written[];
   /** The ways that break it, each with the things it passes. */
@@ -140,22 +144,30 @@ export function thingsOf(way: { from: string; by: readonly string[] }, record: (
 }
 
 /**
- * What was found, in the words of the list: what breaks the rule, or why it is not judged; then,
- * after a comma, its debt and the debt paid. Nothing for a rule that holds with no debt.
- * `own` is the problems of the rule's own file.
+ * Where a broken rule breaks, in one sentence: how many of the records it looks at do not match
+ * `must`, how many records are what it forbids, or how many ways break it. Nothing for a rule
+ * that is not broken.
  */
-export function foundWords(ruling: Ruling, own: readonly Problem[]): string {
-  const parts: string[] = [];
-  if (ruling.state === 'broken')
-    parts.push(ruling.ways !== undefined ? counted(ruling.ways.length, 'way breaks it', 'ways break it') : counted(ruling.breaks.length, 'record breaks it', 'records break it'));
-  if (ruling.state === 'not-judged') {
-    const errors = own.filter((problem) => problem.severity === 'error').length;
-    parts.push(errors > 0 ? `${counted(errors, 'error', 'errors')} in its file` : 'Another file has an error');
+export function whereWords(ruling: Ruling, record: ModelRecord | undefined): string | undefined {
+  if (ruling.state !== 'broken') return undefined;
+  if (ruling.ways !== undefined) {
+    const n = ruling.ways.length;
+    const what = record?.fields.never !== undefined ? (n === 1 ? 'leads where the rule says none may' : 'lead where the rule says none may') : n === 1 ? 'does not pass what Must names' : 'do not pass what Must names';
+    return `${counted(n, 'way', 'ways')} ${what}. ${n === 1 ? 'It is the shortest from its start.' : 'Each is the shortest from its start.'}`;
   }
-  if (ruling.debt.length > 0) parts.push(`${ruling.debt.length} of debt`);
-  const paid = own.filter((problem) => problem.rule === 'debt-paid').length;
-  if (paid > 0) parts.push(`${counted(paid, 'debt', 'debts')} paid`);
-  return parts.join(', ');
+  const n = ruling.breaks.length;
+  const debt = ruling.debt.length > 0 ? ` ${ruling.debt.length} more ${ruling.debt.length === 1 ? 'stands' : 'stand'} in debt.` : '';
+  if (record?.fields.never !== undefined) return `${counted(n, 'record is', 'records are')} what this rule says must never be there.${debt}`;
+  const all = ruling.chosen.length;
+  if (n === all) return `${all === 1 ? 'The one record it looks at does not match Must.' : `None of the ${all} records it looks at matches Must.`}${debt}`;
+  return `${n} of the ${all} records it looks at ${n === 1 ? 'does' : 'do'} not match Must.${debt}`;
+}
+
+/** For each record that breaks a rule with `must`: the lines of `must` it does not match, from the keys the answer names. */
+function missesOf(ruling: Ruling, record: ModelRecord | undefined): Record<string, SelectorLine[]> {
+  const must = record?.fields.must;
+  if (ruling.misses === undefined || !isMapping(must)) return {};
+  return Object.fromEntries(Object.entries(ruling.misses).map(([id, keys]) => [id, keys.flatMap((key) => (key in must ? selectorLines(must[key], [key]) : []))]));
 }
 
 /** The dot of the sidebar's entry: red when a rule is broken, orange when none is and one is not judged. */
@@ -202,7 +214,7 @@ export function rulebookOf({ records, rulings, problems }: Pick<ModelRead, 'reco
   const rows: RuleRow[] = rulings
     .map((ruling) => {
       const name = nameOf(ruling.rule);
-      return { id: ruling.rule, ...(name !== undefined ? { name } : {}), state: ruling.state, found: foundWords(ruling, own(ruling.rule)) };
+      return { id: ruling.rule, ...(name !== undefined ? { name } : {}), state: ruling.state };
     })
     .sort((a, b) => STATES.indexOf(a.state) - STATES.indexOf(b.state) || collator.compare(a.name ?? a.id, b.name ?? b.id) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   const order = new Map(rows.map((row, index) => [row.id, index]));
@@ -221,7 +233,9 @@ export function rulebookOf({ records, rulings, problems }: Pick<ModelRead, 'reco
       ruling,
       problems: mine.filter((problem) => problem.rule !== `rules/${id}`),
       elsewhere: ruling.state === 'not-judged' && !mine.some((problem) => problem.severity === 'error'),
+      ...((where) => (where !== undefined ? { where } : {}))(whereWords(ruling, found)),
       breaks: sorted(ruling.breaks),
+      misses: missesOf(ruling, found),
       written: found !== undefined ? writtenOf(found) : [],
       ways: (ruling.ways ?? []).map((way) => ({ things: thingsOf(way, record), by: way.by, more: way.more })),
       // A debt is judged only with its rule: while the rule is not judged, no debt is said.

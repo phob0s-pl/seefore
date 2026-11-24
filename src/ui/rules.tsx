@@ -27,8 +27,8 @@ const OTHER: Record<string, string> = { connections: 'Connection', technologies:
 /** The list a missing rule leads back to. */
 const LIST = { to: '/rules', title: 'Rules' };
 
-/** The rule, what was found, and the state. */
-const COLS = 'minmax(0, 1.6fr) minmax(0, 1fr) 132px';
+/** The rule, and the state. */
+const COLS = 'minmax(0, 1fr) 160px';
 /** The record, its kind, and its condition. */
 const RECORD_COLS = 'minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 0.8fr)';
 
@@ -82,7 +82,7 @@ export function RulesList() {
         <>
           <p className="rules-line">{rulebook.line}</p>
           <Panel lift className="rules-list">
-            <RowListHeading columns={['Rule', 'Found', 'State']} cols={COLS} />
+            <RowListHeading columns={['Rule', 'State']} cols={COLS} />
             <RowList label="Rules">
               {rulebook.rows.map((row) => (
                 <GridRow
@@ -91,7 +91,7 @@ export function RulesList() {
                   cols={COLS}
                   tile={<RuleTile state={row.state} size="sm" />}
                   name={row.name ?? row.id}
-                  cells={[row.found, <StatePill state={row.state} />]}
+                  cells={[<StatePill state={row.state} />]}
                 />
               ))}
             </RowList>
@@ -149,7 +149,7 @@ function RuleBody({ read, catalogue, crumbs }: { read: RuleRead; catalogue: Cata
         <Problems read={read} />
         <Breaks read={read} catalogue={catalogue} />
         <Debt read={read} catalogue={catalogue} />
-        {record !== undefined && <TheRule read={read} record={record} catalogue={catalogue} />}
+        {record !== undefined && <TheRule read={read} catalogue={catalogue} />}
         <LookedAt read={read} catalogue={catalogue} />
       </SectionStack>
     </>
@@ -201,8 +201,8 @@ function whatOf(record: ModelRecord, catalogue: Catalogue): string {
   return `${end(record.fields.from)} → ${end(record.fields.to)}`;
 }
 
-/** Records as the lists of Models show them, each row a link to its page, with what it is and its condition. */
-function Records({ ids, catalogue, label }: { ids: readonly string[]; catalogue: Catalogue; label: string }) {
+/** Records as the lists of Models show them, each row a link to its page, with what it is and its condition; and under a row what `below` gives for it. */
+function Records({ ids, catalogue, label, below }: { ids: readonly string[]; catalogue: Catalogue; label: string; below?: (id: string) => ReactNode }) {
   return (
     <Panel className="rule-records">
       <RowList label={label}>
@@ -224,6 +224,7 @@ function Records({ ids, catalogue, label }: { ids: readonly string[]; catalogue:
               tile={<KindTile kind={record.kind} size="sm" />}
               name={<NameOf record={record} />}
               cells={[whatOf(record, catalogue), only !== undefined ? `Only ${only.text}` : '']}
+              below={below?.(id)}
             />
           );
         })}
@@ -261,24 +262,44 @@ function Way({ way, catalogue }: { way: WayRead; catalogue: Catalogue }) {
   );
 }
 
-/** The Breaks it section: the records that break the rule, or a row for each start of a way that breaks it. */
-function Breaks({ read, catalogue }: { read: RuleRead; catalogue: Catalogue }) {
-  if (read.ways.length > 0)
-    return (
-      <Section title="Breaks it">
-        <Panel>
-          <ul className="rule-ways" aria-label="Breaks it">
-            {read.ways.map((way, index) => (
-              <Way key={index} way={way} catalogue={catalogue} />
-            ))}
-          </ul>
-        </Panel>
-      </Section>
-    );
-  if (read.breaks.length === 0) return null;
+/** Under a record that breaks a rule: the lines of `must` it does not match. */
+function Misses({ lines, catalogue }: { lines: readonly SelectorLine[]; catalogue: Catalogue }) {
+  if (lines.length === 0) return null;
   return (
-    <Section title="Breaks it">
-      <Records ids={read.breaks} catalogue={catalogue} label="Breaks it" />
+    <div className="rule-misses">
+      <span className="rule-misses-label">Does not match</span>
+      <span className="rule-misses-lines">
+        {lines.map((line, index) => (
+          <Line key={index} line={line} catalogue={catalogue} />
+        ))}
+      </span>
+    </div>
+  );
+}
+
+/**
+ * The Where it breaks section of a broken rule: a sentence that says how much breaks it, then the
+ * records that break it, each with what it does not match, or a row for each start of a way that
+ * breaks it.
+ */
+function Breaks({ read, catalogue }: { read: RuleRead; catalogue: Catalogue }) {
+  if (read.ways.length === 0 && read.breaks.length === 0) return null;
+  return (
+    <Section title="Where it breaks">
+      <div className="rule-stack">
+        {read.where !== undefined && <TextPanel>{read.where}</TextPanel>}
+        {read.ways.length > 0 ? (
+          <Panel>
+            <ul className="rule-ways" aria-label="Where it breaks">
+              {read.ways.map((way, index) => (
+                <Way key={index} way={way} catalogue={catalogue} />
+              ))}
+            </ul>
+          </Panel>
+        ) : (
+          <Records ids={read.breaks} catalogue={catalogue} label="Where it breaks" below={(id) => <Misses lines={read.misses[id] ?? []} catalogue={catalogue} />} />
+        )}
+      </div>
     </Section>
   );
 }
@@ -312,8 +333,8 @@ function Line({ line, catalogue }: { line: SelectorLine; catalogue: Catalogue })
   );
 }
 
-/** The rule as written, with no YAML: "Never", or "Each" and "Must", each standing once on the first line of its selector, then the file. */
-function TheRule({ read, record, catalogue }: { read: RuleRead; record: ModelRecord; catalogue: Catalogue }) {
+/** The rule as written, with no YAML: "Never", or "Each" and "Must", each standing once on the first line of its selector. */
+function TheRule({ read, catalogue }: { read: RuleRead; catalogue: Catalogue }) {
   return (
     <Section title="The rule">
       <Panel>
@@ -328,10 +349,6 @@ function TheRule({ read, record, catalogue }: { read: RuleRead; record: ModelRec
               </div>
             )),
           )}
-          <div>
-            <dt>File</dt>
-            <dd className="mono">{record.file}</dd>
-          </div>
         </dl>
       </Panel>
     </Section>

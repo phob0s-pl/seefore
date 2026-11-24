@@ -2,7 +2,7 @@ import { expect, test } from 'vitest';
 import type { Ruling } from '../src/model/answer.ts';
 import { readModel } from '../src/model/read.ts';
 import type { SourceFile } from '../src/model/read.ts';
-import { dotOf, foundWords, rulebookOf, selectorLines, thingsOf, writtenOf } from '../src/model/rulebook.ts';
+import { dotOf, rulebookOf, selectorLines, thingsOf, whereWords, writtenOf } from '../src/model/rulebook.ts';
 
 /** A shop of Sales with a gateway, an outside bank and a clerk; the worker is there only at night. */
 const BASE: SourceFile[] = [
@@ -33,8 +33,8 @@ const CLERK_CALLS_API = file('connections/clerk-calls-api.yaml', 'from: clerk\nt
 
 /** A ruling of the check, with what it does not say left empty. */
 const ruling = (state: Ruling['state'], more: Partial<Ruling> = {}): Ruling => ({ rule: 'r', state, chosen: [], breaks: [], debt: [], ...more });
-/** A problem at the file of the rule `r`. */
-const at = (rule: string, severity: 'error' | 'warning') => ({ file: 'rules/r.yaml', line: 2, column: 1, rule, severity, message: '', fix: '' });
+/** A rule's record, as far as the sentence of where it breaks reads it. */
+const written = (fields: Record<string, unknown>) => ({ kind: 'rules', id: 'r', file: 'rules/r.yaml', fields });
 
 test('the list stands in the order of the states, then by name, a rule with no record by its id; the line and the dot are the check’s', () => {
   const rules = book(
@@ -55,7 +55,7 @@ test('the list stands in the order of the states, then by name, a rule with no r
     ['no-browser-database', 'holds'],
     ['clerk-not-at-bank', 'holds'],
   ]);
-  expect(rules.rows[0]).toEqual({ id: 'always-there', name: 'Everything in the shop is always there', state: 'broken', found: '1 record breaks it' });
+  expect(rules.rows[0]).toEqual({ id: 'always-there', name: 'Everything in the shop is always there', state: 'broken' });
   expect(rules.line).toBe('7 rules of your own: 2 hold, 2 broken, 1 looks at nothing, 2 not judged.');
   expect(rules.dot).toBe('broken');
   expect(dotOf([ruling('holds'), ruling('not-judged'), ruling('nothing')])).toBe('not-judged');
@@ -64,24 +64,36 @@ test('the list stands in the order of the states, then by name, a rule with no r
   expect(book().line).toBeUndefined();
 });
 
-test('the words of Found: what breaks it or why it is not judged, then its debt and the debt paid; nothing for a rule that holds', () => {
-  expect(foundWords(ruling('broken', { breaks: ['a'] }), [])).toBe('1 record breaks it');
-  expect(foundWords(ruling('broken', { breaks: ['a', 'b'], debt: ['c', 'd'] }), [at('debt-paid', 'warning')])).toBe('2 records break it, 2 of debt, 1 debt paid');
+test('where a rule breaks, in one sentence: how many of what it looks at, of what it forbids, or of ways; nothing for a rule that is not broken', () => {
+  const each = written({ each: { kind: 'apps' }, must: { owner: 'any' } });
+  const never = written({ never: { kind: 'queue' } });
+  expect(whereWords(ruling('broken', { chosen: ['a', 'b', 'c', 'd', 'e'], breaks: ['a', 'b', 'c'] }), each)).toBe('3 of the 5 records it looks at do not match Must.');
+  expect(whereWords(ruling('broken', { chosen: ['a', 'b'], breaks: ['a'], debt: ['b'] }), each)).toBe('1 of the 2 records it looks at does not match Must. 1 more stands in debt.');
+  expect(whereWords(ruling('broken', { chosen: ['a'], breaks: ['a'] }), each)).toBe('The one record it looks at does not match Must.');
+  expect(whereWords(ruling('broken', { chosen: ['a', 'b'], breaks: ['a', 'b'] }), each)).toBe('None of the 2 records it looks at matches Must.');
+  expect(whereWords(ruling('broken', { chosen: ['a', 'b'], breaks: ['a', 'b'] }), never)).toBe('2 records are what this rule says must never be there.');
+  expect(whereWords(ruling('broken', { chosen: ['a'], breaks: ['a'] }), never)).toBe('1 record is what this rule says must never be there.');
   const way = { from: 'a', to: 'b', by: ['c'], more: 0 };
-  expect(foundWords(ruling('broken', { pairs: 1, ways: [way] }), [])).toBe('1 way breaks it');
-  expect(foundWords(ruling('broken', { pairs: 11, ways: Array.from({ length: 11 }, () => way) }), [])).toBe('11 ways break it');
-  expect(foundWords(ruling('not-judged'), [at('key-unknown', 'error')])).toBe('1 error in its file');
-  expect(foundWords(ruling('not-judged'), [at('key-unknown', 'error'), at('reference-unknown', 'error')])).toBe('2 errors in its file');
-  expect(foundWords(ruling('not-judged'), [])).toBe('Another file has an error');
-  expect(foundWords(ruling('holds', { debt: ['a', 'b'] }), [])).toBe('2 of debt');
-  expect(foundWords(ruling('holds'), [at('debt-paid', 'warning'), at('debt-paid', 'warning')])).toBe('2 debts paid');
-  expect(foundWords(ruling('nothing'), [at('rule-looks-at-nothing', 'warning')])).toBe('');
-  expect(foundWords(ruling('holds'), [])).toBe('');
+  expect(whereWords(ruling('broken', { pairs: 1, ways: [way] }), written({ each: { way: {} }, must: { through: {} } }))).toBe('1 way does not pass what Must names. It is the shortest from its start.');
+  expect(whereWords(ruling('broken', { pairs: 11, ways: Array.from({ length: 11 }, () => way) }), written({ never: { way: {} } }))).toBe('11 ways lead where the rule says none may. Each is the shortest from its start.');
+  expect(whereWords(ruling('holds', { debt: ['a'] }), each)).toBeUndefined();
+  expect(whereWords(ruling('not-judged'), undefined)).toBeUndefined();
+});
+
+test('a record that breaks a rule with must says which lines of must it does not match', () => {
+  // The worker writes the orders, is not the API, and has no owner of its own but the shop's: only `from` is missed.
+  const rules = book(rule('only-api', 'name: Only the API writes orders, and its owner is known\neach: {to: {id: orders}, access: [write, read-write]}\nmust: {from: {id: api}, access: any}\n'));
+  const read = rules.rule('only-api');
+  expect(read?.where).toBe('1 of the 2 records it looks at does not match Must.');
+  expect(read?.breaks).toEqual(['worker-writes-orders']);
+  expect(read?.misses).toEqual({ 'worker-writes-orders': [{ keys: ['from', 'id'], ids: ['api'] }] });
+  // A ban has no `must`, so its breaks say nothing they miss.
+  expect(book(ALWAYS_THERE).rule('always-there')).toMatchObject({ where: '1 record is what this rule says must never be there.', misses: {} });
 });
 
 test('a rule whose file has a fault of form has no record and no name: its id stands for it, with its problem and no rule as written', () => {
   const rules = book(rule('misspelt', 'name: Misspelt\nnever: {too: {id: api}}\n'));
-  expect(rules.rows).toEqual([{ id: 'misspelt', state: 'not-judged', found: '1 error in its file' }]);
+  expect(rules.rows).toEqual([{ id: 'misspelt', state: 'not-judged' }]);
   const read = rules.rule('misspelt');
   expect(read).toMatchObject({ id: 'misspelt', elsewhere: false, breaks: [], written: [], ways: [], debt: [] });
   expect(read?.record).toBeUndefined();
@@ -126,14 +138,14 @@ test('the problems of a rule are those of its own file but its breaks; a debt st
     { id: 'worker-writes-orders', paid: false },
     { id: 'api-writes-orders', paid: true },
   ]);
-  expect(records.rows[0]?.found).toBe('1 record breaks it, 1 of debt, 1 debt paid');
+  expect(onlyApi?.where).toBe('1 of the 3 records it looks at does not match Must. 1 more stands in debt.');
   // The break of a way is at the rule's own file, and is no problem of the section.
   const ways = book(CLERK_CALLS_API, rule('through-gateway', `${THROUGH_GATEWAY}debt: [web-calls-api]\n`));
   expect(ways.rule('through-gateway')?.problems.map((problem) => problem.rule)).toEqual(['debt-paid']);
   // Not judged since another file has an error: no problem of its own, and no debt said.
   const elsewhere = book(rule('only-api', `${ONLY_API}debt: [worker-writes-orders]\n`), file('apps/bad.yaml', 'name: Bad\nin: shop\ncolour: red\n'));
   expect(elsewhere.rule('only-api')).toMatchObject({ problems: [], elsewhere: true, debt: [] });
-  expect(elsewhere.rows[0]?.found).toBe('Another file has an error');
+  expect(elsewhere.rule('only-api')?.where).toBeUndefined();
 });
 
 test('the things a way passes: the start of its first connection, then the end of each it goes by', () => {
@@ -146,7 +158,7 @@ test('the things a way passes: the start of its first connection, then the end o
   );
   expect(rules.rule('through-gateway')?.ways).toEqual([{ things: ['clerk', 'api', 'archive'], by: ['clerk-calls-api', 'api-writes-archive'], more: 1 }]);
   expect(rules.rule('through-worker')?.ways).toEqual([{ things: ['clerk', 'api', 'archive'], by: ['clerk-calls-api', 'api-writes-archive'], more: 1 }]);
-  expect(rules.rows.find((row) => row.id === 'through-gateway')?.found).toBe('1 way breaks it');
+  expect(rules.rule('through-gateway')?.where).toBe('1 way does not pass what Must names. It is the shortest from its start.');
   // A connection that names no record leaves out its end; the start is the way's own then.
   expect(thingsOf({ from: 'clerk', by: ['lost', 'api-writes-orders'] }, () => undefined)).toEqual(['clerk']);
 });

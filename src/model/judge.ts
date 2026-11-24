@@ -404,7 +404,10 @@ function judgeRecords(ground: Ground, entry: Entry): Judged {
   const rule = valueOf(entry);
   const { key, selector } = subjectOf(rule) as { key: 'never' | 'each'; selector: Selector };
   const chosen = ground.records.filter((record) => matches(ground, record, selector));
-  const broken = key === 'never' ? chosen : chosen.filter((record) => !matches(ground, record, rule.must as Selector));
+  const must = (rule.must ?? {}) as Record<string, unknown>;
+  const broken = key === 'never' ? chosen : chosen.filter((record) => !matches(ground, record, must as Selector));
+  // A selector holds when each of its keys holds, so the keys that do not hold say what a record misses.
+  const missed = (record: Entry): string[] => Object.keys(must).filter((each) => !matches(ground, record, { [each]: must[each] } as Selector));
   const debt = rule.debt ?? [];
   const problems: Problem[] = [];
   const second = place({ entry, field: key });
@@ -435,6 +438,7 @@ function judgeRecords(ground: Ground, entry: Entry): Judged {
       state: 'holds',
       chosen: chosen.map((record) => record.id),
       breaks: broken.filter((record) => !debt.includes(record.id)).map((record) => record.id),
+      ...(key === 'each' ? { misses: Object.fromEntries(broken.filter((record) => !debt.includes(record.id)).map((record) => [record.id, missed(record)])) } : {}),
       debt: debt.filter((id) => broken.some((record) => record.id === id)),
       ...(walked !== undefined ? { walked: walked.walked } : {}),
     },

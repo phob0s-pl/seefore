@@ -242,7 +242,7 @@ test('seefore check ends with the line of the rules, and --json gives each rulin
   expect(json.rulings).toEqual([
     { rule: 'always-there', state: 'broken', chosen: ['worker'], breaks: ['worker'], debt: [] },
     { rule: 'faulty', state: 'not-judged', chosen: [], breaks: [], debt: [] },
-    { rule: 'only-api', state: 'holds', chosen: ['api-writes-orders', 'worker-writes-orders'], breaks: [], debt: ['worker-writes-orders'] },
-    { rule: 'queues', state: 'nothing', chosen: [], breaks: [], debt: [] },
+    { rule: 'only-api', state: 'holds', chosen: ['api-writes-orders', 'worker-writes-orders'], breaks: [], misses: {}, debt: ['worker-writes-orders'] },
+    { rule: 'queues', state: 'nothing', chosen: [], breaks: [], misses: {}, debt: [] },
   ]);
 });

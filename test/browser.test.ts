@@ -493,7 +493,7 @@ test.skipIf(!HAS_CHROME).concurrent(
         crumbs: 'Rules / The orders are written only by the Order API',
         pills: ['Holds'],
         sections: ['The rule', 'Looked at'],
-        rule: ['Each to · id Orders', 'access write, read-write', 'Must from · id Order API', 'File rules/orders-written-by-the-api.yaml'],
+        rule: ['Each to · id Orders', 'access write, read-write', 'Must from · id Order API'],
         looked: ['No name Order API → Orders'],
         lit: 'Rules',
       });
@@ -517,12 +517,15 @@ test.skipIf(!HAS_CHROME).concurrent(
         }`;
         expect(await waitFor(send, list)).toEqual({
           dot: 'A rule is broken',
-          rows: ['Every store names its technology 1 record breaks it Broken', 'The orders are written only by the Order API Holds'],
+          rows: ['Every store names its technology Broken', 'The orders are written only by the Order API Holds'],
         });
         await click(send, await centreOf(send, 'a[href="/rules/stores-name-technology"]'));
-        const breaks = `location.pathname === '/rules/stores-name-technology' && ${texts('section[aria-label="Breaks it"] li')}.join()`;
-        expect(await waitFor(send, breaks)).toBe('Orders Store · database');
-        await click(send, await centreOf(send, 'section[aria-label="Breaks it"] a[href="/models/orders"]'));
+        const breaks = `location.pathname === '/rules/stores-name-technology' && document.querySelector('section[aria-label="Where it breaks"] li') !== null && {
+          says: document.querySelector('section[aria-label="Where it breaks"] .panel-text')?.textContent,
+          rows: ${texts('section[aria-label="Where it breaks"] li')},
+        }`;
+        expect(await waitFor(send, breaks)).toEqual({ says: 'The one record it looks at does not match Must.', rows: ['Orders Store · database Does not match technology any'] });
+        await click(send, await centreOf(send, 'section[aria-label="Where it breaks"] a[href="/models/orders"]'));
         const record = `location.pathname === '/models/orders' && document.querySelector('section[aria-label="Rules"]') !== null && {
           last: [...document.querySelectorAll('.section-label')].at(-1)?.textContent,
           rules: ${texts('section[aria-label="Rules"] tr')},

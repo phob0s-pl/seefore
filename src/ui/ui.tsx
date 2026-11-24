@@ -108,6 +108,7 @@ export function RowList({ label, children }: { label: string; children: ReactNod
 /**
  * A row of a list: its cells on a grid shared with the heading row, the first holding a small
  * tile, the name and its marks. The whole row is a link. Each level of depth indents it by a tile.
+ * What is given as `below` stands under the link, in the same row, and may hold links of its own.
  */
 export function GridRow({
   to,
@@ -118,6 +119,7 @@ export function GridRow({
   cells = [],
   depth = 0,
   strong,
+  below,
 }: {
   to: string;
   cols: string;
@@ -127,6 +129,7 @@ export function GridRow({
   cells?: readonly ReactNode[];
   depth?: number;
   strong?: boolean;
+  below?: ReactNode;
 }) {
   return (
     <li className="row row-grid-item">
@@ -142,6 +145,7 @@ export function GridRow({
           </span>
         ))}
       </Link>
+      {below}
     </li>
   );
 }
