@@ -1,16 +1,8 @@
-/* Rules: the line of the check over the list, a rule's name that wraps rather than being cut,
-   its problems, the ways that break it and the rule as written. The panels, rows, pills and
-   facts are ui.css's; the breadcrumb is flow.css's. */
+/* Rules: a rule's name that wraps rather than being cut, its problems, the ways that break it
+   and the rule as written. The panels, rows, pills and facts are ui.css's; the breadcrumb is
+   flow.css's. */
 
-/* The check's own last line, under the title. */
-.rules-line {
-  margin: -8px 0 16px;
-  padding: 0 4px;
-  font-size: 13.5px;
-  color: var(--text-secondary);
-}
-
-/* A rule's name and what was found wrap: a rule is a sentence, and the end of it matters. */
+/* A rule's name wraps: a rule is a sentence, and the end of it matters. */
 .rules-list .row-name-ellipsis,
 .rules-list .row-cell {
   white-space: normal;

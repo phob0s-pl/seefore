@@ -1,11 +1,10 @@
 import type { ModelRead, ModelRecord, Problem, Ruling } from './answer.ts';
 import { byName } from './catalogue.ts';
-import { rulingsLine } from './counts.ts';
 
 /**
  * What the pages of the rules ask of `records`, `rulings` and `problems`, worked out and never
- * judged again: the rows of the list, the words of Found, the dot of the sidebar's entry, what
- * the page of one rule shows, and the rules a record breaks. The check has judged; this reads.
+ * judged again: the rows of the list, the dot of the sidebar's entry, what the page of one rule
+ * shows, where it breaks, and the rules a record breaks. The check has judged; this reads.
  */
 
 /** The state of a rule, as the check gave it. */
@@ -67,8 +66,6 @@ export type RuleOf = { rule: string; name?: string; how: 'breaks' | 'debt' | 'wa
 
 /** What the pages ask of the rules. */
 export type Rulebook = {
-  /** The check's own last line: "27 rules of your own: 17 hold, 10 broken. 2 of debt." Nothing with no rule. */
-  line?: string;
   /** The rows of the list, in order of state, then of name. */
   rows: RuleRow[];
   dot: Dot;
@@ -253,6 +250,5 @@ export function rulebookOf({ records, rulings, problems }: Pick<ModelRead, 'reco
       })
       .sort((a, b) => (order.get(a.rule) ?? 0) - (order.get(b.rule) ?? 0));
 
-  const line = rulingsLine(rulings);
-  return { ...(line !== undefined ? { line } : {}), rows, dot: dotOf(rulings), rule, rulesOf };
+  return { rows, dot: dotOf(rulings), rule, rulesOf };
 }

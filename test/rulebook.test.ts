@@ -36,7 +36,7 @@ const ruling = (state: Ruling['state'], more: Partial<Ruling> = {}): Ruling => (
 /** A rule's record, as far as the sentence of where it breaks reads it. */
 const written = (fields: Record<string, unknown>) => ({ kind: 'rules', id: 'r', file: 'rules/r.yaml', fields });
 
-test('the list stands in the order of the states, then by name, a rule with no record by its id; the line and the dot are the check’s', () => {
+test('the list stands in the order of the states, then by name, a rule with no record by its id; the dot is the check’s', () => {
   const rules = book(
     rule('only-api', ONLY_API),
     ALWAYS_THERE,
@@ -56,12 +56,10 @@ test('the list stands in the order of the states, then by name, a rule with no r
     ['clerk-not-at-bank', 'holds'],
   ]);
   expect(rules.rows[0]).toEqual({ id: 'always-there', name: 'Everything in the shop is always there', state: 'broken' });
-  expect(rules.line).toBe('7 rules of your own: 2 hold, 2 broken, 1 looks at nothing, 2 not judged.');
   expect(rules.dot).toBe('broken');
   expect(dotOf([ruling('holds'), ruling('not-judged'), ruling('nothing')])).toBe('not-judged');
   expect(dotOf([ruling('holds'), ruling('nothing')])).toBeUndefined();
   expect(book().rows).toEqual([]);
-  expect(book().line).toBeUndefined();
 });
 
 test('where a rule breaks, in one sentence: how many of what it looks at, of what it forbids, or of ways; nothing for a rule that is not broken', () => {

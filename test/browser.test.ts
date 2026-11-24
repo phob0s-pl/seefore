@@ -464,18 +464,18 @@ test.skipIf(!HAS_CHROME).concurrent(
 const texts = (selector: string) => `[...document.querySelectorAll(${JSON.stringify(selector)})].map((each) => each.innerText.replace(/\\s+/g, ' ').trim())`;
 
 test.skipIf(!HAS_CHROME).concurrent(
-  HAS_CHROME ? 'Rules lists the rules with the check’s line, and a row opens its rule, as written and with what it looked at' : `skipped: there is no Chrome at ${CHROME}`,
+  HAS_CHROME ? 'Rules lists the rules under its title, and a row opens its rule, as written and with what it looked at' : `skipped: there is no Chrome at ${CHROME}`,
   () =>
     inChrome(async (send, address) => {
       await send('Page.navigate', { url: `${address}/rules` });
-      const list = `document.querySelector('.rules-line') !== null && {
-        line: document.querySelector('.rules-line').textContent,
+      const list = `document.querySelector('ul[aria-label="Rules"] > li') !== null && {
+        above: document.querySelector('main h1').nextElementSibling?.className,
         rows: ${texts('ul[aria-label="Rules"] > li')},
         lit: document.querySelector('nav[aria-label="Main navigation"] a.active')?.textContent,
         dot: document.querySelector('.nav-dot') !== null,
       }`;
       expect(await waitFor(send, list)).toEqual({
-        line: '1 rule of your own: 1 holds.',
+        above: 'panel panel-lift rules-list',
         rows: ['The orders are written only by the Order API Holds'],
         lit: 'Rules',
         dot: false,

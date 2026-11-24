@@ -64,8 +64,8 @@ const RuleTile = ({ state, size }: { state: RuleState; size: 'sm' | 'lg' }) => <
 const StatePill = ({ state }: { state: RuleState }) => <Pill tone={STATE[state].tone}>{STATE[state].words}</Pill>;
 
 /**
- * The list of rules, `/rules`: the check's own last line, then one row a rule in the order of
- * the states and by name, each a link to the rule's page.
+ * The list of rules, `/rules`: one row a rule in the order of the states and by name, each a
+ * link to the rule's page.
  */
 export function RulesList() {
   useTitle('Rules');
@@ -80,7 +80,6 @@ export function RulesList() {
         </EmptyState>
       ) : (
         <>
-          <p className="rules-line">{rulebook.line}</p>
           <Panel lift className="rules-list">
             <RowListHeading columns={['Rule', 'State']} cols={COLS} />
             <RowList label="Rules">
