@@ -247,6 +247,34 @@ function Technologies({ record, catalogue }: { record: ModelRecord; catalogue: C
   return <Related title="Technologies" rows={rows} />;
 }
 
+/** One line of a system's context, as its record holds it. */
+type ContextLine = { must?: unknown; prefer?: unknown; why?: unknown };
+
+/**
+ * The Context section of a system: each line with whether it binds ("Must") or may yield
+ * ("Prefer"), the sentence, and under it its reason. Left out when the system has no context.
+ */
+function SystemContext({ record }: { record: ModelRecord }) {
+  const lines = Array.isArray(record.fields.context) ? (record.fields.context as ContextLine[]) : [];
+  const rows = lines.flatMap((line, index) => {
+    const says = typeof line.must === 'string' ? line.must : typeof line.prefer === 'string' ? line.prefer : undefined;
+    if (says === undefined) return [];
+    return [
+      {
+        key: `${index}`,
+        cells: [
+          <Pill>{typeof line.must === 'string' ? 'Must' : 'Prefer'}</Pill>,
+          <div className="context-line">
+            <span className="context-says">{says}</span>
+            {typeof line.why === 'string' && <span className="context-why">{line.why}</span>}
+          </div>,
+        ],
+      },
+    ];
+  });
+  return <Related title="Context" rows={rows} widths={['96px', 'auto']} />;
+}
+
 /** A system, an app, a store, a component or a piece of infrastructure. */
 function Thing({ record, catalogue, travel }: { record: ModelRecord; catalogue: Catalogue; travel: Travel }) {
   const owner = catalogue.owner(record.id);
@@ -271,6 +299,7 @@ function Thing({ record, catalogue, travel }: { record: ModelRecord; catalogue: 
   return (
     <>
       <Facts rows={facts} />
+      {record.kind === 'systems' && <SystemContext record={record} />}
       <Related title="Inside it" rows={thingRows(catalogue, catalogue.inside(record.id))} widths={['auto', '200px']} />
       <Technologies record={record} catalogue={catalogue} />
       <Acts record={record} catalogue={catalogue} />

@@ -227,6 +227,12 @@ test.skipIf(!HAS_CHROME).concurrent(
       expect(read && read.sections).toContain('Is acted on by');
       expect(await waitFor(send, click('Shop'))).toBe(true);
       expect(await waitFor(send, `location.pathname === '/models/shop' && document.title`)).toBe('Shop · seefore');
+      // The system's page shows its context: each line with whether it binds, the sentence and its reason.
+      const context = `document.querySelector('section[aria-label="Context"]') !== null && [...document.querySelectorAll('section[aria-label="Context"] tr')].map((row) => [row.querySelector('.pill')?.textContent, row.querySelector('.context-says')?.textContent, row.querySelector('.context-why')?.textContent])`;
+      expect(await waitFor(send, context)).toEqual([
+        ['Must', 'An order is never lost once the customer has been told it is placed.', 'It is what the shop promises its customers.'],
+        ['Prefer', 'A new feature goes into the Order API.', 'One team runs it. It yields where another team must own the feature.'],
+      ]);
 
       await send('Page.navigate', { url: `${address}/connections` });
       const paths = await waitFor(send, `[...document.querySelectorAll('.row-cell')].map((cell) => cell.textContent).join(' | ')`);
