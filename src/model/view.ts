@@ -183,12 +183,13 @@ export function viewOf(records: readonly ModelRecord[], depth: Depth, focus?: st
     if (arrow) arrow.connections.push(record.id);
     else arrows.set(id, { id, from, to, connections: [record.id] });
   }
-  // An arrow only reads when it ends at a queue or a topic that is itself drawn, and each of its
-  // connections reads. A pair with arrows both ways never does.
+  // An arrow only reads when it ends at a queue or a topic that is itself drawn, as a box, and
+  // each of its connections reads. A pair with arrows both ways never does.
   const access = new Map(sorted.filter((record) => record.kind === 'connections').map((record) => [record.id, record.fields.access]));
+  const frames = new Set(boxes.filter((box) => box.frame).map((box) => box.id));
   const reads = (arrow: Arrow): boolean => {
     const store = things.get(arrow.to);
-    return store?.kind === 'stores' && PASSING.includes(store.fields.kind) && arrow.connections.every((id) => access.get(id) === 'read');
+    return store?.kind === 'stores' && !frames.has(arrow.to) && PASSING.includes(store.fields.kind) && arrow.connections.every((id) => access.get(id) === 'read');
   };
   const place = new Map(drawn.map((id, index) => [id, index]));
   const at = (id: string): number => place.get(id) ?? 0;

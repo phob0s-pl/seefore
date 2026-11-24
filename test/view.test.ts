@@ -245,6 +245,11 @@ test('an arrow is not marked when it reads another kind of store, when one of it
   expect(reading('systems', connection('partner-takes-jobs', 'partner', 'jobs', 'access: read\n'))).toEqual([]);
 });
 
+test('an arrow that only reads is marked in a focused view too', () => {
+  const focused = viewOf(records(JOBS, connection('partner-takes-jobs', 'partner', 'jobs', 'access: read\n')), 'containers', 'shop');
+  expect(focused.arrows.map((arrow) => [arrow.id, arrow.reads])).toEqual([['partner->jobs', true]]);
+});
+
 test('a pair with arrows both ways is never marked', () => {
   const both = view('containers', JOBS, connection('web-takes-jobs', 'web', 'jobs', 'access: read\n'), connection('jobs-wakes-web', 'jobs', 'web'));
   expect(both.arrows.map((arrow) => [arrow.id, arrow.back, arrow.reads])).toEqual([['web->jobs', ['jobs-wakes-web'], undefined]]);

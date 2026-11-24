@@ -55,8 +55,32 @@ type Partition = Map<string, number>;
 /** A picture in the diagram's own place: every box at its corner there, and every route. */
 type Picture = { placed: Placed[]; corners: Map<string, ElkPoint>; routes: Map<string, ElkPoint[]>; bands: Band[] };
 
-/** The ELK graph of a view: frames inside frames, each box at least its size, one edge per arrow. */
-function graphOf(view: View, partition: Partition): ElkNode {
+/**
+ * The store rule: the arrows that are laid out turned round. An arrow that only reads a queue or
+ * a topic is laid out as what it takes flows, from the store to the reader, so that the store
+ * stands between those who write it and those who read it. Not so when the reader is held in an
+ * earlier column than the store, as a person is: the arrow would have to run back round the store.
+ */
+function turnedOf(view: View, partition: Partition): Set<string> {
+  const boxes = new Map(view.boxes.map((box) => [box.id, box]));
+  // The column of a box is that of the box at the top it is in.
+  const column = (id: string): number | undefined => {
+    let top = id;
+    for (let up = boxes.get(top)?.in; up !== undefined; up = boxes.get(top)?.in) top = up;
+    return partition.get(top);
+  };
+  const turned = new Set<string>();
+  for (const arrow of view.arrows) {
+    if (!arrow.reads) continue;
+    const reader = column(arrow.from);
+    const store = column(arrow.to);
+    if (reader === undefined || store === undefined || reader >= store) turned.add(arrow.id);
+  }
+  return turned;
+}
+
+/** The ELK graph of a view: frames inside frames, each box at least its size, one edge per arrow, those of `turned` from their end to their start. */
+function graphOf(view: View, partition: Partition, turned: Set<string>): ElkNode {
   const inside = new Map<string | undefined, Box[]>();
   for (const box of view.boxes) inside.set(box.in, [...(inside.get(box.in) ?? []), box]);
   const node = (box: Box): ElkNode => {
@@ -93,16 +117,14 @@ function graphOf(view: View, partition: Partition): ElkNode {
       'elk.separateConnectedComponents': 'false',
     },
     children: (inside.get(undefined) ?? []).map(node),
-    // The store rule: an arrow that only reads a queue or a topic is laid out as what it takes
-    // flows, from the store to the reader, so that the store stands between those who write it
-    // and those who read it.
-    edges: view.arrows.map((arrow): ElkExtendedEdge => (arrow.reads ? { id: arrow.id, sources: [arrow.to], targets: [arrow.from] } : { id: arrow.id, sources: [arrow.from], targets: [arrow.to] })),
+    edges: view.arrows.map((arrow): ElkExtendedEdge => (turned.has(arrow.id) ? { id: arrow.id, sources: [arrow.to], targets: [arrow.from] } : { id: arrow.id, sources: [arrow.from], targets: [arrow.to] })),
   };
 }
 
 /** Lays the graph out, and reads ELK's answer: a box relative to its frame, an arrow relative to the box it names as its container. */
 async function place(view: View, partition: Partition, elk: Engine): Promise<Picture> {
-  const done = await elk.layout(graphOf(view, partition));
+  const turned = turnedOf(view, partition);
+  const done = await elk.layout(graphOf(view, partition, turned));
   const boxes = new Map(view.boxes.map((box) => [box.id, box]));
   const corners = new Map<string, ElkPoint>([[ROOT, { x: 0, y: 0 }]]);
   const placed: Placed[] = [];
@@ -123,7 +145,6 @@ async function place(view: View, partition: Partition, elk: Engine): Promise<Pic
   walk(done, { x: 0, y: 0 });
   // An arrow laid out turned round is drawn as it is in the model: its route runs from the
   // reader to the store again, so that its head stands at the store.
-  const turned = new Set(view.arrows.filter((arrow) => arrow.reads).map((arrow) => arrow.id));
   const routes = new Map<string, ElkPoint[]>();
   for (const edge of edges) {
     const origin = corners.get(edge.container ?? ROOT) ?? { x: 0, y: 0 };

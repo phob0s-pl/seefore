@@ -142,3 +142,21 @@ test('the line of a reader is still drawn from the reader to the queue, where it
   // The line of the writer is as it was: from the writer's right side to the queue's left.
   expect(layout.routes.get('writer->jobs')?.at(-1)?.x).toBeCloseTo(frame.x + jobs.x, 3);
 });
+
+test('a person who reads a queue stays on the left, and that line is not turned round', async () => {
+  const layout = await laidOut('containers', ...WORKS, person('ops'), { path: 'connections/ops-watches-jobs.yaml', text: 'from: ops\nto: jobs\naccess: read\n' });
+  const frame = placeOf(layout, 'works');
+  const ops = placeOf(layout, 'ops');
+  const jobs = placeOf(layout, 'jobs');
+  expect(frame && ops && jobs).toBeTruthy();
+  if (!frame || !ops || !jobs) return;
+  expect(ops.x + ops.width).toBeLessThan(frame.x);
+  // The line runs straight on from the person's right side to the queue's left side, and never
+  // past the queue.
+  const route = layout.routes.get('ops->jobs') ?? [];
+  expect(route[0]?.x).toBeCloseTo(ops.x + ops.width, 3);
+  expect(route.at(-1)?.x).toBeCloseTo(frame.x + jobs.x, 3);
+  expect(Math.max(...route.map((point) => point.x))).toBeLessThanOrEqual(frame.x + jobs.x + 0.001);
+  // The app that reads the queue is still laid out after it.
+  expect(centre(layout, 'jobs')).toBeLessThan(centre(layout, 'reader'));
+});
