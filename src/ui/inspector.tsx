@@ -47,6 +47,38 @@ function Thing({ record, catalogue }: { record: ModelRecord; catalogue: Catalogu
   );
 }
 
+/** A data record: the small line, its name, its description, each field with its own, and its page. */
+function Data({ record, catalogue }: { record: ModelRecord; catalogue: Catalogue }) {
+  const fields = (Array.isArray(record.fields.fields) ? (record.fields.fields as unknown[]) : []).flatMap((field) => {
+    const { name, description } = (typeof field === 'object' && field !== null ? field : {}) as Record<string, unknown>;
+    return typeof name === 'string' ? [{ name, description: typeof description === 'string' ? description : undefined }] : [];
+  });
+  return (
+    <>
+      <div className="diagram-inspector-kind">
+        <span className="eyebrow">Data</span>
+      </div>
+      <h2>
+        <NameOf record={record} />
+      </h2>
+      <Description record={record} />
+      {fields.length > 0 && (
+        <dl className="data-fields" aria-label="Fields">
+          {fields.map((field) => (
+            <div key={field.name}>
+              <dt>{field.name}</dt>
+              {field.description !== undefined && <dd>{field.description}</dd>}
+            </div>
+          ))}
+        </dl>
+      )}
+      <Details catalogue={catalogue} record={record}>
+        Open data details
+      </Details>
+    </>
+  );
+}
+
 /** A line of one connection: its name, its description, its page, and its path from its real ends. */
 function Connection({ record, catalogue }: { record: ModelRecord; catalogue: Catalogue }) {
   const { fields } = record;
@@ -107,8 +139,8 @@ function Connections({ arrow, records, catalogue }: { arrow: Arrow; records: Mod
 }
 
 /**
- * The panel on the field: what the picked box, frame or line is, and the way to its page. Its
- * button, and Escape, close it.
+ * The panel on the field: what the picked box, frame or line is, or a data record a step passes,
+ * and the way to its page. Its button, and Escape, close it.
  */
 export function Inspector({ picked, view, catalogue, onClose }: { picked: string; view: View; catalogue: Catalogue; onClose: () => void }) {
   useEffect(() => {
@@ -128,7 +160,11 @@ export function Inspector({ picked, view, catalogue, onClose }: { picked: string
   if (record === undefined) return null;
   const body =
     arrow === undefined ? (
-      <Thing record={record} catalogue={catalogue} />
+      record.kind === 'data' ? (
+        <Data record={record} catalogue={catalogue} />
+      ) : (
+        <Thing record={record} catalogue={catalogue} />
+      )
     ) : shown.length === 1 ? (
       <Connection record={record} catalogue={catalogue} />
     ) : (

@@ -144,3 +144,20 @@
   color: rgba(255, 255, 255, 0.92);
   overflow-wrap: anywhere;
 }
+
+/* The steps that name a data record or travel a connection: each row one link to its flow, on
+   that step. What happens in the step wraps rather than being cut. */
+.step-list .row-cell {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.step-list .row-name {
+  color: var(--link);
+}
+.step-list .row-grid-item > a:hover .row-name {
+  color: var(--link-hover);
+}
+.step-list .row-cell:first-of-type {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-tertiary);
+}

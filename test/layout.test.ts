@@ -160,3 +160,18 @@ test('a person who reads a queue stays on the left, and that line is not turned 
   // The app that reads the queue is still laid out after it.
   expect(centre(layout, 'jobs')).toBeLessThan(centre(layout, 'reader'));
 });
+
+test("a flow's own diagram is read top to bottom, with tight gaps, and the model's stays as it is", async () => {
+  const files = [system('works'), ...WORKS.slice(1)];
+  const read = readModel([{ path: 'seefore.yaml', text: 'format: 1\nname: Test\n' }, ...files]);
+  const view = viewOf(read.records, 'containers');
+  const across = await layOut(view, 'containers', elk);
+  const down = await layOut(view, 'containers', elk, 'flow');
+  const at = (layout: Layout, id: string) => layout.placed.find((each) => each.box.id === id);
+  // Left to right, the writer stands left of the queue; top to bottom, above it.
+  expect((at(across, 'writer')?.x ?? 0) + (at(across, 'writer')?.width ?? 0)).toBeLessThan(at(across, 'jobs')?.x ?? 0);
+  expect((at(down, 'writer')?.y ?? 0) + (at(down, 'writer')?.height ?? 0)).toBeLessThan(at(down, 'jobs')?.y ?? 0);
+  // And it is narrower than it was wide: the frame's own size says so.
+  expect(at(down, 'works')?.width ?? 0).toBeLessThan(at(across, 'works')?.width ?? 0);
+  expect(await layOut(view, 'containers', elk)).toEqual(across);
+});

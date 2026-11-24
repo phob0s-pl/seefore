@@ -9,4 +9,8 @@ steps:
   - id: saves
     does: api-writes-orders
     name: Saves the order
+    only: when the customer has paid
     data: [order-details]
+  - id: confirms
+    reply: places
+    name: Confirms the order

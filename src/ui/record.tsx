@@ -3,13 +3,14 @@ import { ArrowDown } from 'lucide-react';
 import { Link, useOutletContext, useParams } from 'react-router-dom';
 import type { ModelRecord } from '../model/answer.ts';
 import type { Catalogue } from '../model/catalogue.ts';
+import type { StepAt, Travel, Way } from '../model/travel.ts';
 import { KIND, typeWords } from './kinds.tsx';
 import { KindTile, Missing, ModelsPage, NameOf, RecordLink, TABS } from './models.tsx';
 import type { ModelState } from './shell.tsx';
-import { Facts, Panel, Pill, Section, SectionStack, TextPanel, useTitle } from './ui.tsx';
+import { Facts, GridRow, Panel, Pill, RowList, Section, SectionStack, TextPanel, useTitle } from './ui.tsx';
 
-type Fact = { label: string; value: ReactNode };
-type Row = { key: string; cells: ReactNode[] };
+export type Fact = { label: string; value: ReactNode };
+export type Row = { key: string; cells: ReactNode[] };
 
 const ACCESS: Record<string, string> = { read: 'Read', write: 'Write', 'read-write': 'Read and write' };
 /** The ids of a list field, those that are not text left out. */
@@ -18,26 +19,32 @@ export const ids = (value: unknown): string[] => (Array.isArray(value) ? value.f
 /** The page of one record, at `<list>/<id>`; an id that names no record of that list's kinds is missing. */
 export function RecordPage({ tab }: { tab: (typeof TABS)[number] }) {
   const { id = '' } = useParams();
-  const { catalogue } = useOutletContext<ModelState>();
+  const { catalogue, travel } = useOutletContext<ModelState>();
   const found = catalogue?.record(id);
   const record = found !== undefined && catalogue?.address(found) === `${tab.to}/${id}` ? found : undefined;
   const name = record?.fields.name;
   useTitle(typeof name === 'string' ? name : record?.kind === 'connections' ? 'No name' : (record?.id ?? 'Models'));
-  return <ModelsPage>{(catalogue) => (record !== undefined ? <RecordBody record={record} catalogue={catalogue} /> : <Missing list={tab} />)}</ModelsPage>;
+  return (
+    <ModelsPage>
+      {(catalogue) => (record !== undefined && travel !== undefined ? <RecordBody record={record} catalogue={catalogue} travel={travel} /> : <Missing list={tab} />)}
+    </ModelsPage>
+  );
 }
 
 /** A record's page: its name with the tile of its kind and its marks, its description, then what its kind shows. */
-function RecordBody({ record, catalogue }: { record: ModelRecord; catalogue: Catalogue }) {
+function RecordBody({ record, catalogue, travel }: { record: ModelRecord; catalogue: Catalogue; travel: Travel }) {
   const { kind, fields } = record;
   const body =
     kind === 'people' ? (
-      <Person record={record} catalogue={catalogue} />
+      <Person record={record} catalogue={catalogue} travel={travel} />
     ) : KIND[kind] !== undefined ? (
-      <Thing record={record} catalogue={catalogue} />
+      <Thing record={record} catalogue={catalogue} travel={travel} />
     ) : kind === 'connections' ? (
-      <Connection record={record} catalogue={catalogue} />
+      <Connection record={record} catalogue={catalogue} travel={travel} />
     ) : kind === 'technologies' ? (
       <Technology record={record} catalogue={catalogue} />
+    ) : kind === 'data' ? (
+      <Data record={record} catalogue={catalogue} travel={travel} />
     ) : (
       <Owner record={record} catalogue={catalogue} />
     );
@@ -64,7 +71,7 @@ function RecordBody({ record, catalogue }: { record: ModelRecord; catalogue: Cat
 }
 
 /** A section of rows in a panel. With no row it is left out, or says "None." when it must stand. */
-function Related({ title, rows, widths, always }: { title: string; rows: Row[]; widths?: string[]; always?: boolean }) {
+export function Related({ title, rows, widths, always }: { title: string; rows: Row[]; widths?: string[]; always?: boolean }) {
   if (rows.length === 0 && !always) return null;
   return (
     <Section title={title}>
@@ -103,7 +110,7 @@ function Related({ title, rows, widths, always }: { title: string; rows: Row[]; 
 }
 
 /** A record in a cell: the tile of its kind and a link to its page, or the id alone when it names nothing. */
-function Named({ catalogue, id }: { catalogue: Catalogue; id: unknown }) {
+export function Named({ catalogue, id }: { catalogue: Catalogue; id: unknown }) {
   const record = typeof id === 'string' ? catalogue.record(id) : undefined;
   return (
     <span className="record-cell">
@@ -114,7 +121,7 @@ function Named({ catalogue, id }: { catalogue: Catalogue; id: unknown }) {
 }
 
 /** "from Shop": where an owner or a condition is taken from, when not from the record itself. */
-function Taken({ catalogue, from, record }: { catalogue: Catalogue; from: string; record: ModelRecord }) {
+export function Taken({ catalogue, from, record }: { catalogue: Catalogue; from: string; record: ModelRecord }) {
   if (from === record.id) return null;
   return (
     <span className="fact-from">
@@ -139,6 +146,66 @@ function onlyFact(catalogue: Catalogue, record: ModelRecord): Fact[] {
       )),
     },
   ];
+}
+
+/** A part's owner, its own or taken from what it is in, with where from: "Sales from Shop". */
+export function OwnerOf({ catalogue, record }: { catalogue: Catalogue; record: ModelRecord }) {
+  const owner = catalogue.owner(record.id);
+  if (owner === undefined) return null;
+  return (
+    <>
+      <RecordLink catalogue={catalogue} id={owner.id} />
+      <Taken catalogue={catalogue} from={owner.from} record={record} />
+    </>
+  );
+}
+
+/** The way data goes on a connection, in words: "Payments to Card provider", or "back from Card provider to Payments". */
+function WayOf({ catalogue, way: { from, to, back } }: { catalogue: Catalogue; way: Way }) {
+  return back ? (
+    <>
+      back from <RecordLink catalogue={catalogue} id={from} /> to <RecordLink catalogue={catalogue} id={to} />
+    </>
+  ) : (
+    <>
+      <RecordLink catalogue={catalogue} id={from} /> to <RecordLink catalogue={catalogue} id={to} />
+    </>
+  );
+}
+
+/** The flow's name, the step's number and what happens in it. */
+const STEP = 'minmax(0, 1fr) 64px minmax(0, 1.5fr)';
+
+/** The Steps section: each step as one link to its flow, opened on that step. */
+function Steps({ steps }: { steps: readonly StepAt[] }) {
+  if (steps.length === 0) return null;
+  return (
+    <Section title="Steps">
+      <Panel className="step-list">
+        <RowList label="Steps">
+          {steps.map((step) => (
+            <GridRow
+              key={`${step.flow} ${step.number}`}
+              to={`/flows/${step.flow}${step.step !== '' ? `#${encodeURIComponent(step.step)}` : ''}`}
+              cols={STEP}
+              tile={<KindTile kind="flows" size="sm" />}
+              name={step.flowName}
+              cells={[`step ${step.number}`, step.happens]}
+            />
+          ))}
+        </RowList>
+      </Panel>
+    </Section>
+  );
+}
+
+/** The Flows section of a part or a person: each flow through it, with its feature beside it. */
+function FlowsThrough({ record, catalogue, travel }: { record: ModelRecord; catalogue: Catalogue; travel: Travel }) {
+  const rows = travel.flowsThrough(record.id).map((each) => ({
+    key: each.flow,
+    cells: [<Named catalogue={catalogue} id={each.flow} />, each.feature !== undefined ? <Named catalogue={catalogue} id={each.feature} /> : ''],
+  }));
+  return <Related title="Flows" rows={rows} widths={['50%', '50%']} />;
 }
 
 /** The rows of the things a list of ids names, with the type of each. */
@@ -167,7 +234,7 @@ function Technologies({ record, catalogue }: { record: ModelRecord; catalogue: C
 }
 
 /** A system, an app, a store, a component or a piece of infrastructure. */
-function Thing({ record, catalogue }: { record: ModelRecord; catalogue: Catalogue }) {
+function Thing({ record, catalogue, travel }: { record: ModelRecord; catalogue: Catalogue; travel: Travel }) {
   const owner = catalogue.owner(record.id);
   const facts: Fact[] = [
     { label: 'Type', value: typeWords(record.kind, record.fields.kind) },
@@ -193,17 +260,19 @@ function Thing({ record, catalogue }: { record: ModelRecord; catalogue: Catalogu
       <Related title="Inside it" rows={thingRows(catalogue, catalogue.inside(record.id))} widths={['auto', '200px']} />
       <Technologies record={record} catalogue={catalogue} />
       <Acts record={record} catalogue={catalogue} />
+      <FlowsThrough record={record} catalogue={catalogue} travel={travel} />
     </>
   );
 }
 
-/** A kind of person: its condition, and the connections it acts with and those that act on it. */
-function Person({ record, catalogue }: { record: ModelRecord; catalogue: Catalogue }) {
+/** A kind of person: its condition, the connections it acts with and those that act on it, and the flows through it. */
+function Person({ record, catalogue, travel }: { record: ModelRecord; catalogue: Catalogue; travel: Travel }) {
   const facts = onlyFact(catalogue, record);
   return (
     <>
       {facts.length > 0 && <Facts rows={facts} />}
       <Acts record={record} catalogue={catalogue} />
+      <FlowsThrough record={record} catalogue={catalogue} travel={travel} />
     </>
   );
 }
@@ -224,8 +293,8 @@ export function End({ role, id, catalogue }: { role: string; id: unknown; catalo
   return <li>{to !== undefined ? <Link to={to}>{inner}</Link> : <div className="connection-end">{inner}</div>}</li>;
 }
 
-/** A connection: its two ends, its facts, what it passes through and its technologies. */
-function Connection({ record, catalogue }: { record: ModelRecord; catalogue: Catalogue }) {
+/** A connection: its two ends, its facts, what it passes through, its technologies, the steps on it and the data seen on it. */
+function Connection({ record, catalogue, travel }: { record: ModelRecord; catalogue: Catalogue; travel: Travel }) {
   const { fields } = record;
   const facts: Fact[] = [
     ...(typeof fields.access === 'string' ? [{ label: 'Access', value: ACCESS[fields.access] ?? fields.access }] : []),
@@ -236,6 +305,10 @@ function Connection({ record, catalogue }: { record: ModelRecord; catalogue: Cat
     const stop = catalogue.record(id);
     return { key: `${index}`, cells: [<span className="step-number">{index + 1}</span>, <Named catalogue={catalogue} id={id} />, stop ? typeWords(stop.kind, stop.fields.kind) : ''] };
   });
+  const data = travel.dataOn(record.id).map((way) => ({
+    key: `${way.data} ${way.from} ${way.back}`,
+    cells: [<Named catalogue={catalogue} id={way.data} />, <WayOf catalogue={catalogue} way={way} />],
+  }));
   return (
     <>
       <ol className="connection-path" aria-label="From and to">
@@ -248,6 +321,27 @@ function Connection({ record, catalogue }: { record: ModelRecord; catalogue: Cat
       {facts.length > 0 && <Facts rows={facts} />}
       <Related title="Passes through" rows={via} widths={['44px', 'auto', '200px']} />
       <Technologies record={record} catalogue={catalogue} />
+      <Steps steps={travel.stepsOn(record.id)} />
+      <Related title="Data" rows={data} widths={['auto', '360px']} />
+    </>
+  );
+}
+
+/** A data record: its fields, the steps that name it, and the connections it is seen on, with the way it goes. */
+function Data({ record, catalogue, travel }: { record: ModelRecord; catalogue: Catalogue; travel: Travel }) {
+  const fields = (Array.isArray(record.fields.fields) ? (record.fields.fields as unknown[]) : []).flatMap((field, index): Row[] => {
+    const { name, description } = (typeof field === 'object' && field !== null ? field : {}) as Record<string, unknown>;
+    return typeof name === 'string' ? [{ key: `${index}`, cells: [name, typeof description === 'string' ? description : ''] }] : [];
+  });
+  const ways = travel.waysOf(record.id).map((way) => ({
+    key: `${way.connection} ${way.from} ${way.back}`,
+    cells: [<Named catalogue={catalogue} id={way.connection} />, <WayOf catalogue={catalogue} way={way} />],
+  }));
+  return (
+    <>
+      <Related title="Fields" rows={fields} widths={['240px', 'auto']} />
+      <Steps steps={travel.stepsWith(record.id)} />
+      <Related title="Connections" rows={ways} widths={['auto', '360px']} />
     </>
   );
 }

@@ -345,3 +345,116 @@ test.skipIf(!HAS_CHROME).concurrent(
     }),
   20_000,
 );
+
+/** A key pressed and let go, as a hand presses it. */
+async function press(send: Send, key: string, code: number) {
+  await send('Input.dispatchKeyEvent', { type: 'keyDown', key, code: key, windowsVirtualKeyCode: code });
+  await send('Input.dispatchKeyEvent', { type: 'keyUp', key, code: key, windowsVirtualKeyCode: code });
+}
+
+/** What the page of a flow shows: the address's step, the bar, the picked row, the stepped line and its heads, and what is faded. */
+const FLOW = `(() => {
+  const bar = document.querySelector('section[aria-label="Current step"]');
+  const stepped = [...document.querySelectorAll('.react-flow__edge.stepped')];
+  const path = stepped[0]?.querySelector('.react-flow__edge-path');
+  return document.querySelectorAll('.react-flow__edge-path[d^="M"]').length > 0 && {
+    hash: location.hash,
+    bar: bar?.innerText.replace(/\\s+/g, ' ').trim(),
+    current: document.querySelector('[aria-current="step"]')?.getAttribute('data-step') ?? null,
+    stepped: stepped.map((each) => each.getAttribute('data-id')),
+    heads: path ? [path.hasAttribute('marker-start'), path.hasAttribute('marker-end')] : [],
+    faded: [...document.querySelectorAll('.faded')].map((each) => each.getAttribute('data-id')).sort(),
+  };
+})()`;
+type FlowRead = { hash: string; bar: string; current: string | null; stepped: string[]; heads: boolean[]; faded: string[] };
+/** The page of the flow, once the address names the step and the page has drawn it, or after five seconds what it shows. */
+async function flowAt(send: Send, hash: string): Promise<FlowRead> {
+  const step = JSON.stringify(hash === '' ? null : hash.slice(1));
+  const read = (await waitFor(send, `(() => { const read = ${FLOW}; return read && read.hash === ${JSON.stringify(hash)} && read.current === ${step} && read; })()`)) as FlowRead | false;
+  return read || ((await send('Runtime.evaluate', { expression: FLOW, returnByValue: true })).result?.result?.value as FlowRead);
+}
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME ? 'a flow opens on the whole of it; a click on a row puts the step in the address, fills the bar and lights one line; the down key moves on' : `skipped: there is no Chrome at ${CHROME}`,
+  () =>
+    inChrome(async (send, address) => {
+      await send('Page.navigate', { url: `${address}/flows/placing-an-order` });
+      const whole = await flowAt(send, '');
+      expect(whole).toMatchObject({ current: null, stepped: [], faded: [] });
+      expect(whole.bar).toContain('Placing an order');
+      expect(await waitFor(send, 'document.title')).toBe('Placing an order · seefore');
+
+      await click(send, await centreOf(send, '[data-row="step"][data-step="saves"]'));
+      const saves = await flowAt(send, '#saves');
+      expect(saves).toMatchObject({ current: 'saves', stepped: ['order-api->orders'], heads: [false, true] });
+      expect(saves.bar).toContain('2 of 3 Saves the order');
+      expect(saves.bar).toContain('Order API to Orders Only when the customer has paid Data Order details');
+      expect(saves.faded).toEqual(['customer', 'customer->order-api']);
+
+      // The reply travels back along the customer's line: its one head is at the customer.
+      await press(send, 'ArrowDown', 40);
+      const confirms = await flowAt(send, '#confirms');
+      expect(confirms).toMatchObject({ current: 'confirms', stepped: ['customer->order-api'], heads: [true, false], faded: ['order-api->orders', 'orders'] });
+      expect(confirms.bar).toContain('3 of 3 Confirms the order');
+      expect(confirms.bar).toContain('Order API replies to Customer Reply to 1, Places an order');
+    }),
+  20_000,
+);
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME ? 'the list of features has each flow under its feature and opens it, the old list of flows leads there, and the back arrow leaves the flow in one go' : `skipped: there is no Chrome at ${CHROME}`,
+  () =>
+    inChrome(async (send, address) => {
+      // There is no list of flows apart: its old address leads to the features.
+      await send('Page.navigate', { url: `${address}/flows` });
+      expect(await waitFor(send, `location.pathname === '/features' && [...document.querySelectorAll('main a')].map((link) => link.getAttribute('href')).join()`)).toBe('/features/ordering,/flows/placing-an-order');
+      expect(await waitFor(send, `document.querySelector('nav[aria-label="Main navigation"]')?.innerText.replace(/\\s+/g, ' ')`)).toBe('Architecture Features Models');
+      expect(await waitFor(send, `document.querySelector('a[href="/flows/placing-an-order"]')?.textContent`)).toBe('Placing an order');
+      await click(send, await centreOf(send, 'a[href="/flows/placing-an-order"]'));
+      await flowAt(send, '');
+      await click(send, await centreOf(send, '[data-row="step"][data-step="places"]'));
+      await press(send, 'ArrowDown', 40);
+      expect((await flowAt(send, '#saves')).current).toBe('saves');
+      await click(send, await centreOf(send, 'button[aria-label="Go back"]'));
+      expect(await waitFor(send, `location.pathname === '/features' && location.pathname`)).toBe('/features');
+    }),
+  20_000,
+);
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME ? "the list of features opens a feature's page, and a flow on it opens the flow" : `skipped: there is no Chrome at ${CHROME}`,
+  () =>
+    inChrome(async (send, address) => {
+      await send('Page.navigate', { url: `${address}/features` });
+      expect(await waitFor(send, `document.querySelector('a[href="/features/ordering"]')?.innerText.replace(/\\s+/g, ' ')`)).toBe('Ordering');
+      await click(send, await centreOf(send, 'a[href="/features/ordering"]'));
+      const page = `location.pathname === '/features/ordering' && document.title === 'Ordering · seefore' && [...document.querySelectorAll('.section-label')].map((label) => label.textContent)`;
+      expect(await waitFor(send, page)).toEqual(['Flows', 'From its flows', 'Data']);
+      expect(await waitFor(send, `[...document.querySelectorAll('.facts dt')].map((label) => label.textContent).join()`)).toBe('For');
+      await click(send, await centreOf(send, 'section[aria-label="Flows"] a[href="/flows/placing-an-order"]'));
+      expect(await waitFor(send, `document.title === 'Placing an order · seefore' && location.pathname`)).toBe('/flows/placing-an-order');
+    }),
+  20_000,
+);
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME ? "the Data tab opens a data record's page with its fields, and a step on it opens the flow on that step" : `skipped: there is no Chrome at ${CHROME}`,
+  () =>
+    inChrome(async (send, address) => {
+      await send('Page.navigate', { url: `${address}/data` });
+      await click(send, await centreOf(send, 'a[href="/data/order-details"]'));
+      const page = `location.pathname === '/data/order-details' && document.querySelector('section[aria-label="Connections"]') !== null && {
+        tab: document.querySelector('.models-tabs a.active')?.textContent,
+        fields: [...document.querySelectorAll('section[aria-label="Fields"] tr')].map((row) => row.innerText.replace(/\\s+/g, ' ').trim()),
+        ways: [...document.querySelectorAll('section[aria-label="Connections"] td')].map((cell) => cell.textContent),
+      }`;
+      expect(await waitFor(send, page)).toEqual({
+        tab: 'Data',
+        fields: ['items What is bought, and how many of each', 'address'],
+        ways: ['Customer to Order API', 'Order API to Orders'],
+      });
+      await click(send, await centreOf(send, 'section[aria-label="Steps"] a[href="/flows/placing-an-order#saves"]'));
+      expect(await waitFor(send, `location.hash === '#saves' && document.querySelector('[aria-current="step"]')?.getAttribute('data-step')`)).toBe('saves');
+    }),
+  20_000,
+);

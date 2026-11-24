@@ -4,12 +4,14 @@ import { BaseEdge, ControlButton, Controls, Handle, MarkerType, Position, ReactF
 import type { Edge, EdgeProps, Node, NodeProps, ReactFlowInstance } from '@xyflow/react';
 import { Scan } from 'lucide-react';
 import type { ElkPoint } from 'elkjs/lib/elk-api.js';
+import { litByStep } from '../model/flow.ts';
+import type { Lights } from '../model/flow.ts';
 import { litBy } from '../model/view.ts';
 import type { Box, Depth, View } from '../model/view.ts';
 import { engine } from './elk.ts';
 import { iconOf, KIND, typeWords } from './kinds.tsx';
 import { layOut, nearestRoute } from './layout.ts';
-import type { Band, Layout } from './layout.ts';
+import type { Band, Layout, Shape } from './layout.ts';
 import { CanvasFrame } from './ui.tsx';
 
 type BoxNode = Node<{ box: Box }, 'box' | 'frame'>;
@@ -103,10 +105,16 @@ const HEAD = { type: MarkerType.ArrowClosed, color: 'var(--graph-edge)' };
 const PICKED_HEAD = { type: MarkerType.ArrowClosed, color: 'var(--accent)' };
 const edgeTypes = { route: RouteLine };
 
-function FitButton() {
+/**
+ * How a diagram is fitted to the field. A flow's own diagram is small, so it is never made
+ * larger than its boxes were drawn to be: a flow of four boxes would else fill the field.
+ */
+const fitOf = (shape: Shape) => (shape === 'flow' ? { ...FIT, maxZoom: 1 } : FIT);
+
+function FitButton({ shape }: { shape: Shape }) {
   const { fitView } = useReactFlow();
   return (
-    <ControlButton aria-label="Fit" title="Fit the diagram" onClick={() => void fitView(FIT)}>
+    <ControlButton aria-label="Fit" title="Fit the diagram" onClick={() => void fitView(fitOf(shape))}>
       <Scan />
     </ControlButton>
   );
@@ -196,18 +204,27 @@ function HoverLabel({ hovered, view, label, place }: { hovered: string | undefin
  * pick; the page holds it, and puts the panel that reads it in the field as `children`. The mouse
  * over a box or a line, or else the pick, fades all but it and what it joins, and a label at the
  * mouse says what is under it.
+ *
+ * On the page of a flow, `step` is what the picked step lights: its line, drawn as a pick is with
+ * one head where the step travels to, or its box, outlined. With no hover and no pick, all but it
+ * and what it joins fades. A change of step lays nothing out. A flow's own diagram has the
+ * `shape` of a flow: it is read top to bottom.
  */
 export function Diagram({
   view,
   depth,
   picked,
   onPick,
+  step,
+  shape = 'model',
   children,
 }: {
   view: View;
   depth: Depth;
   picked: string | undefined;
   onPick: (id?: string) => void;
+  step?: Lights;
+  shape?: Shape;
   children?: ReactNode;
 }) {
   const [layout, setLayout] = useState<Layout>();
@@ -215,14 +232,14 @@ export function Diagram({
   const [flow, setFlow] = useState<ReactFlowInstance<BoxNode | BandNode, RouteEdge>>();
   useEffect(() => {
     let current = true;
-    layOut(view, depth, engine()).then(
+    layOut(view, depth, engine(), shape).then(
       (done) => current && setLayout(done),
       () => current && setFailed(true),
     );
     return () => {
       current = false;
     };
-  }, [view, depth]);
+  }, [view, depth, shape]);
 
   // The nodes and lines as laid out, with nothing in focus.
   const placed = useMemo(
@@ -306,31 +323,41 @@ export function Diagram({
     if (still.current) settle();
   };
   const focus = hovered ?? picked;
-  const lit = useMemo(() => (focus === undefined ? undefined : litBy(view, focus)), [view, focus]);
+  const lit = useMemo(() => (focus !== undefined ? litBy(view, focus) : step !== undefined ? litByStep(view, step) : undefined), [view, focus, step]);
+  // The step's own line and box, which keep their look under a hover or a pick.
+  const steppedLine = step !== undefined && 'arrow' in step ? step : undefined;
+  const steppedBox = step !== undefined && 'box' in step ? step.box : undefined;
 
   const nodes = useMemo(() => {
     const bright = lit && new Set(lit.boxes);
     return placed.map((node) => {
       if (node.type === 'band') return node;
-      const className = [node.id === picked ? 'picked' : '', bright && !bright.has(node.id) ? 'faded' : ''].join(' ').trim();
+      const className = [node.id === picked ? 'picked' : '', node.id === steppedBox ? 'stepped' : '', bright && !bright.has(node.id) ? 'faded' : ''].join(' ').trim();
       return className === '' ? node : nodeLook(`${node.id} ${className}`, () => ({ ...node, className }));
     });
-  }, [placed, nodeLook, lit, picked]);
+  }, [placed, nodeLook, lit, picked, steppedBox]);
   const edges = useMemo(() => {
     const bright = lit && new Set(lit.arrows);
     return lines.map((line) => {
       const chosen = line.id === picked;
+      // The way the step travels on its line: its one head is at the start when it goes back.
+      const way = steppedLine?.arrow === line.id ? (steppedLine.back ? 'back' : 'on') : '';
       const faded = bright !== undefined && !bright.has(line.id);
-      const lifted = bright !== undefined && !faded;
+      const lifted = (bright !== undefined && !faded) || way !== '';
       if (!chosen && !faded && !lifted) return line;
-      return lineLook(`${line.id} ${chosen} ${faded}`, () => ({
-        ...line,
-        className: [chosen ? 'picked' : '', faded ? 'faded' : ''].join(' ').trim(),
-        ...(lifted ? { zIndex: LIFT } : {}),
-        ...(chosen ? { markerEnd: PICKED_HEAD, ...(line.markerStart !== undefined ? { markerStart: PICKED_HEAD } : {}) } : {}),
-      }));
+      return lineLook(`${line.id} ${chosen} ${faded} ${lifted} ${way}`, () => {
+        const { markerStart, markerEnd, ...rest } = line;
+        const heads =
+          way === 'back' ? { markerStart: PICKED_HEAD } : way === 'on' ? { markerEnd: PICKED_HEAD } : chosen ? { markerEnd: PICKED_HEAD, ...(markerStart !== undefined ? { markerStart: PICKED_HEAD } : {}) } : { markerStart, markerEnd };
+        return {
+          ...rest,
+          ...heads,
+          className: [chosen ? 'picked' : '', way !== '' ? 'stepped' : '', faded ? 'faded' : ''].join(' ').trim(),
+          ...(lifted ? { zIndex: LIFT } : {}),
+        };
+      });
     });
-  }, [lines, lineLook, lit, picked]);
+  }, [lines, lineLook, lit, picked, steppedLine]);
 
   // The label follows the mouse: each move writes where it stands, and no render is made for it.
   // It keeps inside the field, and clear of the panel while one is open; where there is no room
@@ -372,7 +399,7 @@ export function Diagram({
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
           fitView
-          fitViewOptions={FIT}
+          fitViewOptions={fitOf(shape)}
           minZoom={0.05}
           maxZoom={2}
           nodesDraggable={false}
@@ -406,7 +433,7 @@ export function Diagram({
           onMouseMove={follow}
         >
           <Controls className="glass-group glass-group-column" position="bottom-left" showInteractive={false} showFitView={false}>
-            <FitButton />
+            <FitButton shape={shape} />
           </Controls>
           <KeepClear picked={picked} routes={layout.routes} />
           <HoverLabel hovered={moving ? undefined : hovered} view={view} label={label} place={place} />
