@@ -1,0 +1,343 @@
+/* The page of a flow: its steps in the sidebar's place, its breadcrumb in the top bar, the bar of
+   the current step over the field, and the step's line or box on the diagram. */
+
+/* The sidebar is wider on this page, and its steps scroll by themselves under the name. */
+.app-shell-reading {
+  --sidebar-width: 380px;
+}
+.app-shell-reading .desktop-sidebar {
+  overflow: hidden;
+  padding-bottom: 0;
+}
+.app-shell-reading .brand-row {
+  padding-bottom: 14px;
+}
+.sidebar-slot {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  margin: 0 -10px;
+}
+.flow-steps {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 0;
+  padding: 0 10px 12px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* What scrolls past the name and the foot fades rather than being cut. */
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 10px, #000 calc(100% - 10px), transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 10px, #000 calc(100% - 10px), transparent 100%);
+}
+
+/* A row: Starts and Ends with their sentences, or a step with its number, what happens and who
+   acts on what. The current row is lit as the current entry of the sidebar is. */
+.flow-row {
+  display: flex;
+  flex-shrink: 0;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 10px;
+  border-radius: var(--radius-note);
+  text-align: left;
+  color: var(--text-primary);
+  /* A row kept in sight stands clear of the column's edges. */
+  scroll-margin-block: 10px;
+}
+.flow-row:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+.flow-row[aria-current='step'],
+.flow-row.current {
+  background: var(--surface-selected-strong);
+  box-shadow: var(--shadow-active);
+}
+.flow-end {
+  flex-direction: column;
+  gap: 2px;
+}
+.flow-end[data-row='ends'] {
+  margin-top: 6px;
+}
+.flow-end-label {
+  font-size: var(--fs-subheadline);
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--text-tertiary);
+}
+.flow-end-text {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-body);
+  overflow-wrap: anywhere;
+}
+.flow-end[data-row='starts'] {
+  margin-bottom: 6px;
+}
+.flow-step-number {
+  display: inline-flex;
+  flex: 0 0 22px;
+  align-items: center;
+  justify-content: center;
+  height: 22px;
+  margin-top: 1px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
+/* A step nobody has placed keeps its number in a dashed circle. */
+.flow-step-unplaced .flow-step-number {
+  border: 1px dashed var(--text-secondary);
+}
+.flow-row[aria-current='step'] .flow-step-number {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--text-on-accent);
+}
+.flow-step-unplaced[aria-current='step'] .flow-step-number {
+  border: 1.5px dashed var(--link);
+  background: var(--info-tint);
+  color: var(--link);
+}
+.flow-step-words {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.flow-step-happens {
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--text-strong);
+  overflow-wrap: anywhere;
+}
+.flow-step-acts {
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--text-tertiary);
+  overflow-wrap: anywhere;
+}
+
+/* A condition or a strand: its words once above its steps, which stand indented on a thin rule. */
+.flow-run {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 4px 0 2px;
+}
+.flow-heading {
+  padding: 2px 10px 2px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+.flow-indent {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-left: 21px;
+  padding-left: 6px;
+  border-left: 1px solid var(--border-strong);
+}
+
+/* The way out, in the top bar: a pill of glass as tall as the choice of depth. */
+.header-slot {
+  display: flex;
+  min-width: 0;
+}
+.breadcrumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  height: 38px;
+  padding: 0 14px;
+  border-radius: var(--radius-full);
+  background: var(--surface-glass);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--border-glass);
+  box-shadow: var(--shadow-pill);
+  font-size: 12.5px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.breadcrumb a {
+  flex-shrink: 0;
+  color: rgba(255, 255, 255, 0.7);
+}
+.breadcrumb a:hover {
+  color: #fff;
+}
+.breadcrumb-gap {
+  color: var(--text-faint);
+}
+.breadcrumb-here {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+/* The page under the top bar: the bar of the step, then the field as high as what is left. */
+.page-content:has(> .flow-page) {
+  padding-bottom: 0;
+}
+.flow-page {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: var(--canvas-height);
+}
+.flow-page > .canvas-frame {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+}
+
+/* The bar of the current step: always 150 pixels, so that the field never moves. Its head stays;
+   the lines under it scroll inside it when they are longer. */
+.flow-bar {
+  display: flex;
+  flex: 0 0 150px;
+  flex-direction: column;
+  height: 150px;
+  padding: 14px 16px 0 20px;
+  border-radius: var(--radius-panel);
+  background: var(--surface-panel);
+  border: 1px solid var(--border-panel);
+  box-shadow: var(--shadow-panel);
+}
+.flow-bar-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.flow-bar-title {
+  display: flex;
+  flex: 1;
+  align-items: baseline;
+  gap: 12px;
+  min-width: 0;
+  font-size: 19px;
+  line-height: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text-strong);
+  overflow-wrap: anywhere;
+}
+.flow-bar-count {
+  flex-shrink: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-tertiary);
+}
+.flow-bar-moves {
+  display: flex;
+  flex-shrink: 0;
+  gap: 6px;
+}
+.flow-bar-moves .button:disabled {
+  opacity: 0.35;
+}
+.flow-bar-lines {
+  flex: 1;
+  min-height: 0;
+  margin-top: 6px;
+  padding-bottom: 12px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.flow-bar-lines > p {
+  font-size: 13px;
+  line-height: 19px;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+.flow-bar-lines > p + p {
+  margin-top: 3px;
+}
+.flow-bar-lines > .flow-bar-acts {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+.flow-bar-lines > .flow-bar-text {
+  color: var(--text-body);
+  max-width: 110ch;
+}
+.flow-bar-open {
+  margin-left: 12px;
+}
+.flow-bar-label {
+  margin-right: 10px;
+  font-size: var(--fs-subheadline);
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--text-tertiary);
+}
+.flow-bar-link {
+  color: var(--link);
+}
+.flow-bar-link:hover {
+  color: var(--link-hover);
+}
+.flow-bar-data {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.flow-bar-data > .flow-bar-label {
+  margin-right: 4px;
+}
+.flow-data-pill {
+  height: 22px;
+  background: var(--info-tint);
+  color: var(--link);
+  cursor: pointer;
+}
+.flow-data-pill:hover {
+  background: var(--info-tint-strong);
+  color: var(--link-hover);
+}
+
+/* A data record in the panel: each field's name, and its description under it. */
+.data-fields {
+  margin: 4px 0 12px;
+  border-top: var(--divider);
+}
+.data-fields > div {
+  padding: 8px 0;
+  border-bottom: var(--divider);
+}
+.data-fields dt {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.data-fields dd {
+  color: var(--text-secondary);
+}
+
+/* The step's line on the diagram: lit as a picked line is; its box: outlined as a picked box. */
+.canvas-frame .react-flow__edge.stepped .react-flow__edge-path {
+  stroke: var(--accent);
+  stroke-width: 2.4;
+}
+.canvas-frame .react-flow__node.stepped > .architecture-node {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}

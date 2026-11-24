@@ -58,8 +58,11 @@ const DRAWN: readonly string[] = ['people', 'systems', 'apps', 'stores', 'compon
 const compare = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 const order = (kind: string): number => KINDS.findIndex((each) => each.folder === kind);
 
+/** The records in order of kind and id, the things a view can draw by id, and what each is in, upwards. */
+export type Things = { sorted: ModelRecord[]; things: Map<string, ModelRecord>; chains: Map<string, string[] | undefined> };
+
 /** The things a view can draw, by id, in order of kind and id, and what each is in, upwards. */
-function thingsOf(records: readonly ModelRecord[]): { sorted: ModelRecord[]; things: Map<string, ModelRecord>; chains: Map<string, string[] | undefined> } {
+export function thingsOf(records: readonly ModelRecord[]): Things {
   const sorted = [...records].sort((a, b) => order(a.kind) - order(b.kind) || compare(a.id, b.id));
   const things = new Map<string, ModelRecord>();
   for (const record of sorted) if (DRAWN.includes(record.kind) && !things.has(record.id)) things.set(record.id, record);
@@ -101,8 +104,39 @@ export type Focus = { id: string; name: string };
  * with an arrow to the focus, and only those arrows. A focus that is none of these is ignored.
  */
 export function viewOf(records: readonly ModelRecord[], depth: Depth, focus?: string): View {
-  const { sorted, things, chains } = thingsOf(records);
+  const base = thingsOf(records);
+  const { sorted, things, chains } = base;
 
+  const deepest = DEPTHS.indexOf(depth);
+  const whole = [...things.keys()].filter((id) => {
+    const chain = chains.get(id);
+    return chain !== undefined && chain.length <= deepest;
+  });
+  const parents = new Set(whole.map((id) => chains.get(id)?.[0]));
+
+  // The focus, when the whole view opens it and it is of the kind its depth focuses on. Within it
+  // is the focus and what it holds; with no focus, everything is.
+  const into = focus !== undefined && parents.has(focus) && things.get(focus)?.kind === FOCUSED[depth] ? focus : undefined;
+  const within = (id: string): boolean => into === undefined || id === into || (chains.get(id)?.includes(into) ?? false);
+  // Around a focus stand, closed, the things beside it and beside each thing it is in. The things
+  // it is in are not drawn.
+  const above = into === undefined ? [] : [into, ...(chains.get(into) ?? [])];
+  const beside = new Set(above.map((id) => chains.get(id)?.[0]));
+  const drawn = whole.filter((id) => within(id) || (!above.includes(id) && beside.has(chains.get(id)?.[0])));
+  return drawingOf(base, drawn, sorted.filter((record) => record.kind === 'connections'), within);
+}
+
+/**
+ * The boxes of the things drawn, each frame before what it holds, and the arrows of the
+ * connections given. `drawn` is in the order of `thingsOf`. A drawn thing with a drawn thing in
+ * it is a frame. Each end of a connection is drawn at the nearest drawn thing it is, or is in;
+ * those that join a box to itself or to its own inside are left out. One arrow joins a pair of
+ * boxes for each direction, and a pair with arrows both ways is one arrow with `back`.
+ *
+ * `within` is the focus of `viewOf`: an arrow is drawn only when one of its ends is within, and
+ * a box that is not within only when an arrow touches it.
+ */
+export function drawingOf({ sorted, things, chains }: Things, drawn: readonly string[], connections: readonly ModelRecord[], within: (id: string) => boolean = () => true): View {
   // The zone of each thing at the top, worked out on the connections themselves, so that it is
   // the same at every depth. "Ours" is a system that is not external, or anything in one.
   const top = (end: unknown): ModelRecord | undefined => {
@@ -126,23 +160,9 @@ export function viewOf(records: readonly ModelRecord[], depth: Depth, focus?: st
     return calls.has(id) && !called.has(id) ? { zone: 'people', caller: true } : { zone: 'external' };
   };
 
-  const deepest = DEPTHS.indexOf(depth);
-  const whole = [...things.keys()].filter((id) => {
-    const chain = chains.get(id);
-    return chain !== undefined && chain.length <= deepest;
-  });
-  const parents = new Set(whole.map((id) => chains.get(id)?.[0]));
-
-  // The focus, when the whole view opens it and it is of the kind its depth focuses on. Within it
-  // is the focus and what it holds; with no focus, everything is.
-  const into = focus !== undefined && parents.has(focus) && things.get(focus)?.kind === FOCUSED[depth] ? focus : undefined;
-  const within = (id: string): boolean => into === undefined || id === into || (chains.get(id)?.includes(into) ?? false);
-  // Around a focus stand, closed, the things beside it and beside each thing it is in. The things
-  // it is in are not drawn.
-  const above = into === undefined ? [] : [into, ...(chains.get(into) ?? [])];
-  const beside = new Set(above.map((id) => chains.get(id)?.[0]));
-  const drawn = whole.filter((id) => within(id) || (!above.includes(id) && beside.has(chains.get(id)?.[0])));
   const isDrawn = new Set(drawn);
+  // A frame holds what is drawn: around a focus, a closed box has nothing drawn in it.
+  const holders = new Set(drawn.map((id) => chains.get(id)?.[0]));
 
   const boxes = drawn.map((id): Box => {
     const thing = things.get(id) as ModelRecord;
@@ -155,7 +175,7 @@ export function viewOf(records: readonly ModelRecord[], depth: Depth, focus?: st
       kind,
       name: typeof fields.name === 'string' ? fields.name : id,
       ...(parent !== undefined ? { in: parent } : {}),
-      frame: parents.has(id) && within(id),
+      frame: holders.has(id),
       ...(fields.external === true ? { external: true as const } : {}),
       ...(typeof fields.kind === 'string' ? { type: fields.kind } : {}),
       ...(parent === undefined ? zoneOf(thing) : {}),
@@ -163,14 +183,9 @@ export function viewOf(records: readonly ModelRecord[], depth: Depth, focus?: st
   });
 
   // An end is the thing itself when it is drawn, else the nearest drawn thing it is in.
-  const lift = (end: unknown): string | undefined => {
-    if (typeof end !== 'string') return undefined;
-    const chain = chains.get(end);
-    return chain === undefined ? undefined : [end, ...chain].find((id) => isDrawn.has(id));
-  };
+  const lift = (end: unknown): string | undefined => (typeof end !== 'string' ? undefined : [end, ...(chains.get(end) ?? [])].find((id) => isDrawn.has(id)));
   const arrows = new Map<string, Arrow>();
-  for (const record of sorted) {
-    if (record.kind !== 'connections') continue;
+  for (const record of connections) {
     const from = lift(record.fields.from);
     const to = lift(record.fields.to);
     if (from === undefined || to === undefined || from === to) continue;

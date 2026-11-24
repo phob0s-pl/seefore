@@ -345,3 +345,76 @@ test.skipIf(!HAS_CHROME).concurrent(
     }),
   20_000,
 );
+
+/** A key pressed and let go, as a hand presses it. */
+async function press(send: Send, key: string, code: number) {
+  await send('Input.dispatchKeyEvent', { type: 'keyDown', key, code: key, windowsVirtualKeyCode: code });
+  await send('Input.dispatchKeyEvent', { type: 'keyUp', key, code: key, windowsVirtualKeyCode: code });
+}
+
+/** What the page of a flow shows: the address's step, the bar, the picked row, the stepped line and its heads, and what is faded. */
+const FLOW = `(() => {
+  const bar = document.querySelector('section[aria-label="Current step"]');
+  const stepped = [...document.querySelectorAll('.react-flow__edge.stepped')];
+  const path = stepped[0]?.querySelector('.react-flow__edge-path');
+  return document.querySelectorAll('.react-flow__edge-path[d^="M"]').length > 0 && {
+    hash: location.hash,
+    bar: bar?.innerText.replace(/\\s+/g, ' ').trim(),
+    current: document.querySelector('[aria-current="step"]')?.getAttribute('data-step') ?? null,
+    stepped: stepped.map((each) => each.getAttribute('data-id')),
+    heads: path ? [path.hasAttribute('marker-start'), path.hasAttribute('marker-end')] : [],
+    faded: [...document.querySelectorAll('.faded')].map((each) => each.getAttribute('data-id')).sort(),
+  };
+})()`;
+type FlowRead = { hash: string; bar: string; current: string | null; stepped: string[]; heads: boolean[]; faded: string[] };
+/** The page of the flow, once the address names the step and the page has drawn it, or after five seconds what it shows. */
+async function flowAt(send: Send, hash: string): Promise<FlowRead> {
+  const step = JSON.stringify(hash === '' ? null : hash.slice(1));
+  const read = (await waitFor(send, `(() => { const read = ${FLOW}; return read && read.hash === ${JSON.stringify(hash)} && read.current === ${step} && read; })()`)) as FlowRead | false;
+  return read || ((await send('Runtime.evaluate', { expression: FLOW, returnByValue: true })).result?.result?.value as FlowRead);
+}
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME ? 'a flow opens on the whole of it; a click on a row puts the step in the address, fills the bar and lights one line; the down key moves on' : `skipped: there is no Chrome at ${CHROME}`,
+  () =>
+    inChrome(async (send, address) => {
+      await send('Page.navigate', { url: `${address}/flows/placing-an-order` });
+      const whole = await flowAt(send, '');
+      expect(whole).toMatchObject({ current: null, stepped: [], faded: [] });
+      expect(whole.bar).toContain('Placing an order');
+      expect(await waitFor(send, 'document.title')).toBe('Placing an order · seefore');
+
+      await click(send, await centreOf(send, '[data-row="step"][data-step="saves"]'));
+      const saves = await flowAt(send, '#saves');
+      expect(saves).toMatchObject({ current: 'saves', stepped: ['order-api->orders'], heads: [false, true] });
+      expect(saves.bar).toContain('2 of 3 Saves the order');
+      expect(saves.bar).toContain('Order API to Orders Only when the customer has paid Data Order details');
+      expect(saves.faded).toEqual(['customer', 'customer->order-api']);
+
+      // The reply travels back along the customer's line: its one head is at the customer.
+      await press(send, 'ArrowDown', 40);
+      const confirms = await flowAt(send, '#confirms');
+      expect(confirms).toMatchObject({ current: 'confirms', stepped: ['customer->order-api'], heads: [true, false], faded: ['order-api->orders', 'orders'] });
+      expect(confirms.bar).toContain('3 of 3 Confirms the order');
+      expect(confirms.bar).toContain('Order API replies to Customer Reply to 1, Places an order');
+    }),
+  20_000,
+);
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME ? 'the list of flows opens a flow under its feature, and the back arrow leaves the flow in one go' : `skipped: there is no Chrome at ${CHROME}`,
+  () =>
+    inChrome(async (send, address) => {
+      await send('Page.navigate', { url: `${address}/flows` });
+      expect(await waitFor(send, `[...document.querySelectorAll('.section-label')].map((label) => label.textContent).join()`)).toBe('Ordering');
+      expect(await waitFor(send, `document.querySelector('a[href="/flows/placing-an-order"]')?.textContent`)).toBe('Placing an order3 steps');
+      await click(send, await centreOf(send, 'a[href="/flows/placing-an-order"]'));
+      await flowAt(send, '');
+      await click(send, await centreOf(send, '[data-row="step"][data-step="places"]'));
+      await press(send, 'ArrowDown', 40);
+      expect((await flowAt(send, '#saves')).current).toBe('saves');
+      await click(send, await centreOf(send, 'button[aria-label="Go back"]'));
+      expect(await waitFor(send, `location.pathname === '/flows' && location.pathname`)).toBe('/flows');
+    }),
+  20_000,
+);

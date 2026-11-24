@@ -57,6 +57,9 @@ const PAGES: Record<string, string> = {
   connections: 'connections',
   technologies: 'technologies',
   owners: 'owners',
+  features: 'features',
+  flows: 'flows',
+  data: 'data',
 };
 
 const collator = new Intl.Collator('en', { sensitivity: 'accent', numeric: true });
@@ -64,7 +67,7 @@ const text = (value: unknown): string | undefined => (typeof value === 'string' 
 const list = (value: unknown): string[] => (Array.isArray(value) ? value.filter((each): each is string => typeof each === 'string') : []);
 const idOrder = (a: ModelRecord, b: ModelRecord): number => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 /** By name, without regard to capitals; a record with no name after those with one; then by id. */
-const byName = (a: ModelRecord, b: ModelRecord): number => {
+export const byName = (a: ModelRecord, b: ModelRecord): number => {
   const first = text(a.fields.name);
   const second = text(b.fields.name);
   if (first !== undefined && second !== undefined) return collator.compare(first, second) || idOrder(a, b);

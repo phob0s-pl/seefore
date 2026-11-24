@@ -13,7 +13,10 @@ import './ui.css';
 import './shell.css';
 import './diagram.css';
 import './records.css';
+import './flow.css';
 import { Architecture } from './architecture.tsx';
+import { FlowPage } from './flow.tsx';
+import { FlowsList } from './flows.tsx';
 import { ActorsList, ConnectionsList, OwnersList, SoftwareList, TABS, TechnologiesList } from './models.tsx';
 import { RecordPage } from './record.tsx';
 import { Shell } from './shell.tsx';
@@ -28,6 +31,8 @@ if (root !== null) {
         <Routes>
           <Route element={<Shell />}>
             <Route index element={<Architecture />} />
+            <Route path="flows" element={<FlowsList />} />
+            <Route path="flows/:id" element={<FlowPage />} />
             <Route path="models" element={<SoftwareList />} />
             <Route path="models/:id" element={<RecordPage tab={software} />} />
             <Route path="actors" element={<ActorsList />} />

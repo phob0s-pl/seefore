@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { Boxes, Check, ChevronDown, ChevronLeft, ChevronRight, Waypoints } from 'lucide-react';
-import { Link, NavLink, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { Boxes, Check, ChevronDown, ChevronLeft, ChevronRight, GitBranch, Waypoints } from 'lucide-react';
+import { Link, NavLink, Outlet, useLocation, useMatch, useNavigate, useSearchParams } from 'react-router-dom';
 import type { ModelAnswer } from '../model/answer.ts';
 import { catalogueOf } from '../model/catalogue.ts';
 import type { Catalogue } from '../model/catalogue.ts';
@@ -11,9 +11,13 @@ import { Button, GlassGroup } from './ui.tsx';
 
 /**
  * What the shell knows of the model, and hands to the page: the answer and what the pages of
- * the records ask of it, worked out once, or why there is none.
+ * the records ask of it, worked out once, or why there is none. On the page of a flow, the
+ * places the page fills itself: the sidebar under the name, and the top bar after the arrows.
  */
-export type ModelState = { answer?: ModelAnswer; catalogue?: Catalogue; failed?: string };
+export type ModelState = { answer?: ModelAnswer; catalogue?: Catalogue; failed?: string; slots?: Slots };
+
+/** The places of the shell that the page of a flow fills: its steps and its breadcrumb. */
+export type Slots = { steps: HTMLElement | null; crumbs: HTMLElement | null };
 
 /** The depths as the top bar names them. */
 const DEPTH_WORDS: Record<Depth, string> = { systems: 'Systems', containers: 'Containers', components: 'Components' };
@@ -98,9 +102,9 @@ function FocusMenu({ depth, focus, choices }: { depth: Depth; focus: string | un
 }
 
 /**
- * The window: the sidebar with the name and its two entries, the top bar with a back and a
- * forward arrow and, on the Architecture page, the choice of depth and of focus, and the page
- * beside them.
+ * The window: the sidebar with the name and its entries, the top bar with a back and a forward
+ * arrow and, on the Architecture page, the choice of depth and of focus, and the page beside
+ * them. On the page of a flow, its steps stand in the sidebar and its breadcrumb in the top bar.
  */
 export function Shell() {
   const navigate = useNavigate();
@@ -118,6 +122,13 @@ export function Shell() {
   const links = useMemo(() => DEPTHS.map((item) => ({ depth: item, to: diagramAt(item, records && focusFor(records, item, focus)) })), [records, focus]);
   // Models is current on each of its lists and on the page of every record.
   const inModels = TABS.some((tab) => pathname === tab.to || pathname.startsWith(`${tab.to}/`));
+  // On the page of a flow the steps take the place of the navigation, while the model is read
+  // and once it has the flow. An address whose flow does not exist keeps the navigation.
+  const flowId = useMatch('/flows/:id')?.params.id;
+  const reading = flowId !== undefined && (state.catalogue === undefined ? state.failed === undefined : state.catalogue.record(flowId)?.kind === 'flows');
+  const [steps, setSteps] = useState<HTMLElement | null>(null);
+  const [crumbs, setCrumbs] = useState<HTMLElement | null>(null);
+  const context = useMemo((): ModelState => (reading ? { ...state, slots: { steps, crumbs } } : state), [state, reading, steps, crumbs]);
 
   useEffect(() => {
     fetch('/api/model')
@@ -133,7 +144,7 @@ export function Shell() {
   // The project's name stands beside the tool's: the model's name, or its folder's.
   const project = model.answer ? (model.answer.name ?? model.answer.folder) : undefined;
   return (
-    <div className="app-shell">
+    <div className={`app-shell${reading ? ' app-shell-reading' : ''}`}>
       <div className="app-fade" aria-hidden="true" />
       <a className="skip-link" href="#main-content">
         Skip to content
@@ -151,16 +162,25 @@ export function Shell() {
             </span>
           )}
         </div>
-        <nav aria-label="Main navigation" className="sidebar-navigation">
-          <NavLink to="/" end className="nav-link">
-            <Waypoints />
-            <span className="nav-text">Architecture</span>
-          </NavLink>
-          <Link to="/models" className={`nav-link${inModels ? ' active' : ''}`} aria-current={inModels ? 'page' : undefined}>
-            <Boxes />
-            <span className="nav-text">Models</span>
-          </Link>
-        </nav>
+        {reading ? (
+          <div className="sidebar-slot" ref={setSteps} />
+        ) : (
+          <nav aria-label="Main navigation" className="sidebar-navigation">
+            <NavLink to="/" end className="nav-link">
+              <Waypoints />
+              <span className="nav-text">Architecture</span>
+            </NavLink>
+            {/* Features stands here, before Flows. */}
+            <NavLink to="/flows" className="nav-link">
+              <GitBranch />
+              <span className="nav-text">Flows</span>
+            </NavLink>
+            <Link to="/models" className={`nav-link${inModels ? ' active' : ''}`} aria-current={inModels ? 'page' : undefined}>
+              <Boxes />
+              <span className="nav-text">Models</span>
+            </Link>
+          </nav>
+        )}
       </aside>
       <div className="app-inset">
         <header className="top-header">
@@ -172,6 +192,7 @@ export function Shell() {
               <ChevronRight />
             </Button>
           </GlassGroup>
+          {reading && <div className="header-slot" ref={setCrumbs} />}
           {pathname === '/' && (
             <nav className="page-tabs" aria-label="Depth">
               {links.map((link) => (
@@ -184,7 +205,7 @@ export function Shell() {
           {pathname === '/' && choices.length > 0 && <FocusMenu key={depth} depth={depth} focus={focus} choices={choices} />}
         </header>
         <main id="main-content" tabIndex={-1} className="page-content">
-          <Outlet context={state} />
+          <Outlet context={context} />
         </main>
       </div>
     </div>

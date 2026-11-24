@@ -4,6 +4,8 @@ import { BaseEdge, ControlButton, Controls, Handle, MarkerType, Position, ReactF
 import type { Edge, EdgeProps, Node, NodeProps, ReactFlowInstance } from '@xyflow/react';
 import { Scan } from 'lucide-react';
 import type { ElkPoint } from 'elkjs/lib/elk-api.js';
+import { litByStep } from '../model/flow.ts';
+import type { Lights } from '../model/flow.ts';
 import { litBy } from '../model/view.ts';
 import type { Box, Depth, View } from '../model/view.ts';
 import { engine } from './elk.ts';
@@ -196,18 +198,24 @@ function HoverLabel({ hovered, view, label, place }: { hovered: string | undefin
  * pick; the page holds it, and puts the panel that reads it in the field as `children`. The mouse
  * over a box or a line, or else the pick, fades all but it and what it joins, and a label at the
  * mouse says what is under it.
+ *
+ * On the page of a flow, `step` is what the picked step lights: its line, drawn as a pick is with
+ * one head where the step travels to, or its box, outlined. With no hover and no pick, all but it
+ * and what it joins fades. A change of step lays nothing out.
  */
 export function Diagram({
   view,
   depth,
   picked,
   onPick,
+  step,
   children,
 }: {
   view: View;
   depth: Depth;
   picked: string | undefined;
   onPick: (id?: string) => void;
+  step?: Lights;
   children?: ReactNode;
 }) {
   const [layout, setLayout] = useState<Layout>();
@@ -306,31 +314,41 @@ export function Diagram({
     if (still.current) settle();
   };
   const focus = hovered ?? picked;
-  const lit = useMemo(() => (focus === undefined ? undefined : litBy(view, focus)), [view, focus]);
+  const lit = useMemo(() => (focus !== undefined ? litBy(view, focus) : step !== undefined ? litByStep(view, step) : undefined), [view, focus, step]);
+  // The step's own line and box, which keep their look under a hover or a pick.
+  const steppedLine = step !== undefined && 'arrow' in step ? step : undefined;
+  const steppedBox = step !== undefined && 'box' in step ? step.box : undefined;
 
   const nodes = useMemo(() => {
     const bright = lit && new Set(lit.boxes);
     return placed.map((node) => {
       if (node.type === 'band') return node;
-      const className = [node.id === picked ? 'picked' : '', bright && !bright.has(node.id) ? 'faded' : ''].join(' ').trim();
+      const className = [node.id === picked ? 'picked' : '', node.id === steppedBox ? 'stepped' : '', bright && !bright.has(node.id) ? 'faded' : ''].join(' ').trim();
       return className === '' ? node : nodeLook(`${node.id} ${className}`, () => ({ ...node, className }));
     });
-  }, [placed, nodeLook, lit, picked]);
+  }, [placed, nodeLook, lit, picked, steppedBox]);
   const edges = useMemo(() => {
     const bright = lit && new Set(lit.arrows);
     return lines.map((line) => {
       const chosen = line.id === picked;
+      // The way the step travels on its line: its one head is at the start when it goes back.
+      const way = steppedLine?.arrow === line.id ? (steppedLine.back ? 'back' : 'on') : '';
       const faded = bright !== undefined && !bright.has(line.id);
-      const lifted = bright !== undefined && !faded;
+      const lifted = (bright !== undefined && !faded) || way !== '';
       if (!chosen && !faded && !lifted) return line;
-      return lineLook(`${line.id} ${chosen} ${faded}`, () => ({
-        ...line,
-        className: [chosen ? 'picked' : '', faded ? 'faded' : ''].join(' ').trim(),
-        ...(lifted ? { zIndex: LIFT } : {}),
-        ...(chosen ? { markerEnd: PICKED_HEAD, ...(line.markerStart !== undefined ? { markerStart: PICKED_HEAD } : {}) } : {}),
-      }));
+      return lineLook(`${line.id} ${chosen} ${faded} ${lifted} ${way}`, () => {
+        const { markerStart, markerEnd, ...rest } = line;
+        const heads =
+          way === 'back' ? { markerStart: PICKED_HEAD } : way === 'on' ? { markerEnd: PICKED_HEAD } : chosen ? { markerEnd: PICKED_HEAD, ...(markerStart !== undefined ? { markerStart: PICKED_HEAD } : {}) } : { markerStart, markerEnd };
+        return {
+          ...rest,
+          ...heads,
+          className: [chosen ? 'picked' : '', way !== '' ? 'stepped' : '', faded ? 'faded' : ''].join(' ').trim(),
+          ...(lifted ? { zIndex: LIFT } : {}),
+        };
+      });
     });
-  }, [lines, lineLook, lit, picked]);
+  }, [lines, lineLook, lit, picked, steppedLine]);
 
   // The label follows the mouse: each move writes where it stands, and no render is made for it.
   // It keeps inside the field, and clear of the panel while one is open; where there is no room
