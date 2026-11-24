@@ -48,6 +48,10 @@ The same model gives the same picture: nothing depends on the size of the window
 - **In `src/ui/`**: the layout above. It takes the layout engine as a value, so that tests can
   run it without a browser. The page draws the bands, a head at the start of a two-way line,
   and boxes at the size the layout gives.
+- **The outline of a box has the colour of its kind**, as in the pictures of the study: a
+  person blue, a system green, an app amber, a store violet, a component light blue, a piece
+  of infrastructure grey. A frame has a quiet dashed outline. The owner asked for it on
+  2026-11-24.
 
 ## What is out
 
