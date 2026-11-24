@@ -3,6 +3,7 @@ import { ArrowDown } from 'lucide-react';
 import { Link, useOutletContext, useParams } from 'react-router-dom';
 import type { ModelRecord } from '../model/answer.ts';
 import type { Catalogue } from '../model/catalogue.ts';
+import type { RuleOf, Rulebook } from '../model/rulebook.ts';
 import type { StepAt, Travel, Way } from '../model/travel.ts';
 import { KIND, typeWords } from './kinds.tsx';
 import { KindTile, Missing, ModelsPage, NameOf, RecordLink, TABS } from './models.tsx';
@@ -19,20 +20,20 @@ export const ids = (value: unknown): string[] => (Array.isArray(value) ? value.f
 /** The page of one record, at `<list>/<id>`; an id that names no record of that list's kinds is missing. */
 export function RecordPage({ tab }: { tab: (typeof TABS)[number] }) {
   const { id = '' } = useParams();
-  const { catalogue, travel } = useOutletContext<ModelState>();
+  const { catalogue, travel, rulebook } = useOutletContext<ModelState>();
   const found = catalogue?.record(id);
   const record = found !== undefined && catalogue?.address(found) === `${tab.to}/${id}` ? found : undefined;
   const name = record?.fields.name;
   useTitle(typeof name === 'string' ? name : record?.kind === 'connections' ? 'No name' : (record?.id ?? 'Models'));
   return (
     <ModelsPage>
-      {(catalogue) => (record !== undefined && travel !== undefined ? <RecordBody record={record} catalogue={catalogue} travel={travel} /> : <Missing list={tab} />)}
+      {(catalogue) => (record !== undefined && travel !== undefined ? <RecordBody record={record} catalogue={catalogue} travel={travel} rulebook={rulebook} /> : <Missing list={tab} />)}
     </ModelsPage>
   );
 }
 
 /** A record's page: its name with the tile of its kind and its marks, its description, then what its kind shows. */
-function RecordBody({ record, catalogue, travel }: { record: ModelRecord; catalogue: Catalogue; travel: Travel }) {
+function RecordBody({ record, catalogue, travel, rulebook }: { record: ModelRecord; catalogue: Catalogue; travel: Travel; rulebook: Rulebook | undefined }) {
   const { kind, fields } = record;
   const body =
     kind === 'people' ? (
@@ -65,6 +66,7 @@ function RecordBody({ record, catalogue, travel }: { record: ModelRecord; catalo
       <SectionStack>
         {typeof fields.description === 'string' && <TextPanel>{fields.description}</TextPanel>}
         {body}
+        <RulesOf rulebook={rulebook} id={record.id} />
       </SectionStack>
     </>
   );
@@ -107,6 +109,18 @@ export function Related({ title, rows, widths, always }: { title: string; rows: 
       )}
     </Section>
   );
+}
+
+/** What a record is to a rule, in the words of its Rules section. */
+const HOW: Record<RuleOf['how'], string> = { breaks: 'Breaks it', debt: 'In debt', way: 'On a way that breaks it' };
+
+/**
+ * The Rules section, last on the page of a record and of a feature: each rule the record breaks,
+ * is in debt of or, for a connection, is on a way that breaks, its name a link to its page.
+ */
+export function RulesOf({ rulebook, id }: { rulebook: Rulebook | undefined; id: string }) {
+  const rows = (rulebook?.rulesOf(id) ?? []).map((each) => ({ key: each.rule, cells: [<Link to={`/rules/${each.rule}`}>{each.name ?? each.rule}</Link>, HOW[each.how]] }));
+  return <Related title="Rules" rows={rows} widths={['auto', '220px']} />;
 }
 
 /** A record in a cell: the tile of its kind and a link to its page, or the id alone when it names nothing. */

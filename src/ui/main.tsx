@@ -14,11 +14,13 @@ import './shell.css';
 import './diagram.css';
 import './records.css';
 import './flow.css';
+import './rules.css';
 import { Architecture } from './architecture.tsx';
 import { FlowPage } from './flow.tsx';
 import { FeaturePage, FeaturesList } from './features.tsx';
 import { ActorsList, ConnectionsList, DataList, OwnersList, SoftwareList, TABS, TechnologiesList } from './models.tsx';
 import { RecordPage } from './record.tsx';
+import { RulePage, RulesList } from './rules.tsx';
 import { Shell } from './shell.tsx';
 
 const [software, actors, connections, technologies, owners, data] = TABS;
@@ -47,6 +49,8 @@ if (root !== null) {
             <Route path="owners/:id" element={<RecordPage tab={owners} />} />
             <Route path="data" element={<DataList />} />
             <Route path="data/:id" element={<RecordPage tab={data} />} />
+            <Route path="rules" element={<RulesList />} />
+            <Route path="rules/:id" element={<RulePage />} />
           </Route>
         </Routes>
       </BrowserRouter>

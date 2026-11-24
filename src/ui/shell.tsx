@@ -1,9 +1,11 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { Boxes, Check, ChevronDown, ChevronLeft, ChevronRight, Puzzle, Waypoints } from 'lucide-react';
+import { Boxes, Check, ChevronDown, ChevronLeft, ChevronRight, ListChecks, Puzzle, Waypoints } from 'lucide-react';
 import { Link, NavLink, Outlet, useLocation, useMatch, useNavigate, useSearchParams } from 'react-router-dom';
 import type { ModelAnswer } from '../model/answer.ts';
 import { catalogueOf } from '../model/catalogue.ts';
 import type { Catalogue } from '../model/catalogue.ts';
+import { rulebookOf } from '../model/rulebook.ts';
+import type { Rulebook } from '../model/rulebook.ts';
 import { travelOf } from '../model/travel.ts';
 import type { Travel } from '../model/travel.ts';
 import { DEPTHS, depthOf, focusesOf, focusFor } from '../model/view.ts';
@@ -13,12 +15,13 @@ import { Button, GlassGroup } from './ui.tsx';
 
 /**
  * What the shell knows of the model, and hands to the page: the answer and what the pages of
- * the records ask of it, worked out once, or why there is none. On the page of a flow, the
- * places the page fills itself: the sidebar under the name, and the top bar after the arrows.
+ * the records and of the rules ask of it, worked out once, or why there is none. On the page of
+ * a flow, the places the page fills itself: the sidebar under the name, and the top bar after
+ * the arrows; on the page of a rule, the top bar alone.
  */
-export type ModelState = { answer?: ModelAnswer; catalogue?: Catalogue; travel?: Travel; failed?: string; slots?: Slots };
+export type ModelState = { answer?: ModelAnswer; catalogue?: Catalogue; travel?: Travel; rulebook?: Rulebook; failed?: string; slots?: Slots };
 
-/** The places of the shell that the page of a flow fills: its steps and its breadcrumb. */
+/** The places of the shell that the page of a flow fills, its steps and its breadcrumb, and that of a rule, its breadcrumb. */
 export type Slots = { steps: HTMLElement | null; crumbs: HTMLElement | null };
 
 /** The depths as the top bar names them. */
@@ -117,7 +120,7 @@ export function Shell() {
   const state = useMemo((): ModelState => {
     if (model.answer === undefined) return model;
     const catalogue = catalogueOf(model.answer.records);
-    return { ...model, catalogue, travel: travelOf(model.answer.records, catalogue) };
+    return { ...model, catalogue, travel: travelOf(model.answer.records, catalogue), rulebook: rulebookOf(model.answer) };
   }, [model]);
   // The focus the address names, and the choices of the depth: none at Systems.
   const records = model.answer?.records;
@@ -132,9 +135,13 @@ export function Shell() {
   // and once it has the flow. An address whose flow does not exist keeps the navigation.
   const flowId = useMatch('/flows/:id')?.params.id;
   const reading = flowId !== undefined && (state.catalogue === undefined ? state.failed === undefined : state.catalogue.record(flowId)?.kind === 'flows');
+  // The page of a rule puts its breadcrumb in the top bar too, and keeps the navigation.
+  const onRule = useMatch('/rules/:id') !== null;
+  const crumbed = reading || onRule;
   const [steps, setSteps] = useState<HTMLElement | null>(null);
   const [crumbs, setCrumbs] = useState<HTMLElement | null>(null);
-  const context = useMemo((): ModelState => (reading ? { ...state, slots: { steps, crumbs } } : state), [state, reading, steps, crumbs]);
+  const context = useMemo((): ModelState => (crumbed ? { ...state, slots: { steps: reading ? steps : null, crumbs } } : state), [state, crumbed, reading, steps, crumbs]);
+  const dot = state.rulebook?.dot;
 
   useEffect(() => {
     fetch('/api/model')
@@ -184,6 +191,11 @@ export function Shell() {
               <Boxes />
               <span className="nav-text">Models</span>
             </Link>
+            <NavLink to="/rules" className="nav-link">
+              <ListChecks />
+              <span className="nav-text">Rules</span>
+              {dot !== undefined && <span className={`nav-dot nav-dot-${dot}`} role="img" aria-label={dot === 'broken' ? 'A rule is broken' : 'A rule is not judged'} />}
+            </NavLink>
           </nav>
         )}
       </aside>
@@ -197,7 +209,7 @@ export function Shell() {
               <ChevronRight />
             </Button>
           </GlassGroup>
-          {reading && <div className="header-slot" ref={setCrumbs} />}
+          {crumbed && <div className="header-slot" ref={setCrumbs} />}
           {pathname === '/' && (
             <nav className="page-tabs" aria-label="Depth">
               {links.map((link) => (

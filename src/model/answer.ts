@@ -57,6 +57,8 @@ export type Ruling = {
   chosen: string[];
   /** A rule over records: the ids that break it and are not in `debt`. */
   breaks: string[];
+  /** A rule with `must` over records: for each id in `breaks`, the keys of `must` it does not match. */
+  misses?: Record<string, string[]>;
   /** A rule of ways: how many pairs of a start and an end a way joins. */
   pairs?: number;
   /** A rule of ways: the ways that break it, the shortest for each start. */

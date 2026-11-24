@@ -52,18 +52,21 @@ export function SectionStack({ children }: { children: ReactNode }) {
   return <div className="section-stack">{children}</div>;
 }
 
-/** The small tinted square that leads a row, in the colour of a kind of thing, or neutral. */
-export function IconTile({ icon: Icon, kind, size }: { icon: LucideIcon; kind?: string; size?: 'sm' | 'lg' }) {
+/** The tone of a state, beside the colour of a kind: danger, warning or success. */
+export type Tone = 'danger' | 'warning' | 'success';
+
+/** The small tinted square that leads a row, in the colour of a kind of thing or the tone of a state, or neutral. */
+export function IconTile({ icon: Icon, kind, tone, size }: { icon: LucideIcon; kind?: string; tone?: Tone; size?: 'sm' | 'lg' }) {
   return (
-    <span className={join('tile', size && `tile-${size}`, kind && `kind-${kind}`)} aria-hidden="true">
+    <span className={join('tile', size && `tile-${size}`, kind && `kind-${kind}`, tone && `tone-${tone}`)} aria-hidden="true">
       <Icon />
     </span>
   );
 }
 
-/** A pill: a mark such as a type or "External", in the colour of a kind of thing, or neutral. */
-export function Pill({ kind, size, children }: { kind?: string; size?: 'xs'; children: ReactNode }) {
-  return <span className={join('pill', size && `pill-${size}`, kind && `kind-${kind}`)}>{children}</span>;
+/** A pill: a mark such as a type or "External", in the colour of a kind of thing or the tone of a state, or neutral. */
+export function Pill({ kind, tone, size, children }: { kind?: string; tone?: Tone; size?: 'xs'; children: ReactNode }) {
+  return <span className={join('pill', size && `pill-${size}`, kind && `kind-${kind}`, tone && `tone-${tone}`)}>{children}</span>;
 }
 
 /** Label and value rows in a panel: a record's facts. */
@@ -105,6 +108,7 @@ export function RowList({ label, children }: { label: string; children: ReactNod
 /**
  * A row of a list: its cells on a grid shared with the heading row, the first holding a small
  * tile, the name and its marks. The whole row is a link. Each level of depth indents it by a tile.
+ * What is given as `below` stands under the link, in the same row, and may hold links of its own.
  */
 export function GridRow({
   to,
@@ -115,6 +119,7 @@ export function GridRow({
   cells = [],
   depth = 0,
   strong,
+  below,
 }: {
   to: string;
   cols: string;
@@ -124,6 +129,7 @@ export function GridRow({
   cells?: readonly ReactNode[];
   depth?: number;
   strong?: boolean;
+  below?: ReactNode;
 }) {
   return (
     <li className="row row-grid-item">
@@ -139,6 +145,7 @@ export function GridRow({
           </span>
         ))}
       </Link>
+      {below}
     </li>
   );
 }
