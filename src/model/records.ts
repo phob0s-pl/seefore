@@ -447,6 +447,61 @@ export const RuleSchema = z
   })
   .meta({ description: "A rule of a team's own: a sentence, and a selector that `seefore check` judges against the other records. `never`, or `each` with `must`." });
 
+/** The most characters of the prompt a change starts from: room for a full brief. */
+export const PROMPT_MAX = 4000;
+/** The most lines of `given`: the answers a person gave, not the conversation. */
+export const GIVEN_MAX = 10;
+
+/** One line of `given`: an answer of the person, in one sentence or two on one line. */
+const GivenLine = z
+  .string()
+  .min(1, { error: 'A line of `given` is empty.' })
+  .max(NOTE_MAX)
+  .regex(ONE_LINE, {
+    error: (issue) => {
+      const text = String(issue.input);
+      if (!/\S/.test(text)) return 'A line of `given` is empty.';
+      if (LINE_BREAK.test(text)) return 'A line of `given` must be on one line.';
+      return 'A line of `given` starts or ends with a space. Take the space off.';
+    },
+  });
+
+/**
+ * The input of a change: what a person brings before anything is drafted. It is the head of a
+ * change's record. What a change holds beside it, and where its file lies, is not defined yet,
+ * so no folder is read with this shape.
+ */
+export const ChangeSchema = z
+  .strictObject({
+    name: Name.meta({ description: 'What the change is called: one line of 1 to 100 characters. It is written last, from the prompt and every answer.' }),
+    prompt: z
+      .string()
+      .min(1, { error: '`prompt` is empty. It holds what the person asked for.' })
+      .max(PROMPT_MAX)
+      .regex(/\S/, { error: '`prompt` is empty. It holds what the person asked for.' })
+      .meta({
+        description:
+          'What the person asked for, in 1 to 4,000 characters: as typed, or put into better words by the assistant with nothing added. It may be a line, a need or a full brief.',
+      }),
+    given: z
+      .array(GivenLine)
+      .min(1)
+      .max(GIVEN_MAX)
+      .superRefine((lines, context) => {
+        const seen = new Set<string>();
+        lines.forEach((line, index) => {
+          if (seen.has(line)) context.addIssue({ code: 'custom', path: [index], message: '`given` has the same line twice. Keep one.' });
+          seen.add(line);
+        });
+      })
+      .meta({
+        description:
+          "What the person answered when asked, each answer put into one line of 1 to 300 characters by the assistant: 1 to 10 lines, none twice. Nothing the prompt says already, and nothing the person did not say. Left out when nothing was asked.",
+      })
+      .optional(),
+  })
+  .meta({ description: 'The input of a change: the prompt a person gave, what they answered when asked, and a name written last. It names no record that is not there yet.' });
+
 /** The shape of each kind's file, by folder. */
 export const SHAPES = {
   people: PersonSchema,

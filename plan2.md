@@ -86,11 +86,24 @@ features.
 
 ### After the MVP
 
-- **4 Changes**: how a change is defined.
+- **4 Changes**: how a change is defined. Its four parts are below.
 - **5 Additional architecture context**: what is needed. It starts below, with rules.
 - **6 Reviewers**: which reviewers we need.
 - **7 Optimisations and UI tweaks**: the list the earlier stages filled.
 - **8 Claude skills and process**.
+
+### 4 Changes
+
+A change starts from a prompt. The owner split the milestone into four parts on 2026-11-24.
+Each is defined on one page before anything of it is built. The earlier study of the whole
+process is in `research/stage-15-22/`, out of Git.
+
+| # | Stage | Result | Who |
+| --- | --- | --- | --- |
+| D1 | The input of a change | One page and a schema: a `prompt`, what the person answered when asked (`given`), and a `name` written last | Fable defines, the main session builds |
+| D2 | What a change is | One page: what a change holds | Fable |
+| D3 | Decisions | One page: what a decision is, and when one is asked, assumed or just made | Fable |
+| D4 | The review of a change | One page: who reads a change, what they say, and how the reading ends | Fable |
 
 ### 5 Additional architecture context
 

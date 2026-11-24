@@ -2,7 +2,9 @@
 
 One schema for each of the thirteen kinds of record (`apps.schema.json`, `people.schema.json`
 and so on, with `features.schema.json`, `flows.schema.json`, `data.schema.json` and
-`rules.schema.json`, the rules of a team's own) and one for the marker (`seefore.schema.json`). They are written from the `zod` shapes in
+`rules.schema.json`, the rules of a team's own), one for the marker (`seefore.schema.json`) and
+one for the input of a change (`changes.schema.json`), which no folder is read with yet. They
+are written from the `zod` shapes in
 `src/model/records.ts` by `npm run schema`; a test fails if they differ. Edit the shapes, not these.
 
 A record holds no schema line, so an editor binds each schema to its folder. For VS Code with
