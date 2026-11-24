@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { BaseEdge, ControlButton, Controls, Handle, MarkerType, Position, ReactFlow, useReactFlow, useViewportStore } from '@xyflow/react';
-import type { Edge, EdgeProps, Node, NodeProps } from '@xyflow/react';
+import type { Edge, EdgeProps, Node, NodeProps, ReactFlowInstance } from '@xyflow/react';
 import { Scan } from 'lucide-react';
 import type { ElkPoint } from 'elkjs/lib/elk-api.js';
 import type { Box, Depth, View } from '../model/view.ts';
 import { engine } from './elk.ts';
 import { iconOf, KIND, typeWords } from './kinds.tsx';
-import { layOut } from './layout.ts';
+import { layOut, nearestRoute } from './layout.ts';
 import type { Band, Layout } from './layout.ts';
 import { CanvasFrame } from './ui.tsx';
 
@@ -157,6 +157,7 @@ export function Diagram({
 }) {
   const [layout, setLayout] = useState<Layout>();
   const [failed, setFailed] = useState(false);
+  const [flow, setFlow] = useState<ReactFlowInstance<BoxNode | BandNode, RouteEdge>>();
   useEffect(() => {
     let current = true;
     layOut(view, depth, engine()).then(
@@ -251,7 +252,10 @@ export function Diagram({
           elementsSelectable={false}
           deleteKeyCode={null}
           onNodeClick={(_event, node) => onPick(node.type === 'band' ? undefined : node.id)}
-          onEdgeClick={(_event, edge) => onPick(edge.id)}
+          onInit={setFlow}
+          // Where lines run close, the reach of one lies on its neighbour: the click means the
+          // line nearest to the mouse, not the one whose reach is on top.
+          onEdgeClick={(event, edge) => onPick((flow && nearestRoute(layout.routes, flow.screenToFlowPosition({ x: event.clientX, y: event.clientY }))) ?? edge.id)}
           onPaneClick={() => onPick()}
         >
           <Controls className="glass-group glass-group-column" position="bottom-left" showInteractive={false} showFitView={false}>
