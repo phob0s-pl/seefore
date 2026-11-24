@@ -67,6 +67,7 @@ and B3 use are in `research/paths.md`, out of Git.
 | B4b | Layout of the diagram | Three zones at the Systems depth, people on the left below it, and a diagram small enough to read | Opus |
 | B5 | Models | The records of the model, read on the page: five lists (software, actors, connections, technologies, owners) and a page for each record | Opus |
 | B6 | A click on the diagram | A click on a box or a line opens a panel on the field that says what it is, with a button to its page | Opus |
+| B7 | The highlight on the diagram | The mouse over a box or a line fades all but it and what it joins, and a pick holds the same | Opus |
 
 ### 3 Flows and features
 
