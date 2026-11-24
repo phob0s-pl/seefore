@@ -143,20 +143,19 @@ export function GridRow({
   );
 }
 
-/** A button, a pill. Ghost is see-through; an icon button holds one icon. */
-export function Button({
-  variant,
-  size,
-  className,
-  ...props
-}: ComponentProps<'button'> & { variant?: 'ghost'; size?: 'icon' }) {
-  return (
-    <button
-      type="button"
-      className={join('button', variant && `button-${variant}`, size && `button-${size}`, className)}
-      {...props}
-    />
-  );
+/** How a button looks: ghost is see-through, outline has a hairline; an icon button holds one icon, a small one is shorter. */
+type Look = { variant?: 'ghost' | 'outline'; size?: 'icon' | 'sm' };
+const buttonClass = ({ variant, size }: Look, className?: string): string =>
+  join('button', variant && `button-${variant}`, size && `button-${size}`, className);
+
+/** A button, a pill. */
+export function Button({ variant, size, className, ...props }: ComponentProps<'button'> & Look) {
+  return <button type="button" className={buttonClass({ variant, size }, className)} {...props} />;
+}
+
+/** A link to a page that looks like a button. */
+export function ButtonLink({ variant, size, className, ...props }: ComponentProps<typeof Link> & Look) {
+  return <Link className={buttonClass({ variant, size }, className)} {...props} />;
 }
 
 /** A pill of controls on glass, such as the top bar's arrows. */

@@ -43,8 +43,8 @@
   overflow-y: auto;
   border-radius: var(--radius-sidebar);
   background: var(--surface-sidebar);
-  backdrop-filter: var(--glass-blur-strong);
   -webkit-backdrop-filter: var(--glass-blur-strong);
+  backdrop-filter: var(--glass-blur-strong);
   border: 1px solid var(--border-glass);
   box-shadow: var(--shadow-glass);
 }
@@ -162,8 +162,8 @@
   padding: 3px;
   border-radius: var(--radius-full);
   background: var(--surface-glass);
-  backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
   border: 1px solid var(--border-glass);
   box-shadow: var(--shadow-pill);
 }
@@ -201,6 +201,12 @@
   max-width: none;
   margin: 0;
   padding: 32px var(--content-gutter) 56px;
+  outline: none;
+}
+/* The page takes the focus when something on it that cannot hold it is clicked. It shows no
+   ring for it, also after a key such as Escape is pressed: a ring round the whole page says
+   nothing. */
+main.page-content:focus-visible {
   outline: none;
 }
 

@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
-import { BaseEdge, ControlButton, Controls, Handle, MarkerType, Position, ReactFlow, useReactFlow } from '@xyflow/react';
-import type { Edge, EdgeProps, Node, NodeProps } from '@xyflow/react';
+import type { ReactNode } from 'react';
+import { BaseEdge, ControlButton, Controls, Handle, MarkerType, Position, ReactFlow, useReactFlow, useViewportStore } from '@xyflow/react';
+import type { Edge, EdgeProps, Node, NodeProps, ReactFlowInstance } from '@xyflow/react';
 import { Scan } from 'lucide-react';
 import type { ElkPoint } from 'elkjs/lib/elk-api.js';
 import type { Box, Depth, View } from '../model/view.ts';
 import { engine } from './elk.ts';
 import { iconOf, KIND, typeWords } from './kinds.tsx';
-import { layOut } from './layout.ts';
+import { layOut, nearestRoute } from './layout.ts';
 import type { Band, Layout } from './layout.ts';
 import { CanvasFrame } from './ui.tsx';
 
@@ -90,13 +91,15 @@ function RouteLine({ id, data, markerStart, markerEnd }: EdgeProps<RouteEdge>) {
   return (
     <>
       <path className="diagram-edge-halo" d={path} fill="none" stroke="var(--surface-canvas)" strokeWidth={6} />
-      <BaseEdge id={id} path={path} markerStart={markerStart} markerEnd={markerEnd} />
+      <BaseEdge id={id} path={path} markerStart={markerStart} markerEnd={markerEnd} interactionWidth={24} />
     </>
   );
 }
 
 const nodeTypes = { box: BoxCard, frame: FrameCard, band: BandCard };
 const HEAD = { type: MarkerType.ArrowClosed, color: 'var(--graph-edge)' };
+/** The heads of the picked line, in the accent colour. */
+const PICKED_HEAD = { type: MarkerType.ArrowClosed, color: 'var(--accent)' };
 const edgeTypes = { route: RouteLine };
 
 function FitButton() {
@@ -108,10 +111,53 @@ function FitButton() {
   );
 }
 
-/** The diagram of a view: laid out by ELK, then drawn by React Flow on the hatched field. */
-export function Diagram({ view, depth }: { view: View; depth: Depth }) {
+/** The room the panel takes at the field's right, as diagram.css places it, and the gap kept beside it. */
+const PANEL = { width: 360, margin: 16, gap: 16 };
+
+/**
+ * Slides the diagram left, just enough, when what is picked lies partly under the panel and fits
+ * in the room beside it. What is wider than that room is left where it is.
+ */
+function KeepClear({ picked, routes }: { picked: string | undefined; routes: Layout['routes'] }) {
+  const { getInternalNode, getViewport, setViewport } = useReactFlow();
+  const width = useViewportStore((state) => state.width);
+  useEffect(() => {
+    if (picked === undefined) return;
+    const node = getInternalNode(picked);
+    const at = node?.internals.positionAbsolute.x;
+    const xs = node && at !== undefined ? [at, at + (node.width ?? node.measured.width ?? 0)] : (routes.get(picked) ?? []).map((point) => point.x);
+    if (xs.length === 0) return;
+    const { x, y, zoom } = getViewport();
+    const left = Math.min(...xs) * zoom + x;
+    const right = Math.max(...xs) * zoom + x;
+    const free = width - Math.min(PANEL.width, width - 2 * PANEL.margin) - PANEL.margin - PANEL.gap;
+    if (right <= free || right - left > free - PANEL.margin) return;
+    void setViewport({ x: x - (right - free), y, zoom }, { duration: 200 });
+  }, [picked, routes, width, getInternalNode, getViewport, setViewport]);
+  return null;
+}
+
+/**
+ * The diagram of a view: laid out by ELK, then drawn by React Flow on the hatched field. A click
+ * on a box, a frame or a line picks it, and a click on the empty field or a band clears the
+ * pick; the page holds it, and puts the panel that reads it in the field as `children`.
+ */
+export function Diagram({
+  view,
+  depth,
+  picked,
+  onPick,
+  children,
+}: {
+  view: View;
+  depth: Depth;
+  picked: string | undefined;
+  onPick: (id?: string) => void;
+  children?: ReactNode;
+}) {
   const [layout, setLayout] = useState<Layout>();
   const [failed, setFailed] = useState(false);
+  const [flow, setFlow] = useState<ReactFlowInstance<BoxNode | BandNode, RouteEdge>>();
   useEffect(() => {
     let current = true;
     layOut(view, depth, engine()).then(
@@ -130,11 +176,12 @@ export function Diagram({ view, depth }: { view: View; depth: Depth }) {
         (band): BandNode => ({
           id: `#band-${band.zone}`,
           type: 'band',
-          className: 'diagram-band-node',
           position: { x: band.x, y: band.y },
           width: band.width,
           height: band.height,
           zIndex: -1,
+          // A band takes no click: the field under it does.
+          style: { pointerEvents: 'none' },
           data: { band },
           draggable: false,
           selectable: false,
@@ -148,6 +195,7 @@ export function Diagram({ view, depth }: { view: View; depth: Depth }) {
           type: box.frame ? 'frame' : 'box',
           position: { x, y },
           ...(box.in !== undefined ? { parentId: box.in } : {}),
+          ...(box.id === picked ? { className: 'picked' } : {}),
           width,
           height,
           data: { box },
@@ -158,24 +206,26 @@ export function Diagram({ view, depth }: { view: View; depth: Depth }) {
         }),
       ),
     ],
-    [layout],
+    [layout, picked],
   );
   const edges = useMemo(
     () =>
-      view.arrows.map(
-        (arrow): RouteEdge => ({
+      view.arrows.map((arrow): RouteEdge => {
+        const head = arrow.id === picked ? PICKED_HEAD : HEAD;
+        return {
           id: arrow.id,
           source: arrow.from,
           target: arrow.to,
           type: 'route',
           data: { points: layout?.routes.get(arrow.id) ?? [] },
-          ...(arrow.back !== undefined ? { markerStart: HEAD } : {}),
-          markerEnd: HEAD,
+          ...(arrow.id === picked ? { className: 'picked' } : {}),
+          ...(arrow.back !== undefined ? { markerStart: head } : {}),
+          markerEnd: head,
           selectable: false,
           focusable: false,
-        }),
-      ),
-    [view, layout],
+        };
+      }),
+    [view, layout, picked],
   );
 
   return (
@@ -201,12 +251,20 @@ export function Diagram({ view, depth }: { view: View; depth: Depth }) {
           edgesFocusable={false}
           elementsSelectable={false}
           deleteKeyCode={null}
+          onNodeClick={(_event, node) => onPick(node.type === 'band' ? undefined : node.id)}
+          onInit={setFlow}
+          // Where lines run close, the reach of one lies on its neighbour: the click means the
+          // line nearest to the mouse, not the one whose reach is on top.
+          onEdgeClick={(event, edge) => onPick((flow && nearestRoute(layout.routes, flow.screenToFlowPosition({ x: event.clientX, y: event.clientY }))) ?? edge.id)}
+          onPaneClick={() => onPick()}
         >
           <Controls className="glass-group glass-group-column" position="bottom-left" showInteractive={false} showFitView={false}>
             <FitButton />
           </Controls>
+          <KeepClear picked={picked} routes={layout.routes} />
         </ReactFlow>
       )}
+      {children}
     </CanvasFrame>
   );
 }

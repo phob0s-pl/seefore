@@ -251,3 +251,30 @@ export async function layOut(view: View, depth: Depth, elk: Engine): Promise<Lay
   const placed = [...picture.placed].sort((a, b) => (order.get(a.box.id) ?? 0) - (order.get(b.box.id) ?? 0));
   return { placed, routes: picture.routes, bands: picture.bands };
 }
+
+/**
+ * The line that runs nearest to a point of the diagram. The reach of a line is wider than the
+ * line, so that it is easy to catch, and where lines run close the reach of one lies on its
+ * neighbour: a click then means the line it is nearest to, whichever reach is on top.
+ */
+export function nearestRoute(routes: Map<string, ElkPoint[]>, at: ElkPoint): string | undefined {
+  let nearest: string | undefined;
+  let least = Infinity;
+  for (const [id, points] of routes) {
+    for (let i = 1; i < points.length; i++) {
+      const a = points[i - 1] as ElkPoint;
+      const b = points[i] as ElkPoint;
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const length = dx * dx + dy * dy;
+      // How far along the stretch from a to b the point's foot falls, held between its ends.
+      const along = length === 0 ? 0 : Math.max(0, Math.min(1, ((at.x - a.x) * dx + (at.y - a.y) * dy) / length));
+      const distance = Math.hypot(at.x - (a.x + along * dx), at.y - (a.y + along * dy));
+      if (distance < least) {
+        least = distance;
+        nearest = id;
+      }
+    }
+  }
+  return nearest;
+}

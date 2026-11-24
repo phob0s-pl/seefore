@@ -4,7 +4,7 @@ import { readModel } from '../src/model/read.ts';
 import type { SourceFile } from '../src/model/read.ts';
 import { viewOf } from '../src/model/view.ts';
 import type { Depth } from '../src/model/view.ts';
-import { layOut } from '../src/ui/layout.ts';
+import { layOut, nearestRoute } from '../src/ui/layout.ts';
 import type { Layout } from '../src/ui/layout.ts';
 
 // The layout of the page, run with ELK in Node on small models written inline. The bundled ELK
@@ -89,4 +89,20 @@ test('a box with many lines grows taller, so that their ends stand apart; a box 
   expect(placeOf(layout, 'person-01')?.height).toBe(84);
   const ends = many.map((id) => layout.routes.get(`${id}->core`)?.at(-1)?.y ?? 0).sort((a, b) => a - b);
   for (let i = 1; i < ends.length; i++) expect((ends[i] ?? 0) - (ends[i - 1] ?? 0)).toBeGreaterThanOrEqual(12 - 0.5);
+});
+
+test('a click means the line it is nearest to, also where two lines run close', () => {
+  // Two lines six apart, and a third that crosses both further on.
+  const routes = new Map([
+    ['upper', [{ x: 0, y: 100 }, { x: 200, y: 100 }]],
+    ['lower', [{ x: 0, y: 106 }, { x: 200, y: 106 }, { x: 200, y: 300 }]],
+    ['across', [{ x: 400, y: 0 }, { x: 400, y: 300 }]],
+  ]);
+  expect(nearestRoute(routes, { x: 50, y: 100 })).toBe('upper');
+  expect(nearestRoute(routes, { x: 50, y: 102 })).toBe('upper');
+  expect(nearestRoute(routes, { x: 50, y: 105 })).toBe('lower');
+  // Past the end of a line, its end counts, not the line drawn further.
+  expect(nearestRoute(routes, { x: 205, y: 250 })).toBe('lower');
+  expect(nearestRoute(routes, { x: 395, y: 150 })).toBe('across');
+  expect(nearestRoute(new Map(), { x: 0, y: 0 })).toBeUndefined();
 });
