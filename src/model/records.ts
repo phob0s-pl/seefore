@@ -294,6 +294,159 @@ export const DataSchema = z
   })
   .meta({ description: 'A thing with a name that one part passes to another: what is sent, what comes back, what is put into a store or taken from it. It is no schema.' });
 
+/** The folders of the architecture, which a rule chooses among: all but `rules`. */
+export const RECORD_FOLDERS = ['people', 'systems', 'apps', 'stores', 'components', 'connections', 'infrastructure', 'owners', 'technologies', 'features', 'flows', 'data'] as const;
+
+/** The words of a selector's `kind`: a folder of the architecture, or a kind of app or of store. */
+export const KIND_WORDS = [...RECORD_FOLDERS, ...APP_KINDS, ...STORE_KINDS] as const;
+
+/** A rule's selector, as it is read. A list means "any of". */
+export type Selector = {
+  id?: string | string[];
+  kind?: string | string[];
+  within?: string | string[];
+  not?: Selector;
+  owner?: string | string[];
+  technology?: string | string[];
+  external?: boolean;
+  only?: 'any' | 'none';
+  name?: 'any' | 'none';
+  description?: 'any' | 'none';
+  opens?: 'to' | 'any' | 'none';
+  access?: string | string[];
+  from?: Selector;
+  to?: Selector;
+  via?: Selector | 'any' | 'none';
+  connection?: Selector | 'any' | 'none';
+  data?: string | string[];
+};
+
+/** What `never` or `each` holds: a selector, or the ways between two ends. An end left out is any thing. */
+export type Subject = Selector & { way?: { from?: Selector; to?: Selector } };
+
+/** What `must` holds: a selector, or, of a rule of ways, what each way passes. */
+export type Must = Selector & { through?: Selector };
+
+/** A value that may take more than one form: the message says every form, at the value's place. */
+const forms = (field: string, what: string) => ({ error: (issue: { path?: readonly PropertyKey[] }) => `${subject(issue.path, field)} must be ${what}.` });
+
+/** One id, or a list of them, in a selector. `holds` says what the value holds. */
+function oneOrMany(field: string, holds: string) {
+  return z.union([id(field, `holds ${holds}`), ids(`${quote(field)} holds ${holds}`)], forms(field, 'an id or a list of ids'));
+}
+
+/** One id, a list of them, or the word `any` or `none`. */
+function idsOrWord(field: string, holds: string) {
+  return z.union([z.enum(['any', 'none']), id(field, `holds ${holds}, or \`any\` or \`none\`.`), ids(`${quote(field)} holds ${holds}.`)], forms(field, '`any`, `none`, an id or a list of ids'));
+}
+
+const Present = z.enum(['any', 'none']);
+
+/** The keys every selector has. `never` and `each` add `way` to them, and `must` adds `through`. */
+const SelectorKeys = z.strictObject({
+    id: oneOrMany('id', 'ids of records.').meta({ description: 'The record with this id, or one of these ids.' }).optional(),
+    kind: z
+      .union([z.enum(KIND_WORDS), z.array(z.enum(KIND_WORDS)).min(1)], forms('kind', `one of ${KIND_WORDS.map((word) => '`' + word + '`').join(', ')}, or a list of them`))
+      .meta({ description: `A record of this folder, or whose own kind is this: ${KIND_WORDS.join(', ')}. A list means any of them.` })
+      .optional(),
+    within: oneOrMany('within', 'ids of people, systems, apps, stores, components or pieces of infrastructure.')
+      .meta({ description: 'A thing with this id, and everything in it at any depth.' })
+      .optional(),
+    get not() {
+      return SelectorSchema.optional().meta({ description: 'What the selector given here does not choose.' });
+    },
+    owner: idsOrWord('owner', 'ids of records in `owners/`')
+      .meta({ description: 'A part or a feature with this owner: its own, or for a part that of the nearest thing it is in. `any`: it has one. `none`: it has none.' })
+      .optional(),
+    technology: idsOrWord('technology', 'ids of records in `technologies/`')
+      .meta({ description: 'A part or a connection with one of these technologies of its own. `any`: it has one. `none`: it has none.' })
+      .optional(),
+    external: z.boolean().meta({ description: '`true`: an outside system, or a thing in one. `false`: any other thing.' }).optional(),
+    only: Present.meta({ description: '`any`: it is there only under a condition, its own or that of what it is in. `none`: it is always there.' }).optional(),
+    name: Present.meta({ description: '`any`: it has a name. `none`: it has none.' }).optional(),
+    description: Present.meta({ description: '`any`: it has a description. `none`: it has none.' }).optional(),
+    opens: z.enum(['to', 'any', 'none']).meta({ description: 'A connection whose far side opened the channel (`to` or `any`), or one that does not say so (`none`).' }).optional(),
+    access: z
+      .union([z.enum([...ACCESS, 'any', 'none']), z.array(z.enum(ACCESS)).min(1)], forms('access', '`read`, `write`, `read-write`, a list of them, `any` or `none`'))
+      .meta({ description: 'A connection with this access to its store: read, write, read-write or a list of them. `any`: it has one. `none`: it has none.' })
+      .optional(),
+    get from() {
+      return SelectorSchema.optional().meta({ description: 'A connection whose `from` is a thing this selector chooses.' });
+    },
+    get to() {
+      return SelectorSchema.optional().meta({ description: 'A connection whose `to` is a thing this selector chooses.' });
+    },
+    get via() {
+      return z
+        .union([Present, SelectorSchema], forms('via', '`any`, `none` or a selector, a mapping'))
+        .optional()
+        .meta({ description: 'A connection with a hop in `via` that this selector chooses. `any`: it has a hop. `none`: it has none.' });
+    },
+    get connection() {
+      return z
+        .union([Present, SelectorSchema], forms('connection', '`any`, `none` or a selector, a mapping'))
+        .optional()
+        .meta({
+          description: 'A thing that is an end of a connection this selector chooses: at `from` when it names only `to`, at `to` when it names only `from`, at either end otherwise. `any`: an end of some connection. `none`: of none.',
+        });
+    },
+    data: idsOrWord('data', 'ids of records in `data/`')
+      .meta({ description: 'A connection on which a step of a flow passes this data, or a reply to such a step does. `any`: some data. `none`: none.' })
+      .optional(),
+});
+
+/** A selector has one key at least. A mapping with a key that is not known is not empty: that key is the problem. */
+const NOT_EMPTY = {
+  when: (payload: { issues: readonly unknown[] }) => payload.issues.length === 0,
+  error: (issue: { path?: readonly PropertyKey[] }) =>
+    `${subject(issue.path, 'selector')} is an empty mapping. A selector has at least one key. To mean any thing at an end of a way, leave that end out.`,
+};
+const notEmpty = (selector: object): boolean => Object.keys(selector).length > 0;
+
+export const SelectorSchema: z.ZodType<Selector> = SelectorKeys.refine(notEmpty, NOT_EMPTY).meta({
+  description: 'Chooses records of the other twelve folders. Every key given must hold; a list means any of its items; a key the kind of a record does not have does not match it.',
+  minProperties: 1,
+});
+
+const WaySchema = z
+  .strictObject({
+    from: SelectorSchema.meta({ description: 'Where the way starts: a thing this selector chooses. Left out, any thing.' }).optional(),
+    to: SelectorSchema.meta({ description: 'Where the way ends: a thing this selector chooses. Left out, any thing.' }).optional(),
+  })
+  // A way with a key that is not known is not without ends: that key is the problem.
+  .refine((way) => way.from !== undefined || way.to !== undefined, {
+    when: (payload) => payload.issues.length === 0,
+    error: (issue) => `${subject(issue.path, 'way')} has neither \`from\` nor \`to\`. A way has one end at least; an end left out is any thing.`,
+  })
+  .meta({
+    description: 'With no key beside it: the ways, connection after connection, from a thing `from` chooses to a thing `to` chooses. An end left out is any thing; one end at least.',
+    minProperties: 1,
+  });
+
+/** What `never` and `each` hold: a selector, which may hold `way` and then nothing else. */
+const SubjectSchema: z.ZodType<Subject> = SelectorKeys.extend({ way: WaySchema.optional() }).refine(notEmpty, NOT_EMPTY).meta({ minProperties: 1 });
+
+/** What `must` holds: a selector, which of a rule of ways holds `through` and nothing else. */
+const MustSchema: z.ZodType<Must> = SelectorKeys.extend({
+  through: SelectorSchema.meta({ description: 'Of a rule of ways, with no key beside it: each way passes a thing this selector chooses, as an end, a thing between or a hop in `via`.' }).optional(),
+})
+  .refine(notEmpty, NOT_EMPTY)
+  .meta({ minProperties: 1 });
+
+/** A rule of a team's own: what must hold in its architecture, judged from the files alone. */
+export const RuleSchema = z
+  .strictObject({
+    name: oneLine('name', SENTENCE_MAX).meta({ description: 'The rule in words: one sentence a person reads, on one line of 1 to 200 characters.' }),
+    description: Description.meta({ description: 'Why it is a rule, in 1 to 2,000 characters.' }).optional(),
+    never: SubjectSchema.meta({ description: 'Nothing this selector chooses may be in the model. Or `{way: {from, to}}`: no way leads from the one to the other. Never with `each` or `must`.' }).optional(),
+    each: SubjectSchema.meta({ description: 'With `must`: each record this selector chooses also matches `must`. Or `{way: {from, to}}`: each such way passes `through` of `must`.' }).optional(),
+    must: MustSchema.meta({ description: 'With `each`: what each record `each` chooses must match. Of a rule of ways, `{through: <selector>}`.' }).optional(),
+    debt: ids('`debt` holds the ids of records that break the rule and stand for now.')
+      .meta({ description: 'The ids of records that break the rule and stand for now; of a rule of ways, of connections a way does not go by. A list with no id twice.' })
+      .optional(),
+  })
+  .meta({ description: "A rule of a team's own: a sentence, and a selector that `seefore check` judges against the other records. `never`, or `each` with `must`." });
+
 /** The shape of each kind's file, by folder. */
 export const SHAPES = {
   people: PersonSchema,
@@ -308,6 +461,7 @@ export const SHAPES = {
   features: FeatureSchema,
   flows: FlowSchema,
   data: DataSchema,
+  rules: RuleSchema,
 } as const;
 
 /** The marker `seefore.yaml`: the format, and the name of the model. */

@@ -1,0 +1,4 @@
+name: The orders are written only by the Order API
+description: One part answers for what the store of orders holds.
+each: {to: {id: orders}, access: [write, read-write]}
+must: {from: {id: order-api}}

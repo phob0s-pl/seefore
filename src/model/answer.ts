@@ -48,6 +48,25 @@ export type ModelRecord = {
   fields: Record<string, unknown>;
 };
 
+/** What one rule of the team's own came to. */
+export type Ruling = {
+  /** The rule's id: the name of its file. */
+  rule: string;
+  state: 'holds' | 'broken' | 'nothing' | 'not-judged';
+  /** A rule over records: the ids it looked at, what `each` chose or what `never` chose. */
+  chosen: string[];
+  /** A rule over records: the ids that break it and are not in `debt`. */
+  breaks: string[];
+  /** A rule of ways: how many pairs of a start and an end a way joins. */
+  pairs?: number;
+  /** A rule of ways: the ways that break it, the shortest for each start. */
+  ways?: { from: string; to: string; by: string[]; more: number }[];
+  /** The ids in `debt` that still stand. */
+  debt: string[];
+  /** A rule over `data`: of the connections it could look at, how many a flow walks. */
+  walked?: { connections: number; walked: number };
+};
+
 /** What is read from the files of a model. */
 export type ModelRead = {
   /** The name in the marker, when the marker has a good one. */
@@ -55,6 +74,8 @@ export type ModelRead = {
   records: ModelRecord[];
   problems: Problem[];
   counts: Count[];
+  /** What each rule in `rules/` came to, in order of the rule's id. */
+  rulings: Ruling[];
 };
 
 /** The answer of `/api/model`. */

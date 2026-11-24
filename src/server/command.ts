@@ -4,7 +4,7 @@ import type { ModelAnswer } from '../model/answer.ts';
 import { fileURLToPath } from 'node:url';
 import { readFolder } from './files.ts';
 import { HOST, startServer } from './server.ts';
-import { countLine } from '../model/counts.ts';
+import { countLine, rulingsLine } from '../model/counts.ts';
 
 /** What the command was asked to do. */
 export type Options = { server: boolean; check: boolean; json: boolean; workdir: string; port: number };
@@ -90,8 +90,8 @@ function check(model: ModelAnswer, json: boolean, io: Io): number {
   const errors = model.problems.filter((problem) => problem.severity === 'error').length;
   const warnings = model.problems.length - errors;
   if (json) {
-    const { folder, name, records, problems, counts } = model;
-    io.out(JSON.stringify({ folder, name, records: records.length, errors, warnings, problems, counts }));
+    const { folder, name, records, problems, counts, rulings } = model;
+    io.out(JSON.stringify({ folder, name, records: records.length, errors, warnings, problems, counts, rulings }));
     return errors > 0 ? 1 : 0;
   }
   for (const problem of model.problems) {
@@ -106,5 +106,7 @@ function check(model: ModelAnswer, json: boolean, io: Io): number {
     const line = countLine(count);
     if (line !== undefined) io.out(line);
   }
+  const rulings = rulingsLine(model.rulings);
+  if (rulings !== undefined) io.out(rulings);
   return errors > 0 ? 1 : 0;
 }

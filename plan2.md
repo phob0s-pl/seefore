@@ -87,7 +87,14 @@ features.
 ### After the MVP
 
 - **4 Changes**: how a change is defined.
-- **5 Additional architecture context**: what is needed.
+- **5 Additional architecture context**: what is needed. It starts below, with rules.
 - **6 Reviewers**: which reviewers we need.
 - **7 Optimisations and UI tweaks**: the list the earlier stages filled.
 - **8 Claude skills and process**.
+
+### 5 Additional architecture context
+
+| # | Stage | Result | Who |
+| --- | --- | --- | --- |
+| E1 | Rules of a team's own | A team writes what must hold in `rules/`: nothing like this, or each of these is like that. `seefore check` judges each from the model alone | Fable defines, Opus builds |
+| E2 | Rules on the page | The rules on the page: each with its state, what it looks at and what breaks it | Opus |
