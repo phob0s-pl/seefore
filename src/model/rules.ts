@@ -162,9 +162,15 @@ const WRONG: Wrong[] = [
   },
   {
     field: 'touches',
-    found: ['technologies', 'features'],
+    found: ['technologies'],
     says: '`touches` names the parts and connections that are the feature\'s own.',
-    fix: 'Take it out of `touches`. A technology is named on the part that is built with it; a feature is in no other feature.',
+    fix: 'Take it out of `touches`. A technology is named in `technology` of the part that is built with it.',
+  },
+  {
+    field: 'touches',
+    found: ['features'],
+    says: '`touches` names the parts and connections that are the feature\'s own.',
+    fix: 'Take it out of `touches`. A feature is in no other feature, and names none: say in its `description` how the two belong together.',
   },
   {
     field: 'feature',

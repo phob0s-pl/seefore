@@ -67,7 +67,7 @@ export function checkShape<T>(file: string, yaml: YamlFile, schema: z.ZodType<T>
               valuePosition(yaml, doc, path),
               'value-wrong-kind',
               `${capital(label(path))} must be ${expected(issue.expected)}, but this is ${found}.`,
-              `Change the value of ${label(path)} to ${expected(issue.expected)}.`,
+              written(path) ?? `Change the value of ${label(path)} to ${expected(issue.expected)}.`,
             ),
           );
         }
@@ -135,6 +135,18 @@ function valuePosition(yaml: YamlFile, doc: Document, path: Path): Position {
 /** The place of the mapping a missing key should be in. */
 function parentPosition(yaml: YamlFile, doc: Document, path: Path): Position {
   return valuePosition(yaml, doc, path.slice(0, -1));
+}
+
+/**
+ * How to write a step, a field or their list, for a writer who gave it another form: a step as
+ * a bare id, or `fields` as a mapping of names. Nothing for any other path.
+ */
+function written(path: Path): string | undefined {
+  const [top, index] = path;
+  if (path.length > 2 || (path.length === 2 && typeof index !== 'number')) return undefined;
+  if (top === 'steps') return 'Write each step as a mapping with an `id` of its own and what it is on, as in `- {id: places, does: customer-places-order}`.';
+  if (top === 'fields') return 'Write each field as a mapping with a `name` and, if wanted, a `description`, as in `- {name: balance, description: What is owed}`.';
+  return undefined;
 }
 
 /** The words for the first ten places in a list. */
