@@ -53,13 +53,8 @@ const DRAWN: readonly string[] = ['people', 'systems', 'apps', 'stores', 'compon
 const compare = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 const order = (kind: string): number => KINDS.findIndex((each) => each.folder === kind);
 
-/**
- * What the whole model shows at a depth. A thing is drawn when it is no deeper than the depth:
- * a person, a system and a piece of infrastructure in no system always; what is in a system from
- * Containers on; what is in an app at Components. Each end of a connection is drawn at the
- * deepest drawn thing it is, or is in.
- */
-export function viewOf(records: readonly ModelRecord[], depth: Depth): View {
+/** The things a view can draw, by id, in order of kind and id, and what each is in, upwards. */
+function thingsOf(records: readonly ModelRecord[]): { sorted: ModelRecord[]; things: Map<string, ModelRecord>; chains: Map<string, string[] | undefined> } {
   const sorted = [...records].sort((a, b) => order(a.kind) - order(b.kind) || compare(a.id, b.id));
   const things = new Map<string, ModelRecord>();
   for (const record of sorted) if (DRAWN.includes(record.kind) && !things.has(record.id)) things.set(record.id, record);
@@ -80,6 +75,28 @@ export function viewOf(records: readonly ModelRecord[], depth: Depth): View {
     }
     chains.set(id, whole ? chain : undefined);
   }
+  return { sorted, things, chains };
+}
+
+/** What a focus can be at each depth: a system at Containers, an app at Components. */
+const FOCUSED: Partial<Record<Depth, string>> = { containers: 'systems', components: 'apps' };
+
+/** One choice of focus: a system or an app, by its id and its name. */
+export type Focus = { id: string; name: string };
+
+/**
+ * What the whole model shows at a depth. A thing is drawn when it is no deeper than the depth:
+ * a person, a system and a piece of infrastructure in no system always; what is in a system from
+ * Containers on; what is in an app at Components. Each end of a connection is drawn at the
+ * deepest drawn thing it is, or is in.
+ *
+ * With a focus, a system at Containers or an app at Components that the whole view opens, only
+ * the focus is opened, with what it holds as the whole view draws it. Around it stand, closed,
+ * the things beside it and beside each thing it is in, which are not drawn; of them only those
+ * with an arrow to the focus, and only those arrows. A focus that is none of these is ignored.
+ */
+export function viewOf(records: readonly ModelRecord[], depth: Depth, focus?: string): View {
+  const { sorted, things, chains } = thingsOf(records);
 
   // The zone of each thing at the top, worked out on the connections themselves, so that it is
   // the same at every depth. "Ours" is a system that is not external, or anything in one.
@@ -105,23 +122,35 @@ export function viewOf(records: readonly ModelRecord[], depth: Depth): View {
   };
 
   const deepest = DEPTHS.indexOf(depth);
-  const drawn = [...things.keys()].filter((id) => {
+  const whole = [...things.keys()].filter((id) => {
     const chain = chains.get(id);
     return chain !== undefined && chain.length <= deepest;
   });
+  const parents = new Set(whole.map((id) => chains.get(id)?.[0]));
+
+  // The focus, when the whole view opens it and it is of the kind its depth focuses on. Within it
+  // is the focus and what it holds; with no focus, everything is.
+  const into = focus !== undefined && parents.has(focus) && things.get(focus)?.kind === FOCUSED[depth] ? focus : undefined;
+  const within = (id: string): boolean => into === undefined || id === into || (chains.get(id)?.includes(into) ?? false);
+  // Around a focus stand, closed, the things beside it and beside each thing it is in. The things
+  // it is in are not drawn.
+  const above = into === undefined ? [] : [into, ...(chains.get(into) ?? [])];
+  const beside = new Set(above.map((id) => chains.get(id)?.[0]));
+  const drawn = whole.filter((id) => within(id) || (!above.includes(id) && beside.has(chains.get(id)?.[0])));
   const isDrawn = new Set(drawn);
-  const parents = new Set(drawn.map((id) => chains.get(id)?.[0]));
 
   const boxes = drawn.map((id): Box => {
     const thing = things.get(id) as ModelRecord;
     const { kind, fields } = thing;
-    const parent = chains.get(id)?.[0];
+    // A box around a focus may be in a thing that is not drawn: it stands at the top.
+    const up = chains.get(id)?.[0];
+    const parent = up !== undefined && isDrawn.has(up) ? up : undefined;
     return {
       id,
       kind,
       name: typeof fields.name === 'string' ? fields.name : id,
       ...(parent !== undefined ? { in: parent } : {}),
-      frame: parents.has(id),
+      frame: parents.has(id) && within(id),
       ...(fields.external === true ? { external: true as const } : {}),
       ...(typeof fields.kind === 'string' ? { type: fields.kind } : {}),
       ...(parent === undefined ? zoneOf(thing) : {}),
@@ -142,6 +171,8 @@ export function viewOf(records: readonly ModelRecord[], depth: Depth): View {
     if (from === undefined || to === undefined || from === to) continue;
     // A frame and what it holds: the arrow would run from a box to its own inside.
     if (chains.get(from)?.includes(to) || chains.get(to)?.includes(from)) continue;
+    // Around a focus, an arrow is drawn only when it touches the focus or what it holds.
+    if (!within(from) && !within(to)) continue;
     const id = `${from}->${to}`;
     const arrow = arrows.get(id);
     if (arrow) arrow.connections.push(record.id);
@@ -158,7 +189,34 @@ export function viewOf(records: readonly ModelRecord[], depth: Depth): View {
     if (back !== undefined) taken.add(back.id);
     both.push(back !== undefined ? { ...arrow, back: back.connections } : arrow);
   }
-  return { boxes, arrows: both };
+  // A box around a focus is drawn only when an arrow touches it.
+  const touched = new Set(both.flatMap((arrow) => [arrow.from, arrow.to]));
+  return { boxes: boxes.filter((box) => within(box.id) || touched.has(box.id)), arrows: both };
+}
+
+/**
+ * What can be chosen as a focus at a depth, by name without regard to capitals and then by id:
+ * at Containers each system, at Components each app, that the whole view opens. None at Systems.
+ */
+export function focusesOf(records: readonly ModelRecord[], depth: Depth): Focus[] {
+  const kind = FOCUSED[depth];
+  if (kind === undefined) return [];
+  return viewOf(records, depth)
+    .boxes.filter((box) => box.frame && box.kind === kind)
+    .map(({ id, name }) => ({ id, name }))
+    .sort((a, b) => compare(a.name.toLowerCase(), b.name.toLowerCase()) || compare(a.id, b.id));
+}
+
+/**
+ * The focus an id in the address means at a depth, or none for everything: the id when it can be
+ * chosen there, and at Containers, for a thing inside a system that can be, that system.
+ */
+export function focusFor(records: readonly ModelRecord[], depth: Depth, wanted: string | null | undefined): string | undefined {
+  if (wanted === null || wanted === undefined) return undefined;
+  const choices = new Set(focusesOf(records, depth).map((choice) => choice.id));
+  if (choices.has(wanted)) return wanted;
+  if (depth !== 'containers') return undefined;
+  return thingsOf(records).chains.get(wanted)?.find((id) => choices.has(id));
 }
 
 /**

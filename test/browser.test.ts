@@ -323,3 +323,25 @@ test.skipIf(!HAS_CHROME).concurrent(
     }),
   20_000,
 );
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME ? 'a choice in the focus menu puts the focus in the address and draws fewer boxes, and the back arrow returns to everything' : `skipped: there is no Chrome at ${CHROME}`,
+  () =>
+    inChrome(async (send, address) => {
+      await send('Page.navigate', { url: `${address}/?depth=containers` });
+      const boxes = (count: number) => waitFor(send, `document.querySelectorAll('.architecture-node[data-id]').length === ${count}`);
+      expect(await boxes(5)).toBe(true);
+      await click(send, await centreOf(send, 'button[aria-label="Focus"]'));
+      await click(send, await centreOf(send, '[role="listbox"] [role="option"][href="/?depth=containers&focus=shop"]'));
+      // The address, whether the list is open, and what the trigger says, once they are as wanted.
+      const shows = (search: string, choice: string) =>
+        waitFor(send, `location.search === ${JSON.stringify(search)} && document.querySelector('[role="listbox"]') === null && document.querySelector('button[aria-label="Focus"]').textContent === ${JSON.stringify(choice)}`);
+      expect(await shows('?depth=containers&focus=shop', 'Shop')).toBe(true);
+      // The clerk has no line with the shop.
+      expect(await boxes(4)).toBe(true);
+      await click(send, await centreOf(send, 'button[aria-label="Go back"]'));
+      expect(await shows('?depth=containers', 'All systems')).toBe(true);
+      expect(await boxes(5)).toBe(true);
+    }),
+  20_000,
+);
