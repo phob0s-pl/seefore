@@ -11,7 +11,8 @@ import { expect, test } from 'vitest';
 import { startServer } from '../src/server/server.ts';
 
 // The built page, served by the command, drawn in the Chrome that is installed and driven over
-// its debugging protocol. `npm run check` builds the page first.
+// its debugging protocol. `npm run check` builds the page first. The tests run side by side,
+// each with a Chrome and a server of its own, and click with the mouse events a hand makes.
 const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const PAGE = fileURLToPath(new URL('../dist/ui', import.meta.url));
 const SHOP = fileURLToPath(new URL('./shop', import.meta.url));
@@ -108,7 +109,75 @@ async function waitFor(send: Send, expression: string): Promise<unknown> {
   return value;
 }
 
-test.skipIf(!HAS_CHROME)(
+type Point = { x: number; y: number };
+
+/** The centre of what a selector finds, once the diagram has stopped moving, so that a click lands on it. */
+async function centreOf(send: Send, selector: string): Promise<Point> {
+  const expression = `(() => {
+    const found = document.querySelector(${JSON.stringify(selector)});
+    if (found === null) return null;
+    const box = found.getBoundingClientRect();
+    return box.width > 0 ? { x: box.x + box.width / 2, y: box.y + box.height / 2 } : null;
+  })()`;
+  return settled(send, expression);
+}
+
+/** The point halfway along a line of the diagram, on the screen. */
+async function middleOf(send: Send, arrow: string): Promise<Point> {
+  const expression = `(() => {
+    const path = document.querySelector(${JSON.stringify(`.react-flow__edge[data-id="${arrow}"] .react-flow__edge-path`)});
+    if (path === null || path.getTotalLength() === 0) return null;
+    const point = path.getPointAtLength(path.getTotalLength() / 2).matrixTransform(path.getScreenCTM());
+    return { x: point.x, y: point.y };
+  })()`;
+  return settled(send, expression);
+}
+
+/** A point of the field where nothing is drawn. */
+const EMPTY = `(() => {
+  const field = document.querySelector('.react-flow__pane').getBoundingClientRect();
+  const points = [[12, 12], [field.width - 12, 12], [12, field.height / 2], [field.width / 2, 12]];
+  const point = points.map(([x, y]) => ({ x: field.x + x, y: field.y + y })).find(({ x, y }) => document.elementFromPoint(x, y)?.classList.contains('react-flow__pane'));
+  return point ?? null;
+})()`;
+
+/** A point an expression gives, once two readings a tenth of a second apart agree. */
+async function settled(send: Send, expression: string): Promise<Point> {
+  let last = '';
+  for (let tries = 0; tries < 50; tries++) {
+    const value = (await send('Runtime.evaluate', { expression, returnByValue: true })).result?.result?.value;
+    const text = JSON.stringify(value ?? null);
+    if (value && text === last) return value as Point;
+    last = text;
+    await pause(100);
+  }
+  throw new Error(`Nothing to click: ${expression}`);
+}
+
+/** A click as a hand makes it: the mouse moves there, is pressed and is let go. */
+async function click(send: Send, { x, y }: Point) {
+  await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
+  await send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', buttons: 1, clickCount: 1 });
+  await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', buttons: 0, clickCount: 1 });
+}
+
+/** What the panel of the diagram says, or false while there is none. */
+const PANEL = `(() => {
+  const panel = document.querySelector('aside[aria-label="Diagram inspector"]');
+  const texts = (selector) => [...(panel?.querySelectorAll(selector) ?? [])].map((each) => each.textContent);
+  return panel !== null && {
+    kind: texts('.eyebrow')[0],
+    name: texts('h2')[0],
+    text: texts('p')[0],
+    button: texts('a.button')[0],
+    path: [...panel.querySelectorAll('.connection-path li')].map((stop) => stop.querySelector('small')?.textContent + ' ' + stop.querySelector('strong')?.textContent),
+  };
+})()`;
+type Read = { kind?: string; name?: string; text?: string; button?: string; path: string[] };
+
+const closed = (send: Send) => waitFor(send, `document.querySelector('aside[aria-label="Diagram inspector"]') === null`);
+
+test.skipIf(!HAS_CHROME).concurrent(
   HAS_CHROME ? 'the built page, served by the command, draws a known box, an arrow and a band in Chrome' : `skipped: there is no Chrome at ${CHROME}`,
   () =>
     inChrome(async (send, address) => {
@@ -125,7 +194,7 @@ test.skipIf(!HAS_CHROME)(
   20_000,
 );
 
-test.skipIf(!HAS_CHROME)(
+test.skipIf(!HAS_CHROME).concurrent(
   HAS_CHROME ? 'Models lists the records: a row opens its page, a link on it opens the next, and a connection shows its path' : `skipped: there is no Chrome at ${CHROME}`,
   () =>
     inChrome(async (send, address) => {
@@ -150,6 +219,52 @@ test.skipIf(!HAS_CHROME)(
       await send('Page.navigate', { url: `${address}/connections` });
       const paths = await waitFor(send, `[...document.querySelectorAll('.row-cell')].map((cell) => cell.textContent).join(' | ')`);
       expect(paths).toContain('Order API → Orders');
+    }),
+  20_000,
+);
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME ? 'a click on a box opens the panel with its name, its type and a button, and the button opens its page' : `skipped: there is no Chrome at ${CHROME}`,
+  () =>
+    inChrome(async (send, address) => {
+      await send('Page.navigate', { url: `${address}/` });
+      await click(send, await centreOf(send, '.react-flow__node[data-id="shop"]'));
+      const read = (await waitFor(send, PANEL)) as Read | false;
+      expect(read).toMatchObject({ kind: 'System', name: 'Shop', text: 'Sells things online.', button: 'Open model details' });
+      await click(send, await centreOf(send, 'aside[aria-label="Diagram inspector"] a.button'));
+      expect(await waitFor(send, `document.title === 'Shop · seefore' && location.pathname`)).toBe('/models/shop');
+    }),
+  20_000,
+);
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME ? 'a click on a line opens the panel with its connection and the path between its real ends' : `skipped: there is no Chrome at ${CHROME}`,
+  () =>
+    inChrome(async (send, address) => {
+      await send('Page.navigate', { url: `${address}/` });
+      await click(send, await middleOf(send, 'customer->shop'));
+      const read = (await waitFor(send, PANEL)) as Read | false;
+      expect(read).toMatchObject({ kind: 'Connection', name: 'Places an order', button: 'Open connection details', path: ['From Customer', 'To Order API'] });
+    }),
+  20_000,
+);
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME ? 'Escape and a click on the empty field each close the panel' : `skipped: there is no Chrome at ${CHROME}`,
+  () =>
+    inChrome(async (send, address) => {
+      await send('Page.navigate', { url: `${address}/?depth=containers` });
+      const app = '.react-flow__node[data-id="order-api"]';
+      await click(send, await centreOf(send, app));
+      expect(await waitFor(send, PANEL)).toMatchObject({ kind: 'App · service', name: 'Order API' });
+      await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
+      await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
+      expect(await closed(send)).toBe(true);
+      // A pick may slide the diagram clear of the panel, so the box is found again.
+      await click(send, await centreOf(send, app));
+      expect(await waitFor(send, PANEL)).toMatchObject({ name: 'Order API' });
+      await click(send, await settled(send, EMPTY));
+      expect(await closed(send)).toBe(true);
     }),
   20_000,
 );

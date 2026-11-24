@@ -12,7 +12,8 @@ type Fact = { label: string; value: ReactNode };
 type Row = { key: string; cells: ReactNode[] };
 
 const ACCESS: Record<string, string> = { read: 'Read', write: 'Write', 'read-write': 'Read and write' };
-const ids = (value: unknown): string[] => (Array.isArray(value) ? value.filter((each): each is string => typeof each === 'string') : []);
+/** The ids of a list field, those that are not text left out. */
+export const ids = (value: unknown): string[] => (Array.isArray(value) ? value.filter((each): each is string => typeof each === 'string') : []);
 
 /** The page of one record, at `<list>/<id>`; an id that names no record of that list's kinds is missing. */
 export function RecordPage({ tab }: { tab: (typeof TABS)[number] }) {
@@ -207,8 +208,8 @@ function Person({ record, catalogue }: { record: ModelRecord; catalogue: Catalog
   );
 }
 
-/** One end of a connection: a row that opens the thing, with its role above its name. */
-function End({ role, id, catalogue }: { role: string; id: unknown; catalogue: Catalogue }) {
+/** One stop of a connection: a row that opens the thing, with its role above its name. */
+export function End({ role, id, catalogue }: { role: string; id: unknown; catalogue: Catalogue }) {
   const record = typeof id === 'string' ? catalogue.record(id) : undefined;
   const to = record && catalogue.address(record);
   const inner = (
