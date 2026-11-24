@@ -106,3 +106,57 @@ test('a click means the line it is nearest to, also where two lines run close', 
   expect(nearestRoute(routes, { x: 395, y: 150 })).toBe('across');
   expect(nearestRoute(new Map(), { x: 0, y: 0 })).toBeUndefined();
 });
+
+/** A system in which one app writes a queue and a database, and another reads both. */
+const WORKS: SourceFile[] = [
+  system('works'),
+  { path: 'apps/writer.yaml', text: 'name: Writer\nin: works\n' },
+  { path: 'apps/reader.yaml', text: 'name: Reader\nin: works\n' },
+  { path: 'stores/jobs.yaml', text: 'name: Jobs\nin: works\nkind: queue\n' },
+  { path: 'stores/ledger.yaml', text: 'name: Ledger\nin: works\nkind: database\n' },
+  { path: 'connections/writer-puts-jobs.yaml', text: 'from: writer\nto: jobs\naccess: write\n' },
+  { path: 'connections/reader-takes-jobs.yaml', text: 'from: reader\nto: jobs\naccess: read\n' },
+  { path: 'connections/writer-keeps-ledger.yaml', text: 'from: writer\nto: ledger\naccess: write\n' },
+  { path: 'connections/reader-reads-ledger.yaml', text: 'from: reader\nto: ledger\naccess: read\n' },
+];
+
+test('a queue stands between the app that writes it and the app that only reads it, and a database does not', async () => {
+  const layout = await laidOut('containers', ...WORKS);
+  // All four stand in the one frame, so their places can be compared as they are.
+  expect(centre(layout, 'writer')).toBeLessThan(centre(layout, 'jobs'));
+  expect(centre(layout, 'jobs')).toBeLessThan(centre(layout, 'reader'));
+  expect(centre(layout, 'reader')).toBeLessThan(centre(layout, 'ledger'));
+});
+
+test('the line of a reader is still drawn from the reader to the queue, where its head stands', async () => {
+  const layout = await laidOut('containers', ...WORKS);
+  const frame = placeOf(layout, 'works');
+  const reader = placeOf(layout, 'reader');
+  const jobs = placeOf(layout, 'jobs');
+  const route = layout.routes.get('reader->jobs') ?? [];
+  expect(frame && reader && jobs && route.length >= 2).toBe(true);
+  if (!frame || !reader || !jobs) return;
+  // The route starts on the reader's left side and ends on the queue's right side.
+  expect(route[0]?.x).toBeCloseTo(frame.x + reader.x, 3);
+  expect(route.at(-1)?.x).toBeCloseTo(frame.x + jobs.x + jobs.width, 3);
+  // The line of the writer is as it was: from the writer's right side to the queue's left.
+  expect(layout.routes.get('writer->jobs')?.at(-1)?.x).toBeCloseTo(frame.x + jobs.x, 3);
+});
+
+test('a person who reads a queue stays on the left, and that line is not turned round', async () => {
+  const layout = await laidOut('containers', ...WORKS, person('ops'), { path: 'connections/ops-watches-jobs.yaml', text: 'from: ops\nto: jobs\naccess: read\n' });
+  const frame = placeOf(layout, 'works');
+  const ops = placeOf(layout, 'ops');
+  const jobs = placeOf(layout, 'jobs');
+  expect(frame && ops && jobs).toBeTruthy();
+  if (!frame || !ops || !jobs) return;
+  expect(ops.x + ops.width).toBeLessThan(frame.x);
+  // The line runs straight on from the person's right side to the queue's left side, and never
+  // past the queue.
+  const route = layout.routes.get('ops->jobs') ?? [];
+  expect(route[0]?.x).toBeCloseTo(ops.x + ops.width, 3);
+  expect(route.at(-1)?.x).toBeCloseTo(frame.x + jobs.x, 3);
+  expect(Math.max(...route.map((point) => point.x))).toBeLessThanOrEqual(frame.x + jobs.x + 0.001);
+  // The app that reads the queue is still laid out after it.
+  expect(centre(layout, 'jobs')).toBeLessThan(centre(layout, 'reader'));
+});
