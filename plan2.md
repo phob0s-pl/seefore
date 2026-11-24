@@ -65,7 +65,7 @@ and B3 use are in `research/paths.md`, out of Git.
 | B3 | Basic UI | What we need of the owner's present UI, and its basic version | Fable defines, Opus builds |
 | B4 | Architecture diagram | The model as one diagram | Opus |
 | B4b | Layout of the diagram | Three zones at the Systems depth, people on the left below it, and a diagram small enough to read | Opus |
-| B5 | Model UI | The records of the model, read on the page | Sonnet |
+| B5 | Models | The records of the model, read on the page: five lists (software, actors, connections, technologies, owners) and a page for each record | Opus |
 
 ### 3 Flows and features
 
