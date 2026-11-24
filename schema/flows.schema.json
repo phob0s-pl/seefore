@@ -1,0 +1,130 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100,
+      "pattern": "^\\S(?:[^\\n\\r\\u0085\\u2028\\u2029]*\\S)?$",
+      "description": "The task, in the words of the one who starts it: one line of 1 to 100 characters."
+    },
+    "starts": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "pattern": "^\\S(?:[^\\n\\r\\u0085\\u2028\\u2029]*\\S)?$",
+      "description": "Who or what starts it: a person, a clock, a message. One line of 1 to 200 characters."
+    },
+    "ends": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "pattern": "^\\S(?:[^\\n\\r\\u0085\\u2028\\u2029]*\\S)?$",
+      "description": "What is true at the end, with what makes it true. One line of 1 to 200 characters."
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000,
+      "pattern": "\\S",
+      "description": "What it promises, what that costs, what must never happen, in 1 to 2,000 characters."
+    },
+    "only": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100,
+      "pattern": "^\\S(?:[^\\n\\r\\u0085\\u2028\\u2029]*\\S)?$",
+      "description": "When the thing is there at all: the words that read after \"only\", one line of at most 100 characters. Left out when it is always there."
+    },
+    "feature": {
+      "type": "string",
+      "maxLength": 80,
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+      "description": "The id of the one feature the flow belongs to, a record in features/."
+    },
+    "steps": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 80,
+            "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+            "description": "The step's own id in its flow, in the form of a record's id, given once. `flow#step` is its address."
+          },
+          "does": {
+            "type": "string",
+            "maxLength": 80,
+            "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+            "description": "The id of a connection (one part acts on another), of a part (it happens there) or of a flow (it runs here, whole). Never with `reply`."
+          },
+          "reply": {
+            "type": "string",
+            "maxLength": 80,
+            "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+            "description": "The id of an earlier step of this flow that names a connection: its answer travels back. Never with `does`."
+          },
+          "after": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 80,
+              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+            },
+            "description": "The ids of earlier steps this one comes after, where that is not the step above."
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "pattern": "^\\S(?:[^\\n\\r\\u0085\\u2028\\u2029]*\\S)?$",
+            "description": "What happens, verb first: one line of 1 to 100 characters. Left out where the name of the connection or of the flow in `does` says it."
+          },
+          "only": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "pattern": "^\\S(?:[^\\n\\r\\u0085\\u2028\\u2029]*\\S)?$",
+            "description": "When the thing is there at all: the words that read after \"only\", one line of at most 100 characters. Left out when it is always there."
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300,
+            "pattern": "\\S",
+            "description": "A sentence or two of 1 to 300 characters: a wait, a retry, a refusal."
+          },
+          "data": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 80,
+              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+            },
+            "description": "The ids of the data this step passes, records in data/: on a step on a connection, or on a reply. A list with no id twice."
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false,
+        "description": "One step of a flow: what happens on a connection, in a part or as a whole flow, or the answer to an earlier step."
+      },
+      "description": "The steps in order, at least one, each a mapping with its own `id`."
+    }
+  },
+  "required": [
+    "name",
+    "starts",
+    "ends",
+    "feature",
+    "steps"
+  ],
+  "additionalProperties": false,
+  "description": "One path through the model, told for one outcome: what starts it, the acts in order, each on a record the model holds, and what is true at the end."
+}

@@ -1,7 +1,7 @@
 import type { z } from 'zod';
 import type { ModelRead, ModelRecord, Problem } from './answer.ts';
 import { idProblem } from './id.ts';
-import { KINDS, NOUNS } from './kinds.ts';
+import { KINDS, RECORD_NOUNS } from './kinds.ts';
 import type { Entry } from './model.ts';
 import { runRules } from './rules.ts';
 import { MARKER_FILE, readMarker } from './marker.ts';
@@ -9,7 +9,7 @@ import { START, compareProblems, error, list, quote, warning } from './problem.t
 import { SHAPES } from './records.ts';
 import { checkShape } from './shape.ts';
 import { readYaml } from './yaml.ts';
-import { isSeq } from 'yaml';
+import { isMap, isSeq } from 'yaml';
 import type { YamlFile } from './yaml.ts';
 import type { Position } from './problem.ts';
 
@@ -77,7 +77,7 @@ export function readModel(files: readonly SourceFile[]): ModelRead {
     const entry: Entry = { id, kind: folder, file: file.path, ok: false, fields: {}, at: new Map() };
     entries.push(entry);
     if (!yaml.doc || !yaml.map) continue;
-    const shape = checkShape(file.path, yaml, SHAPES[folder as keyof typeof SHAPES] as z.ZodType, NOUNS[folder] as string);
+    const shape = checkShape(file.path, yaml, SHAPES[folder as keyof typeof SHAPES] as z.ZodType, RECORD_NOUNS[folder] as string);
     problems.push(...shape.problems.map((problem) => ({ ...problem, record: id })));
     if (shape.value !== undefined) {
       const fields = shape.value as Record<string, unknown>;
@@ -92,14 +92,21 @@ export function readModel(files: readonly SourceFile[]): ModelRead {
   return result();
 }
 
-/** Where each field of a file is written, and each item of a list, as `via[1]`. */
+/**
+ * Where each field of a file is written, each item of a list, as `via[1]`, and each value inside
+ * an item, as `steps[2].does` and `steps[0].after[1]`.
+ */
 function placesOf(yaml: YamlFile): Map<string, Position> {
   const at = new Map<string, Position>();
-  if (!yaml.map) return at;
-  for (const pair of yaml.map.items) {
-    const key = String((pair.key as { value?: unknown }).value);
-    at.set(key, yaml.at(pair.value));
-    if (isSeq(pair.value)) pair.value.items.forEach((item, index) => at.set(`${key}[${index}]`, yaml.at(item)));
-  }
+  const walk = (node: unknown, path: string): void => {
+    if (path !== '') at.set(path, yaml.at(node));
+    if (isMap(node)) {
+      for (const pair of node.items) {
+        const key = String((pair.key as { value?: unknown }).value);
+        walk(pair.value, path === '' ? key : `${path}.${key}`);
+      }
+    } else if (isSeq(node)) node.items.forEach((item, index) => walk(item, `${path}[${index}]`));
+  };
+  if (yaml.map) walk(yaml.map, '');
   return at;
 }

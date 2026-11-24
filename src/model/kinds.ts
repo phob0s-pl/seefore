@@ -1,4 +1,4 @@
-/** The nine kinds of record, in the order the page shows them: a folder each, with its words. */
+/** The twelve kinds of record, in the order the page shows them: a folder each, with its words. */
 export const KINDS = [
   { folder: 'people', one: 'person', many: 'people' },
   { folder: 'systems', one: 'system', many: 'systems' },
@@ -9,6 +9,9 @@ export const KINDS = [
   { folder: 'infrastructure', one: 'piece of infrastructure', many: 'pieces of infrastructure' },
   { folder: 'owners', one: 'owner', many: 'owners' },
   { folder: 'technologies', one: 'technology', many: 'technologies' },
+  { folder: 'features', one: 'feature', many: 'features' },
+  { folder: 'flows', one: 'flow', many: 'flows' },
+  { folder: 'data', one: 'data record', many: 'data records' },
 ] as const;
 
 /** What each folder's records are called in a message, with their article. */
@@ -22,4 +25,10 @@ export const NOUNS: Record<string, string> = {
   infrastructure: 'a piece of infrastructure',
   owners: 'an owner',
   technologies: 'a technology',
+  features: 'a feature',
+  flows: 'a flow',
+  data: 'data',
 };
+
+/** What one record of each folder is called where the record itself is meant: "`colour` is not a key of a data record". */
+export const RECORD_NOUNS: Record<string, string> = { ...NOUNS, data: 'a data record' };

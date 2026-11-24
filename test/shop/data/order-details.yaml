@@ -1,0 +1,6 @@
+name: Order details
+description: What a customer orders.
+fields:
+  - name: items
+    description: What is bought, and how many of each
+  - name: address

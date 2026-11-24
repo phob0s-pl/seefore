@@ -44,6 +44,24 @@ export function listOf(entry: Entry, field: string): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
 }
 
+/** A step of a flow that read: its place in the list, its keys, and the whole of it. */
+export type Step = { index: number; id: string; does?: string; reply?: string; name?: string; after: string[]; data: string[]; fields: Record<string, unknown> };
+
+/** The steps of a flow, in order. None when the entry is no flow, or its file did not read. */
+export function stepsOf(entry: Entry): Step[] {
+  const steps = entry.ok && entry.kind === 'flows' ? entry.fields['steps'] : undefined;
+  if (!Array.isArray(steps)) return [];
+  return steps.map((value: unknown, index) => {
+    const fields = value as Record<string, unknown>;
+    const text = (key: string) => (typeof fields[key] === 'string' ? (fields[key] as string) : undefined);
+    const many = (key: string) => (Array.isArray(fields[key]) ? (fields[key] as unknown[]).filter((item): item is string => typeof item === 'string') : []);
+    const does = text('does');
+    const reply = text('reply');
+    const name = text('name');
+    return { index, id: text('id') ?? '', ...(does !== undefined ? { does } : {}), ...(reply !== undefined ? { reply } : {}), ...(name !== undefined ? { name } : {}), after: many('after'), data: many('data'), fields };
+  });
+}
+
 /** Builds the model once from the entries. */
 export function buildModel(entries: readonly Entry[]): Model {
   const claimed = new Map<string, Entry[]>();

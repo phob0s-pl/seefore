@@ -55,9 +55,10 @@ export function checkShape<T>(file: string, yaml: YamlFile, schema: z.ZodType<T>
           problems.push(error(file, valuePosition(yaml, doc, path), 'value-not-allowed', notAllowed(path, allowed)));
         } else if (!doc.hasIn(path)) {
           const owner = path.length <= 1 ? what : label(path.slice(0, -1));
+          const key = quote(String(path[path.length - 1]));
           const definition = definitionOf(schema, path);
-          const fix = `Add the key ${quote(String(path[path.length - 1]))}.${definition ? ` ${definition}` : ''}`;
-          problems.push(error(file, parentPosition(yaml, doc, path), 'key-missing', `${capital(label(path))} is missing from ${owner}.`, fix));
+          const fix = `Add the key ${key}.${definition ? ` ${definition}` : ''}`;
+          problems.push(error(file, parentPosition(yaml, doc, path), 'key-missing', `${key} is missing from ${owner}.`, fix));
         } else if (issue.code === 'invalid_type') {
           const found = describe(doc.getIn(path));
           problems.push(
@@ -74,7 +75,10 @@ export function checkShape<T>(file: string, yaml: YamlFile, schema: z.ZodType<T>
       }
       case 'too_small': {
         if (issue.origin === 'array') {
-          problems.push(error(file, valuePosition(yaml, doc, path), 'value-too-small', `${capital(label(path))} is an empty list.`, `Give ${label(path)} at least one id, or delete the key.`));
+          const key = path[path.length - 1];
+          const item = (typeof key === 'string' ? ITEMS[key] : undefined) ?? 'id';
+          const fix = `Give ${label(path)} at least one ${item}${optional(schema, path) ? ', or delete the key' : ''}.`;
+          problems.push(error(file, valuePosition(yaml, doc, path), 'value-too-small', `${capital(label(path))} is an empty list.`, fix));
           break;
         }
         const message =
@@ -100,9 +104,13 @@ export function checkShape<T>(file: string, yaml: YamlFile, schema: z.ZodType<T>
         break;
       }
       default: {
-        // A schema that adds its own rule writes the whole message in plain words.
-        const code = issue.code === 'custom' && typeof issue.params?.['code'] === 'string' ? issue.params['code'] : 'value-invalid';
-        problems.push(error(file, valuePosition(yaml, doc, path), code, issue.message));
+        // A schema that adds its own rule writes the whole message in plain words. An id twice in
+        // a list is said here, where the whole path is known: "`a` is in `after` of the first step twice."
+        const params = issue.code === 'custom' ? issue.params : undefined;
+        const code = typeof params?.['code'] === 'string' ? params['code'] : 'value-invalid';
+        const twice = params?.['twice'];
+        const message = typeof twice === 'string' ? `${quote(twice)} is in ${label(path.slice(0, -1))} twice. Keep one.` : issue.message;
+        problems.push(error(file, valuePosition(yaml, doc, path), code, message));
       }
     }
     // The field at fault is the first key of the path; a key that is not known names itself.
@@ -132,21 +140,36 @@ function parentPosition(yaml: YamlFile, doc: Document, path: Path): Position {
 /** The words for the first ten places in a list. */
 const ORDINALS = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth', 'tenth'];
 
+/** The lists whose items are mappings, and what one item is called. */
+const ITEMS: Record<string, string> = { steps: 'step', fields: 'field' };
+
+/** An item of a list in words: "the third step", or "step 12" past the tenth. */
+function nth(index: number, item: string): string {
+  const ordinal = ORDINALS[index];
+  return ordinal === undefined ? `${item} ${index + 1}` : `the ${ordinal} ${item}`;
+}
+
 /**
  * How a path is shown in a message: `name`, or "the second id in `technology`" for an item of a
- * list. Past the tenth an item is named by its number, as in "id 11 in `technology`". It starts
- * in lowercase; `capital` makes it start a sentence.
+ * list. Past the tenth an item is named by its number, as in "id 11 in `technology`". Inside a
+ * step or a field, the value is named as people say it: "`does` of the third step", "the second
+ * id in `after` of the first step". It starts in lowercase; `capital` makes it start a sentence.
  */
 export function label(path: Path): string {
+  const at = path.findIndex((part, index) => typeof part === 'string' && ITEMS[part] !== undefined && typeof path[index + 1] === 'number');
+  if (at >= 0) {
+    const item = nth(path[at + 1] as number, ITEMS[path[at] as string] as string);
+    const rest = path.slice(at + 2);
+    return rest.length === 0 ? item : `${label(rest)} of ${item}`;
+  }
   const last = path[path.length - 1];
   if (typeof last !== 'number') return quote(dotted(path));
   const list = quote(dotted(path.slice(0, -1)));
-  const ordinal = ORDINALS[last];
-  return ordinal === undefined ? `id ${last + 1} in ${list}` : `the ${ordinal} id in ${list}`;
+  return `${nth(last, 'id')} in ${list}`;
 }
 
-/** A path as a program writes it: `owner.team`, `tags[2]`. */
-function dotted(path: Path): string {
+/** A path as a program writes it, and as the rules name a field: `owner.team`, `via[2]`, `steps[2].does`. */
+export function dotted(path: Path): string {
   let text = '';
   for (const part of path) {
     if (typeof part === 'number') text += `[${part}]`;
@@ -195,28 +218,52 @@ function describe(value: unknown): string {
   return 'a mapping';
 }
 
-/** The keys a mapping may have, when the schema at that path is a plain object. */
-function knownKeys(schema: z.ZodType, path: Path): string[] {
+type Def = { type?: string; innerType?: unknown; element?: unknown };
+
+function defOf(schema: unknown): Def | undefined {
+  return (schema as { _zod?: { def?: Def } } | undefined)?._zod?.def;
+}
+
+/** A schema without the `optional` around it. */
+function unwrapped(schema: unknown): unknown {
+  let current = schema;
+  while (defOf(current)?.type === 'optional') current = defOf(current)?.innerType;
+  return current;
+}
+
+/** The schema of the value at a path, into mappings and lists, with the `optional` around it kept. */
+function schemaAt(schema: z.ZodType, path: Path): unknown {
   let current: unknown = schema;
   for (const part of path) {
+    current = unwrapped(current);
+    if (typeof part === 'number') {
+      const def = defOf(current);
+      if (def?.type !== 'array') return undefined;
+      current = def.element;
+      continue;
+    }
     const shape = shapeOf(current);
-    if (!shape || typeof part !== 'string' || !(part in shape)) return [];
+    if (!shape || typeof part !== 'string' || !(part in shape)) return undefined;
     current = shape[part];
   }
-  const shape = shapeOf(current);
+  return current;
+}
+
+/** The keys a mapping may have, when the schema at that path is a plain object. */
+function knownKeys(schema: z.ZodType, path: Path): string[] {
+  const shape = shapeOf(unwrapped(schemaAt(schema, path)));
   return shape ? Object.keys(shape) : [];
 }
 
 /** The definition, in words, that the schema gives the key at a path; none when it gives none. */
 function definitionOf(schema: z.ZodType, path: Path): string | undefined {
-  let current: unknown = schema;
-  for (const part of path) {
-    const shape = shapeOf(current);
-    if (!shape || typeof part !== 'string' || !(part in shape)) return undefined;
-    current = shape[part];
-  }
-  const description = (current as { description?: unknown }).description;
+  const description = (schemaAt(schema, path) as { description?: unknown } | undefined)?.description;
   return typeof description === 'string' && description !== '' ? description : undefined;
+}
+
+/** True when the key at a path may be left out. */
+function optional(schema: z.ZodType, path: Path): boolean {
+  return defOf(schemaAt(schema, path))?.type === 'optional';
 }
 
 function shapeOf(schema: unknown): Record<string, unknown> | undefined {
