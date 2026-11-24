@@ -1,4 +1,4 @@
-import { isMap, isSeq } from 'yaml';
+import { isMap, isSeq, isScalar } from 'yaml';
 import type { Document, YAMLMap } from 'yaml';
 import type { z } from 'zod';
 import { capital, error, list, quote } from './problem.ts';
@@ -41,9 +41,15 @@ export function checkShape<T>(file: string, yaml: YamlFile, schema: z.ZodType<T>
           const hint = known.length > 0 ? ` Its keys are ${list(known)}.` : '';
           const owner = path.length === 0 ? what : label(path);
           const nothing = path.length === 0 && key === 'in' && (what === 'a system' || what === 'a person');
+          // Inside `{ }` a comma starts a new key, so the rest of a sentence with a comma in it
+          // reads as a key with no value.
+          const pair = isMap(parent) ? parent.items.find((each) => isScalar(each.key) && each.key.value === key) : undefined;
+          const cut = isMap(parent) && parent.flow === true && pair !== undefined && (pair.value === null || (isScalar(pair.value) && pair.value.value === null));
           const fix = nothing
             ? `${capital(what)} is in nothing. Say what it belongs to in its description.`
-            : `Delete the key ${quote(key)} from the file, or, if a known key was meant, rename it.${hint}`;
+            : cut
+              ? `A comma inside \`{ }\` starts a new key. If ${quote(key)} is the rest of a sentence, put that text in quotes, as in \`description: "First, then the rest"\`, or write the mapping on lines of its own.`
+              : `Delete the key ${quote(key)} from the file, or, if a known key was meant, rename it.${hint}`;
           problems.push({ ...error(file, where, 'key-unknown', `${quote(key)} is not a key of ${owner}.${hint}`, fix), field: path.length === 0 ? key : String(path[0]) });
         }
         break;

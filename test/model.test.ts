@@ -125,6 +125,15 @@ test('a fault inside a step or a field has its own place and names it in words',
   ]);
 });
 
+test('a sentence cut by a comma inside a short mapping is told as that, and a key that is simply not known is not', () => {
+  const [cut] = problemsOf({ path: 'data/order.yaml', text: 'name: Order\nfields:\n  - {name: items, description: What is bought, and how many}\n' });
+  expect(cut).toMatchObject({ rule: 'key-unknown', line: 3 });
+  expect(cut?.message).toContain('`and how many` is not a key of the first field');
+  expect(cut?.fix).toContain('A comma inside `{ }` starts a new key');
+  const [plain] = problemsOf({ path: 'data/order.yaml', text: 'name: Order\nfields:\n  - {name: items, colour: red}\n' });
+  expect(plain?.fix).toContain('Delete the key `colour`');
+});
+
 test('a broken file leaves the others read', () => {
   const read = readModel([MARKER, ALICE, { path: 'people/bob.yaml', text: 'name: [\n' }]);
   expect(read.records.map((record) => record.id)).toEqual(['alice']);
