@@ -11,7 +11,7 @@ import type { Box, Depth, View } from '../model/view.ts';
 import { engine } from './elk.ts';
 import { iconOf, KIND, typeWords } from './kinds.tsx';
 import { layOut, nearestRoute } from './layout.ts';
-import type { Band, Layout } from './layout.ts';
+import type { Band, Layout, Shape } from './layout.ts';
 import { CanvasFrame } from './ui.tsx';
 
 type BoxNode = Node<{ box: Box }, 'box' | 'frame'>;
@@ -105,10 +105,16 @@ const HEAD = { type: MarkerType.ArrowClosed, color: 'var(--graph-edge)' };
 const PICKED_HEAD = { type: MarkerType.ArrowClosed, color: 'var(--accent)' };
 const edgeTypes = { route: RouteLine };
 
-function FitButton() {
+/**
+ * How a diagram is fitted to the field. A flow's own diagram is small, so it is never made
+ * larger than its boxes were drawn to be: a flow of four boxes would else fill the field.
+ */
+const fitOf = (shape: Shape) => (shape === 'flow' ? { ...FIT, maxZoom: 1 } : FIT);
+
+function FitButton({ shape }: { shape: Shape }) {
   const { fitView } = useReactFlow();
   return (
-    <ControlButton aria-label="Fit" title="Fit the diagram" onClick={() => void fitView(FIT)}>
+    <ControlButton aria-label="Fit" title="Fit the diagram" onClick={() => void fitView(fitOf(shape))}>
       <Scan />
     </ControlButton>
   );
@@ -201,7 +207,8 @@ function HoverLabel({ hovered, view, label, place }: { hovered: string | undefin
  *
  * On the page of a flow, `step` is what the picked step lights: its line, drawn as a pick is with
  * one head where the step travels to, or its box, outlined. With no hover and no pick, all but it
- * and what it joins fades. A change of step lays nothing out.
+ * and what it joins fades. A change of step lays nothing out. A flow's own diagram has the
+ * `shape` of a flow: it is read top to bottom.
  */
 export function Diagram({
   view,
@@ -209,6 +216,7 @@ export function Diagram({
   picked,
   onPick,
   step,
+  shape = 'model',
   children,
 }: {
   view: View;
@@ -216,6 +224,7 @@ export function Diagram({
   picked: string | undefined;
   onPick: (id?: string) => void;
   step?: Lights;
+  shape?: Shape;
   children?: ReactNode;
 }) {
   const [layout, setLayout] = useState<Layout>();
@@ -223,14 +232,14 @@ export function Diagram({
   const [flow, setFlow] = useState<ReactFlowInstance<BoxNode | BandNode, RouteEdge>>();
   useEffect(() => {
     let current = true;
-    layOut(view, depth, engine()).then(
+    layOut(view, depth, engine(), shape).then(
       (done) => current && setLayout(done),
       () => current && setFailed(true),
     );
     return () => {
       current = false;
     };
-  }, [view, depth]);
+  }, [view, depth, shape]);
 
   // The nodes and lines as laid out, with nothing in focus.
   const placed = useMemo(
@@ -390,7 +399,7 @@ export function Diagram({
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
           fitView
-          fitViewOptions={FIT}
+          fitViewOptions={fitOf(shape)}
           minZoom={0.05}
           maxZoom={2}
           nodesDraggable={false}
@@ -424,7 +433,7 @@ export function Diagram({
           onMouseMove={follow}
         >
           <Controls className="glass-group glass-group-column" position="bottom-left" showInteractive={false} showFitView={false}>
-            <FitButton />
+            <FitButton shape={shape} />
           </Controls>
           <KeepClear picked={picked} routes={layout.routes} />
           <HoverLabel hovered={moving ? undefined : hovered} view={view} label={label} place={place} />

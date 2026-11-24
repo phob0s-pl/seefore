@@ -79,7 +79,7 @@ test('the people a feature is for are those among its parts from its flows and t
   expect(broken.feature('lost')).toMatchObject({ stated: ['nobody', 'fan'], people: [{ id: 'fan' }] });
 });
 
-test('the flows through a part: a step on a connection that ends at it, or a step in it, each flow once with its feature', () => {
+test('the flows through a part: a step on a connection that ends at it or at something it holds, or a step in it, each flow once with its feature', () => {
   const through = travel();
   expect(through.flowsThrough('orders')).toEqual([
     { flow: 'checks', feature: 'stock' },
@@ -94,8 +94,8 @@ test('the flows through a part: a step on a connection that ends at it, or a ste
     { flow: 'pays', feature: 'paying' },
     { flow: 'saves', feature: 'paying' },
   ]);
-  // A system no connection ends at has no flow through it, though its apps do.
-  expect(through.flowsThrough('shop')).toEqual([]);
+  // A system has the flows through what it holds, each once.
+  expect(through.flowsThrough('shop').map((each) => each.flow)).toEqual(['checks', 'pays', 'saves']);
   expect(through.flowsThrough('clerk')).toEqual([]);
 });
 

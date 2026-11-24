@@ -251,7 +251,7 @@ function FlowBody({ flow, records, catalogue, slots }: { flow: FlowRead; records
           </div>
         </CanvasFrame>
       ) : (
-        <Diagram view={view} depth="components" picked={panel !== undefined && !panel.data ? panel.id : undefined} onPick={onPick} step={step?.lights}>
+        <Diagram view={view} depth="components" shape="flow" picked={panel !== undefined && !panel.data ? panel.id : undefined} onPick={onPick} step={step?.lights}>
           {panel !== undefined && <Inspector picked={panel.id} view={view} catalogue={catalogue} onClose={close} />}
         </Diagram>
       )}

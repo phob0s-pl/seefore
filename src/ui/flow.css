@@ -210,9 +210,9 @@
    the lines under it scroll inside it when they are longer. */
 .flow-bar {
   display: flex;
-  flex: 0 0 150px;
+  flex: 0 0 172px;
   flex-direction: column;
-  height: 150px;
+  height: 172px;
   padding: 14px 16px 0 20px;
   border-radius: var(--radius-panel);
   background: var(--surface-panel);

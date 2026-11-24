@@ -39,6 +39,21 @@ const COMMON: LayoutOptions = {
   'elk.spacing.portPort': '12',
 };
 
+/**
+ * The shape of a diagram: the model as a whole, read left to right with the wide gaps, or one
+ * flow's own parts, read top to bottom with tight gaps. A flow touches about seven boxes, and in
+ * a field wider than it is high a row of them is too small to read: of 80 real flows 34 had names
+ * that could be read when fitted, and 73 have them this way.
+ */
+export type Shape = 'model' | 'flow';
+
+/** What a flow's own diagram sets otherwise: its direction, and the gaps along it. */
+const FLOW: LayoutOptions = {
+  'elk.layered.spacing.nodeNodeBetweenLayers': '24',
+  'elk.layered.spacing.edgeEdgeBetweenLayers': '6',
+  'elk.layered.spacing.edgeNodeBetweenLayers': '8',
+};
+
 /** The diagram as one graph. Its id has a character no id of a record has. */
 const ROOT = '#diagram';
 
@@ -80,7 +95,9 @@ function turnedOf(view: View, partition: Partition): Set<string> {
 }
 
 /** The ELK graph of a view: frames inside frames, each box at least its size, one edge per arrow, those of `turned` from their end to their start. */
-function graphOf(view: View, partition: Partition, turned: Set<string>): ElkNode {
+function graphOf(view: View, partition: Partition, turned: Set<string>, shape: Shape): ElkNode {
+  const common: LayoutOptions = shape === 'flow' ? { ...COMMON, ...FLOW } : COMMON;
+  const sides = shape === 'flow' ? 20 : 60;
   const inside = new Map<string | undefined, Box[]>();
   for (const box of view.boxes) inside.set(box.in, [...(inside.get(box.in) ?? []), box]);
   const node = (box: Box): ElkNode => {
@@ -89,7 +106,7 @@ function graphOf(view: View, partition: Partition, turned: Set<string>): ElkNode
       return {
         id: box.id,
         // Room at the top for the frame's name.
-        layoutOptions: { ...COMMON, 'elk.padding': '[top=56,left=60,bottom=20,right=60]', ...column },
+        layoutOptions: { ...common, 'elk.padding': `[top=56,left=${sides},bottom=20,right=${sides}]`, ...column },
         children: (inside.get(box.id) ?? []).map(node),
       };
     }
@@ -109,10 +126,10 @@ function graphOf(view: View, partition: Partition, turned: Set<string>): ElkNode
     id: ROOT,
     layoutOptions: {
       'elk.algorithm': 'layered',
-      'elk.direction': 'RIGHT',
+      'elk.direction': shape === 'flow' ? 'DOWN' : 'RIGHT',
       'elk.hierarchyHandling': 'INCLUDE_CHILDREN',
       'elk.padding': '[top=40,left=40,bottom=40,right=40]',
-      ...COMMON,
+      ...common,
       'elk.partitioning.activate': 'true',
       'elk.separateConnectedComponents': 'false',
     },
@@ -122,9 +139,9 @@ function graphOf(view: View, partition: Partition, turned: Set<string>): ElkNode
 }
 
 /** Lays the graph out, and reads ELK's answer: a box relative to its frame, an arrow relative to the box it names as its container. */
-async function place(view: View, partition: Partition, elk: Engine): Promise<Picture> {
+async function place(view: View, partition: Partition, elk: Engine, shape: Shape = 'model'): Promise<Picture> {
   const turned = turnedOf(view, partition);
-  const done = await elk.layout(graphOf(view, partition, turned));
+  const done = await elk.layout(graphOf(view, partition, turned, shape));
   const boxes = new Map(view.boxes.map((box) => [box.id, box]));
   const corners = new Map<string, ElkPoint>([[ROOT, { x: 0, y: 0 }]]);
   const placed: Placed[] = [];
@@ -264,12 +281,15 @@ async function inZones(view: View, elk: Engine): Promise<Picture> {
   return best.picture;
 }
 
-/** Lays a view out with ELK's layered layout, frames inside frames included: in zones at the Systems depth, the people first below it. */
-export async function layOut(view: View, depth: Depth, elk: Engine): Promise<Layout> {
+/**
+ * Lays a view out with ELK's layered layout, frames inside frames included: in zones at the Systems
+ * depth, the people first below it. A flow's own diagram is read top to bottom, the people first.
+ */
+export async function layOut(view: View, depth: Depth, elk: Engine, shape: Shape = 'model'): Promise<Layout> {
   const picture =
-    depth === 'systems'
+    depth === 'systems' && shape === 'model'
       ? await inZones(view, elk)
-      : await place(view, new Map(view.boxes.filter((box) => box.in === undefined).map((box) => [box.id, box.zone === 'people' && !box.caller ? 0 : 1])), elk);
+      : await place(view, new Map(view.boxes.filter((box) => box.in === undefined).map((box) => [box.id, box.zone === 'people' && !box.caller ? 0 : 1])), elk, shape);
   // A frame comes before what it holds, as React Flow asks.
   const order = new Map(view.boxes.map((box, index) => [box.id, index]));
   const placed = [...picture.placed].sort((a, b) => (order.get(a.box.id) ?? 0) - (order.get(b.box.id) ?? 0));

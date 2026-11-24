@@ -54,7 +54,7 @@ export type Travel = {
   stepsWith: (id: string) => StepAt[];
   /** Every connection a data record is seen on, with the way it goes, once each. */
   waysOf: (id: string) => SeenOn[];
-  /** Every flow with a step on a connection that ends at the part, or in the part: by name. */
+  /** Every flow with a step on a connection that ends at the part or at something it holds, or a step that happens there: by name. */
   flowsThrough: (id: string) => FlowThrough[];
   /** The steps on a connection, and the replies to them. */
   stepsOn: (id: string) => StepAt[];
@@ -162,9 +162,11 @@ export function travelOf(records: readonly ModelRecord[], catalogue: Catalogue =
         all().flatMap((walk) => (walk.connection !== undefined && walk.way !== undefined && walk.data.includes(id) ? [{ connection: walk.connection.id, ...walk.way }] : [])),
         (seen) => `${seen.connection} ${wayKey(seen)}`,
       ),
+    // A flow goes through a part when a step of it touches the part itself or something the part
+    // holds: a system's page shows the flows through its apps.
     flowsThrough: (id) =>
       once(
-        all().filter((walk) => ends(walk).includes(id)),
+        all().filter((walk) => ends(walk).some((end) => end === id || catalogue.chain(end).some((above) => above.id === id))),
         (walk) => walk.flow,
       ).map((walk) => ({ flow: walk.flow, ...(walk.feature !== undefined ? { feature: walk.feature } : {}) })),
     stepsOn: (id) => all().filter((walk) => walk.connection?.id === id).map(at),
