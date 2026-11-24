@@ -137,24 +137,24 @@
   font-size: 11px;
   color: var(--text-tertiary);
 }
-/* A frame: an opened system or app is a dashed outline that names itself and holds its boxes. */
+/* The colour of each kind, from ui.css. */
 .architecture-node-people {
-  --kind: #7aa2f7;
+  --kind: var(--kind-people);
 }
 .architecture-node-systems {
-  --kind: #9ece6a;
+  --kind: var(--kind-systems);
 }
 .architecture-node-apps {
-  --kind: #e0af68;
+  --kind: var(--kind-apps);
 }
 .architecture-node-stores {
-  --kind: #bb9af7;
+  --kind: var(--kind-stores);
 }
 .architecture-node-components {
-  --kind: #7dcfff;
+  --kind: var(--kind-components);
 }
 .architecture-node-infrastructure {
-  --kind: #9aa5ce;
+  --kind: var(--kind-infrastructure);
 }
 /* A frame keeps a quiet dashed outline: its colour would compete with the boxes inside it. */
 .architecture-boundary {

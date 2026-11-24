@@ -129,3 +129,273 @@
 .page-line.failed {
   color: var(--danger);
 }
+
+/* The colours of the kinds of thing, as the diagram draws them, and the tint of a tile or pill
+   in each. A connection, a technology and an owner keep the neutral tint. */
+:root {
+  --kind-people: #7aa2f7;
+  --kind-systems: #9ece6a;
+  --kind-apps: #e0af68;
+  --kind-stores: #bb9af7;
+  --kind-components: #7dcfff;
+  --kind-infrastructure: #9aa5ce;
+}
+.kind-people {
+  --tone: var(--kind-people);
+}
+.kind-systems {
+  --tone: var(--kind-systems);
+}
+.kind-apps {
+  --tone: var(--kind-apps);
+}
+.kind-stores {
+  --tone: var(--kind-stores);
+}
+.kind-components {
+  --tone: var(--kind-components);
+}
+.kind-infrastructure {
+  --tone: var(--kind-infrastructure);
+}
+:is(.tile, .pill)[class*='kind-'] {
+  --tone-tint: color-mix(in srgb, var(--tone) 16%, transparent);
+}
+
+.text-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--link);
+  font-size: 12.5px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.text-link:hover {
+  color: var(--link-hover);
+}
+
+/* A page body: sections stacked with one gap. */
+.section-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-sections);
+}
+/* The quiet label above a panel: it names the section, the panel holds the content. */
+.section-label {
+  padding: 0 20px 8px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: rgba(255, 255, 255, 0.5);
+}
+.panel-lift {
+  box-shadow: var(--shadow-panel-lift);
+}
+.panel-padded {
+  padding: 14px 20px;
+}
+.panel-text {
+  max-width: 72ch;
+  font-size: 14px;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.85);
+  text-wrap: pretty;
+}
+.panel-text + .panel-text {
+  margin-top: 10px;
+}
+
+/* Rows inside a panel, with a heading row above them when they carry cells. */
+.row-list {
+  display: flex;
+  flex-direction: column;
+}
+.row-list-heading {
+  display: grid;
+  column-gap: 12px;
+  padding: 9px 18px;
+  border-bottom: var(--divider);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--text-tertiary);
+}
+.row-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.92);
+  overflow-wrap: anywhere;
+}
+.row-name-strong {
+  font-weight: 600;
+}
+.row-name-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* A row that carries cells: the grid is set inline by the list, and the row is a link. */
+.row-grid-item {
+  padding-left: 18px;
+}
+.row-grid-item:hover {
+  background: var(--surface-hover);
+}
+.row-grid-item > a:hover {
+  color: #fff;
+}
+.row-grid-item + .row-grid-item > a {
+  border-top: var(--divider);
+}
+.row-grid-name {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.row-grid {
+  display: grid;
+  align-items: center;
+  column-gap: 12px;
+  min-height: 42px;
+  padding: 9px 18px 9px 0;
+  font-size: 13.5px;
+  color: rgba(255, 255, 255, 0.9);
+}
+.row-cell {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+/* Tiles: the small tinted square that leads a row. */
+.tile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-tile);
+  background: var(--tone-tint, var(--neutral-tint));
+  color: var(--tone, var(--neutral-ink));
+}
+.tile svg {
+  width: 15px;
+  height: 15px;
+  stroke-width: 1.9;
+}
+.tile-sm {
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+}
+.tile-sm svg {
+  width: 14px;
+  height: 14px;
+}
+.tile-lg {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+}
+.tile-lg svg {
+  width: 22px;
+  height: 22px;
+}
+
+/* Pills: a mark, such as a type or "External". */
+.pill {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: var(--radius-full);
+  background: var(--tone-tint, var(--neutral-tint));
+  color: var(--tone, var(--neutral-ink));
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+}
+.pill-xs {
+  height: 18px;
+  padding: 0 7px;
+  font-size: 10.5px;
+  font-weight: 500;
+}
+
+/* Facts: label and value rows in a panel. */
+.facts {
+  display: flex;
+  flex-direction: column;
+}
+.facts > div {
+  display: grid;
+  grid-template-columns: 130px minmax(0, 1fr);
+  gap: 12px;
+  align-items: baseline;
+  margin-left: 20px;
+  padding: 11px 20px 11px 0;
+}
+.facts > div + div {
+  border-top: var(--divider);
+}
+.facts dt {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.facts dd {
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+.facts dd a {
+  color: var(--link);
+}
+.facts dd a:hover {
+  color: var(--link-hover);
+}
+
+/* Tables inside a panel: rows separated by the divider, which starts after the panel's left
+   padding as a row's divider does. */
+.panel-table {
+  width: calc(100% - 20px);
+  margin-left: 20px;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 13px;
+}
+.panel-table th,
+.panel-table td {
+  padding: 10px 16px 10px 0;
+  vertical-align: middle;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.panel-table tbody th {
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.9);
+}
+.panel-table tbody td {
+  color: rgba(255, 255, 255, 0.6);
+}
+.panel-table a {
+  color: var(--link);
+}
+.panel-table a:hover {
+  color: var(--link-hover);
+}
+.panel-table tbody tr + tr > * {
+  border-top: var(--divider);
+}

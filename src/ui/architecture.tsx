@@ -3,10 +3,11 @@ import { useOutletContext, useSearchParams } from 'react-router-dom';
 import { depthOf, viewOf } from '../model/view.ts';
 import { Diagram } from './diagram.tsx';
 import type { ModelState } from './shell.tsx';
-import { CanvasFrame, EmptyState } from './ui.tsx';
+import { CanvasFrame, EmptyState, useTitle } from './ui.tsx';
 
 /** The landing page: the whole model as a diagram, at the depth the address names. */
 export function Architecture() {
+  useTitle('Architecture');
   const { answer, failed } = useOutletContext<ModelState>();
   const [params] = useSearchParams();
   const depth = depthOf(params.get('depth'));
