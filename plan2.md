@@ -77,8 +77,9 @@ and B3 use are in `research/paths.md`, out of Git.
 | --- | --- | --- | --- |
 | C1 | What a feature is | One page | Fable |
 | C2 | What a flow is | One page | Fable |
-| C3 | Features and flows read | The two new folders are read and checked, with `seefore check` | Sonnet |
-| C4 | Feature and flow UI | Both on the page | Opus |
+| C2b | What data is | One page: a record with a name and fields, named on a step of a flow | Fable |
+| C3 | Features, flows and data read | The three new folders are read and checked, with `seefore check` | Sonnet |
+| C4 | Feature, flow and data UI | All three on the page | Opus |
 
 **The MVP is the end of milestone 3**: the owner's own model as a diagram, with its flows and
 features.
