@@ -26,6 +26,19 @@ test('the schemas of a feature, a flow and data pass a good record and refuse a 
   expect(check('data', { name: 'Account details', fields: [{ description: 'What is owed' }] })).toBe(false);
 });
 
+test('the schema of a change’s input passes a prompt with a name, with or without what was given, and refuses the rest', () => {
+  const input = { name: 'Listening copies on time after a donation', prompt: 'Run two jobs at once.\nNo new hardware.' };
+  expect(check('changes', input)).toBe(true);
+  expect(check('changes', { ...input, given: ['The copies took longer than two working days.', 'Any way will do.'] })).toBe(true);
+  expect(check('changes', { name: input.name })).toBe(false);
+  expect(check('changes', { prompt: input.prompt })).toBe(false);
+  expect(check('changes', { ...input, need: 'Copies are late.' })).toBe(false);
+  expect(check('changes', { ...input, given: [] })).toBe(false);
+  expect(check('changes', { ...input, given: ['One line\nand a second'] })).toBe(false);
+  expect(check('changes', { ...input, prompt: '   ' })).toBe(false);
+  expect(check('changes', { ...input, given: Array.from({ length: 11 }, (_, at) => `Answer ${at}`) })).toBe(false);
+});
+
 test('a schema passes a good record and refuses a bad one', () => {
   expect(check('apps', { name: 'Order API', in: 'shop', kind: 'service', technology: ['go'] })).toBe(true);
   expect(check('connections', { from: 'a', to: 'b', access: 'read' })).toBe(true);

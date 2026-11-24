@@ -100,7 +100,7 @@ process is in `research/stage-15-22/`, out of Git.
 
 | # | Stage | Result | Who |
 | --- | --- | --- | --- |
-| D1 | The input of a change | One page: what must be known before a change is drafted, and how it is got from a prompt, with the questions worth asking | Fable |
+| D1 | The input of a change | One page and a schema: a `prompt`, what the person answered when asked (`given`), and a `name` written last | Fable defines, the main session builds |
 | D2 | What a change is | One page: what a change holds | Fable |
 | D3 | Decisions | One page: what a decision is, and when one is asked, assumed or just made | Fable |
 | D4 | The review of a change | One page: who reads a change, what they say, and how the reading ends | Fable |
