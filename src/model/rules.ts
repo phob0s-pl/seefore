@@ -1,4 +1,5 @@
-import type { Count, Found, Place, Problem } from './answer.ts';
+import type { Count, Found, Place, Problem, Ruling } from './answer.ts';
+import { judgeRules, ruleReferences, ruleShape } from './judge.ts';
 import { NOUNS } from './kinds.ts';
 import { buildModel, listOf, stepsOf, textOf } from './model.ts';
 import type { Entry, Model } from './model.ts';
@@ -50,14 +51,14 @@ const named = (entries: readonly Entry[]) => list(entries.map((entry) => entry.f
 
 // ---- references: what each field may name, and what to say when it names the wrong thing
 
-/** A field that names records: on a record of `folder`, or on each step of a flow when `step`. */
-type Field = { folder: string; field: string; kinds: readonly string[]; many?: true; step?: true };
+/** A field that names records: on a record of `folder`, or on each step of a flow when `step`. `ways`: in a rule of ways. */
+type Field = { folder: string; field: string; kinds: readonly string[]; many?: true; step?: true; ways?: boolean };
 
 const ENDS = ['people', 'systems', 'apps', 'stores', 'components', 'infrastructure'];
 const PARTS = ['systems', 'apps', 'stores', 'components', 'infrastructure'];
 const NEEDS_OWNER_OR_TECH = ['apps', 'stores', 'components', 'infrastructure'];
 /** The kinds that are not parts or connections: what `touches`, `from` and `to` never name. */
-const NOT_THINGS = ['owners', 'technologies', 'features', 'flows', 'data'];
+const NOT_THINGS = ['owners', 'technologies', 'features', 'flows', 'data', 'rules'];
 
 const FIELDS: Field[] = [
   { folder: 'apps', field: 'in', kinds: ['systems'] },
@@ -82,7 +83,7 @@ function allowed(kinds: readonly string[]): string {
 }
 
 /** A case of a field that names the wrong kind: what is said, and how to mend it. */
-type Wrong = { field: string; folder?: string; found: readonly string[]; says: string; fix: string };
+type Wrong = { field: string; folder?: string; ways?: boolean; found: readonly string[]; says: string; fix: string };
 
 const WRONG: Wrong[] = [
   {
@@ -114,7 +115,7 @@ const WRONG: Wrong[] = [
   },
   {
     field: 'via',
-    found: ['owners', 'technologies', 'connections', 'people', 'stores', 'features', 'flows', 'data'],
+    found: ['owners', 'technologies', 'connections', 'people', 'stores', 'features', 'flows', 'data', 'rules'],
     says: '`via` names what the exchange passes through: a piece of infrastructure, an app, a component or a system.',
     fix: 'Take it out of `via`, or name a piece of infrastructure, an app, a component or a system that the exchange passes through. Say anything more in the description.',
   },
@@ -132,13 +133,13 @@ const WRONG: Wrong[] = [
   },
   {
     field: 'owner',
-    found: ['people', 'systems', 'apps', 'stores', 'components', 'connections', 'infrastructure', 'technologies', 'features', 'flows', 'data'],
+    found: ['people', 'systems', 'apps', 'stores', 'components', 'connections', 'infrastructure', 'technologies', 'features', 'flows', 'data', 'rules'],
     says: '`owner` names an owner, a record in `owners/`.',
     fix: 'Write `owners/<id>.yaml` with a `name` for the team, and name that id in `owner`. If a record of another kind has the id you want, keep both and name the owner for what it is for.',
   },
   {
     field: 'technology',
-    found: ['people', 'systems', 'apps', 'stores', 'components', 'connections', 'infrastructure', 'owners', 'features', 'flows', 'data'],
+    found: ['people', 'systems', 'apps', 'stores', 'components', 'connections', 'infrastructure', 'owners', 'features', 'flows', 'data', 'rules'],
     says: '`technology` names technologies, records in `technologies/`.',
     fix: 'Write `technologies/<id>.yaml` with a `name`, and name that id in `technology`. If a record of another kind has the id you want, keep both and keep the product\'s name for the technology.',
   },
@@ -202,10 +203,41 @@ const WRONG: Wrong[] = [
     says: '`data` names what the step passes, records in `data/`.',
     fix: 'Write `data/<id>.yaml` with a `name` for what passes, and name that id in `data`. The connection or the part goes in `does`.',
   },
+  {
+    field: 'data',
+    folder: 'rules',
+    found: [...ENDS, 'connections', ...NOT_THINGS.filter((kind) => kind !== 'data')],
+    says: '`data` of a selector names data that a step of a flow passes, records in `data/`.',
+    fix: 'Name in `data` the data records that the steps pass, or `any` or `none`.',
+  },
+  {
+    field: 'id',
+    folder: 'rules',
+    found: ['rules'],
+    says: 'A rule chooses among the records of the other twelve folders, and never a rule.',
+    fix: 'Name a record of the model in `id`. To judge two rules together, write each in its own file.',
+  },
+  {
+    field: 'debt',
+    folder: 'rules',
+    found: ['rules'],
+    says: '`debt` names the records that break the rule and stand for now.',
+    fix: 'Take the rule out of `debt`, and name there the records that break this rule.',
+  },
+  {
+    field: 'debt',
+    folder: 'rules',
+    ways: true,
+    found: [...ENDS, ...NOT_THINGS],
+    says: 'Of a rule of ways, `debt` names connections: a way does not go by one.',
+    fix: 'Name in `debt` a connection of the way that stands for now, and take the rest out.',
+  },
 ];
 
 function wrongCase(field: Field, kind: string): Wrong | undefined {
-  return WRONG.find((wrong) => wrong.field === field.field && (wrong.folder === undefined || wrong.folder === field.folder) && wrong.found.includes(kind));
+  return WRONG.find(
+    (wrong) => wrong.field === field.field && (wrong.folder === undefined || wrong.folder === field.folder) && (wrong.ways ?? false) === (field.ways ?? false) && wrong.found.includes(kind),
+  );
 }
 
 /** The nearest of the ids when one is at most two edits away. */
@@ -251,6 +283,10 @@ function references(model: Model): Reference[] {
         else if (!spec.many && typeof value === 'string') all.push({ entry, spec, id: value, path: dotted(where), words });
       }
     }
+    // A rule names ids anywhere in its selectors, and in `debt`.
+    if (entry.kind === 'rules')
+      for (const named of ruleReferences(entry))
+        all.push({ entry, spec: { folder: 'rules', field: named.field, kinds: named.kinds, ways: named.ways }, id: named.id, path: named.path, words: label(named.key) });
   }
   return all;
 }
@@ -313,7 +349,7 @@ const idTwice: Rule = {
 const referenceUnknown: Rule = {
   id: 'reference-unknown',
   gives: 'error',
-  says: "Each id in `in`, `from`, `to`, `owner`, `technology`, `via`, `touches` and `feature`, and in a step's `does` and `data`, names a record.",
+  says: "Each id in `in`, `from`, `to`, `owner`, `technology`, `via`, `touches` and `feature`, in a step's `does` and `data`, and in a rule of a team's own, names a record.",
   check(model) {
     const findings: Finding[] = [];
     for (const { entry, spec, id, path, words } of references(model)) {
@@ -708,13 +744,17 @@ export const RULES: readonly Rule[] = [
   stepShape,
   stepEarlier,
   flowInItself,
+  ruleShape,
   recordUnused,
   featureAlone,
   stepUnplaced,
 ];
 
-/** Runs the rules over the entries. Counts are given only when `whole`: every file read. */
-export function runRules(entries: readonly Entry[], whole: boolean, run: boolean): { problems: Problem[]; counts: Count[] } {
+/**
+ * Runs the rules over the entries, then judges the rules of the team's own. Counts are given, and
+ * those rules judged, only when `whole`: every file outside `rules/` read.
+ */
+export function runRules(entries: readonly Entry[], whole: boolean, run: boolean): { problems: Problem[]; counts: Count[]; rulings: Ruling[] } {
   const model = buildModel(entries);
   const problems: Problem[] = [];
   const counts: Count[] = [];
@@ -731,5 +771,8 @@ export function runRules(entries: readonly Entry[], whole: boolean, run: boolean
       problems.push(...rule.check(model).map((finding) => problemOf(rule, finding)));
     }
   }
-  return { problems, counts };
+  // A rule whose own file has an error is not judged; nor is any, when a file outside `rules/` did not read.
+  const faulty = new Set(problems.filter((problem) => problem.severity === 'error').map((problem) => problem.file));
+  const judged = judgeRules(model, run && whole, faulty);
+  return { problems: [...problems, ...judged.problems], counts, rulings: judged.rulings };
 }

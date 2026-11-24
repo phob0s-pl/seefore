@@ -1,4 +1,4 @@
-import type { Count } from './answer.ts';
+import type { Count, Ruling } from './answer.ts';
 import { list } from './problem.ts';
 
 /** What a record that nothing names is called, by its folder: one, and many. */
@@ -36,4 +36,23 @@ export function countLine(count: Count): string | undefined {
   }
   if (count.checked === null) return `Not counted, since a file could not be read: ${count.says}`;
   return n > 0 ? `${n} found: ${count.says}` : undefined;
+}
+
+/**
+ * The one line that says what the rules of the team's own came to: "14 rules of your own: 12
+ * hold, 2 broken. 2 of debt." Nothing when there is no rule.
+ */
+export function rulingsLine(rulings: readonly Ruling[]): string | undefined {
+  if (rulings.length === 0) return undefined;
+  const of = (state: Ruling['state']) => rulings.filter((ruling) => ruling.state === state).length;
+  const parts = [
+    [of('holds'), of('holds') === 1 ? 'holds' : 'hold'],
+    [of('broken'), 'broken'],
+    [of('nothing'), of('nothing') === 1 ? 'looks at nothing' : 'look at nothing'],
+    [of('not-judged'), 'not judged'],
+  ] as const;
+  const said = parts.filter(([n]) => n > 0).map(([n, words]) => `${n} ${words}`);
+  const debt = rulings.reduce((sum, ruling) => sum + ruling.debt.length, 0);
+  const rules = `${rulings.length} ${rulings.length === 1 ? 'rule' : 'rules'} of your own: ${said.join(', ')}.`;
+  return debt > 0 ? `${rules} ${debt} of debt.` : rules;
 }

@@ -1,6 +1,6 @@
 import { isMap, isSeq, isScalar } from 'yaml';
 import type { Document, YAMLMap } from 'yaml';
-import type { z } from 'zod';
+import { z } from 'zod';
 import { capital, error, list, quote } from './problem.ts';
 import type { Position, Problem } from './problem.ts';
 import { keyPosition } from './yaml.ts';
@@ -29,9 +29,19 @@ export function checkShape<T>(file: string, yaml: YamlFile, schema: z.ZodType<T>
   if (result.success) return { value: result.data, problems: [] };
 
   const problems: Problem[] = [];
-  for (const issue of result.error.issues) {
+  const issues = [...result.error.issues];
+  for (let index = 0; index < issues.length; index++) {
+    const issue = issues[index] as z.core.$ZodIssue;
     const path: Path = issue.path;
     const first = problems.length;
+    // A value that may be a word or a mapping, and is a mapping: its own faults are told, at their places.
+    if (issue.code === 'invalid_union' && isMap(nodeAt(doc, path))) {
+      const inner = mappingIssues(schema, path, doc.toJS());
+      if (inner.length > 0) {
+        issues.push(...inner);
+        continue;
+      }
+    }
     switch (issue.code) {
       case 'unrecognized_keys': {
         const parent = nodeAt(doc, path);
@@ -249,11 +259,34 @@ function unwrapped(schema: unknown): unknown {
   return current;
 }
 
+/**
+ * The faults inside a mapping that stands where a word may stand too, as `via` of a selector:
+ * the mapping is held against its own shape, at its place in the file, so that each message
+ * names the whole path. None when the shape there is not known.
+ */
+function mappingIssues(schema: z.ZodType, path: Path, value: unknown): z.core.$ZodIssue[] {
+  const mapping = mappingOf(schemaAt(schema, path));
+  if (mapping === undefined || path.some((part) => typeof part !== 'string')) return [];
+  let wrapped = mapping as z.ZodType;
+  for (const part of [...path].reverse()) wrapped = z.object({ [part as string]: wrapped });
+  const result = wrapped.safeParse(value);
+  return result.success ? [] : result.error.issues;
+}
+
+/** The mapping a schema stands for: itself, or the one form of a union that is a mapping. */
+function mappingOf(schema: unknown): unknown {
+  const plain = unwrapped(schema);
+  const def = defOf(plain) as (Def & { options?: unknown[] }) | undefined;
+  if (def?.type === 'union') return def.options?.find((option) => shapeOf(unwrapped(option)) !== undefined);
+  return shapeOf(plain) !== undefined ? plain : undefined;
+}
+
 /** The schema of the value at a path, into mappings and lists, with the `optional` around it kept. */
 function schemaAt(schema: z.ZodType, path: Path): unknown {
   let current: unknown = schema;
   for (const part of path) {
     current = unwrapped(current);
+    if (typeof part === 'string' && defOf(current)?.type === 'union') current = mappingOf(current);
     if (typeof part === 'number') {
       const def = defOf(current);
       if (def?.type !== 'array') return undefined;
@@ -269,7 +302,7 @@ function schemaAt(schema: z.ZodType, path: Path): unknown {
 
 /** The keys a mapping may have, when the schema at that path is a plain object. */
 function knownKeys(schema: z.ZodType, path: Path): string[] {
-  const shape = shapeOf(unwrapped(schemaAt(schema, path)));
+  const shape = shapeOf(mappingOf(schemaAt(schema, path)));
   return shape ? Object.keys(shape) : [];
 }
 

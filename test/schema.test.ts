@@ -34,3 +34,17 @@ test('a schema passes a good record and refuses a bad one', () => {
   expect(check('apps', { name: 'API', in: 'shop', kind: 'wizard' })).toBe(false);
   expect(check('apps', { name: 'API' })).toBe(false);
 });
+
+test('the schema of a rule passes a good rule of each form and refuses a bad one', () => {
+  expect(check('rules', { name: 'Only the API writes orders', each: { to: { id: 'orders' }, access: ['write', 'read-write'] }, must: { from: { id: 'api' } }, debt: ['worker-writes-orders'] })).toBe(true);
+  expect(check('rules', { name: 'No browser reaches outside', never: { from: { kind: 'browser' }, to: { external: true, not: { owner: 'none' } }, via: 'any' } })).toBe(true);
+  expect(check('rules', { name: 'People pass the gateway', each: { way: { from: { kind: 'people' }, to: { kind: ['database', 'files'] } } }, must: { through: { within: 'gateway' } } })).toBe(true);
+  expect(check('rules', { name: 'Red', never: { from: { not: { colour: 'red' } } } })).toBe(false);
+  expect(check('rules', { name: 'Wizards', never: { kind: 'wizard' } })).toBe(false);
+  expect(check('rules', { name: 'From a to anywhere', never: { way: { from: { id: 'a' } } } })).toBe(true);
+  expect(check('rules', { name: 'No end', never: { way: {} } })).toBe(false);
+  expect(check('rules', { name: 'A way deep in a selector', never: { from: { way: { to: { id: 'a' } } } } })).toBe(false);
+  expect(check('rules', { name: 'Through in never', never: { through: { id: 'a' } } })).toBe(false);
+  expect(check('rules', { never: { id: 'a' } })).toBe(false);
+  expect(check('rules', { name: 'Empty', never: {} })).toBe(false);
+});

@@ -1,4 +1,8 @@
-/** The twelve kinds of record, in the order the page shows them: a folder each, with its words. */
+/**
+ * The thirteen kinds of record, a folder each, with its words. The first twelve are the
+ * architecture, in the order the page shows them; the thirteenth, `rules`, holds the rules of a
+ * team's own, which choose among the other twelve. The page shows no rule.
+ */
 export const KINDS = [
   { folder: 'people', one: 'person', many: 'people' },
   { folder: 'systems', one: 'system', many: 'systems' },
@@ -12,6 +16,7 @@ export const KINDS = [
   { folder: 'features', one: 'feature', many: 'features' },
   { folder: 'flows', one: 'flow', many: 'flows' },
   { folder: 'data', one: 'data record', many: 'data records' },
+  { folder: 'rules', one: 'rule', many: 'rules' },
 ] as const;
 
 /** What each folder's records are called in a message, with their article. */
@@ -28,6 +33,7 @@ export const NOUNS: Record<string, string> = {
   features: 'a feature',
   flows: 'a flow',
   data: 'data',
+  rules: 'a rule',
 };
 
 /** What one record of each folder is called where the record itself is meant: "`colour` is not a key of a data record". */

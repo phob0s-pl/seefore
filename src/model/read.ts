@@ -29,15 +29,23 @@ export function readModel(files: readonly SourceFile[]): ModelRead {
   const marker = sorted.find((file) => file.path === MARKER_FILE);
   if (!marker) {
     problems.push(error(MARKER_FILE, START, 'marker-missing', `There is no ${quote(MARKER_FILE)} here, so this is not a seefore model.`));
-    return { records, problems, counts: runRules([], false, false).counts };
+    return { records, problems, counts: runRules([], false, false).counts, rulings: [] };
   }
   const read = readMarker(marker.text);
   problems.push(...read.problems);
   const result = (): ModelRead => {
-    // The rules run only on a model that has been read as format 1. A count needs every file read.
-    const whole = !problems.some((problem) => problem.severity === 'error') && entries.every((entry) => entry.ok);
+    // The rules run only on a model that has been read as format 1. A count, and the judging of
+    // the rules in `rules/`, need every file outside `rules/` read: a faulty rule leaves the rest judged.
+    const outside = (file: string) => !file.startsWith('rules/');
+    const whole = !problems.some((problem) => problem.severity === 'error' && outside(problem.file)) && entries.every((entry) => entry.ok || !outside(entry.file));
     const ruled = runRules(entries, whole, read.readable);
-    return { ...(read.name !== undefined ? { name: read.name } : {}), records, problems: [...problems, ...ruled.problems].sort(compareProblems), counts: ruled.counts };
+    return {
+      ...(read.name !== undefined ? { name: read.name } : {}),
+      records,
+      problems: [...problems, ...ruled.problems].sort(compareProblems),
+      counts: ruled.counts,
+      rulings: ruled.rulings,
+    };
   };
   if (!read.readable) return result();
 
