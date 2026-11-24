@@ -69,6 +69,7 @@ and B3 use are in `research/paths.md`, out of Git.
 | B6 | A click on the diagram | A click on a box or a line opens a panel on the field that says what it is, with a button to its page | Opus |
 | B7 | The highlight on the diagram | The mouse over a box or a line fades all but it and what it joins, and a pick holds the same | Opus |
 | B8 | A focus on the diagram | At Containers one system, at Components one app, opened, with what it has a line with as closed boxes | Opus |
+| B9 | The store rule of the layout | A queue or a topic stands between those who write it and those who read it | Main session builds, Opus reviews |
 
 ### 3 Flows and features
 
