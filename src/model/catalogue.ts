@@ -23,6 +23,8 @@ export type Catalogue = {
   connections: ModelRecord[];
   technologies: ModelRecord[];
   owners: ModelRecord[];
+  features: ModelRecord[];
+  data: ModelRecord[];
   /** What a thing is in, upwards. */
   chain: (id: string) => ModelRecord[];
   /** What is directly inside a thing. */
@@ -153,6 +155,8 @@ export function catalogueOf(records: readonly ModelRecord[]): Catalogue {
     connections,
     technologies: of('technologies'),
     owners: of('owners'),
+    features: of('features'),
+    data: of('data'),
     chain,
     inside,
     from: ends('from'),

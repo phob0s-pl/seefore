@@ -6,13 +6,14 @@ import { iconOf, typeWords } from './kinds.tsx';
 import type { ModelState } from './shell.tsx';
 import { EmptyState, GridRow, IconTile, Panel, Pill, RowList, RowListHeading, useTitle } from './ui.tsx';
 
-/** The five tabs of Models, in their order: the address of each list and its title. */
+/** The six tabs of Models, in their order: the address of each list and its title. */
 export const TABS = [
   { to: '/models', title: 'Software' },
   { to: '/actors', title: 'Actors' },
   { to: '/connections', title: 'Connections' },
   { to: '/technologies', title: 'Technologies' },
   { to: '/owners', title: 'Owners' },
+  { to: '/data', title: 'Data' },
 ] as const;
 
 /** The folders whose records have a colour of their own: the things. */
@@ -163,8 +164,14 @@ export function OwnersList() {
   return <ModelsPage>{(catalogue) => <Names records={catalogue.owners} catalogue={catalogue} label="Owners" empty="No owners yet." />}</ModelsPage>;
 }
 
+/** The Data tab: the name of each data record. */
+export function DataList() {
+  useTitle('Models');
+  return <ModelsPage>{(catalogue) => <Names records={catalogue.data} catalogue={catalogue} label="Data" empty="No data yet." />}</ModelsPage>;
+}
+
 /** The page of an address whose id names no record of its kind, with a link back to its list. */
-export function Missing({ list }: { list: (typeof TABS)[number] }) {
+export function Missing({ list }: { list: { to: string; title: string } }) {
   return (
     <EmptyState title="No such record.">
       <Link className="text-link" to={list.to}>

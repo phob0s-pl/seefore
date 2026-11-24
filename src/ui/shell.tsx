@@ -1,9 +1,11 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { Boxes, Check, ChevronDown, ChevronLeft, ChevronRight, GitBranch, Waypoints } from 'lucide-react';
+import { Boxes, Check, ChevronDown, ChevronLeft, ChevronRight, GitBranch, Puzzle, Waypoints } from 'lucide-react';
 import { Link, NavLink, Outlet, useLocation, useMatch, useNavigate, useSearchParams } from 'react-router-dom';
 import type { ModelAnswer } from '../model/answer.ts';
 import { catalogueOf } from '../model/catalogue.ts';
 import type { Catalogue } from '../model/catalogue.ts';
+import { travelOf } from '../model/travel.ts';
+import type { Travel } from '../model/travel.ts';
 import { DEPTHS, depthOf, focusesOf, focusFor } from '../model/view.ts';
 import type { Depth, Focus } from '../model/view.ts';
 import { TABS } from './models.tsx';
@@ -14,7 +16,7 @@ import { Button, GlassGroup } from './ui.tsx';
  * the records ask of it, worked out once, or why there is none. On the page of a flow, the
  * places the page fills itself: the sidebar under the name, and the top bar after the arrows.
  */
-export type ModelState = { answer?: ModelAnswer; catalogue?: Catalogue; failed?: string; slots?: Slots };
+export type ModelState = { answer?: ModelAnswer; catalogue?: Catalogue; travel?: Travel; failed?: string; slots?: Slots };
 
 /** The places of the shell that the page of a flow fills: its steps and its breadcrumb. */
 export type Slots = { steps: HTMLElement | null; crumbs: HTMLElement | null };
@@ -112,7 +114,11 @@ export function Shell() {
   const [params] = useSearchParams();
   const depth = depthOf(params.get('depth'));
   const [model, setModel] = useState<{ answer?: ModelAnswer; failed?: string }>({});
-  const state = useMemo((): ModelState => (model.answer ? { ...model, catalogue: catalogueOf(model.answer.records) } : model), [model]);
+  const state = useMemo((): ModelState => {
+    if (model.answer === undefined) return model;
+    const catalogue = catalogueOf(model.answer.records);
+    return { ...model, catalogue, travel: travelOf(model.answer.records, catalogue) };
+  }, [model]);
   // The focus the address names, and the choices of the depth: none at Systems.
   const records = model.answer?.records;
   const wanted = params.get('focus');
@@ -170,7 +176,10 @@ export function Shell() {
               <Waypoints />
               <span className="nav-text">Architecture</span>
             </NavLink>
-            {/* Features stands here, before Flows. */}
+            <NavLink to="/features" className="nav-link">
+              <Puzzle />
+              <span className="nav-text">Features</span>
+            </NavLink>
             <NavLink to="/flows" className="nav-link">
               <GitBranch />
               <span className="nav-text">Flows</span>

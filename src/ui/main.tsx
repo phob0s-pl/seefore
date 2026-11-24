@@ -16,12 +16,13 @@ import './records.css';
 import './flow.css';
 import { Architecture } from './architecture.tsx';
 import { FlowPage } from './flow.tsx';
+import { FeaturePage, FeaturesList } from './features.tsx';
 import { FlowsList } from './flows.tsx';
-import { ActorsList, ConnectionsList, OwnersList, SoftwareList, TABS, TechnologiesList } from './models.tsx';
+import { ActorsList, ConnectionsList, DataList, OwnersList, SoftwareList, TABS, TechnologiesList } from './models.tsx';
 import { RecordPage } from './record.tsx';
 import { Shell } from './shell.tsx';
 
-const [software, actors, connections, technologies, owners] = TABS;
+const [software, actors, connections, technologies, owners, data] = TABS;
 
 const root = document.getElementById('root');
 if (root !== null) {
@@ -31,6 +32,8 @@ if (root !== null) {
         <Routes>
           <Route element={<Shell />}>
             <Route index element={<Architecture />} />
+            <Route path="features" element={<FeaturesList />} />
+            <Route path="features/:id" element={<FeaturePage />} />
             <Route path="flows" element={<FlowsList />} />
             <Route path="flows/:id" element={<FlowPage />} />
             <Route path="models" element={<SoftwareList />} />
@@ -43,6 +46,8 @@ if (root !== null) {
             <Route path="technologies/:id" element={<RecordPage tab={technologies} />} />
             <Route path="owners" element={<OwnersList />} />
             <Route path="owners/:id" element={<RecordPage tab={owners} />} />
+            <Route path="data" element={<DataList />} />
+            <Route path="data/:id" element={<RecordPage tab={data} />} />
           </Route>
         </Routes>
       </BrowserRouter>

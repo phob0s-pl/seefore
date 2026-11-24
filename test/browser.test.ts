@@ -418,3 +418,41 @@ test.skipIf(!HAS_CHROME).concurrent(
     }),
   20_000,
 );
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME ? "the list of features opens a feature's page, and a flow on it opens the flow" : `skipped: there is no Chrome at ${CHROME}`,
+  () =>
+    inChrome(async (send, address) => {
+      await send('Page.navigate', { url: `${address}/features` });
+      expect(await waitFor(send, `document.querySelector('a[href="/features/ordering"]')?.innerText.replace(/\\s+/g, ' ')`)).toBe('Ordering 1 flow');
+      await click(send, await centreOf(send, 'a[href="/features/ordering"]'));
+      const page = `location.pathname === '/features/ordering' && document.title === 'Ordering · seefore' && [...document.querySelectorAll('.section-label')].map((label) => label.textContent)`;
+      expect(await waitFor(send, page)).toEqual(['Flows', 'From its flows', 'Data']);
+      expect(await waitFor(send, `[...document.querySelectorAll('.facts dt')].map((label) => label.textContent).join()`)).toBe('For');
+      await click(send, await centreOf(send, 'section[aria-label="Flows"] a[href="/flows/placing-an-order"]'));
+      expect(await waitFor(send, `document.title === 'Placing an order · seefore' && location.pathname`)).toBe('/flows/placing-an-order');
+    }),
+  20_000,
+);
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME ? "the Data tab opens a data record's page with its fields, and a step on it opens the flow on that step" : `skipped: there is no Chrome at ${CHROME}`,
+  () =>
+    inChrome(async (send, address) => {
+      await send('Page.navigate', { url: `${address}/data` });
+      await click(send, await centreOf(send, 'a[href="/data/order-details"]'));
+      const page = `location.pathname === '/data/order-details' && document.querySelector('section[aria-label="Connections"]') !== null && {
+        tab: document.querySelector('.models-tabs a.active')?.textContent,
+        fields: [...document.querySelectorAll('section[aria-label="Fields"] tr')].map((row) => row.innerText.replace(/\\s+/g, ' ').trim()),
+        ways: [...document.querySelectorAll('section[aria-label="Connections"] td')].map((cell) => cell.textContent),
+      }`;
+      expect(await waitFor(send, page)).toEqual({
+        tab: 'Data',
+        fields: ['items What is bought, and how many of each', 'address'],
+        ways: ['Customer to Order API', 'Order API to Orders'],
+      });
+      await click(send, await centreOf(send, 'section[aria-label="Steps"] a[href="/flows/placing-an-order#saves"]'));
+      expect(await waitFor(send, `location.hash === '#saves' && document.querySelector('[aria-current="step"]')?.getAttribute('data-step')`)).toBe('saves');
+    }),
+  20_000,
+);
