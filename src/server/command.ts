@@ -3,13 +3,14 @@ import { readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import type { ModelAnswer } from '../model/answer.ts';
 import { fileURLToPath } from 'node:url';
-import { readFolder, readTexts, writeRenamed } from './files.ts';
+import { readFolder, readTexts, removeFiles, writeRenamed } from './files.ts';
 import { guideText } from '../model/guide.ts';
 import { listLines } from '../model/list.ts';
 import { HOST, startServer } from './server.ts';
-import { countLine, rulingsLine } from '../model/counts.ts';
+import { countLines, rulingsLine } from '../model/counts.ts';
 import { readRenames, renameRecords } from '../model/rename.ts';
 import type { Rename, RenameAccount } from '../model/rename.ts';
+import { removeRecords } from '../model/remove.ts';
 import { ARCHITECTURE, init } from './init.ts';
 
 /** What the command was asked to do. */
@@ -24,7 +25,7 @@ export const PORT = 4400;
 /** The built page, found from this file, so that the command works from any folder. */
 const PAGE = fileURLToPath(new URL('../../dist/ui/', import.meta.url));
 
-const USAGE = 'run it as "seefore <verb> [<options>]", the verb one of init, check, list, guide, rename and --server; see seefore --help';
+const USAGE = 'run it as "seefore <verb> [<options>]", the verb one of init, check, list, guide, rename, remove and --server; see seefore --help';
 
 const RENAME_USAGE = 'run it as "seefore rename <old> <new> [--workdir=<dir>] [--dry-run]" or "seefore rename --list=<file> [--workdir=<dir>] [--dry-run]"';
 
@@ -89,6 +90,16 @@ const VERBS: readonly Verb[] = [
       ['--list=<file>', 'A file of such pairs, a pair a line, in place of <old> <new>'],
       WORKDIR,
       ['--dry-run', 'Prints what it would do and writes nothing'],
+    ],
+  },
+  {
+    verb: 'remove',
+    call: 'seefore remove <id>... [--workdir=<dir>] [--dry-run]',
+    what: 'Removes records, and refuses while another record names one of them',
+    options: [
+      ['<id>...', 'The records that go, each by its id, or by its folder and id, as stores/store-orders'],
+      WORKDIR,
+      ['--dry-run', 'Prints what it would do and removes nothing'],
     ],
   },
   {
@@ -190,6 +201,7 @@ export async function run(args: readonly string[], cwd: string, io: Io): Promise
   const verb = args.find((arg) => !arg.startsWith('--'));
   if (verb === 'init') return init(args, cwd, io, fail);
   if (verb === 'rename') return rename(args, cwd, io, fail);
+  if (verb === 'remove') return remove(args, cwd, io, fail);
   if (verb === 'guide') return guide(args, io, fail);
   if (verb === 'list') return list(args, cwd, io, fail);
   const options = readOptions(args, cwd);
@@ -262,7 +274,60 @@ async function list(args: readonly string[], cwd: string, io: Io, fail: (message
   const { folders, ...rest } = asked;
   const said = listLines(model, { ...rest, ...(folders.length > 0 ? { folders } : {}) });
   if ('error' in said) return fail(said.error);
+  // A model with nothing to list says so: a skill must tell an empty model from one that is not there.
+  if (said.lines.length === 0) io.out(folders.length === 1 && folders[0] === 'changes' ? 'No changes yet.' : 'No records yet.');
   for (const line of said.lines) io.out(line);
+  // A file with an error is no record, so no line lists it: say which, or a reader takes the list for whole.
+  const listed = (file: string) => folders.length === 0 || folders.some((each) => file.startsWith(`${each}/`));
+  const left = [...new Set(model.problems.filter((problem) => problem.severity === 'error' && problem.file.includes('/') && listed(problem.file) && !model.records.some((record) => record.file === problem.file)).map((problem) => problem.file))];
+  const laid = asked.change !== undefined || (folders.length === 1 && folders[0] === 'changes');
+  if (left.length > 0 && !laid) io.out(`Not listed, since ${left.length === 1 ? 'it has' : 'they have'} an error: ${left.join(', ')}. \`seefore check\` says what.`);
+  return 0;
+}
+
+/**
+ * Removes records: takes their files away and prints each. It refuses, and removes nothing,
+ * while a record that stays names one of them. With `--dry-run` it prints the same and removes nothing.
+ */
+async function remove(args: readonly string[], cwd: string, io: Io, fail: (message: string) => number): Promise<number> {
+  const ids: string[] = [];
+  let workdir: string | undefined;
+  let dryRun = false;
+  let verb = false;
+  for (const arg of args) {
+    if (arg === 'remove' && !verb) verb = true;
+    else if (arg === '--dry-run') dryRun = true;
+    else if (arg.startsWith('--workdir=')) workdir = arg.slice('--workdir='.length);
+    else if (arg.startsWith('--')) return fail(`unknown option "${arg}"`);
+    else ids.push(arg);
+  }
+  if (workdir === '') return fail('give a folder, as in --workdir=<dir>');
+  if (ids.length === 0) return fail('run it as "seefore remove <id>... [--workdir=<dir>] [--dry-run]"');
+  const folder = findModel(cwd, workdir);
+  let files: Awaited<ReturnType<typeof readTexts>>;
+  try {
+    files = await readTexts(folder);
+  } catch {
+    return fail(`cannot read the folder "${folder}"`);
+  }
+  if (!existsSync(join(folder, 'seefore.yaml'))) return fail(`"${folder}" is not a model: it has no seefore.yaml`);
+  const done = removeRecords(files, ids);
+  if ('refusals' in done) {
+    for (const refusal of done.refusals) io.err(`seefore: ${refusal}`);
+    io.err('seefore: nothing is removed');
+    return 1;
+  }
+  for (const file of done.files) io.out(file);
+  io.out(`${done.files.length} ${done.files.length === 1 ? 'record' : 'records'} removed.`);
+  if (dryRun) {
+    io.out('A dry run: nothing is removed.');
+    return 0;
+  }
+  try {
+    await removeFiles(folder, done.files);
+  } catch {
+    return fail(`cannot remove the files in "${folder}"`);
+  }
   return 0;
 }
 
@@ -345,12 +410,10 @@ function check(model: ModelAnswer, json: boolean, io: Io): number {
   }
   if (model.problems.length > 0) io.out('');
   const many = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`;
-  const summary = model.problems.length === 0 ? 'No problem of form.' : `${many(errors, 'error')}, ${many(warnings, 'warning')}.`;
+  // With no problem it says what was held, so that nobody takes the check for a look at the keys alone.
+  const summary = model.problems.length === 0 ? 'No problem: the keys are in form, every id that is named is there, and so is every path of `source`.' : `${many(errors, 'error')}, ${many(warnings, 'warning')}.`;
   io.out(`${many(model.records.length, 'record')} read. ${summary}`);
-  for (const count of model.counts) {
-    const line = countLine(count);
-    if (line !== undefined) io.out(line);
-  }
+  for (const line of countLines(model.counts)) io.out(line);
   const rulings = rulingsLine(model.rulings);
   if (rulings !== undefined) io.out(rulings);
   return errors > 0 ? 1 : 0;

@@ -20,7 +20,7 @@ import type { Position } from './problem.ts';
 export type SourceFile = { path: string; text: string };
 
 /** What the reading may ask of the disk: whether a path of `source` is there. With none, `source` is held by its form alone. */
-export type Asked = { exists?: (path: string) => boolean };
+export type Asked = { exists?: (path: string) => boolean; folder?: (path: string) => boolean };
 
 /**
  * Reads a model from the texts of its YAML files. Each file is checked by itself, so a broken
@@ -48,7 +48,7 @@ export function readModel(files: readonly SourceFile[], asked: Asked = {}): Mode
     const whole = !problems.some((problem) => problem.severity === 'error' && outside(problem.file)) && entries.every((entry) => entry.ok || !outside(entry.file));
     const ruled = runRules(entries, whole, read.readable);
     // Each change that reads is held alone: against the model as it is today, and with the model as it would be.
-    const today = [...problems, ...ruled.problems, ...(asked.exists !== undefined ? sourceGone(entries, asked.exists) : [])];
+    const today = [...problems, ...ruled.problems, ...(asked.exists !== undefined ? sourceGone(entries, asked.exists, asked.folder) : [])];
     const held = { files: sorted, entries, problems: today, read: (files: readonly SourceFile[]) => readModel(files, asked) };
     const changed: Problem[] = [];
     const laid: Laid[] = [];

@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -36,7 +37,7 @@ test('a folder that is not there, or no --server, ends with 1 and one line', asy
 
   lines.length = 0;
   expect(await run(['--workdir=nowhere'], '/here', io)).toBe(1);
-  expect(lines).toEqual(['seefore: run it as "seefore <verb> [<options>]", the verb one of init, check, list, guide, rename and --server; see seefore --help']);
+  expect(lines).toEqual(['seefore: run it as "seefore <verb> [<options>]", the verb one of init, check, list, guide, rename, remove and --server; see seefore --help']);
 });
 
 test('a folder with no seefore.yaml is not a model', async () => {
@@ -238,7 +239,7 @@ test('every verb finds the model: the folder given, else this folder, else archi
 
   const checked = await runIn(folder, ['check']);
   expect(checked.code).toBe(0);
-  expect(checked.out[0]).toBe('0 records read. No problem of form.');
+  expect(checked.out[0]).toBe('0 records read. No problem: the keys are in form, every id that is named is there, and so is every path of `source`.');
   await mkdir(join(architecture, 'apps'));
   await writeFile(join(architecture, 'apps/app-api.yaml'), 'name: API\nin: system-shop\n');
   await mkdir(join(architecture, 'systems'));
@@ -252,7 +253,7 @@ test('--help says the verbs, a line each, and the options of one', async () => {
   expect(all.code).toBe(0);
   expect(all.err).toEqual([]);
   const verbs = all.out.filter((line) => line.startsWith('  ')).map((line) => line.trim().split(' ')[0]);
-  expect(verbs).toEqual(['init', 'check', 'list', 'guide', 'rename', '--server']);
+  expect(verbs).toEqual(['init', 'check', 'list', 'guide', 'rename', 'remove', '--server']);
 
   const check = await runIn('/here', ['check', '--help']);
   expect(check.code).toBe(0);
@@ -315,5 +316,55 @@ test('guide prints the words of the format for a folder and for a skill, and the
   expect((await lines('guide')).out.some((line) => line.trim().startsWith('review '))).toBe(true);
   const wrong = await lines('guide', 'nothing');
   expect([wrong.code, wrong.out, wrong.err.length]).toEqual([1, [], 1]);
+});
+
+test('list says so when there is nothing to list, so that an empty model is told from one that is not there', async () => {
+  const folder = await mkdtemp(join(tmpdir(), 'seefore-'));
+  const lines = async (...args: string[]) => {
+    const out: string[] = [];
+    const err: string[] = [];
+    const code = await run(args, folder, { out: (line) => out.push(line), err: (line) => err.push(line) });
+    return { code, out, err };
+  };
+  // No model: one line of what is wrong, and 1.
+  const none = await lines('list');
+  expect([none.code, none.out, none.err.length]).toEqual([1, [], 1]);
+  // A model with no record yet: it is there, and it says that it is empty.
+  expect((await lines('init', '--name=Shop')).code).toBe(0);
+  expect(await lines('list')).toEqual({ code: 0, out: ['No records yet.'], err: [] });
+  expect(await lines('list', 'apps')).toEqual({ code: 0, out: ['No records yet.'], err: [] });
+  expect(await lines('list', 'changes')).toEqual({ code: 0, out: ['No changes yet.'], err: [] });
+});
+
+test('remove takes records away, and refuses while a record that stays names one of them', async () => {
+  const folder = await mkdtemp(join(tmpdir(), 'seefore-remove-'));
+  const write = async (path: string, text: string) => {
+    await mkdir(join(folder, path, '..'), { recursive: true });
+    await writeFile(join(folder, path), text);
+  };
+  await write('seefore.yaml', 'format: 1\nname: Shop\n');
+  await write('systems/system-shop.yaml', 'name: Shop\n');
+  await write('apps/app-api.yaml', 'name: API\nin: system-shop\n');
+  await write('stores/store-orders.yaml', 'name: Orders\nin: system-shop\n');
+  await write('stores/store-broken.yaml', 'name: Pg: the database\nin: system-shop\n');
+  await write('connections/connection-api-saves-orders.yaml', 'from: app-api\nto: store-orders\naccess: write\n');
+  // The list names the file it could not list.
+  expect((await runLines(['list', 'stores', `--workdir=${folder}`])).out).toEqual(['stores/store-orders  Orders  in system-shop', 'Not listed, since it has an error: stores/store-broken.yaml. `seefore check` says what.']);
+  // A store that a connection names does not go alone.
+  const refused = await runLines(['remove', 'store-orders', `--workdir=${folder}`]);
+  expect(refused.code).toBe(1);
+  expect(refused.err[0]).toBe('seefore: `store-orders` stays: connections/connection-api-saves-orders.yaml:2:5 names it');
+  expect(refused.err.slice(1)).toEqual(['seefore: remove what names it in the same call, or change it first', 'seefore: nothing is removed']);
+  expect(existsSync(join(folder, 'stores/store-orders.yaml'))).toBe(true);
+  // A dry run says what would go; with its connection the store goes, and a file that does not parse goes by its folder and id.
+  expect((await runLines(['remove', 'store-orders', 'connection-api-saves-orders', '--dry-run', `--workdir=${folder}`])).out).toEqual(['connections/connection-api-saves-orders.yaml', 'stores/store-orders.yaml', '2 records removed.', 'A dry run: nothing is removed.']);
+  expect(await runLines(['remove', 'store-orders', 'connection-api-saves-orders', 'stores/store-broken', `--workdir=${folder}`])).toEqual({
+    code: 0,
+    out: ['connections/connection-api-saves-orders.yaml', 'stores/store-broken.yaml', 'stores/store-orders.yaml', '3 records removed.'],
+    err: [],
+  });
+  expect(existsSync(join(folder, 'stores/store-orders.yaml'))).toBe(false);
+  expect((await runLines(['check', `--workdir=${folder}`])).out[0]).toMatch(/^2 records read\. No problem/);
+  expect((await runLines(['remove', 'app-web', `--workdir=${folder}`])).err).toEqual(['seefore: there is no record `app-web`', 'seefore: nothing is removed']);
 });
 

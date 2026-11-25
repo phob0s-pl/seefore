@@ -2,6 +2,7 @@ import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test } from 'vitest';
+import { listLines } from '../src/model/list.ts';
 import { readModel } from '../src/model/read.ts';
 import type { SourceFile } from '../src/model/read.ts';
 import { renameRecords } from '../src/model/rename.ts';
@@ -74,3 +75,37 @@ test('on the disk a path is counted from the folder that holds the model, and a 
   expect('files' in renamed && renamed.files.find((each) => each.path === 'apps/app-backend.yaml')?.text).toBe('name: API\nin: system-shop\nsource: [api/main.go, api/]\n');
   expect('files' in renamed && renamed.files.find((each) => each.path === 'components/component-cart.yaml')?.text).toBe('name: Cart\nin: app-backend\nsource: [api/cart/]\n');
 });
+
+test('the check names what a list holds, and says that a key of one value may only be that', () => {
+  // Found in the first round of the skill `model`: "Take ids out of `source`", and "`opens` must be one of `to`".
+  const fixes = (...files: SourceFile[]) => readModel([...SHOP, ...files]).problems.map((problem) => [problem.rule, problem.message, problem.fix]);
+  expect(fixes(file('apps/app-web', 'name: Web\nin: system-shop\nsource: [a, b, c, d]\n'))).toEqual([
+    ['value-too-big', '`source` is too long a list: it may have at most 3.', 'Take paths out of `source` until it has at most 3.'],
+  ]);
+  expect(fixes(file('apps/app-web', 'name: Web\nin: system-shop\nsource: []\n')).map((each) => each[2])).toEqual(['Give `source` at least one path, or delete the key.']);
+  expect(fixes(file('connections/connection-web-calls-api', 'from: app-api\nto: app-api\nopens: from\n')).map((each) => each[1])).toEqual(['`opens` may only be `to`. Otherwise take the key out.']);
+  expect(fixes(file('systems/system-bank', 'name: Bank\nexternal: yes\n')).map((each) => each[1])).toEqual(['`external` may only be `true`. Otherwise take the key out.']);
+  // A part may talk to its own copies, and two connections may join the same two parts, one for each purpose.
+  expect(fixes(file('connections/connection-api-syncs-api', 'from: app-api\nto: app-api\nname: Syncs with its copies\n'), file('connections/connection-api-reads-orders', 'from: app-api\nto: store-orders\naccess: read\nname: Reads orders\n'), file('connections/connection-api-writes-orders', 'from: app-api\nto: store-orders\naccess: write\nname: Saves orders\n'))).toEqual([]);
+});
+
+test('a connection says where the code shows it, and its path is held as the others are', () => {
+  const saves = file('connections/connection-api-saves-orders', 'from: app-api\nto: store-orders\naccess: write\nname: Saves orders\nsource: [api/orders.go]\n');
+  expect(readModel([...SHOP, saves]).problems).toEqual([]);
+  const gone = readModel([...SHOP, saves], { exists: (path) => path !== 'api/orders.go' });
+  expect(gone.problems.map((problem) => [problem.rule, problem.severity, problem.file, problem.message])).toEqual([
+    ['source-gone', 'warning', 'connections/connection-api-saves-orders.yaml', '`source` names `api/orders.go`, which is not there.'],
+  ]);
+  // A connection is shown by a file: a folder that is there is a warning of its own, and on a part a folder is right.
+  const wide = file('connections/connection-api-reads-orders', 'from: app-api\nto: store-orders\naccess: read\nsource: [api/]\n');
+  const folders = readModel([...SHOP, wide], { exists: () => true, folder: (path) => path.endsWith('/') });
+  expect(folders.problems.map((problem) => [problem.rule, problem.severity, problem.file, problem.message, problem.fix])).toEqual([
+    ['source-folder', 'warning', 'connections/connection-api-reads-orders.yaml', '`source` of a connection names the folder `api/`: a folder shows no connection.', 'Name the file in it where the code or config of `from` names `to`, or take the path out of `source`.'],
+  ]);
+  // The list shows it at the end of the connection's line, and a key of one value says how to mend it.
+  const listed = listLines(readModel([...SHOP, saves]), { folders: ['connections'] });
+  expect('lines' in listed && listed.lines).toEqual(['connections/connection-api-saves-orders  Saves orders  app-api -> store-orders  api/orders.go']);
+  const opens = readModel([...SHOP, file('connections/connection-api-calls-api', 'from: app-api\nto: app-api\nopens: from\n')]).problems;
+  expect(opens.map((problem) => problem.fix)).toEqual(['Write `to`, or delete the key.']);
+});
+

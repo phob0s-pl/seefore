@@ -42,7 +42,7 @@ export const EXAMPLES: Readonly<Record<string, { path: string; text: string }>> 
   },
   connections: {
     path: 'connections/connection-customer-places-order.yaml',
-    text: ['from: person-customer', 'to: app-order-api', 'via: [infra-gateway]', 'name: Places an order'].join('\n'),
+    text: ['from: person-customer', 'to: app-order-api', 'via: [infra-gateway]', 'name: Places an order', 'only: when the shop is open', 'source: [services/orders/routes.ts]'].join('\n'),
   },
   infrastructure: { path: 'infrastructure/infra-gateway.yaml', text: ['name: Gateway', 'in: system-shop', 'description: Takes every request from outside and passes it on.'].join('\n') },
   owners: { path: 'owners/owner-shop-team.yaml', text: ['name: Shop team', 'description: The developers who build and run the shop.'].join('\n') },
@@ -186,7 +186,7 @@ function wrap(words: string, indent: number): string[] {
 }
 
 /** What a guide has told so far: whether a selector is named, so that its section follows, and where each mapping was told, by the keys that hold it. */
-type Told = { selector: boolean; mappings: Map<object, string> };
+type Told = { selector: boolean; mappings: Map<object, string>; shared?: { keys: Map<string, string>; folder: string } };
 
 /**
  * The keys of a mapping, each with whether it is needed and what it holds, and the keys of a
@@ -197,10 +197,20 @@ function keyLines(shape: Record<string, unknown>, indent: number, told: Told, ab
   const lines: string[] = [];
   for (const key of Object.keys(shape)) {
     const schema = shape[key];
-    lines.push(`${' '.repeat(indent)}${key} (${defOf(schema)?.type === 'optional' ? 'may be left out' : 'needed'})`);
+    const head = `${' '.repeat(indent)}${key} (${defOf(schema)?.type === 'optional' ? 'may be left out' : 'needed'})`;
     const said = described(schema) ?? '';
-    lines.push(...wrap(said, indent + 2));
     const inner = mappingIn(schema);
+    // In the guide of a skill, a key that an earlier folder told in the same words is told by that folder's name.
+    if (told.shared !== undefined && above.length === 0 && inner === undefined) {
+      const before = told.shared.keys.get(`${key}\n${said}`);
+      if (before !== undefined) {
+        lines.push(`${head}: as in ${before}.`);
+        continue;
+      }
+      told.shared.keys.set(`${key}\n${said}`, told.shared.folder);
+    }
+    lines.push(head);
+    lines.push(...wrap(said, indent + 2));
     const keys = shapeOf(inner);
     if (keys === undefined) continue;
     const where = [key, ...above].map((each) => `\`${each}\``).join(' in ');
@@ -225,22 +235,25 @@ function keyLines(shape: Record<string, unknown>, indent: number, told: Told, ab
 }
 
 /** What the id of a record of a folder is. */
-function idLine(folder: string): string {
+function idLine(folder: string, where = true): string {
   const example = EXAMPLES[folder]?.path ?? `${folder}/<id>.yaml`;
   const id = example.slice(folder.length + 1, -'.yaml'.length);
   if (folder === 'changes') return `Its id is its own, with no word of a folder before it: the name of its file, as \`${id}\` in ${example}.`;
   if (folder === 'reviews') return `It is named as its change: the review of changes/${id}.yaml is ${example}. Its id is that of the change.`;
-  return `Its id begins with \`${WORDS[folder]}-\` and says what it is, as \`${id}\`: the name of its file, ${example}.`;
+  return `Its id begins with \`${WORDS[folder]}-\` and says what it is, as \`${id}\`: the name of its file, ${example}${where ? ", in the model's folder, which is the one that holds `seefore.yaml`" : ''}.`;
 }
 
-/** The guide of one folder: what a record is, its id, its keys and one example file. */
-function folderGuide(folder: string): string {
+/**
+ * The guide of one folder: what a record is, its id, its keys and one example file. In the
+ * guide of a skill `shared` holds the keys the folders before it told, each told once.
+ */
+function folderGuide(folder: string, shared?: Map<string, string>): string {
   const kind = KINDS.find((each) => each.folder === folder);
   const shape = SHAPES[folder as keyof typeof SHAPES];
   const example = EXAMPLES[folder];
-  const told: Told = { selector: false, mappings: new Map() };
+  const told: Told = { selector: false, mappings: new Map(), ...(shared !== undefined ? { shared: { keys: shared, folder } } : {}) };
   const keys = keyLines(shapeOf(shape) ?? {}, 2, told);
-  const lines = [`# ${folder}: one ${kind?.one ?? folder} a file`, '', ...wrap(described(shape) ?? '', 0), '', ...wrap(idLine(folder), 0), '', 'Keys:', ...keys];
+  const lines = [`# ${folder}: one ${kind?.one ?? folder} a file`, '', ...wrap(described(shape) ?? '', 0), '', ...wrap(idLine(folder, shared === undefined), 0), '', 'Keys:', ...keys];
   if (told.selector) lines.push('', 'A selector:', ...wrap(described(SelectorSchema) ?? '', 2), ...keyLines(shapeOf(SelectorSchema) ?? {}, 2, told));
   if (example !== undefined) lines.push('', `Example, ${example.path}:`, ...example.text.split('\n').map((line) => `  ${line}`));
   return lines.join('\n');
@@ -272,8 +285,10 @@ export function guideText(topic?: string): { text: string } | { error: string } 
   if (topic === undefined || topic === '') return { text: index() };
   const skill = SKILLS[topic];
   if (skill !== undefined) {
-    const head = wrap(skill.length === 1 ? `The skill ${topic} writes the folder ${skill[0]}. Its guide follows.` : `The skill ${topic} writes the folders ${joined(skill)}. The guide of each follows.`, 0);
-    return { text: [...head, ...skill.map((folder) => `\n${folderGuide(folder)}`)].join('\n') };
+    const where = "The folders lie in the model's folder, the one that holds `seefore.yaml`.";
+    const head = wrap(skill.length === 1 ? `The skill ${topic} writes the folder ${skill[0]}. ${where} Its guide follows.` : `The skill ${topic} writes the folders ${joined(skill)}. ${where} The guide of each follows.`, 0);
+    const shared = new Map<string, string>();
+    return { text: [...head, ...skill.map((folder) => `\n${folderGuide(folder, shared)}`)].join('\n') };
   }
   if (FOLDERS.includes(topic)) return { text: folderGuide(topic) };
   const quoted = (words: readonly string[]) => joined(words.map((each) => `\`${each}\``));

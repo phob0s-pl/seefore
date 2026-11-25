@@ -738,6 +738,32 @@ const recordUnused: Rule = {
   },
 };
 
+/**
+ * A part that no connection names: an app, a store or a component that is no end of a
+ * connection and that none passes through. A connection at a component names its app too.
+ * A count and no warning: a connection is written from what a file shows, never to quiet a line.
+ */
+const partAlone: Rule = {
+  id: 'part-alone',
+  gives: 'count',
+  says: 'Some connection names each app, each store and each component.',
+  looksAt: ['apps', 'stores', 'components'],
+  check(model) {
+    const named = new Set<string>();
+    for (const entry of model.entries) {
+      if (entry.kind !== 'connections') continue;
+      for (const id of [textOf(entry, 'from'), textOf(entry, 'to'), ...listOf(entry, 'via')]) if (id !== undefined) named.add(id);
+    }
+    for (const entry of model.entries) {
+      const app = entry.kind === 'components' && named.has(entry.id) ? textOf(entry, 'in') : undefined;
+      if (app !== undefined) named.add(app);
+    }
+    return model.entries
+      .filter((entry) => (entry.kind === 'apps' || entry.kind === 'stores' || entry.kind === 'components') && !named.has(entry.id))
+      .map((entry) => ({ entry, message: `No connection names ${quote(entry.id)}.`, fix: 'Write the connection that a file shows of it: what it uses, or who uses it. With no such file, leave it.' }));
+  },
+};
+
 const featureAlone: Rule = {
   id: 'feature-alone',
   gives: 'count',
@@ -785,6 +811,7 @@ export const RULES: readonly Rule[] = [
   ruleShape,
   contextMany,
   recordUnused,
+  partAlone,
   featureAlone,
   stepUnplaced,
 ];

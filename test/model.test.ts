@@ -93,6 +93,7 @@ test('a small good model with a feature, a flow and a data record reads with no 
   expect(read.records.find((record) => record.kind === 'flows')?.fields.steps).toHaveLength(3);
   expect(read.counts.map((count) => [count.rule, count.found.length])).toEqual([
     ['record-unused', 0],
+    ['part-alone', 0],
     ['feature-alone', 0],
     ['step-unplaced', 0],
   ]);

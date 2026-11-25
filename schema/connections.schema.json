@@ -27,7 +27,7 @@
     "opens": {
       "type": "string",
       "const": "to",
-      "description": "`to`: the far side opened the channel this exchange goes down. Left out when the one that sends opened it, or nobody has said."
+      "description": "`to`: the far side opened the channel this exchange goes down, as when an agent dials out and the server sends down that tunnel: `from` the server, `to` the agent, `opens: to`. The dialling is no connection of its own. Left out when the one that sends opened it, or nobody has said."
     },
     "access": {
       "type": "string",
@@ -50,14 +50,14 @@
       "minLength": 1,
       "maxLength": 100,
       "pattern": "^\\S(?:[^\\n\\r\\u0085\\u2028\\u2029]*\\S)?$",
-      "description": "When the thing is there at all: the words that read after \"only\", one line of at most 100 characters. Left out when it is always there."
+      "description": "The condition under which the thing is there at all, begun with \"when\", \"on\" or \"for\", so that it reads after the word \"only\": `only: when a customer pays by card`. One line of at most 100 characters. Left out when it is always there."
     },
     "description": {
       "type": "string",
       "minLength": 1,
       "maxLength": 2000,
       "pattern": "\\S",
-      "description": "What it is responsible for, in 1 to 2,000 characters. Its first sentence says what the thing is: a box shows that sentence."
+      "description": "What passes and why, where the name does not say it, in 1 to 2,000 characters."
     },
     "technology": {
       "minItems": 1,
@@ -68,6 +68,18 @@
         "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
       },
       "description": "What the exchange is carried in, such as a protocol or a format: ids of records in technologies/, a set."
+    },
+    "source": {
+      "minItems": 1,
+      "maxItems": 3,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 300,
+        "pattern": "^(?!\\/)(?!.*(?:^|\\/)\\.\\.(?:\\/|$))[^*\\\\\\n\\r]*\\S$"
+      },
+      "description": "Where the code shows it, a file in which the code or config of `from` names `to`: the paths of one to three files, counted from the folder that holds the model's folder, written with `/`. A path with `..`, with `*` or with `/` at its start is an error, and the check warns when a path is not there or is a folder. When `from` has no code here, the route of `to` that takes its call; from a person, the entry point they use. Left out when nobody has looked."
     }
   },
   "required": [
@@ -75,5 +87,5 @@
     "to"
   ],
   "additionalProperties": false,
-  "description": "One thing acts on another, for one purpose. It has an id of its own. C4 calls it a relationship."
+  "description": "One thing acts on another, for one purpose. It has an id of its own. Two connections may join the same two things, one for each purpose, and `from` and `to` may be one thing, when a part talks to its own copies. C4 calls it a relationship."
 }
