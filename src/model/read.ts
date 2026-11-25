@@ -1,7 +1,7 @@
 import type { z } from 'zod';
 import type { Laid, ModelRead, ModelRecord, Problem } from './answer.ts';
 import { idProblem } from './id.ts';
-import { KINDS, RECORD_NOUNS } from './kinds.ts';
+import { KINDS, RECORD_NOUNS, ofModel } from './kinds.ts';
 import type { Entry } from './model.ts';
 import { runRules } from './rules.ts';
 import { MARKER_FILE, readMarker } from './marker.ts';
@@ -40,7 +40,7 @@ export function readModel(files: readonly SourceFile[]): ModelRead {
     // The rules run only on a model that has been read as format 1. A count, and the judging of
     // the rules in `rules/`, need every file of the architecture read: a faulty rule, or a faulty
     // line of context, leaves the rest judged.
-    const outside = (file: string) => !file.startsWith('rules/') && !file.startsWith('context/') && !file.startsWith('changes/');
+    const outside = (file: string) => !file.startsWith('rules/') && !file.startsWith('context/') && !file.startsWith('changes/') && !file.startsWith('reviews/');
     const whole = !problems.some((problem) => problem.severity === 'error' && outside(problem.file)) && entries.every((entry) => entry.ok || !outside(entry.file));
     const ruled = runRules(entries, whole, read.readable);
     // Each change that reads is held alone: against the model as it is today, and with the model as it would be.
@@ -99,7 +99,8 @@ export function readModel(files: readonly SourceFile[]): ModelRead {
     problems.push(...yaml.problems);
     const entry: Entry = { id, kind: folder, file: file.path, ok: false, fields: {}, at: new Map() };
     // A change is no record of the model: its id is its own, and may be that of a record it adds.
-    if (folder !== 'changes') entries.push(entry);
+    // So it is for a review, whose id is its change's.
+    if (ofModel(folder)) entries.push(entry);
     if (!yaml.doc || !yaml.map) continue;
     const shape = checkShape(file.path, yaml, SHAPES[folder as keyof typeof SHAPES] as z.ZodType, RECORD_NOUNS[folder] as string);
     problems.push(...shape.problems.map((problem) => ({ ...problem, record: id })));

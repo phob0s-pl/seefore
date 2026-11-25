@@ -1,9 +1,10 @@
 /**
- * The fifteen kinds of record, a folder each, with its words. The first twelve are the
+ * The sixteen kinds of record, a folder each, with its words. The first twelve are the
  * architecture, in the order the page shows them. The thirteenth, `rules`, holds the rules of a
  * team's own, which choose among the twelve. The fourteenth, `context`, holds what is true of
  * the whole model, or of one system, and that no record of the architecture says. The
  * fifteenth, `changes`, holds what is proposed: the records a change adds, updates and removes.
+ * The sixteenth, `reviews`, holds what a reader found in a change: a file for each change.
  */
 export const KINDS = [
   { folder: 'people', one: 'person', many: 'people' },
@@ -21,13 +22,17 @@ export const KINDS = [
   { folder: 'rules', one: 'rule', many: 'rules' },
   { folder: 'context', one: 'line of context', many: 'lines of context' },
   { folder: 'changes', one: 'change', many: 'changes' },
+  { folder: 'reviews', one: 'review', many: 'reviews' },
 ] as const;
 
-/** Whether a folder holds records of the architecture: every folder but `rules`, `context` and `changes`. */
-export const ofArchitecture = (kind: string): boolean => kind !== 'rules' && kind !== 'context' && kind !== 'changes';
+/** Whether a folder holds records of the architecture: every folder but `rules`, `context`, `changes` and `reviews`. */
+export const ofArchitecture = (kind: string): boolean => kind !== 'rules' && kind !== 'context' && kind !== 'changes' && kind !== 'reviews';
 
-/** The folders whose records a change may add, update or remove: every folder but its own. */
-export const CHANGED_FOLDERS: readonly string[] = KINDS.map((kind) => kind.folder).filter((folder) => folder !== 'changes');
+/** Whether a folder holds records of the model: all but what is proposed and what was found in it. Such a file is named by a change's id, which is its own. */
+export const ofModel = (kind: string): boolean => kind !== 'changes' && kind !== 'reviews';
+
+/** The folders whose records a change may add, update or remove: every folder of the model. */
+export const CHANGED_FOLDERS: readonly string[] = KINDS.map((kind) => kind.folder).filter(ofModel);
 
 /** What each folder's records are called in a message, with their article. */
 export const NOUNS: Record<string, string> = {
@@ -46,6 +51,7 @@ export const NOUNS: Record<string, string> = {
   rules: 'a rule',
   context: 'a line of context',
   changes: 'a change',
+  reviews: 'a review',
 };
 
 /** What one record of each folder is called where the record itself is meant: "`colour` is not a key of a data record". */

@@ -1,4 +1,5 @@
 import type { ModelRecord } from './answer.ts';
+import { ofModel } from './kinds.ts';
 
 import { stepsOf } from './model.ts';
 import type { Step } from './model.ts';
@@ -76,7 +77,8 @@ const joined = (words: readonly string[]): string => (words.length <= 1 ? words.
 /** The first record of each id: a second one is a problem of `seefore check`. */
 function byIdOf(records: readonly ModelRecord[]): Map<string, ModelRecord> {
   const byId = new Map<string, ModelRecord>();
-  for (const record of records) if (!byId.has(record.id)) byId.set(record.id, record);
+  // A change and its review are named by the change's id, which may be that of a record: they are none of the model.
+  for (const record of records) if (ofModel(record.kind) && !byId.has(record.id)) byId.set(record.id, record);
   return byId;
 }
 

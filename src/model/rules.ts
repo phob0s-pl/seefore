@@ -59,7 +59,7 @@ const ENDS = ['people', 'systems', 'apps', 'stores', 'components', 'infrastructu
 const PARTS = ['systems', 'apps', 'stores', 'components', 'infrastructure'];
 const NEEDS_OWNER_OR_TECH = ['apps', 'stores', 'components', 'infrastructure'];
 /** The kinds that are not parts or connections: what `touches`, `from` and `to` never name. */
-const NOT_THINGS = ['owners', 'technologies', 'features', 'flows', 'data', 'rules', 'context', 'changes'];
+const NOT_THINGS = ['owners', 'technologies', 'features', 'flows', 'data', 'rules', 'context', 'changes', 'reviews'];
 
 const FIELDS: Field[] = [
   { folder: 'apps', field: 'in', kinds: ['systems'] },
@@ -117,7 +117,7 @@ const WRONG: Wrong[] = [
   },
   {
     field: 'via',
-    found: ['owners', 'technologies', 'connections', 'people', 'stores', 'features', 'flows', 'data', 'rules', 'context', 'changes'],
+    found: ['owners', 'technologies', 'connections', 'people', 'stores', 'features', 'flows', 'data', 'rules', 'context', 'changes', 'reviews'],
     says: '`via` names what the exchange passes through: a piece of infrastructure, an app, a component or a system.',
     fix: 'Take it out of `via`, or name a piece of infrastructure, an app, a component or a system that the exchange passes through. Say anything more in the description.',
   },
@@ -135,13 +135,13 @@ const WRONG: Wrong[] = [
   },
   {
     field: 'owner',
-    found: ['people', 'systems', 'apps', 'stores', 'components', 'connections', 'infrastructure', 'technologies', 'features', 'flows', 'data', 'rules', 'context', 'changes'],
+    found: ['people', 'systems', 'apps', 'stores', 'components', 'connections', 'infrastructure', 'technologies', 'features', 'flows', 'data', 'rules', 'context', 'changes', 'reviews'],
     says: '`owner` names an owner, a record in `owners/`.',
     fix: 'Write `owners/<id>.yaml` with a `name` for the team, and name that id in `owner`. If a record of another kind has the id you want, keep both and name the owner for what it is for.',
   },
   {
     field: 'technology',
-    found: ['people', 'systems', 'apps', 'stores', 'components', 'connections', 'infrastructure', 'owners', 'features', 'flows', 'data', 'rules', 'context', 'changes'],
+    found: ['people', 'systems', 'apps', 'stores', 'components', 'connections', 'infrastructure', 'owners', 'features', 'flows', 'data', 'rules', 'context', 'changes', 'reviews'],
     says: '`technology` names technologies, records in `technologies/`.',
     fix: 'Write `technologies/<id>.yaml` with a `name`, and name that id in `technology`. If a record of another kind has the id you want, keep both and keep the product\'s name for the technology.',
   },

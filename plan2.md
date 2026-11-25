@@ -101,7 +101,8 @@ process is in `research/stage-15-22/`, out of Git.
 On 2026-11-25, with the input and the body built, the owner put the page of a change next,
 before decisions and the review, and split it into four parts: D5 to D8. They are built in
 that order, each on what the one before it left; D3 and D4 follow. The owner had D4 defined
-on the same day, before D8: its check is D4b and its page D9.
+on the same day, before D8: its check is D4b and its page D9. The page was built first, with
+the reading of the folder.
 
 | # | Stage | Result | Who |
 | --- | --- | --- | --- |
@@ -109,13 +110,13 @@ on the same day, before D8: its check is D4b and its page D9.
 | D2 | The body of a change | A change in `changes/` says which records it adds, updates and removes. The check holds it against the model, and holds the model as it would be | The main session, with Astra's proposal |
 | D3 | Decisions | One page: what a decision is, and when one is asked, assumed or just made | Fable |
 | D4 | The review of a change | One page: a review is a file of its own, `reviews/<change>.yaml`. A point has a name, a severity, what it is about, a finding, a recommendation, a status and comments. One reading of the whole change, one of what was fixed, then the person | Fable and Astra propose, the main session defines |
-| D4b | The review in the check | The folder `reviews/`, its shape and its schema, the mark of a change, and what the check says of a review | The main session |
+| D4b | The review in the check | The mark of a change, and what the check says of a review beyond its form: a review with no change, an address that names nothing, a status with no comment, a review of an earlier state of its change | The main session |
 | D5 | Changes on the page | An entry "Changes" in the sidebar: a list of the changes, and a page for each with its name and what the check says of it | The main session defines, Opus builds |
 | D6 | The need of a change on its page | On a change's page, what was asked for: the prompt, and what the person answered when asked | The main session |
 | D7 | The records of a change on its page | The Records page lists what a change adds, updates and removes, by the page's own lists. A record opens under the change's address: an updated one as before and after, key by key, then as it would be. Inside a change a link leads under the change if the change touches the record | The main session builds the model's part, Opus the pages |
 | D7b | A flow under a change | A flow opens under a change as the flow's own page. One the change adds or removes has only its mark. One it updates has one list of steps and one diagram, of today and of the change together: red for what goes, green for what comes, yellow for what changes; a switch shows the flow as it would be alone. The fields of a data record, before and after as a list | The main session builds the model's part, Opus the pages, Fable reviews |
 | D8 | The diagram of a change | The architecture diagram as it would be with the change, with what is added, removed and changed marked on it | The main session defines, Opus builds |
-| D9 | The review of a change on its page | A third entry "Review" in a change's sidebar: its points, each with its status and its comments, those that wait for the person first | The main session defines, Opus builds |
+| D9 | The review of a change on its page | The folder `reviews/` is read, with its shape and its schema. A third entry "Review" in a change's sidebar: its points in a table, each with its name and its status; a row opens the point on a page of its own | The main session builds the model's part, Opus the pages |
 
 ### 5 Additional architecture context
 

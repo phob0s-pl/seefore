@@ -1,0 +1,97 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "read": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}$",
+      "description": "The mark of the change as it was read: eight characters, each a digit or a letter from a to f, in quotes."
+    },
+    "points": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+        "maxLength": 80
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "pattern": "^\\S(?:[^\\n\\r\\u0085\\u2028\\u2029]*\\S)?$",
+            "description": "The fault, as one sentence that reads alone: one line of 1 to 100 characters. No remedy and no word of severity."
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "block",
+              "note"
+            ],
+            "description": "`block`: the point must be answered before the reading can end. `note`: nobody must answer it, and nothing waits for it."
+          },
+          "about": {
+            "minItems": 1,
+            "maxItems": 3,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^(?:need|(?:people|systems|apps|stores|components|connections|infrastructure|owners|technologies|features|flows|data|rules|context)\\/[a-z][a-z0-9]*(?:-[a-z0-9]+)*|flows\\/[a-z][a-z0-9]*(?:-[a-z0-9]+)*#[a-z][a-z0-9]*(?:-[a-z0-9]+)*)$"
+            },
+            "description": "Where to look: one to three addresses, the nearest first, none twice. A record is `folder/id`, a step of a flow `flows/<id>#<step>`, the need the word `need`."
+          },
+          "finding": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500,
+            "pattern": "\\S",
+            "description": "One fault, in 1 to 500 characters: what the records say, by their ids, and what goes wrong for whom. No remedy."
+          },
+          "recommendation": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300,
+            "pattern": "\\S",
+            "description": "What must be true of the change for the point to close, in 1 to 300 characters; or a question for the person. An outcome, not a design. May be left out on a note."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "fixed",
+              "declined",
+              "closed",
+              "reopened"
+            ],
+            "description": "Where the point stands. Left out, it is `open`. The corrector sets `fixed` or `declined`; the reviewer, at the second reading, `closed` or `reopened`."
+          },
+          "comments": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300,
+              "pattern": "^\\S(?:[^\\n\\r\\u0085\\u2028\\u2029]*\\S)?$"
+            },
+            "description": "One line of 1 to 300 characters added at each change of status, by who changes it. No line is rewritten or taken out."
+          }
+        },
+        "required": [
+          "name",
+          "severity",
+          "about",
+          "finding"
+        ],
+        "additionalProperties": false
+      },
+      "description": "The points, each under its id, the weightiest first. Left out when nothing is found."
+    }
+  },
+  "required": [
+    "read"
+  ],
+  "additionalProperties": false,
+  "description": "The review of a change, in a file named by the change's id: the mark of the change as it was read, and the points that the reader found."
+}

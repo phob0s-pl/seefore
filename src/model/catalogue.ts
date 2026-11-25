@@ -88,6 +88,9 @@ export type Touch = { change: string; paths: ReadonlySet<string> };
 /** The address of a record under a change: the change's, `records`, and the record's path. */
 export const addressUnder = (change: string, path: string): string => `/changes/${change}/records/${path}`;
 
+/** The address of a record's page in the system; none for a kind that has no page. */
+export const addressInSystem = (record: ModelRecord): string | undefined => (PAGES[record.kind] !== undefined ? `/${PAGES[record.kind]}/${record.id}` : undefined);
+
 /**
  * What the pages of the records ask, worked out once from the records of `/api/model`. With
  * what a change touches, the address of a touched record is the one under that change, and any
@@ -168,7 +171,7 @@ export function catalogueOf(records: readonly ModelRecord[], touch?: Touch): Cat
     address: (record) => {
       const path = `${record.kind}/${record.id}`;
       if (touch?.paths.has(path)) return addressUnder(touch.change, path);
-      return PAGES[record.kind] !== undefined ? `/${PAGES[record.kind]}/${record.id}` : undefined;
+      return addressInSystem(record);
     },
     nameOf: (id) => text(byId.get(id)?.fields.name) ?? id,
     software,

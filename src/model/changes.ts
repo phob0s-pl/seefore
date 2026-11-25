@@ -1,8 +1,11 @@
 import type { Laid, ModelRecord } from './answer.ts';
-import { byName } from './catalogue.ts';
+import { addressInSystem, addressUnder, byName } from './catalogue.ts';
 import type { Touch } from './catalogue.ts';
-import { flowUnder, orderOfBoth } from './flow.ts';
+import { flowSteps, flowUnder, orderOfBoth } from './flow.ts';
 import type { FlowUnder, Mark } from './flow.ts';
+import { ofModel } from './kinds.ts';
+import { reviewOf } from './review.ts';
+import type { About, Review } from './review.ts';
 
 /**
  * What the pages of the changes ask of the records of `changes/` and of what the check laid,
@@ -66,6 +69,8 @@ export type Changes = {
   differences: (id: string, path: string) => Difference[];
   /** A flow under a change: what the change does to each of its steps, boxes and lines. Nothing when the change does not name the flow, or the check could not lay the change. */
   flow: (id: string, flow: string) => FlowUnder | undefined;
+  /** The review of a change, from the file in `reviews/` that bears the change's id. Nothing when there is no such file, or the check could not read it. */
+  review: (id: string) => Review | undefined;
 };
 
 /** The fields of a data record as a list of names with their descriptions, or nothing when the value is no such list. */
@@ -158,7 +163,7 @@ export function changesOf(records: readonly ModelRecord[], laid: readonly Laid[]
 
   // The records of today by their paths; a change is none of them.
   const today = new Map<string, ModelRecord>();
-  for (const record of records) if (record.kind !== 'changes' && !today.has(`${record.kind}/${record.id}`)) today.set(`${record.kind}/${record.id}`, record);
+  for (const record of records) if (ofModel(record.kind) && !today.has(`${record.kind}/${record.id}`)) today.set(`${record.kind}/${record.id}`, record);
   const after = (id: string): Map<string, ModelRecord> => new Map((read.get(id) ?? []).map((record) => [`${record.kind}/${record.id}`, record]));
 
   const touch = (id: string): Touch | undefined => {
@@ -192,6 +197,39 @@ export function changesOf(records: readonly ModelRecord[], laid: readonly Laid[]
     const fields = isMapping(written) ? written[touched.path] : undefined;
     return isMapping(fields) ? { kind: touched.folder, id: touched.id, file: `${touched.path}.yaml`, fields } : undefined;
   };
+  const flow = (id: string, flowId: string): FlowUnder | undefined => {
+    const key = `${id}\n${flowId}`;
+    if (flows.has(key)) return flows.get(key);
+    const made = world(id);
+    const read = made === undefined ? undefined : flowUnder([...today.values()], made.records, byId.get(id)?.touched ?? [], flowId);
+    flows.set(key, read);
+    return read;
+  };
+
+  // The reviews by the id of their change, and what an address of a point names. A record the
+  // change touches leads under the change, once the check has laid it; any other to its page in
+  // the system. A step leads to its flow, on that step, and bears the step's words.
+  const written = new Map<string, ModelRecord>();
+  for (const record of records) if (record.kind === 'reviews' && !written.has(record.id)) written.set(record.id, record);
+  const reviews = new Map<string, Review | undefined>();
+  const about = (id: string, address: string): About => {
+    if (address === 'need') return { address, label: 'Need', to: `/changes/${id}`, need: true };
+    const hash = address.indexOf('#');
+    const path = hash < 0 ? address : address.slice(0, hash);
+    const split = parts(path);
+    const change = byId.get(id);
+    const touched = change?.touched.find((each) => each.path === path);
+    const record = (touched?.verb === 'remove' ? undefined : after(id).get(path)) ?? today.get(path);
+    if (split === undefined || record === undefined) return { address, label: address };
+    const base = touched === undefined ? addressInSystem(record) : change?.laid === true ? addressUnder(id, path) : undefined;
+    const label = labelOf(record, { ...split, path, verb: 'update', keys: [] });
+    if (hash < 0) return { address, label, record, ...(base !== undefined ? { to: base } : {}) };
+    // The step's words: as the flow under the change has them, which holds a step that goes too; else as the flow has them today.
+    const stepId = address.slice(hash + 1);
+    const step = (touched !== undefined ? flow(id, split.id)?.steps : undefined)?.find((each) => each.id === stepId) ?? flowSteps([...today.values()], split.id)?.steps.find((each) => each.id === stepId);
+    return { address, label, step: step?.happens ?? stepId, record, ...(base !== undefined && step !== undefined ? { to: `${base}#${encodeURIComponent(stepId)}` } : base !== undefined ? { to: base } : {}) };
+  };
+
   return {
     all,
     change: (id) => byId.get(id),
@@ -215,12 +253,12 @@ export function changesOf(records: readonly ModelRecord[], laid: readonly Laid[]
       const will = found.after.fields;
       return found.touched.keys.map((key) => ({ key, ...(key in was ? { before: was[key] } : {}), ...(key in will ? { after: will[key] } : {}) }));
     },
-    flow: (id, flow) => {
-      const key = `${id}\n${flow}`;
-      if (flows.has(key)) return flows.get(key);
-      const made = world(id);
-      const read = made === undefined ? undefined : flowUnder([...today.values()], made.records, byId.get(id)?.touched ?? [], flow);
-      flows.set(key, read);
+    flow,
+    review: (id) => {
+      if (reviews.has(id)) return reviews.get(id);
+      const record = byId.has(id) ? written.get(id) : undefined;
+      const read = record === undefined ? undefined : reviewOf(record, (address) => about(id, address));
+      reviews.set(id, read);
       return read;
     },
   };

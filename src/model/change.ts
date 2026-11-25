@@ -48,6 +48,7 @@ function pathFault(path: string): string | undefined {
   const folder = path.slice(0, at);
   const id = path.slice(at + 1);
   if (folder === 'changes') return `${quote(path)} names a change. A change adds, updates and removes records of the model, and no change.`;
+  if (folder === 'reviews') return `${quote(path)} names a review. A change adds, updates and removes records of the model, and no review.`;
   if (!CHANGED_FOLDERS.includes(folder)) return `${quote(path)} is not the path of a record: there is no folder ${quote(folder)}. The folders are ${list(CHANGED_FOLDERS)}.`;
   if (id.endsWith('.yaml')) return `${quote(path)} is the name of a file. A path leaves \`.yaml\` off, as ${quote(path.slice(0, -'.yaml'.length))}.`;
   const wrong = idProblem(id);
