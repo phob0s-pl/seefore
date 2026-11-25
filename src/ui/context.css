@@ -1,0 +1,108 @@
+/* Context: the names that lead to each band, and a band for each system with lines, its two
+   columns side by side. No colour on a line: on this page colour says a state, and a line has
+   none. The title, the panel, the tile and the pill are ui.css's. */
+
+/* The names under the title, with " · " between, each leading to its band. */
+.context-index {
+  margin: 0 0 32px;
+  padding: 0 4px;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--text-secondary);
+}
+.context-index a {
+  color: var(--link);
+}
+.context-index a:hover {
+  color: var(--link-hover);
+}
+
+.context-bands {
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+}
+
+/* A band's row: the system's tile, its name, and "External" for an outside system. */
+.context-band-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 0 0 16px;
+  padding: 0 4px;
+}
+.context-band-name {
+  min-width: 0;
+  font-size: 22px;
+  line-height: 28px;
+  font-weight: 700;
+  color: var(--text-strong);
+  overflow-wrap: anywhere;
+}
+.context-band-name a:hover {
+  color: var(--link-hover);
+}
+
+/* Two columns of equal width, Must on the left; a band of one kind keeps a column's width. */
+.context-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 610px));
+  gap: 20px;
+}
+@media (width < 900px) {
+  .context-columns {
+    grid-template-columns: minmax(0, 610px);
+    row-gap: 28px;
+  }
+}
+.context-column {
+  min-width: 0;
+}
+
+/* A column's heading: its word, and beside it what it means. */
+.context-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+  margin: 0 0 10px;
+  padding: 0 4px;
+}
+.context-heading h3 {
+  font-size: 17px;
+  line-height: 22px;
+  font-weight: 700;
+  color: var(--text-strong);
+}
+.context-heading p {
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--text-secondary);
+}
+
+/* A line: the sentence, and under it its reason, both in full. The divider starts after the
+   panel's left padding, as a row's does. */
+.context-line {
+  margin-left: 20px;
+  padding: 14px 20px 14px 0;
+  overflow-wrap: anywhere;
+}
+.context-line + .context-line {
+  border-top: var(--divider);
+}
+.context-sentence {
+  font-size: 17px;
+  line-height: 26px;
+  font-weight: 500;
+  color: var(--text-strong);
+  text-wrap: pretty;
+}
+.context-reason {
+  margin-top: 4px;
+  font-size: 14px;
+  line-height: 22px;
+  font-weight: 400;
+  color: var(--text-body);
+  text-wrap: pretty;
+}

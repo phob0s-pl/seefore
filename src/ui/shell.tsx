@@ -1,9 +1,11 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { Boxes, Check, ChevronDown, ChevronLeft, ChevronRight, ListChecks, Puzzle, Waypoints } from 'lucide-react';
+import { Boxes, Check, ChevronDown, ChevronLeft, ChevronRight, Compass, ListChecks, Puzzle, Waypoints } from 'lucide-react';
 import { Link, NavLink, Outlet, useLocation, useMatch, useNavigate, useSearchParams } from 'react-router-dom';
 import type { ModelAnswer } from '../model/answer.ts';
 import { catalogueOf } from '../model/catalogue.ts';
 import type { Catalogue } from '../model/catalogue.ts';
+import { contextOf } from '../model/context.ts';
+import type { Context } from '../model/context.ts';
 import { rulebookOf } from '../model/rulebook.ts';
 import type { Rulebook } from '../model/rulebook.ts';
 import { travelOf } from '../model/travel.ts';
@@ -15,11 +17,11 @@ import { Button, GlassGroup } from './ui.tsx';
 
 /**
  * What the shell knows of the model, and hands to the page: the answer and what the pages of
- * the records and of the rules ask of it, worked out once, or why there is none. On the page of
- * a flow, the places the page fills itself: the sidebar under the name, and the top bar after
- * the arrows; on the page of a rule, the top bar alone.
+ * the records, of the rules and of the context ask of it, worked out once, or why there is
+ * none. On the page of a flow, the places the page fills itself: the sidebar under the name,
+ * and the top bar after the arrows; on the page of a rule, the top bar alone.
  */
-export type ModelState = { answer?: ModelAnswer; catalogue?: Catalogue; travel?: Travel; rulebook?: Rulebook; failed?: string; slots?: Slots };
+export type ModelState = { answer?: ModelAnswer; catalogue?: Catalogue; travel?: Travel; rulebook?: Rulebook; context?: Context; failed?: string; slots?: Slots };
 
 /** The places of the shell that the page of a flow fills, its steps and its breadcrumb, and that of a rule, its breadcrumb. */
 export type Slots = { steps: HTMLElement | null; crumbs: HTMLElement | null };
@@ -120,7 +122,7 @@ export function Shell() {
   const state = useMemo((): ModelState => {
     if (model.answer === undefined) return model;
     const catalogue = catalogueOf(model.answer.records);
-    return { ...model, catalogue, travel: travelOf(model.answer.records, catalogue), rulebook: rulebookOf(model.answer) };
+    return { ...model, catalogue, travel: travelOf(model.answer.records, catalogue), rulebook: rulebookOf(model.answer), context: contextOf(model.answer.records) };
   }, [model]);
   // The focus the address names, and the choices of the depth: none at Systems.
   const records = model.answer?.records;
@@ -140,7 +142,7 @@ export function Shell() {
   const crumbed = reading || onRule;
   const [steps, setSteps] = useState<HTMLElement | null>(null);
   const [crumbs, setCrumbs] = useState<HTMLElement | null>(null);
-  const context = useMemo((): ModelState => (crumbed ? { ...state, slots: { steps: reading ? steps : null, crumbs } } : state), [state, crumbed, reading, steps, crumbs]);
+  const handed = useMemo((): ModelState => (crumbed ? { ...state, slots: { steps: reading ? steps : null, crumbs } } : state), [state, crumbed, reading, steps, crumbs]);
   const dot = state.rulebook?.dot;
 
   useEffect(() => {
@@ -183,6 +185,10 @@ export function Shell() {
               <Waypoints />
               <span className="nav-text">Architecture</span>
             </NavLink>
+            <NavLink to="/context" className="nav-link">
+              <Compass />
+              <span className="nav-text">Context</span>
+            </NavLink>
             <NavLink to="/features" className="nav-link">
               <Puzzle />
               <span className="nav-text">Features</span>
@@ -222,7 +228,7 @@ export function Shell() {
           {pathname === '/' && choices.length > 0 && <FocusMenu key={depth} depth={depth} focus={focus} choices={choices} />}
         </header>
         <main id="main-content" tabIndex={-1} className="page-content">
-          <Outlet context={context} />
+          <Outlet context={handed} />
         </main>
       </div>
     </div>
