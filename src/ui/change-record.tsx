@@ -167,6 +167,8 @@ export function ChangeRecordPage() {
  */
 function FlowUnderPage({ change, changes, under, label, system, slots }: { change: Change; changes: Changes; under: FlowUnder; label: string; system: string; slots: Slots | undefined }) {
   const catalogue = useMemo(() => catalogueOf(under.records, changes.touch(change.id)), [under, changes, change.id]);
+  // What the change does to each record it names, for the panel of a box or a line.
+  const verbs = useMemo(() => new Map(change.touched.map((each) => [each.path, each.verb])), [change]);
   const verb = under.verb;
   return (
     <FlowBody
@@ -176,6 +178,7 @@ function FlowUnderPage({ change, changes, under, label, system, slots }: { chang
       view={under.view}
       was={under.was}
       marks={under.marks}
+      verbs={verbs}
       catalogue={catalogue}
       slots={slots}
       crumbs={

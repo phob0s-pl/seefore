@@ -913,3 +913,90 @@ test.skipIf(!HAS_CHROME).concurrent(
     }),
   20_000,
 );
+
+/** What the diagram shows of a change: each box's mark, each line's mark with its colour and dash, the signs on the boxes, and the legend; or false until the lines are drawn. */
+const MARKS = `document.querySelectorAll('.react-flow__edge-path[d^="M"]').length > 0 && {
+  boxes: [...document.querySelectorAll('.react-flow__node')].map((node) => [node.getAttribute('data-id'), node.querySelector('.architecture-node')?.getAttribute('data-mark') ?? null, [...node.classList].filter((name) => name.startsWith('mark-')).join()]).sort(),
+  lines: [...document.querySelectorAll('.react-flow__edge')].map((edge) => {
+    const path = getComputedStyle(edge.querySelector('.react-flow__edge-path'));
+    return [edge.getAttribute('data-id'), [...edge.classList].filter((name) => name.startsWith('mark-')).join(), path.stroke, path.strokeDasharray];
+  }).sort(),
+  signs: [...document.querySelectorAll('.architecture-node .diagram-mark-sign')].map((sign) => sign.closest('[data-id]').getAttribute('data-id') + ' ' + sign.getAttribute('aria-label')).sort(),
+  legend: ${texts('[aria-label="Legend"] li')},
+}`;
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME ? "on a flow the change updates the diagram's boxes and lines bear their marks and a legend says them; on the flow's own page nothing does" : `skipped: there is no Chrome at ${CHROME}`,
+  () =>
+    inChrome(async (send, address) => {
+      await send('Page.navigate', { url: `${address}/changes/orders-by-post/records/flows/placing-an-order` });
+      expect(await waitFor(send, `${onFlowUnder('placing-an-order', 'Placing an order')} && ${MARKS}`)).toEqual({
+        // The flow no longer passes the store of orders, newly passes the clerk, and passes the Order API, which the change updates.
+        boxes: [
+          ['clerk', 'added', 'mark-added'],
+          ['customer', null, ''],
+          ['order-api', 'updated', 'mark-updated'],
+          ['orders', 'removed', 'mark-removed'],
+          ['shop', null, ''],
+        ],
+        // A red line is dashed; the others are not. The colours are those of the theme.
+        lines: [
+          ['clerk->order-api', 'mark-added', 'rgb(101, 213, 128)', 'none'],
+          ['customer->order-api', '', 'rgb(129, 139, 152)', 'none'],
+          ['order-api->orders', 'mark-removed', 'rgb(255, 117, 109)', '6px, 4px'],
+        ],
+        signs: ['clerk Newly passed', 'order-api Updated by the change', 'orders No longer passed'],
+        legend: ['+ Newly passed', '− No longer passed', '~ Updated by the change'],
+      });
+      await send('Page.navigate', { url: `${address}/flows/placing-an-order` });
+      expect(await waitFor(send, `location.pathname === '/flows/placing-an-order' && document.querySelector('.react-flow__node') !== null && ${MARKS}`)).toMatchObject({
+        boxes: [
+          ['customer', null, ''],
+          ['order-api', null, ''],
+          ['orders', null, ''],
+          ['shop', null, ''],
+        ],
+        signs: [],
+        legend: [],
+      });
+    }),
+  20_000,
+);
+
+/** What the panel says of what the change does: the pill beside the type, the sentence under the name, and where its button leads. */
+const PANEL_UNDER = `(() => {
+  const panel = document.querySelector('aside[aria-label="Diagram inspector"]');
+  return panel !== null && {
+    name: panel.querySelector('h2')?.textContent,
+    pills: [...panel.querySelectorAll('.diagram-inspector-kind .pill')].map((pill) => pill.className + ' ' + pill.textContent),
+    passes: panel.querySelector('.diagram-inspector-passes')?.textContent ?? null,
+    button: panel.querySelector('a.button')?.getAttribute('href'),
+  };
+})()`;
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME ? 'under a change a red box opens its panel with the sentence that the flow no longer passes it, and a yellow one with the pill Updated and its button under the change' : `skipped: there is no Chrome at ${CHROME}`,
+  () =>
+    inChrome(async (send, address) => {
+      await send('Page.navigate', { url: `${address}/changes/orders-by-post/records/flows/placing-an-order` });
+      await click(send, await centreOf(send, '.react-flow__node[data-id="orders"]'));
+      // The store of orders is not a record the change names: no pill, and its button leads to the system.
+      expect(await waitFor(send, `(() => { const read = ${PANEL_UNDER}; return read && read.name === 'Orders' && read; })()`)).toEqual({
+        name: 'Orders',
+        pills: [],
+        passes: 'With this change the flow no longer passes it.',
+        button: '/models/orders',
+      });
+      await press(send, 'Escape', 27);
+      expect(await closed(send)).toBe(true);
+      // The Order API is in both and the change updates it: its pill, no sentence, and its button under the change.
+      await click(send, await centreOf(send, '.react-flow__node[data-id="order-api"]'));
+      expect(await waitFor(send, `(() => { const read = ${PANEL_UNDER}; return read && read.name === 'Order API' && read; })()`)).toEqual({
+        name: 'Order API',
+        pills: ['pill tone-caution Updated'],
+        passes: null,
+        button: '/changes/orders-by-post/records/apps/order-api',
+      });
+    }),
+  20_000,
+);

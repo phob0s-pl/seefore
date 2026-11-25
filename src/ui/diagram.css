@@ -166,6 +166,106 @@
 .architecture-boundary .architecture-node-heading {
   max-width: 270px;
 }
+/* An updated flow under a change: what the change does to a box, a frame or a line has a colour.
+   Green where the flow newly passes it, red where it no longer does, yellow where it passes it on
+   both sides and the change updates its record. The border says the kind, the inside says the
+   difference, and the outline and the brightness say the current step: no two share a place. */
+.mark-added {
+  --mark: var(--success);
+  --mark-tint: var(--success-tint);
+}
+.mark-removed {
+  --mark: var(--danger);
+  --mark-tint: var(--danger-tint);
+}
+.mark-updated {
+  --mark: var(--caution);
+  --mark-tint: var(--caution-tint);
+}
+/* A box: a band down its left side inside the border, following its rounded corner, and a faint
+   wash over its ground: the tint at a little over half, so that the name reads on it. Its name
+   keeps clear of the sign at its top right. */
+.architecture-node[data-mark]:not(.architecture-boundary) {
+  --mark-wash: color-mix(in srgb, var(--mark-tint) 60%, transparent);
+  background: linear-gradient(var(--mark-wash), var(--mark-wash)), var(--surface-raised);
+  box-shadow: inset 5px 0 0 var(--mark), var(--shadow-panel-lift);
+}
+.architecture-node[data-mark]:not(.architecture-boundary) > .architecture-node-heading {
+  padding-right: 14px;
+}
+/* A frame: its dashed outline takes the colour, and the sign stands after its name. */
+.architecture-boundary[data-mark] {
+  border-color: var(--mark);
+}
+.architecture-boundary[data-mark] .architecture-node-heading > div {
+  flex: 0 1 auto;
+}
+/* The round sign: +, − or ~ in the colour on a dark ground. */
+.diagram-mark-sign {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  border-radius: var(--radius-full);
+  border: 1.5px solid var(--mark);
+  background: var(--surface-canvas);
+  color: var(--mark);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+}
+.architecture-node > .diagram-mark-sign {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+}
+/* A line: its stroke and its heads take the colour, and a red one is dashed. Lit by a pick or by
+   the step, it keeps its colour and grows thicker; a line with no mark turns the accent colour. */
+.canvas-frame .react-flow__edge:is(.mark-added, .mark-removed, .mark-updated) .react-flow__edge-path {
+  stroke: var(--mark);
+  stroke-width: 2;
+}
+.canvas-frame .react-flow__edge.mark-removed .react-flow__edge-path {
+  stroke-dasharray: 6 4;
+}
+.canvas-frame .react-flow__edge:is(.mark-added, .mark-removed, .mark-updated):is(.picked, .stepped) .react-flow__edge-path {
+  stroke: var(--mark);
+  stroke-width: 3.2;
+}
+/* The legend of the colours: small glass at the field's top left, clear of the zoom column. */
+.diagram-legend {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  max-width: calc(100% - 32px);
+  margin: 0;
+  padding: 6px 12px;
+  list-style: none;
+  border-radius: var(--radius-control);
+  background: var(--surface-glass-strong);
+  /* The plain property comes last: the build keeps only the last of the two. */
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--border-glass);
+  box-shadow: var(--shadow-pill);
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--text-secondary);
+  pointer-events: none;
+}
+.diagram-legend > li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 /* An arrow hangs on these points; they are not shown and cannot be used. */
 .architecture-node .diagram-handle {
   opacity: 0;
@@ -334,4 +434,13 @@
   display: block;
   font-size: 12px;
   color: var(--text-secondary);
+}
+/* Under a change: the quiet sentence under the name of what the flow newly passes or no longer
+   passes, and the word at the right of a row of several connections, as a step's word. */
+.diagram-inspector .diagram-inspector-passes {
+  margin-top: -4px;
+  color: var(--text-tertiary);
+}
+.diagram-inspector .row-grid-name > .flow-step-mark {
+  margin-top: 0;
 }

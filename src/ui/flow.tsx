@@ -134,7 +134,8 @@ function runsOf(steps: readonly StepShown[]): (StepShown | Run)[] {
  * once; the catalogue its links and its panel are made with; and the way back for the top bar.
  * Under a change, the steps bear their marks, `was` holds today's words of the flow's own keys
  * that the change writes otherwise, `marks` what the change does to each box, arrow and connection
- * of the view, and `system`, for a flow the change removes, its address in the system.
+ * of the view, `verbs` what it does to each record it names, by its path, and `system`, for a
+ * flow the change removes, its address in the system.
  */
 export function FlowBody({
   flow,
@@ -142,6 +143,8 @@ export function FlowBody({
   count,
   view,
   was = NONE,
+  marks,
+  verbs,
   catalogue,
   slots,
   crumbs,
@@ -153,6 +156,7 @@ export function FlowBody({
   view: View;
   was?: readonly Was[];
   marks?: ReadonlyMap<string, Mark>;
+  verbs?: ReadonlyMap<string, Verb>;
   catalogue: Catalogue;
   slots: Slots | undefined;
   crumbs: ReactNode;
@@ -329,8 +333,8 @@ export function FlowBody({
           </div>
         </CanvasFrame>
       ) : (
-        <Diagram view={view} depth="components" shape="flow" picked={panel !== undefined && !panel.data ? panel.id : undefined} onPick={onPick} step={step?.lights}>
-          {panel !== undefined && <Inspector picked={panel.id} view={view} catalogue={catalogue} onClose={close} />}
+        <Diagram view={view} depth="components" shape="flow" picked={panel !== undefined && !panel.data ? panel.id : undefined} onPick={onPick} step={step?.lights} marks={marks}>
+          {panel !== undefined && <Inspector picked={panel.id} view={view} catalogue={catalogue} onClose={close} marks={marks} verbs={verbs} />}
         </Diagram>
       )}
     </div>

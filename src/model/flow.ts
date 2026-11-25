@@ -397,10 +397,17 @@ export function flowUnder(
   // so a step that goes lights its own line.
   const removed = new Set(touched.filter((each) => each.verb === 'remove').map((each) => each.path));
   const gone = today.filter((record) => removed.has(`${record.kind}/${record.id}`));
-  const both: ModelRecord = { ...will, fields: { ...will.fields, steps: order.map((id) => rawAfter.get(id) ?? rawToday.get(id)) } };
+  // A step that stays and is put on another connection or part still walked the old one today:
+  // that is drawn too. It is walked here by a step of no row, after the rows, which is let go below.
+  const old = [...rawAfter.entries()].flatMap(([id, now]) => {
+    const before = rawToday.get(id);
+    return before !== undefined && before.reply === undefined && typeof before.does === 'string' && before.does !== now.does ? [{ id: `${id} (today)`, does: before.does }] : [];
+  });
+  const both: ModelRecord = { ...will, fields: { ...will.fields, steps: [...order.map((id) => rawAfter.get(id) ?? rawToday.get(id)), ...old] } };
   const records = [...after.filter((record) => record !== will), both, ...gone];
-  const read = flowSteps(records, flowId);
-  if (read === undefined) return undefined;
+  const drawn = flowSteps(records, flowId);
+  if (drawn === undefined) return undefined;
+  const read = { ...drawn, steps: drawn.steps.slice(0, order.length) };
   const view = flowView(records, flowId);
 
   // The number a step shows: its place as it would be, or for one that goes its place today.

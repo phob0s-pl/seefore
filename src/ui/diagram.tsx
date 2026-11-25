@@ -5,7 +5,7 @@ import type { Edge, EdgeProps, Node, NodeProps, ReactFlowInstance } from '@xyflo
 import { Scan } from 'lucide-react';
 import type { ElkPoint } from 'elkjs/lib/elk-api.js';
 import { litByStep } from '../model/flow.ts';
-import type { Lights } from '../model/flow.ts';
+import type { Lights, Mark } from '../model/flow.ts';
 import { litBy } from '../model/view.ts';
 import type { Box, Depth, View } from '../model/view.ts';
 import { engine } from './elk.ts';
@@ -14,12 +14,37 @@ import { layOut, nearestRoute } from './layout.ts';
 import type { Band, Layout, Shape } from './layout.ts';
 import { CanvasFrame } from './ui.tsx';
 
-type BoxNode = Node<{ box: Box }, 'box' | 'frame'>;
+type BoxNode = Node<{ box: Box; mark?: Shown }, 'box' | 'frame'>;
 type BandNode = Node<{ band: Band }, 'band'>;
 type RouteEdge = Edge<{ points: ElkPoint[] }, 'route'>;
 
 /** The room a fitted diagram leaves at each edge of the field, in pixels. */
 const FIT = { padding: 40 };
+
+/** A mark that is shown: what a change does to a box or a line that it does not leave as it is. */
+type Shown = Exclude<Mark, 'same'>;
+
+/** The sign of each mark and what it says: on a box, by a frame's name, and in the legend. */
+const SIGNS: Record<Shown, { sign: string; words: string }> = {
+  added: { sign: '+', words: 'Newly passed' },
+  removed: { sign: '−', words: 'No longer passed' },
+  updated: { sign: '~', words: 'Updated by the change' },
+};
+
+/** The mark of a box or a line that is shown, or none: on a flow's own page, and where the change leaves it as it is. */
+const shownOf = (marks: ReadonlyMap<string, Mark> | undefined, id: string): Shown | undefined => {
+  const mark = marks?.get(id);
+  return mark === undefined || mark === 'same' ? undefined : mark;
+};
+
+/** The round sign of a mark, in its colour on a dark ground. In the legend its words stand beside it, so it says nothing itself. */
+function MarkSign({ mark, said = true }: { mark: Shown; said?: boolean }) {
+  return (
+    <span className={`diagram-mark-sign mark-${mark}`} {...(said ? { role: 'img', 'aria-label': SIGNS[mark].words } : { 'aria-hidden': true })}>
+      {SIGNS[mark].sign}
+    </span>
+  );
+}
 
 /** The kind of a box in words: "External system", or "Store · database". */
 function kindWords(box: Box): string {
@@ -46,11 +71,16 @@ function Ends() {
   );
 }
 
-/** A box: its icon, its name and, small, its kind. It is drawn again only when its box changes, not when its class does. */
-const BoxCard = memo(function BoxCard({ data: { box } }: NodeProps<BoxNode>) {
+/**
+ * A box: its icon, its name and, small, its kind. Under a change, a box with a mark has its sign
+ * at its top right; diagram.css gives it the band and the wash. It is drawn again only when its
+ * box changes, not when its class does.
+ */
+const BoxCard = memo(function BoxCard({ data: { box, mark } }: NodeProps<BoxNode>) {
   return (
-    <div className={`architecture-node architecture-node-${box.kind}`} data-id={box.id}>
+    <div className={`architecture-node architecture-node-${box.kind}`} data-id={box.id} data-mark={mark}>
       <Ends />
+      {mark !== undefined && <MarkSign mark={mark} />}
       <div className="architecture-node-heading">
         <KindIcon kind={box.kind} />
         <div>
@@ -62,16 +92,17 @@ const BoxCard = memo(function BoxCard({ data: { box } }: NodeProps<BoxNode>) {
   );
 });
 
-/** An opened system or app: a dashed outline that names itself and holds its boxes. */
-const FrameCard = memo(function FrameCard({ data: { box } }: NodeProps<BoxNode>) {
+/** An opened system or app: a dashed outline that names itself and holds its boxes. Under a change, a frame with a mark has its sign after its name. */
+const FrameCard = memo(function FrameCard({ data: { box, mark } }: NodeProps<BoxNode>) {
   return (
-    <div className="architecture-node architecture-boundary" data-id={box.id}>
+    <div className="architecture-node architecture-boundary" data-id={box.id} data-mark={mark}>
       <Ends />
       <div className="architecture-node-heading">
         <KindIcon kind={box.kind} />
         <div>
           <strong>{box.name}</strong>
         </div>
+        {mark !== undefined && <MarkSign mark={mark} />}
       </div>
     </div>
   );
@@ -103,18 +134,31 @@ const nodeTypes = { box: BoxCard, frame: FrameCard, band: BandCard };
 const HEAD = { type: MarkerType.ArrowClosed, color: 'var(--graph-edge)' };
 /** The heads of the picked line, in the accent colour. */
 const PICKED_HEAD = { type: MarkerType.ArrowClosed, color: 'var(--accent)' };
+/** The heads of a line with a mark, in its colour, picked or not. */
+const MARK_HEADS: Record<Shown, typeof HEAD> = {
+  added: { type: MarkerType.ArrowClosed, color: 'var(--success)' },
+  removed: { type: MarkerType.ArrowClosed, color: 'var(--danger)' },
+  updated: { type: MarkerType.ArrowClosed, color: 'var(--caution)' },
+};
 const edgeTypes = { route: RouteLine };
+
+/** The room a fitted diagram leaves at the top of the field while the legend stands there: the legend's and a gap under it. */
+const UNDER_LEGEND = 64;
 
 /**
  * How a diagram is fitted to the field. A flow's own diagram is small, so it is never made
- * larger than its boxes were drawn to be: a flow of four boxes would else fill the field.
+ * larger than its boxes were drawn to be: a flow of four boxes would else fill the field. Under
+ * a legend, the diagram starts below it.
  */
-const fitOf = (shape: Shape) => (shape === 'flow' ? { ...FIT, maxZoom: 1 } : FIT);
+const fitOf = (shape: Shape, legend = false) => {
+  const room = legend ? { padding: { top: UNDER_LEGEND, right: FIT.padding, bottom: FIT.padding, left: FIT.padding } } : FIT;
+  return shape === 'flow' ? { ...room, maxZoom: 1 } : room;
+};
 
-function FitButton({ shape }: { shape: Shape }) {
+function FitButton({ shape, legend }: { shape: Shape; legend: boolean }) {
   const { fitView } = useReactFlow();
   return (
-    <ControlButton aria-label="Fit" title="Fit the diagram" onClick={() => void fitView(fitOf(shape))}>
+    <ControlButton aria-label="Fit" title="Fit the diagram" onClick={() => void fitView(fitOf(shape, legend))}>
       <Scan />
     </ControlButton>
   );
@@ -198,6 +242,20 @@ function HoverLabel({ hovered, view, label, place }: { hovered: string | undefin
   );
 }
 
+/** What the colours of an updated flow say: a small glass at the field's top left. */
+function Legend() {
+  return (
+    <ul className="diagram-legend" aria-label="Legend">
+      {(Object.keys(SIGNS) as Shown[]).map((mark) => (
+        <li key={mark}>
+          <MarkSign mark={mark} said={false} />
+          {SIGNS[mark].words}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 /**
  * The diagram of a view: laid out by ELK, then drawn by React Flow on the hatched field. A click
  * on a box, a frame or a line picks it, and a click on the empty field or a band clears the
@@ -209,6 +267,11 @@ function HoverLabel({ hovered, view, label, place }: { hovered: string | undefin
  * one head where the step travels to, or its box, outlined. With no hover and no pick, all but it
  * and what it joins fades. A change of step lays nothing out. A flow's own diagram has the
  * `shape` of a flow: it is read top to bottom.
+ *
+ * Under a change, `marks` says what the change does to each box, frame and line: a box bears the
+ * colour inside its border, a frame on its outline, a line on its stroke and its heads, and a
+ * legend says what the colours mean. The border keeps the colour of the box's kind, and the
+ * outline and the brightness still say what is picked and what the step lights.
  */
 export function Diagram({
   view,
@@ -217,6 +280,7 @@ export function Diagram({
   onPick,
   step,
   shape = 'model',
+  marks,
   children,
 }: {
   view: View;
@@ -225,6 +289,7 @@ export function Diagram({
   onPick: (id?: string) => void;
   step?: Lights;
   shape?: Shape;
+  marks?: ReadonlyMap<string, Mark> | undefined;
   children?: ReactNode;
 }) {
   const [layout, setLayout] = useState<Layout>();
@@ -262,8 +327,9 @@ export function Diagram({
           focusable: false,
         }),
       ),
-      ...(layout?.placed ?? []).map(
-        ({ box, x, y, width, height }): BoxNode => ({
+      ...(layout?.placed ?? []).map(({ box, x, y, width, height }): BoxNode => {
+        const mark = shownOf(marks, box.id);
+        return {
           id: box.id,
           type: box.frame ? 'frame' : 'box',
           position: { x, y },
@@ -273,36 +339,43 @@ export function Diagram({
           // Its size is known, so that a node given anew for a change of class keeps where its
           // lines end, and its lines do not blink out while it is measured again.
           measured: { width, height },
-          data: { box },
+          ...(mark !== undefined ? { className: `mark-${mark}` } : {}),
+          data: mark !== undefined ? { box, mark } : { box },
           draggable: false,
           selectable: false,
           connectable: false,
           focusable: false,
-        }),
-      ),
+        };
+      }),
     ],
-    [layout],
+    [layout, marks],
   );
   const lines = useMemo(
     () =>
-      view.arrows.map(
-        (arrow): RouteEdge => ({
+      view.arrows.map((arrow): RouteEdge => {
+        const mark = shownOf(marks, arrow.id);
+        const head = mark !== undefined ? MARK_HEADS[mark] : HEAD;
+        return {
           id: arrow.id,
           source: arrow.from,
           target: arrow.to,
           type: 'route',
           data: { points: layout?.routes.get(arrow.id) ?? [] },
-          ...(arrow.back !== undefined ? { markerStart: HEAD } : {}),
-          markerEnd: HEAD,
+          ...(arrow.back !== undefined ? { markerStart: head } : {}),
+          markerEnd: head,
+          ...(mark !== undefined ? { className: `mark-${mark}` } : {}),
           selectable: false,
           focusable: false,
-        }),
-      ),
-    [view, layout],
+        };
+      }),
+    [view, layout, marks],
   );
   // The looks last as long as the nodes and lines they are made from.
   const nodeLook = useMemo(() => looks<BoxNode | BandNode>(), [placed]);
   const lineLook = useMemo(() => looks<RouteEdge>(), [lines]);
+
+  // The legend stands only where something bears a colour.
+  const legend = useMemo(() => [...(marks?.values() ?? [])].some((mark) => mark !== 'same'), [marks]);
 
   // What the mouse is over, a box or a line, as it moves. It becomes the hover once it has stayed
   // the same for a moment, and not while the field is dragged or zoomed. The hover shows over the
@@ -332,8 +405,10 @@ export function Diagram({
     const bright = lit && new Set(lit.boxes);
     return placed.map((node) => {
       if (node.type === 'band') return node;
-      const className = [node.id === picked ? 'picked' : '', node.id === steppedBox ? 'stepped' : '', bright && !bright.has(node.id) ? 'faded' : ''].join(' ').trim();
-      return className === '' ? node : nodeLook(`${node.id} ${className}`, () => ({ ...node, className }));
+      // A box's mark is its own class, and what is in focus is added to it.
+      const own = node.className ?? '';
+      const className = [own, node.id === picked ? 'picked' : '', node.id === steppedBox ? 'stepped' : '', bright && !bright.has(node.id) ? 'faded' : ''].filter((each) => each !== '').join(' ');
+      return className === own ? node : nodeLook(`${node.id} ${className}`, () => ({ ...node, className }));
     });
   }, [placed, nodeLook, lit, picked, steppedBox]);
   const edges = useMemo(() => {
@@ -346,18 +421,20 @@ export function Diagram({
       const lifted = (bright !== undefined && !faded) || way !== '';
       if (!chosen && !faded && !lifted) return line;
       return lineLook(`${line.id} ${chosen} ${faded} ${lifted} ${way}`, () => {
-        const { markerStart, markerEnd, ...rest } = line;
-        const heads =
-          way === 'back' ? { markerStart: PICKED_HEAD } : way === 'on' ? { markerEnd: PICKED_HEAD } : chosen ? { markerEnd: PICKED_HEAD, ...(markerStart !== undefined ? { markerStart: PICKED_HEAD } : {}) } : { markerStart, markerEnd };
+        const { markerStart, markerEnd, className, ...rest } = line;
+        // A line with a mark keeps its colour when it is lit, and its heads keep it too.
+        const mark = shownOf(marks, line.id);
+        const bold = mark !== undefined ? MARK_HEADS[mark] : PICKED_HEAD;
+        const heads = way === 'back' ? { markerStart: bold } : way === 'on' ? { markerEnd: bold } : chosen ? { markerEnd: bold, ...(markerStart !== undefined ? { markerStart: bold } : {}) } : { markerStart, markerEnd };
         return {
           ...rest,
           ...heads,
-          className: [chosen ? 'picked' : '', way !== '' ? 'stepped' : '', faded ? 'faded' : ''].join(' ').trim(),
+          className: [className ?? '', chosen ? 'picked' : '', way !== '' ? 'stepped' : '', faded ? 'faded' : ''].filter((each) => each !== '').join(' '),
           ...(lifted ? { zIndex: LIFT } : {}),
         };
       });
     });
-  }, [lines, lineLook, lit, picked, steppedLine]);
+  }, [lines, lineLook, lit, picked, steppedLine, marks]);
 
   // The label follows the mouse: each move writes where it stands, and no render is made for it.
   // It keeps inside the field, and clear of the panel while one is open; where there is no room
@@ -399,7 +476,7 @@ export function Diagram({
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
           fitView
-          fitViewOptions={fitOf(shape)}
+          fitViewOptions={fitOf(shape, legend)}
           minZoom={0.05}
           maxZoom={2}
           nodesDraggable={false}
@@ -433,12 +510,13 @@ export function Diagram({
           onMouseMove={follow}
         >
           <Controls className="glass-group glass-group-column" position="bottom-left" showInteractive={false} showFitView={false}>
-            <FitButton shape={shape} />
+            <FitButton shape={shape} legend={legend} />
           </Controls>
           <KeepClear picked={picked} routes={layout.routes} />
           <HoverLabel hovered={moving ? undefined : hovered} view={view} label={label} place={place} />
         </ReactFlow>
       )}
+      {layout !== undefined && legend && <Legend />}
       {children}
     </CanvasFrame>
   );

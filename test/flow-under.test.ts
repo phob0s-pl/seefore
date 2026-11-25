@@ -144,6 +144,30 @@ test('the view holds what the flow passes today and what it would pass, each box
   expect(flow?.records.some((record) => record.id === 'api-reads-orders')).toBe(true);
 });
 
+test('a step that stays and is put on another connection leaves its old line and box on the view, in red', () => {
+  // `notes` stays, and now writes the orders: the audit trail and the line to it are passed no more.
+  const { read, flow } = under('update:\n  flows/placing:\n    steps:\n      - places\n      - reads\n      - saves\n      - hands-on\n      - {id: notes, does: api-writes-orders, name: Notes it in the order}\n      - confirms\n');
+  expect(read.problems).toEqual([]);
+  // The list has the six steps and no other row; the step is updated, with today's words for what it was on.
+  expect(flow?.steps.map((step) => [step.number, step.id, step.mark])).toEqual([
+    [1, 'places', 'same'],
+    [2, 'reads', 'same'],
+    [3, 'saves', 'same'],
+    [4, 'hands-on', 'same'],
+    [5, 'notes', 'updated'],
+    [6, 'confirms', 'same'],
+  ]);
+  expect(flow?.steps[4]?.was).toEqual([{ key: 'does', today: 'Worker to Audit' }, { key: 'name' }]);
+  expect(flow?.steps[4]?.acts).toBe('API to Orders');
+  // Its old line and the box at the far end are drawn still, and marked as passed no more.
+  expect(flow?.view.boxes.some((box) => box.id === 'audit')).toBe(true);
+  expect(flow?.view.arrows.some((arrow) => arrow.connections.includes('worker-writes-audit'))).toBe(true);
+  expect(flow?.marks.get('audit')).toBe('removed');
+  expect(flow?.marks.get('worker-writes-audit')).toBe('removed');
+  // The worker is passed still, by the step before.
+  expect(flow?.marks.get('worker')).toBe('same');
+});
+
 test('a step that goes lights its own line, on the view of both', () => {
   const { flow } = under(BODY);
   const lit = (id: string) => flow?.steps.find((step) => step.id === id)?.lights;
