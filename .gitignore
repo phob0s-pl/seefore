@@ -7,3 +7,8 @@ dist/
 
 # The work before plan 2, kept to copy from (owner, 2026-11-23).
 .old/
+
+# Plans and experiments stay out of Git, as the research does: the repository holds code,
+# skills and specifications (owner, 2026-11-25).
+/plan*.md
+/experiments/
