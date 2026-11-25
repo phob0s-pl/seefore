@@ -7,6 +7,8 @@ import { runRules } from './rules.ts';
 import { MARKER_FILE, readMarker } from './marker.ts';
 import { START, compareProblems, error, list, quote, warning } from './problem.ts';
 import { SHAPES } from './records.ts';
+import { changeProblems } from './change.ts';
+import type { ReadChange } from './change.ts';
 import { checkShape } from './shape.ts';
 import { readYaml } from './yaml.ts';
 import { isMap, isSeq } from 'yaml';
@@ -24,6 +26,7 @@ export function readModel(files: readonly SourceFile[]): ModelRead {
   const problems: Problem[] = [];
   const records: ModelRecord[] = [];
   const entries: Entry[] = [];
+  const changes: (ReadChange & { id: string })[] = [];
   const sorted = [...files].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
 
   const marker = sorted.find((file) => file.path === MARKER_FILE);
@@ -37,13 +40,17 @@ export function readModel(files: readonly SourceFile[]): ModelRead {
     // The rules run only on a model that has been read as format 1. A count, and the judging of
     // the rules in `rules/`, need every file of the architecture read: a faulty rule, or a faulty
     // line of context, leaves the rest judged.
-    const outside = (file: string) => !file.startsWith('rules/') && !file.startsWith('context/');
+    const outside = (file: string) => !file.startsWith('rules/') && !file.startsWith('context/') && !file.startsWith('changes/');
     const whole = !problems.some((problem) => problem.severity === 'error' && outside(problem.file)) && entries.every((entry) => entry.ok || !outside(entry.file));
     const ruled = runRules(entries, whole, read.readable);
+    // Each change that reads is held alone: against the model as it is today, and with the model as it would be.
+    const today = [...problems, ...ruled.problems];
+    const held = { files: sorted, entries, problems: today, read: (laid: readonly SourceFile[]) => readModel(laid).problems };
+    const changed = changes.flatMap((change) => changeProblems(change, held).map((problem) => ({ ...problem, record: change.id })));
     return {
       ...(read.name !== undefined ? { name: read.name } : {}),
       records,
-      problems: [...problems, ...ruled.problems].sort(compareProblems),
+      problems: [...today, ...changed].sort(compareProblems),
       counts: ruled.counts,
       rulings: ruled.rulings,
     };
@@ -84,7 +91,8 @@ export function readModel(files: readonly SourceFile[]): ModelRead {
     const yaml = readYaml(file.path, file.text, 'A record');
     problems.push(...yaml.problems);
     const entry: Entry = { id, kind: folder, file: file.path, ok: false, fields: {}, at: new Map() };
-    entries.push(entry);
+    // A change is no record of the model: its id is its own, and may be that of a record it adds.
+    if (folder !== 'changes') entries.push(entry);
     if (!yaml.doc || !yaml.map) continue;
     const shape = checkShape(file.path, yaml, SHAPES[folder as keyof typeof SHAPES] as z.ZodType, RECORD_NOUNS[folder] as string);
     problems.push(...shape.problems.map((problem) => ({ ...problem, record: id })));
@@ -95,6 +103,7 @@ export function readModel(files: readonly SourceFile[]): ModelRead {
         entry.ok = true;
         entry.fields = fields;
         entry.at = placesOf(yaml);
+        if (folder === 'changes') changes.push({ id, file: file.path, yaml });
       }
     }
   }

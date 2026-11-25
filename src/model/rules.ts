@@ -59,7 +59,7 @@ const ENDS = ['people', 'systems', 'apps', 'stores', 'components', 'infrastructu
 const PARTS = ['systems', 'apps', 'stores', 'components', 'infrastructure'];
 const NEEDS_OWNER_OR_TECH = ['apps', 'stores', 'components', 'infrastructure'];
 /** The kinds that are not parts or connections: what `touches`, `from` and `to` never name. */
-const NOT_THINGS = ['owners', 'technologies', 'features', 'flows', 'data', 'rules', 'context'];
+const NOT_THINGS = ['owners', 'technologies', 'features', 'flows', 'data', 'rules', 'context', 'changes'];
 
 const FIELDS: Field[] = [
   { folder: 'apps', field: 'in', kinds: ['systems'] },
@@ -117,7 +117,7 @@ const WRONG: Wrong[] = [
   },
   {
     field: 'via',
-    found: ['owners', 'technologies', 'connections', 'people', 'stores', 'features', 'flows', 'data', 'rules', 'context'],
+    found: ['owners', 'technologies', 'connections', 'people', 'stores', 'features', 'flows', 'data', 'rules', 'context', 'changes'],
     says: '`via` names what the exchange passes through: a piece of infrastructure, an app, a component or a system.',
     fix: 'Take it out of `via`, or name a piece of infrastructure, an app, a component or a system that the exchange passes through. Say anything more in the description.',
   },
@@ -135,13 +135,13 @@ const WRONG: Wrong[] = [
   },
   {
     field: 'owner',
-    found: ['people', 'systems', 'apps', 'stores', 'components', 'connections', 'infrastructure', 'technologies', 'features', 'flows', 'data', 'rules', 'context'],
+    found: ['people', 'systems', 'apps', 'stores', 'components', 'connections', 'infrastructure', 'technologies', 'features', 'flows', 'data', 'rules', 'context', 'changes'],
     says: '`owner` names an owner, a record in `owners/`.',
     fix: 'Write `owners/<id>.yaml` with a `name` for the team, and name that id in `owner`. If a record of another kind has the id you want, keep both and name the owner for what it is for.',
   },
   {
     field: 'technology',
-    found: ['people', 'systems', 'apps', 'stores', 'components', 'connections', 'infrastructure', 'owners', 'features', 'flows', 'data', 'rules', 'context'],
+    found: ['people', 'systems', 'apps', 'stores', 'components', 'connections', 'infrastructure', 'owners', 'features', 'flows', 'data', 'rules', 'context', 'changes'],
     says: '`technology` names technologies, records in `technologies/`.',
     fix: 'Write `technologies/<id>.yaml` with a `name`, and name that id in `technology`. If a record of another kind has the id you want, keep both and keep the product\'s name for the technology.',
   },
@@ -243,7 +243,7 @@ function wrongCase(field: Field, kind: string): Wrong | undefined {
 }
 
 /** The nearest of the ids when one is at most two edits away. */
-function nearest(id: string, ids: readonly string[]): string | undefined {
+export function nearest(id: string, ids: readonly string[]): string | undefined {
   let best: string | undefined;
   let bestDistance = 3;
   for (const other of ids) {

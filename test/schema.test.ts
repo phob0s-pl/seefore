@@ -12,7 +12,13 @@ test('the files in schema/ are what the shapes write now', () => {
   }
 });
 
-const check = (kind: string, record: unknown): boolean => new Ajv().compile(JSON.parse(schemas()[`${kind}.schema.json`] as string))(record);
+/** Whether the schema of a kind passes a record. The other schemas are at hand by their file names, as the schema of a change refers to them. */
+const check = (kind: string, record: unknown): boolean => {
+  const ajv = new Ajv();
+  const all = schemas();
+  for (const [name, text] of Object.entries(all)) if (name !== `${kind}.schema.json`) ajv.addSchema(JSON.parse(text) as object, name);
+  return ajv.compile(JSON.parse(all[`${kind}.schema.json`] as string))(record) as boolean;
+};
 
 test('the schemas of a feature, a flow and data pass a good record and refuse a bad one', () => {
   expect(check('features', { name: 'Sales reports', touches: ['promoter', 'loader'], owner: 'sales' })).toBe(true);
@@ -48,6 +54,26 @@ test('the schema of a line of context passes one of must and prefer with a why, 
   expect(check('context', { must: 'No order is lost.', why: 'The promise.', name: 'A name' })).toBe(false);
   expect(check('context', { must: 'No order is lost.', why: 'The promise.', system: 'Not an id' })).toBe(false);
   expect(check('systems', { name: 'Shop', context: [{ must: 'No order is lost.', why: 'The promise.' }] })).toBe(false);
+});
+
+test('the schema of a change holds its body: a record under add by the schema of its folder, the keys under update by its kind, and paths', () => {
+  const input = { name: 'Settlement from a ledger', prompt: 'Move Settlement onto a ledger.' };
+  const body = {
+    add: { 'apps/ledger': { name: 'Ledger', in: 'boxwick', kind: 'service' }, 'context/payouts-to-the-cent': { must: 'A payout is worked out to the cent.', why: 'Finance asks for it.' } },
+    update: { 'apps/settlement': { description: 'Reads the ledger.', owner: null }, 'flows/paying-promoters': { steps: ['works-out', { id: 'reads-entries', does: 'settlement-reads-ledger' }] } },
+    remove: ['connections/settlement-reads-orders'],
+  };
+  expect(check('changes', { ...input, ...body })).toBe(true);
+  expect(check('changes', input)).toBe(true);
+  // A record under `add` is held whole; a key under `update` is one of its kind; a path is a folder and an id.
+  expect(check('changes', { ...input, add: { 'apps/ledger': { in: 'boxwick' } } })).toBe(false);
+  expect(check('changes', { ...input, add: { 'apps/ledger': { name: 'Ledger', in: 'boxwick', colour: 'red' } } })).toBe(false);
+  expect(check('changes', { ...input, update: { 'apps/settlement': { colour: 'red' } } })).toBe(false);
+  expect(check('changes', { ...input, update: { 'apps/settlement': {} } })).toBe(false);
+  expect(check('changes', { ...input, add: { ledger: { name: 'Ledger', in: 'boxwick' } } })).toBe(false);
+  expect(check('changes', { ...input, add: { 'changes/other': { name: 'Other', prompt: 'Another.' } } })).toBe(false);
+  expect(check('changes', { ...input, remove: ['apps/Ledger'] })).toBe(false);
+  expect(check('changes', { ...input, remove: ['apps/ledger', 'apps/ledger'] })).toBe(false);
 });
 
 test('a schema passes a good record and refuses a bad one', () => {

@@ -27,6 +27,258 @@
         "pattern": "^\\S(?:[^\\n\\r\\u0085\\u2028\\u2029]*\\S)?$"
       },
       "description": "What the person answered when asked, each answer put into one line of 1 to 300 characters by the assistant: 1 to 10 lines, none twice. Nothing the prompt says already, and nothing the person did not say. Left out when nothing was asked."
+    },
+    "add": {
+      "description": "The records the change adds: each under its path, `folder/id`, whole, as its own file would hold it. The id is one that no record has.",
+      "type": "object",
+      "minProperties": 1,
+      "patternProperties": {
+        "^people/[a-z][a-z0-9]*(?:-[a-z0-9]+)*$": {
+          "$ref": "people.schema.json"
+        },
+        "^systems/[a-z][a-z0-9]*(?:-[a-z0-9]+)*$": {
+          "$ref": "systems.schema.json"
+        },
+        "^apps/[a-z][a-z0-9]*(?:-[a-z0-9]+)*$": {
+          "$ref": "apps.schema.json"
+        },
+        "^stores/[a-z][a-z0-9]*(?:-[a-z0-9]+)*$": {
+          "$ref": "stores.schema.json"
+        },
+        "^components/[a-z][a-z0-9]*(?:-[a-z0-9]+)*$": {
+          "$ref": "components.schema.json"
+        },
+        "^connections/[a-z][a-z0-9]*(?:-[a-z0-9]+)*$": {
+          "$ref": "connections.schema.json"
+        },
+        "^infrastructure/[a-z][a-z0-9]*(?:-[a-z0-9]+)*$": {
+          "$ref": "infrastructure.schema.json"
+        },
+        "^owners/[a-z][a-z0-9]*(?:-[a-z0-9]+)*$": {
+          "$ref": "owners.schema.json"
+        },
+        "^technologies/[a-z][a-z0-9]*(?:-[a-z0-9]+)*$": {
+          "$ref": "technologies.schema.json"
+        },
+        "^features/[a-z][a-z0-9]*(?:-[a-z0-9]+)*$": {
+          "$ref": "features.schema.json"
+        },
+        "^flows/[a-z][a-z0-9]*(?:-[a-z0-9]+)*$": {
+          "$ref": "flows.schema.json"
+        },
+        "^data/[a-z][a-z0-9]*(?:-[a-z0-9]+)*$": {
+          "$ref": "data.schema.json"
+        },
+        "^rules/[a-z][a-z0-9]*(?:-[a-z0-9]+)*$": {
+          "$ref": "rules.schema.json"
+        },
+        "^context/[a-z][a-z0-9]*(?:-[a-z0-9]+)*$": {
+          "$ref": "context.schema.json"
+        }
+      },
+      "additionalProperties": false
+    },
+    "update": {
+      "description": "The records the change updates: under the path of each, `folder/id`, only the keys that change, each as it will be. `null` takes a key out. In `steps` of a flow, a step that stays as it is is named by its id alone.",
+      "type": "object",
+      "minProperties": 1,
+      "patternProperties": {
+        "^people/[a-z][a-z0-9]*(?:-[a-z0-9]+)*$": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {
+            "enum": [
+              "name",
+              "only",
+              "description"
+            ]
+          }
+        },
+        "^systems/[a-z][a-z0-9]*(?:-[a-z0-9]+)*$": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {
+            "enum": [
+              "name",
+              "only",
+              "description",
+              "external",
+              "owner"
+            ]
+          }
+        },
+        "^apps/[a-z][a-z0-9]*(?:-[a-z0-9]+)*$": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {
+            "enum": [
+              "name",
+              "in",
+              "only",
+              "description",
+              "kind",
+              "technology",
+              "owner"
+            ]
+          }
+        },
+        "^stores/[a-z][a-z0-9]*(?:-[a-z0-9]+)*$": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {
+            "enum": [
+              "name",
+              "in",
+              "only",
+              "description",
+              "kind",
+              "technology",
+              "owner"
+            ]
+          }
+        },
+        "^components/[a-z][a-z0-9]*(?:-[a-z0-9]+)*$": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {
+            "enum": [
+              "name",
+              "in",
+              "only",
+              "description",
+              "technology",
+              "owner"
+            ]
+          }
+        },
+        "^connections/[a-z][a-z0-9]*(?:-[a-z0-9]+)*$": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {
+            "enum": [
+              "from",
+              "to",
+              "via",
+              "opens",
+              "access",
+              "name",
+              "only",
+              "description",
+              "technology"
+            ]
+          }
+        },
+        "^infrastructure/[a-z][a-z0-9]*(?:-[a-z0-9]+)*$": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {
+            "enum": [
+              "name",
+              "in",
+              "only",
+              "description",
+              "technology",
+              "owner"
+            ]
+          }
+        },
+        "^owners/[a-z][a-z0-9]*(?:-[a-z0-9]+)*$": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {
+            "enum": [
+              "name",
+              "description"
+            ]
+          }
+        },
+        "^technologies/[a-z][a-z0-9]*(?:-[a-z0-9]+)*$": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {
+            "enum": [
+              "name",
+              "description"
+            ]
+          }
+        },
+        "^features/[a-z][a-z0-9]*(?:-[a-z0-9]+)*$": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {
+            "enum": [
+              "name",
+              "description",
+              "only",
+              "owner",
+              "touches"
+            ]
+          }
+        },
+        "^flows/[a-z][a-z0-9]*(?:-[a-z0-9]+)*$": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {
+            "enum": [
+              "name",
+              "starts",
+              "ends",
+              "description",
+              "only",
+              "feature",
+              "steps"
+            ]
+          }
+        },
+        "^data/[a-z][a-z0-9]*(?:-[a-z0-9]+)*$": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {
+            "enum": [
+              "name",
+              "description",
+              "fields"
+            ]
+          }
+        },
+        "^rules/[a-z][a-z0-9]*(?:-[a-z0-9]+)*$": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {
+            "enum": [
+              "name",
+              "description",
+              "never",
+              "each",
+              "must",
+              "debt"
+            ]
+          }
+        },
+        "^context/[a-z][a-z0-9]*(?:-[a-z0-9]+)*$": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {
+            "enum": [
+              "must",
+              "prefer",
+              "why",
+              "system"
+            ]
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "remove": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^(?:people|systems|apps|stores|components|connections|infrastructure|owners|technologies|features|flows|data|rules|context)/[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+      },
+      "description": "The records the change removes: the path of each, `folder/id`. What still names one of them is told by the check.",
+      "uniqueItems": true
     }
   },
   "required": [
@@ -34,5 +286,5 @@
     "prompt"
   ],
   "additionalProperties": false,
-  "description": "The input of a change: the prompt a person gave, what they answered when asked, and a name written last. It names no record that is not there yet."
+  "description": "A change: its input (the prompt a person gave, what they answered when asked, and a name written last), and its body, the records it adds, updates and removes. With no body it is an input alone."
 }

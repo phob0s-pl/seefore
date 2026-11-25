@@ -304,7 +304,7 @@ function schemaAt(schema: z.ZodType, path: Path): unknown {
 }
 
 /** The keys a mapping may have, when the schema at that path is a plain object. */
-function knownKeys(schema: z.ZodType, path: Path): string[] {
+export function knownKeys(schema: z.ZodType, path: Path): string[] {
   const shape = shapeOf(mappingOf(schemaAt(schema, path)));
   return shape ? Object.keys(shape) : [];
 }

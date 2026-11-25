@@ -101,7 +101,7 @@ process is in `research/stage-15-22/`, out of Git.
 | # | Stage | Result | Who |
 | --- | --- | --- | --- |
 | D1 | The input of a change | One page and a schema: a `prompt`, what the person answered when asked (`given`), and a `name` written last | Fable defines, the main session builds |
-| D2 | What a change is | One page: what a change holds | Fable |
+| D2 | The body of a change | A change in `changes/` says which records it adds, updates and removes. The check holds it against the model, and holds the model as it would be | The main session, with Astra's proposal |
 | D3 | Decisions | One page: what a decision is, and when one is asked, assumed or just made | Fable |
 | D4 | The review of a change | One page: who reads a change, what they say, and how the reading ends | Fable |
 
