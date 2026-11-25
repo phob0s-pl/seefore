@@ -312,3 +312,24 @@ test('a flow with a step id twice has no step told from another: it is shown as 
   expect(flow?.marks.size).toBe(0);
   expect(flow?.was).toEqual([{ key: 'description', today: 'How an order is placed.' }]);
 });
+
+test('an updated flow has its result too: the flow as it would be alone, with no step that goes and no mark', () => {
+  const { flow } = under(BODY);
+  const result = flow?.result;
+  // The steps as they would be, with the numbers they bear in the list of both, and none of the two that go.
+  expect(result?.steps.map((step) => [step.number, step.id, step.mark, step.was])).toEqual(
+    flow?.steps.filter((step) => step.mark !== 'removed').map((step) => [step.number, step.id, 'same', []]),
+  );
+  expect(result).toMatchObject({ verb: 'update', count: 6, was: [], flow: { description: 'Now with a ledger.' } });
+  expect(result?.steps.length).toBe(6);
+  expect(result?.marks.size).toBe(0);
+  // Its view holds what the flow would pass: the ledger, and not the audit trail that only today's flow passes.
+  const boxes = result?.view.boxes.map((box) => box.id);
+  expect(boxes).toContain('ledger');
+  expect(boxes).not.toContain('audit');
+  expect(flow?.view.boxes.map((box) => box.id)).toContain('audit');
+  expect(result?.result).toBeUndefined();
+  // A flow the change adds or removes is one view already.
+  expect(under('remove:\n  - flows/placing\n').flow?.result).toBeUndefined();
+});
+

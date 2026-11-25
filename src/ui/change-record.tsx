@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { ListChecks, Lock, Scale } from 'lucide-react';
-import { Link, useOutletContext, useParams } from 'react-router-dom';
+import { Link, useLocation, useOutletContext, useParams, useSearchParams } from 'react-router-dom';
 import type { ModelRecord } from '../model/answer.ts';
 import { catalogueOf } from '../model/catalogue.ts';
 import type { Catalogue } from '../model/catalogue.ts';
@@ -11,7 +11,7 @@ import type { FlowUnder } from '../model/flow.ts';
 import { travelOf } from '../model/travel.ts';
 import type { Travel } from '../model/travel.ts';
 import { FeatureBody } from './features.tsx';
-import { FlowBody, MARK_WORDS } from './flow.tsx';
+import { FlowBody, MARK_WORDS, stepInHash } from './flow.tsx';
 import { addressOf, KindTile, Missing, RecordLink } from './models.tsx';
 import { RecordBody, TypeMarks } from './record.tsx';
 import type { ModelState, Slots } from './shell.tsx';
@@ -159,6 +159,10 @@ export function ChangeRecordPage() {
   );
 }
 
+/** What the address asks of an updated flow's page: `?view=result` is the flow as it would be alone; anything else what the change does to it. */
+const VIEW = 'view';
+const RESULT = 'result';
+
 /**
  * A flow under a change: the flow's own page, drawn from what the change does to it, with the way
  * back to the change and the flow's mark in the top bar. Its links and its panel are made by a
@@ -166,18 +170,28 @@ export function ChangeRecordPage() {
  * the change removes, `system` is its address in the system.
  */
 function FlowUnderPage({ change, changes, under, label, system, slots }: { change: Change; changes: Changes; under: FlowUnder; label: string; system: string; slots: Slots | undefined }) {
-  const catalogue = useMemo(() => catalogueOf(under.records, changes.touch(change.id)), [under, changes, change.id]);
+  const { pathname, hash } = useLocation();
+  const [params] = useSearchParams();
+  // An updated flow has two views: what the change does to it, and the flow as it would be alone.
+  const result = params.get(VIEW) === RESULT ? under.result : undefined;
+  const shown = result ?? under;
+  const catalogue = useMemo(() => catalogueOf(shown.records, changes.touch(change.id)), [shown, changes, change.id]);
   // What the change does to each record it names, for the panel of a box or a line.
   const verbs = useMemo(() => new Map(change.touched.map((each) => [each.path, each.verb])), [change]);
   const verb = under.verb;
+  // The step picked stays picked in the other view when that view has it: a step that goes is in the first alone.
+  const picked = stepInHash(hash);
+  const kept = (steps: FlowUnder['steps']) => (steps.some((step) => step.id === picked) ? hash : '');
   return (
     <FlowBody
-      flow={under.flow}
-      steps={under.steps}
-      count={under.count}
-      view={under.view}
-      was={under.was}
-      marks={under.marks}
+      // Each view is a list and a diagram of its own, laid out afresh, with no panel left open from the other.
+      key={result !== undefined ? RESULT : 'changes'}
+      flow={shown.flow}
+      steps={shown.steps}
+      count={shown.count}
+      view={shown.view}
+      was={shown.was}
+      marks={shown.marks}
       verbs={verbs}
       catalogue={catalogue}
       slots={slots}
@@ -185,6 +199,16 @@ function FlowUnderPage({ change, changes, under, label, system, slots }: { chang
         <>
           <Crumbs change={change} label={label} />
           <MarkPill verb={verb} />
+          {under.result !== undefined && (
+            <nav className="page-tabs" aria-label="View">
+              <Link replace to={{ pathname, hash: kept(under.steps) }} aria-current={result === undefined ? 'page' : undefined}>
+                Changes
+              </Link>
+              <Link replace to={{ pathname, search: `?${VIEW}=${RESULT}`, hash: kept(under.result.steps) }} aria-current={result !== undefined ? 'page' : undefined}>
+                Result
+              </Link>
+            </nav>
+          )}
         </>
       }
       system={verb === 'remove' ? system : undefined}

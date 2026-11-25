@@ -273,6 +273,8 @@ export type FlowUnder = {
   view: View;
   marks: Map<string, Mark>;
   records: ModelRecord[];
+  /** Of a flow the change updates: the flow as it would be alone, with no mark, as a flow the change adds is read. */
+  result?: FlowUnder;
 };
 
 /** The keys of a step that are its own: a step is updated when one of them is written otherwise. */
@@ -390,7 +392,7 @@ export function flowUnder(
   const rawAfter = rawSteps(will);
   if (rawToday.size !== readToday.steps.length || rawAfter.size !== readAfter.steps.length) {
     const shown = plain(after);
-    return shown === undefined ? undefined : { ...shown, was: head };
+    return shown === undefined ? undefined : { ...shown, was: head, result: shown };
   }
   const order = orderOfBoth([...rawToday.keys()], [...rawAfter.keys()]);
   const moved = movedOf([...rawToday.keys()], [...rawAfter.keys()]);
@@ -504,5 +506,7 @@ export function flowUnder(
     // A line of several connections bears their mark when they agree, and is updated when they do not: something on it differs.
     marks.set(arrow.id, each.every((mark) => mark === each[0]) ? (each[0] ?? 'same') : 'updated');
   }
-  return { verb, flow: { ...readAfter, steps }, was: head, steps, count: readAfter.steps.length, view, marks, records };
+  // The flow as it would be alone, which the page shows in place of the difference when asked.
+  const result: FlowUnder = { verb, flow: readAfter, was: [], steps: readAfter.steps.map((step) => ({ ...step, mark: 'same', was: [] })), count: readAfter.steps.length, view: viewAfter, marks: new Map(), records: [...after] };
+  return { verb, flow: { ...readAfter, steps }, was: head, steps, count: readAfter.steps.length, view, marks, records, result };
 }

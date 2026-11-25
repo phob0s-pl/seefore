@@ -2,9 +2,9 @@
 
 Stage D7b of `plan2.md`, in milestone 4. The owner said on 2026-11-25: "new, deleted flow is
 just label, updated flow will have red elements removed, green added, and yellow updated",
-answered three questions, and had it built as one stage. Fable and Astra each planned it
-apart (`research/changes/flow-page/`, out of Git). The main session builds the model's
-part, Opus the pages, and Fable reviews.
+answered three questions, had it built as one stage, and after the review asked for the
+switch. Fable and Astra each planned it apart (`research/changes/flow-page/`, out of Git).
+The main session builds the model's part, Opus the pages, and Fable reviews.
 
 ## What the owner answered
 
@@ -24,7 +24,7 @@ own page (C4): its steps in the sidebar, the bar of the current step, its diagra
 | The top bar | The home button, the arrows, the way back: the change, to Need; "Records", to the list; the flow's name. After it the mark: **Added**, **Updated** or **Removed** |
 | A flow the change adds | The flow as it would be. No colour on a step, a box or a line |
 | A flow the change removes | The flow as it is today, the same way. The bar with no step says "Removed by this change. This is the flow as it is today.", with "Open it in the system" |
-| A flow the change updates | One list of steps and one diagram, of today and of the change together, as below |
+| A flow the change updates | Two views, by a switch after the mark. **Changes**: one list of steps and one diagram, of today and of the change together, as below. **Result**, at `?view=result`: the flow as it would be alone, read as a flow the change adds. A step picked stays picked where the other view has it |
 
 **The mark "Updated" is yellow on every page of a change**, on the Records list too.
 
@@ -75,8 +75,8 @@ description differs, and today's words under an updated one.
 ## How it is built
 
 - **`flowUnder` in `src/model/flow.ts`** says all that differs: the steps in one list, each
-  with its mark, today's words for its changed keys and what it lights; the view of both;
-  and a mark for every box, arrow and connection. The page compares nothing.
+  with its mark, today's words for its changed keys and what it lights; the view of both; a
+  mark for every box, arrow and connection; and the result. The page compares nothing.
 - **The pages**: `flow.tsx` draws a flow from that; the links of the flow's page (its
   feature, a flow it runs) follow `address`; `diagram.tsx` draws the marks.
 
@@ -85,16 +85,16 @@ description differs, and today's words under an updated one.
 - **Later**: the words that differ marked inside a text; the old ends of a connection whose
   `from` or `to` changes; a note that another change updates this flow too; the same marks
   on the whole diagram (D8); a rule and a line of context on pages of their own.
-- **Never**: two changes laid together; a switch between today and the change; colour on a
-  step or a box of a flow that is added or removed.
+- **Never**: two changes laid together; a view of today alone under a change, which is the
+  flow's own page; colour on a step or a box of a flow that is added or removed.
 
 ## Tests
 
-Thirteen of the model: the one list and its numbers; what makes a step updated; a step
+Fourteen of the model: the one list and its numbers; what makes a step updated; a step
 that only moves; the marks of boxes and lines; a step put on another connection; what a
 removed step lights; a reply that goes; a step that goes on a connection the change
-rewrites; strands and conditions in the one list; an id twice; a flow added and one removed;
-no flow where the change names none; the fields of a data record. Five in the browser: an
-updated and an added flow open with their mark; the list's colours and a removed step
-picked; the diagram's marks and legend; a panel's sentence and its button; a removed flow,
-and the fields of a data record.
+rewrites; strands and conditions in the one list; an id twice; the result; a flow added and
+one removed; no flow where the change names none; the fields of a data record. Six in the
+browser: an updated and an added flow open with their mark; the list's colours and a
+removed step picked; the diagram's marks and legend; a panel's sentence and its button; a
+removed flow, and the fields of a data record; the switch.

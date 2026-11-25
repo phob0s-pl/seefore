@@ -28,7 +28,7 @@ function movesFrom(place: Place, last: number): { previous?: Place; next?: Place
 const joined = (words: readonly string[]): string => (words.length <= 1 ? words.join('') : `${words.slice(0, -1).join(', ')} and ${words[words.length - 1]}`);
 
 /** The step's id an address names after `#`, or none. */
-function stepInHash(hash: string): string {
+export function stepInHash(hash: string): string {
   try {
     return decodeURIComponent(hash.slice(1));
   } catch {
@@ -163,7 +163,7 @@ export function FlowBody({
   system?: string;
 }) {
   const navigate = useNavigate();
-  const { pathname, hash } = useLocation();
+  const { pathname, search, hash } = useLocation();
   const wanted = stepInHash(hash);
   const index = wanted === '' ? -1 : steps.findIndex((step) => step.id === wanted);
   const step = index >= 0 ? steps[index] : undefined;
@@ -183,9 +183,10 @@ export function FlowBody({
       at.current = to;
       setEnds(to === 'ends');
       const id = typeof to === 'number' ? steps[to]?.id : undefined;
-      void navigate({ pathname, hash: id !== undefined ? `#${encodeURIComponent(id)}` : '' }, { replace: true });
+      // What the address asks besides the step stays: under a change, which of the two views.
+      void navigate({ pathname, search, hash: id !== undefined ? `#${encodeURIComponent(id)}` : '' }, { replace: true });
     },
-    [navigate, pathname, steps],
+    [navigate, pathname, search, steps],
   );
   const last = steps.length - 1;
   const { previous, next } = movesFrom(place, last);

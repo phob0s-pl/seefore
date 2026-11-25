@@ -1043,3 +1043,74 @@ test.skipIf(!HAS_CHROME).concurrent(
   20_000,
 );
 
+/** What the two views of an updated flow show: the address, the switch, the mark, the rows, the step picked, the boxes and whether anything bears a colour; or false until the lines are drawn. */
+const VIEWS = `document.querySelectorAll('.react-flow__edge-path[d^="M"]').length > 0 && {
+  search: location.search,
+  hash: location.hash,
+  tabs: [...document.querySelectorAll('.top-header nav[aria-label="View"] a')].map((link) => [link.textContent, link.getAttribute('aria-current')]),
+  mark: ${texts('.header-slot > .pill')},
+  rows: [...document.querySelectorAll('[data-row="step"]')].map((row) => [row.getAttribute('data-step'), row.getAttribute('data-mark'), row.querySelector('.flow-step-number').textContent]),
+  current: document.querySelector('[data-row="step"][aria-current="step"]')?.getAttribute('data-step') ?? null,
+  boxes: [...document.querySelectorAll('.react-flow__node')].map((node) => node.getAttribute('data-id')).sort(),
+  marked: document.querySelectorAll('.react-flow__node [data-mark], .react-flow__edge[class*="mark-"]').length,
+  legend: document.querySelector('[aria-label="Legend"]') !== null,
+  today: document.querySelectorAll('.flow-line-today, .flow-end-today').length,
+}`;
+/** The view the switch says is shown, drawn, with the step the address names picked: the address changes a moment before the page does. */
+const inView = (view: string, hash: string) =>
+  `document.querySelector('.top-header nav[aria-label="View"] a[aria-current="page"]')?.textContent === ${JSON.stringify(view)} && location.hash === ${JSON.stringify(hash)} && (document.querySelector('[data-row="step"][aria-current="step"]')?.getAttribute('data-step') ?? '') === ${JSON.stringify(hash.slice(1))} && ${VIEWS}`;
+const OTHER_VIEW = '.top-header nav[aria-label="View"] a:not([aria-current])';
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME ? 'an updated flow has a switch in the top bar: Changes, and Result, the flow as it would be with no colour; the step picked stays, and a step that goes is let go' : `skipped: there is no Chrome at ${CHROME}`,
+  () =>
+    inChrome(async (send, address) => {
+      await send('Page.navigate', { url: `${address}/changes/orders-by-post/records/flows/placing-an-order#confirms` });
+      expect(await waitFor(send, `${onFlowUnder('placing-an-order', 'Placing an order')} && ${inView('Changes', '#confirms')}`)).toMatchObject({
+        search: '',
+        tabs: [
+          ['Changes', 'page'],
+          ['Result', null],
+        ],
+        current: 'confirms',
+        boxes: ['clerk', 'customer', 'order-api', 'orders', 'shop'],
+        legend: true,
+      });
+      // Result: the steps as they would be, the step picked still picked, and nothing of today: no step that goes, no box only today's flow passes, no colour, no legend.
+      await click(send, await centreOf(send, OTHER_VIEW));
+      expect(await waitFor(send, inView('Result', '#confirms'))).toEqual({
+        search: '?view=result',
+        hash: '#confirms',
+        tabs: [
+          ['Changes', null],
+          ['Result', 'page'],
+        ],
+        mark: ['Updated'],
+        rows: [
+          ['places', null, '1'],
+          ['types-in', null, '2'],
+          ['confirms', null, '3'],
+        ],
+        current: 'confirms',
+        boxes: ['clerk', 'customer', 'order-api', 'shop'],
+        marked: 0,
+        legend: false,
+        today: 0,
+      });
+      // A move to another step keeps the view.
+      await press(send, 'ArrowUp', 38);
+      expect(await waitFor(send, inView('Result', '#types-in'))).toMatchObject({ search: '?view=result', current: 'types-in' });
+      // Back to Changes on the same step; from a step that goes, Result opens on the whole flow.
+      await click(send, await centreOf(send, OTHER_VIEW));
+      expect(await waitFor(send, inView('Changes', '#types-in'))).toMatchObject({ search: '', current: 'types-in', rows: [['places', null, '1'], ['saves', 'removed', '−'], ['types-in', 'added', '2'], ['confirms', 'updated', '3']] });
+      await click(send, await centreOf(send, '[data-row="step"][data-step="saves"]'));
+      expect(await waitFor(send, inView('Changes', '#saves'))).toMatchObject({ current: 'saves' });
+      await click(send, await centreOf(send, OTHER_VIEW));
+      expect(await waitFor(send, inView('Result', ''))).toMatchObject({ search: '?view=result', current: null });
+      // A flow the change adds is one view: it has no switch.
+      await send('Page.navigate', { url: `${address}/changes/orders-by-post/records/flows/taking-a-posted-order` });
+      expect(await waitFor(send, `${onFlowUnder('taking-a-posted-order', 'Taking a posted order')} && document.querySelectorAll('.react-flow__edge-path[d^="M"]').length > 0 && { tabs: document.querySelectorAll('nav[aria-label="View"]').length }`)).toEqual({ tabs: 0 });
+    }),
+  20_000,
+);
+
