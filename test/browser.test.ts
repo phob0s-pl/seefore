@@ -415,7 +415,7 @@ test.skipIf(!HAS_CHROME).concurrent(
       // There is no list of flows apart: its old address leads to the features.
       await send('Page.navigate', { url: `${address}/flows` });
       expect(await waitFor(send, `location.pathname === '/features' && [...document.querySelectorAll('main a')].map((link) => link.getAttribute('href')).join()`)).toBe('/features/ordering,/flows/placing-an-order');
-      expect(await waitFor(send, `document.querySelector('nav[aria-label="Main navigation"]')?.innerText.replace(/\\s+/g, ' ')`)).toBe('Architecture Context Features Models Rules');
+      expect(await waitFor(send, `document.querySelector('nav[aria-label="Main navigation"]')?.innerText.replace(/\\s+/g, ' ')`)).toBe('Architecture Context Features Models Rules Changes');
       expect(await waitFor(send, `document.querySelector('a[href="/flows/placing-an-order"]')?.textContent`)).toBe('Placing an order');
       await click(send, await centreOf(send, 'a[href="/flows/placing-an-order"]'));
       await flowAt(send, '');
@@ -566,7 +566,8 @@ test.skipIf(!HAS_CHROME).concurrent(
         links: ['/context/orders-are-never-lost', '/context/a-new-store-is-postgresql', '/models/shop', '/context/features-go-into-the-order-api'],
       });
       await click(send, await centreOf(send, '.context-list a[href="/context/orders-are-never-lost"]'));
-      const page = `location.pathname === '/context/orders-are-never-lost' && document.querySelector('.context-title') !== null && {
+      // The window's title is set a moment after the page is drawn, so the wait is for it too.
+      const page = `location.pathname === '/context/orders-are-never-lost' && document.querySelector('.context-title') !== null && document.title.startsWith('An order') && {
         lit: document.querySelector('nav[aria-label="Main navigation"] a.active')?.textContent,
         window: document.title,
         crumbs: document.querySelector('nav[aria-label="Breadcrumb"]') !== null,
@@ -623,6 +624,95 @@ test.skipIf(!HAS_CHROME).concurrent(
       // An id that names no line is missing; so is the id of a record that is no line.
       await send('Page.navigate', { url: `${address}/context/shop` });
       expect(await waitFor(send, `document.querySelector('.empty-state') !== null && ${texts('.empty-state')}[0]`)).toBe('No such record. Back to Context');
+    }),
+  20_000,
+);
+
+/** What the sidebar shows: the text of the main navigation or none, and that of a change's sections and its current entry, or none. */
+const SIDEBAR = `({
+  main: document.querySelector('nav[aria-label="Main navigation"]')?.innerText.replace(/\\s+/g, ' ').trim() ?? null,
+  change: document.querySelector('nav[aria-label="Change sections"]')?.innerText.replace(/\\s+/g, ' ').trim() ?? null,
+  current: document.querySelector('nav[aria-label="Change sections"] a.active .nav-text')?.textContent ?? null,
+})`;
+/** A page of the change in the test model, once it is drawn: the address, the title on the page and the window's. */
+const onChange = (path: string) => `location.pathname === ${JSON.stringify(path)} && document.querySelector('main h1')?.textContent === 'Orders by post' && document.title === 'Orders by post · seefore' && ${SIDEBAR}`;
+/** The list of the changes, once it is drawn. */
+const ON_CHANGES = `location.pathname === '/changes' && document.querySelector('ul[aria-label="Changes"] > li') !== null && ${SIDEBAR}`;
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME ? 'the entry Changes opens the list, and a row opens the change with its own sidebar, Need current' : `skipped: there is no Chrome at ${CHROME}`,
+  () =>
+    inChrome(async (send, address) => {
+      await send('Page.navigate', { url: `${address}/` });
+      await click(send, await centreOf(send, 'nav[aria-label="Main navigation"] a[href="/changes"]'));
+      const list = `(() => { const read = ${ON_CHANGES}; return read && document.title === 'Changes · seefore' && {
+        ...read,
+        title: document.querySelector('main h1').textContent,
+        lit: document.querySelector('nav[aria-label="Main navigation"] a.active')?.textContent,
+        rows: ${texts('ul[aria-label="Changes"] > li')},
+        links: [...document.querySelectorAll('ul[aria-label="Changes"] a')].map((link) => link.getAttribute('href')),
+      }; })()`;
+      expect(await waitFor(send, list)).toEqual({
+        main: 'Architecture Context Features Models Rules Changes',
+        change: null,
+        current: null,
+        title: 'Changes',
+        lit: 'Changes',
+        rows: ['Orders by post'],
+        links: ['/changes/orders-by-post'],
+      });
+      await click(send, await centreOf(send, 'ul[aria-label="Changes"] a[href="/changes/orders-by-post"]'));
+      expect(await waitFor(send, `(() => { const read = ${onChange('/changes/orders-by-post')}; return read && read.change !== null && { ...read, page: document.querySelector('main').innerText.trim() }; })()`)).toEqual({
+        main: null,
+        change: 'Sections 1 Need 2 Records All changes',
+        current: 'Need',
+        page: 'Orders by post',
+      });
+    }),
+  20_000,
+);
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME ? 'Records opens its page, "All changes" leads back to the list with the main sidebar, and an id that names no change is missing' : `skipped: there is no Chrome at ${CHROME}`,
+  () =>
+    inChrome(async (send, address) => {
+      await send('Page.navigate', { url: `${address}/changes/orders-by-post` });
+      expect(await waitFor(send, `(() => { const read = ${onChange('/changes/orders-by-post')}; return read && read.current; })()`)).toBe('Need');
+      await click(send, await centreOf(send, 'nav[aria-label="Change sections"] a[href="/changes/orders-by-post/records"]'));
+      expect(await waitFor(send, `(() => { const read = ${onChange('/changes/orders-by-post/records')}; return read && read.current === 'Records' && read; })()`)).toMatchObject({ main: null, current: 'Records' });
+      await click(send, await centreOf(send, 'nav[aria-label="Change sections"] a[href="/changes"]'));
+      expect(await waitFor(send, `(() => { const read = ${ON_CHANGES}; return read && read.main !== null && read; })()`)).toEqual({
+        main: 'Architecture Context Features Models Rules Changes',
+        change: null,
+        current: null,
+      });
+      // The id of a record that is no change: the change is looked for in `changes/` alone.
+      await send('Page.navigate', { url: `${address}/changes/shop` });
+      expect(await waitFor(send, `document.querySelector('.empty-state') !== null && { says: ${texts('.empty-state')}[0], sidebar: ${SIDEBAR} }`)).toEqual({
+        says: 'No such record. Back to Changes',
+        sidebar: { main: 'Architecture Context Features Models Rules Changes', change: null, current: null },
+      });
+    }),
+  20_000,
+);
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME ? 'the home button stands before the arrows on a change and on a flow, leads home, and is not there on the list' : `skipped: there is no Chrome at ${CHROME}`,
+  () =>
+    inChrome(async (send, address) => {
+      const HOME = `document.querySelector('.history-controls a[aria-label="Home"]')`;
+      // The labels of the top bar's group, in their order.
+      const GROUP = `[...document.querySelectorAll('.history-controls > [aria-label]')].map((each) => each.getAttribute('aria-label'))`;
+      await send('Page.navigate', { url: `${address}/changes` });
+      expect(await waitFor(send, `(() => { const read = ${ON_CHANGES}; return read && ${GROUP}; })()`)).toEqual(['Go back', 'Go forward']);
+      await send('Page.navigate', { url: `${address}/changes/orders-by-post` });
+      expect(await waitFor(send, `(() => { const read = ${onChange('/changes/orders-by-post')}; return read && read.change !== null && ${HOME} !== null && ${GROUP}; })()`)).toEqual(['Home', 'Go back', 'Go forward']);
+      await click(send, await centreOf(send, '.history-controls a[aria-label="Home"]'));
+      expect(await waitFor(send, `location.pathname === '/' && document.querySelector('nav[aria-label="Main navigation"]') !== null && ${HOME} === null`)).toBe(true);
+      await send('Page.navigate', { url: `${address}/flows/placing-an-order` });
+      expect(await waitFor(send, `document.querySelector('.sidebar-slot [data-row="step"]') !== null && ${GROUP}`)).toEqual(['Home', 'Go back', 'Go forward']);
+      await click(send, await centreOf(send, '.history-controls a[aria-label="Home"]'));
+      expect(await waitFor(send, `location.pathname === '/' && document.querySelector('nav[aria-label="Main navigation"]') !== null && ${HOME} === null`)).toBe(true);
     }),
   20_000,
 );

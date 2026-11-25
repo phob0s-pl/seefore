@@ -1,9 +1,11 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { Boxes, Check, ChevronDown, ChevronLeft, ChevronRight, Compass, ListChecks, Puzzle, Waypoints } from 'lucide-react';
+import { Boxes, Check, ChevronDown, ChevronLeft, ChevronRight, Compass, House, ListChecks, PencilRuler, Puzzle, Waypoints } from 'lucide-react';
 import { Link, NavLink, Outlet, useLocation, useMatch, useNavigate, useSearchParams } from 'react-router-dom';
 import type { ModelAnswer } from '../model/answer.ts';
 import { catalogueOf } from '../model/catalogue.ts';
 import type { Catalogue } from '../model/catalogue.ts';
+import { changesOf } from '../model/changes.ts';
+import type { Changes } from '../model/changes.ts';
 import { contextOf } from '../model/context.ts';
 import type { Context } from '../model/context.ts';
 import { rulebookOf } from '../model/rulebook.ts';
@@ -12,16 +14,17 @@ import { travelOf } from '../model/travel.ts';
 import type { Travel } from '../model/travel.ts';
 import { DEPTHS, depthOf, focusesOf, focusFor } from '../model/view.ts';
 import type { Depth, Focus } from '../model/view.ts';
+import { ChangeSidebar } from './changes.tsx';
 import { TABS } from './models.tsx';
-import { Button, GlassGroup } from './ui.tsx';
+import { Button, ButtonLink, GlassGroup } from './ui.tsx';
 
 /**
  * What the shell knows of the model, and hands to the page: the answer and what the pages of
- * the records, of the rules and of the context ask of it, worked out once, or why there is
- * none. On the page of a flow, the places the page fills itself: the sidebar under the name,
- * and the top bar after the arrows; on the page of a rule, the top bar alone.
+ * the records, of the rules, of the context and of the changes ask of it, worked out once, or
+ * why there is none. On the page of a flow, the places the page fills itself: the sidebar under
+ * the name, and the top bar after the arrows; on the page of a rule, the top bar alone.
  */
-export type ModelState = { answer?: ModelAnswer; catalogue?: Catalogue; travel?: Travel; rulebook?: Rulebook; context?: Context; failed?: string; slots?: Slots };
+export type ModelState = { answer?: ModelAnswer; catalogue?: Catalogue; travel?: Travel; rulebook?: Rulebook; context?: Context; changes?: Changes; failed?: string; slots?: Slots };
 
 /** The places of the shell that the page of a flow fills, its steps and its breadcrumb, and that of a rule, its breadcrumb. */
 export type Slots = { steps: HTMLElement | null; crumbs: HTMLElement | null };
@@ -111,7 +114,9 @@ function FocusMenu({ depth, focus, choices }: { depth: Depth; focus: string | un
 /**
  * The window: the sidebar with the name and its entries, the top bar with a back and a forward
  * arrow and, on the Architecture page, the choice of depth and of focus, and the page beside
- * them. On the page of a flow, its steps stand in the sidebar and its breadcrumb in the top bar.
+ * them. On the page of a flow, its steps stand in the sidebar and its breadcrumb in the top bar;
+ * on the pages of a change, its sections stand in the sidebar. Where the sidebar is replaced, a
+ * home button stands before the arrows.
  */
 export function Shell() {
   const navigate = useNavigate();
@@ -122,7 +127,7 @@ export function Shell() {
   const state = useMemo((): ModelState => {
     if (model.answer === undefined) return model;
     const catalogue = catalogueOf(model.answer.records);
-    return { ...model, catalogue, travel: travelOf(model.answer.records, catalogue), rulebook: rulebookOf(model.answer), context: contextOf(model.answer.records) };
+    return { ...model, catalogue, travel: travelOf(model.answer.records, catalogue), rulebook: rulebookOf(model.answer), context: contextOf(model.answer.records), changes: changesOf(model.answer.records) };
   }, [model]);
   // The focus the address names, and the choices of the depth: none at Systems.
   const records = model.answer?.records;
@@ -140,6 +145,14 @@ export function Shell() {
   // The page of a rule puts its breadcrumb in the top bar too, and keeps the navigation.
   const onRule = useMatch('/rules/:id') !== null;
   const crumbed = reading || onRule;
+  // On both pages of a change its own sidebar takes the place of the navigation, once the model
+  // has the change. While the model is read, and for an id that names no change, the navigation stays.
+  const onNeed = useMatch('/changes/:id');
+  const onRecords = useMatch('/changes/:id/records');
+  const changeId = (onNeed ?? onRecords)?.params.id;
+  const change = changeId !== undefined ? state.changes?.change(changeId) : undefined;
+  // Wherever the navigation is replaced, a button leads home.
+  const home = reading || change !== undefined;
   const [steps, setSteps] = useState<HTMLElement | null>(null);
   const [crumbs, setCrumbs] = useState<HTMLElement | null>(null);
   const handed = useMemo((): ModelState => (crumbed ? { ...state, slots: { steps: reading ? steps : null, crumbs } } : state), [state, crumbed, reading, steps, crumbs]);
@@ -179,6 +192,8 @@ export function Shell() {
         </div>
         {reading ? (
           <div className="sidebar-slot" ref={setSteps} />
+        ) : change !== undefined ? (
+          <ChangeSidebar change={change} />
         ) : (
           <nav aria-label="Main navigation" className="sidebar-navigation">
             <NavLink to="/" end className="nav-link">
@@ -202,12 +217,24 @@ export function Shell() {
               <span className="nav-text">Rules</span>
               {dot !== undefined && <span className={`nav-dot nav-dot-${dot}`} role="img" aria-label={dot === 'broken' ? 'A rule is broken' : 'A rule is not judged'} />}
             </NavLink>
+            <NavLink to="/changes" className="nav-link">
+              <PencilRuler />
+              <span className="nav-text">Changes</span>
+            </NavLink>
           </nav>
         )}
       </aside>
       <div className="app-inset">
         <header className="top-header">
           <GlassGroup className="history-controls" aria-label="Page history">
+            {home && (
+              <>
+                <ButtonLink to="/" variant="ghost" size="icon" aria-label="Home">
+                  <House />
+                </ButtonLink>
+                <span className="history-divider" aria-hidden="true" />
+              </>
+            )}
             <Button variant="ghost" size="icon" aria-label="Go back" onClick={() => void navigate(-1)}>
               <ChevronLeft />
             </Button>
