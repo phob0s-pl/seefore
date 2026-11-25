@@ -108,11 +108,12 @@ test('a point says what it is about by name, and each address leads under the ch
     // A record the change does not touch leads to its page in the system.
     ['stores/orders', 'Orders', null, '/models/orders', 'stores'],
   ]);
-  expect(second?.about.map((each) => [each.address, each.label, each.to ?? null])).toEqual([
-    ['apps/api', 'API', '/changes/post/records/apps/api'],
+  expect(second?.about.map((each) => [each.address, each.label, each.to ?? null, each.need ?? false])).toEqual([
+    ['apps/api', 'API', '/changes/post/records/apps/api', false],
     // A record the change removes is read as it is today, and leads under the change.
-    ['technologies/go', 'Go', '/changes/post/records/technologies/go'],
-    ['need', 'Need', '/changes/post'],
+    ['technologies/go', 'Go', '/changes/post/records/technologies/go', false],
+    // The need is no record, and the answer says so.
+    ['need', 'Need', '/changes/post', true],
   ]);
   // What names nothing stands as written and leads nowhere; a step that is not there leads to its flow.
   expect(third?.about.map((each) => [each.address, each.label, each.step ?? null, each.to ?? null])).toEqual([

@@ -23,11 +23,11 @@ import { Button, ButtonLink, GlassGroup } from './ui.tsx';
  * the records, of the rules, of the context and of the changes ask of it, worked out once, or
  * why there is none. On the page of a flow, in the system or under a change, the places the page
  * fills itself: the sidebar under the name, and the top bar after the arrows; on the page of a
- * rule and on that of a record under a change, the top bar alone.
+ * rule, on that of a record under a change and on that of a point of its review, the top bar alone.
  */
 export type ModelState = { answer?: ModelAnswer; catalogue?: Catalogue; travel?: Travel; rulebook?: Rulebook; context?: Context; changes?: Changes; failed?: string; slots?: Slots };
 
-/** The places of the shell that the page of a flow fills, its steps and its breadcrumb, and that of a rule or of a record under a change, its breadcrumb. */
+/** The places of the shell that the page of a flow fills, its steps and its breadcrumb, and that of a rule, of a record under a change or of a point, its breadcrumb. */
 export type Slots = { steps: HTMLElement | null; crumbs: HTMLElement | null };
 
 /** The depths as the top bar names them. */
@@ -149,15 +149,16 @@ export function Shell() {
   const onFlowUnder = flowUnder !== undefined && (state.changes === undefined ? state.failed === undefined : state.changes.flow(flowUnder.id ?? '', flowUnder.flow ?? '') !== undefined);
   const reading = onFlow || onFlowUnder;
   // On the pages of a change its own sidebar takes the place of the navigation, once the model
-  // has the change: Need, Records, and the page of each record under it. While the model is read,
-  // and for an id that names no change, the navigation stays.
+  // has the change: Need, Records and the page of each record under it, Review and the page of
+  // each point. While the model is read, and for an id that names no change, the navigation stays.
   const onNeed = useMatch('/changes/:id');
   const onRecords = useMatch('/changes/:id/records/*');
-  const changeId = (onNeed ?? onRecords)?.params.id;
+  const onReview = useMatch('/changes/:id/review/*');
+  const changeId = (onNeed ?? onRecords ?? onReview)?.params.id;
   const change = changeId !== undefined ? state.changes?.change(changeId) : undefined;
-  // The page of a rule, and that of a record under a change, put their breadcrumb in the top bar too.
+  // The page of a rule, that of a record under a change and that of a point put their breadcrumb in the top bar too.
   const onRule = useMatch('/rules/:id') !== null;
-  const underChange = (onRecords?.params['*'] ?? '') !== '';
+  const underChange = (onRecords?.params['*'] ?? '') !== '' || (onReview?.params['*'] ?? '') !== '';
   const crumbed = reading || onRule || underChange;
   // Wherever the navigation is replaced, a button leads home.
   const home = reading || change !== undefined;

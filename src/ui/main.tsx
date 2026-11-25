@@ -19,6 +19,7 @@ import './context.css';
 import './changes.css';
 import { Architecture } from './architecture.tsx';
 import { ChangeRecordPage } from './change-record.tsx';
+import { ReviewPointPage } from './change-review.tsx';
 import { ChangePage, ChangesList } from './changes.tsx';
 import { ContextLinePage, ContextList } from './context.tsx';
 import { FlowPage } from './flow.tsx';
@@ -62,6 +63,8 @@ if (root !== null) {
             <Route path="changes/:id" element={<ChangePage section="need" />} />
             <Route path="changes/:id/records" element={<ChangePage section="records" />} />
             <Route path="changes/:id/records/*" element={<ChangeRecordPage />} />
+            <Route path="changes/:id/review" element={<ChangePage section="review" />} />
+            <Route path="changes/:id/review/:point" element={<ReviewPointPage />} />
           </Route>
         </Routes>
       </BrowserRouter>

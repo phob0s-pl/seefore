@@ -665,7 +665,7 @@ test.skipIf(!HAS_CHROME).concurrent(
       const need = `{ sections: ${texts('main .section-label')}, prompt: ${texts('section[aria-label="Prompt"] .panel-text')}, given: ${texts('section[aria-label="Given"] .change-given > li')} }`;
       expect(await waitFor(send, `(() => { const read = ${onChange('/changes/orders-by-post')}; return read && read.change !== null && document.querySelector('main .section-label') !== null && { ...read, ...${need} }; })()`)).toEqual({
         main: null,
-        change: '1 Need 2 Records All changes',
+        change: '1 Need 2 Records 3 Review All changes',
         current: 'Need',
         sections: ['Prompt', 'Given'],
         prompt: ['The clerk takes orders that come by post, and types them into the shop.'],
@@ -758,7 +758,7 @@ test.skipIf(!HAS_CHROME).concurrent(
       }; })()`;
       expect(await waitFor(send, page)).toEqual({
         main: null,
-        change: '1 Need 2 Records All changes',
+        change: '1 Need 2 Records 3 Review All changes',
         current: 'Records',
         crumbs: 'Orders by post / Records / Ordering',
         back: ['/changes/orders-by-post', '/changes/orders-by-post/records'],
@@ -1111,6 +1111,193 @@ test.skipIf(!HAS_CHROME).concurrent(
       await send('Page.navigate', { url: `${address}/changes/orders-by-post/records/flows/taking-a-posted-order` });
       expect(await waitFor(send, `${onFlowUnder('taking-a-posted-order', 'Taking a posted order')} && document.querySelectorAll('.react-flow__edge-path[d^="M"]').length > 0 && { tabs: document.querySelectorAll('nav[aria-label="View"]').length }`)).toEqual({ tabs: 0 });
     }),
+  20_000,
+);
+
+/** The icon of each tile a selector finds: a block's, a note's, or none of them. */
+const severities = (selector: string) =>
+  `[...document.querySelectorAll(${JSON.stringify(`${selector} .tile svg`)})].map((icon) => (icon.classList.contains('lucide-octagon-alert') ? 'block' : icon.classList.contains('lucide-sticky-note') ? 'note' : null))`;
+/** The review of the change in the test model, once its rows are drawn under the change's name with Review current. */
+const ON_REVIEW = `(() => { const read = ${onChange('/changes/orders-by-post/review')}; return read && read.current === 'Review' && document.querySelector('ul[aria-label="Points"] > li') !== null && read; })()`;
+/** A point of that review, once its name stands as the title, in the way back and in the window's title. */
+const onPoint = (point: string, name: string) =>
+  `location.pathname === ${JSON.stringify(`/changes/orders-by-post/review/${point}`)} && document.querySelector('main h1')?.textContent === ${JSON.stringify(name)} && document.querySelector('.breadcrumb-here')?.textContent === ${JSON.stringify(name)} && document.title === ${JSON.stringify(`${name} · seefore`)}`;
+/** What a point's page shows: its tile, its pills, its sections and what is in them, and where each row of About leads. */
+const POINT = `({
+  tile: ${severities('.record-title')}[0],
+  pills: [...document.querySelectorAll('.record-title .pill')].map((pill) => pill.className + ' ' + pill.textContent),
+  sections: ${texts('main .section-label')},
+  finding: ${texts('section[aria-label="Finding"] .panel-text')},
+  recommendation: ${texts('section[aria-label="Recommendation"] .panel-text')},
+  about: ${texts('section[aria-label="About"] li')},
+  leads: ${hrefs('section[aria-label="About"] a')},
+  comments: ${texts('section[aria-label="Comments"] li')},
+})`;
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME ? "a change's third entry, Review, lists its points under the change's name, a row a point with the tile of its severity, its name and its status, each leading to its point" : `skipped: there is no Chrome at ${CHROME}`,
+  () =>
+    inChrome(async (send, address) => {
+      await send('Page.navigate', { url: `${address}/changes/orders-by-post` });
+      expect(await waitFor(send, `(() => { const read = ${onChange('/changes/orders-by-post')}; return read && read.current; })()`)).toBe('Need');
+      await click(send, await centreOf(send, 'nav[aria-label="Change sections"] a[href="/changes/orders-by-post/review"]'));
+      const list = `(() => { const read = ${ON_REVIEW}; return read && {
+        ...read,
+        home: document.querySelector('.history-controls a[aria-label="Home"]') !== null,
+        crumbs: document.querySelector('.breadcrumb') !== null,
+        above: document.querySelector('main h1').nextElementSibling?.className,
+        rows: ${texts('ul[aria-label="Points"] > li')},
+        tiles: ${severities('ul[aria-label="Points"]')},
+        tones: [...document.querySelectorAll('ul[aria-label="Points"] .pill')].map((pill) => pill.className),
+        links: ${hrefs('ul[aria-label="Points"] a')},
+      }; })()`;
+      expect(await waitFor(send, list)).toEqual({
+        main: null,
+        change: '1 Need 2 Records 3 Review All changes',
+        current: 'Review',
+        home: true,
+        crumbs: false,
+        above: 'panel panel-lift review-list',
+        // In the order of the file, each with its status.
+        rows: [
+          'A posted order is typed in and never saved Reopened',
+          'Nothing says how an order that came by post is confirmed Declined',
+          'The Order API loses its technology and nothing is named in its place Fixed',
+          'The clerk types an order in and cannot see it afterwards Open',
+          'Orders kept before the change have no `sent by` Closed',
+        ],
+        tiles: ['block', 'block', 'block', 'block', 'note'],
+        // Reopened is red, Declined orange, Fixed yellow, Open has no colour, Closed is green.
+        tones: ['pill tone-danger', 'pill tone-warning', 'pill tone-caution', 'pill', 'pill tone-success'],
+        links: [
+          '/changes/orders-by-post/review/posted-order-not-saved',
+          '/changes/orders-by-post/review/no-way-to-confirm-by-post',
+          '/changes/orders-by-post/review/go-still-in-use',
+          '/changes/orders-by-post/review/clerk-reads-nothing',
+          '/changes/orders-by-post/review/sent-by-on-old-orders',
+        ],
+      });
+    }),
+  20_000,
+);
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME ? "a row of Review opens its point with the change's sidebar, the way back, its pills and its sections; About leads under the change where the change touches the record, to the system elsewhere, to a flow on its step, and to Need" : `skipped: there is no Chrome at ${CHROME}`,
+  () =>
+    inChrome(async (send, address) => {
+      await send('Page.navigate', { url: `${address}/changes/orders-by-post/review` });
+      expect(await waitFor(send, ON_REVIEW)).toMatchObject({ current: 'Review' });
+      await click(send, await centreOf(send, 'ul[aria-label="Points"] a[href="/changes/orders-by-post/review/posted-order-not-saved"]'));
+      const first = `(() => { const read = ${onPoint('posted-order-not-saved', 'A posted order is typed in and never saved')} && ${SIDEBAR}; return read && {
+        ...read,
+        home: document.querySelector('.history-controls a[aria-label="Home"]') !== null,
+        crumbs: ${texts('.breadcrumb')}[0],
+        back: ${hrefs('.breadcrumb a')},
+        ...${POINT},
+      }; })()`;
+      expect(await waitFor(send, first)).toEqual({
+        main: null,
+        change: '1 Need 2 Records 3 Review All changes',
+        current: 'Review',
+        home: true,
+        crumbs: 'Orders by post / Review / A posted order is typed in and never saved',
+        back: ['/changes/orders-by-post', '/changes/orders-by-post/review'],
+        tile: 'block',
+        pills: ['pill tone-danger Block', 'pill tone-danger Reopened'],
+        sections: ['Finding', 'Recommendation', 'About', 'Comments'],
+        finding: ['The change takes the step `saves` out of `placing-an-order` and puts `types-in` in its place. No step of that flow writes the store of orders any more, so an order that is confirmed is kept nowhere.'],
+        recommendation: ['The flow says where an order is written before it is confirmed.'],
+        // A step by its flow's name and its own words, a line of context by its sentence, a store by its name.
+        about: ['Placing an order Types in a posted order', 'An order is never lost once the customer has been told it is placed.', 'Orders'],
+        // The flow is touched by the change, the line of context and the store are not.
+        leads: ['/changes/orders-by-post/records/flows/placing-an-order#types-in', '/context/orders-are-never-lost', '/models/orders'],
+        comments: ['The step that types the order in now says that the Order API keeps it.', 'A description says it. No step walks `api-writes-orders`, so the flow still ends at the clerk.'],
+      });
+      // "Review" in the way back leads to the list, and the next row to its point: a step, and the need.
+      await click(send, await centreOf(send, '.breadcrumb a[href="/changes/orders-by-post/review"]'));
+      expect(await waitFor(send, ON_REVIEW)).toMatchObject({ current: 'Review' });
+      await click(send, await centreOf(send, 'ul[aria-label="Points"] a[href="/changes/orders-by-post/review/no-way-to-confirm-by-post"]'));
+      expect(await waitFor(send, `${onPoint('no-way-to-confirm-by-post', 'Nothing says how an order that came by post is confirmed')} && ${POINT}`)).toMatchObject({
+        pills: ['pill tone-danger Block', 'pill tone-warning Declined'],
+        about: ['Placing an order Confirms the order by email', 'Need'],
+        leads: ['/changes/orders-by-post/records/flows/placing-an-order#confirms', '/changes/orders-by-post'],
+      });
+      // The step opens its flow under the change, on that step.
+      await click(send, await centreOf(send, 'section[aria-label="About"] a[href="/changes/orders-by-post/records/flows/placing-an-order#confirms"]'));
+      expect(await waitFor(send, `${onFlowUnder('placing-an-order', 'Placing an order')} && location.hash === '#confirms' && document.querySelector('[data-row="step"][aria-current="step"]')?.getAttribute('data-step')`)).toBe('confirms');
+      // A record the change updates and one it removes lead under the change.
+      await send('Page.navigate', { url: `${address}/changes/orders-by-post/review/go-still-in-use` });
+      expect(await waitFor(send, `${onPoint('go-still-in-use', 'The Order API loses its technology and nothing is named in its place')} && ${POINT}`)).toMatchObject({
+        pills: ['pill tone-danger Block', 'pill tone-caution Fixed'],
+        about: ['Order API', 'Go'],
+        leads: ['/changes/orders-by-post/records/apps/order-api', '/changes/orders-by-post/records/technologies/go'],
+      });
+      // A note with no recommendation has no section for it; an open point with no comments has none for them.
+      await send('Page.navigate', { url: `${address}/changes/orders-by-post/review/sent-by-on-old-orders` });
+      expect(await waitFor(send, `${onPoint('sent-by-on-old-orders', 'Orders kept before the change have no `sent by`')} && ${POINT}`)).toMatchObject({
+        tile: 'note',
+        pills: ['pill Note', 'pill tone-success Closed'],
+        sections: ['Finding', 'About', 'Comments'],
+        recommendation: [],
+        leads: ['/changes/orders-by-post/records/data/order-details'],
+      });
+      await send('Page.navigate', { url: `${address}/changes/orders-by-post/review/clerk-reads-nothing` });
+      expect(await waitFor(send, `${onPoint('clerk-reads-nothing', 'The clerk types an order in and cannot see it afterwards')} && ${POINT}`)).toMatchObject({
+        pills: ['pill tone-danger Block', 'pill Open'],
+        sections: ['Finding', 'Recommendation', 'About'],
+        comments: [],
+        leads: ['/changes/orders-by-post/records/connections/clerk-orders'],
+      });
+    }),
+  20_000,
+);
+
+/** What Review shows in place of its list, once it is drawn under the change's name, with Review current in the change's sidebar. */
+const unlisted = (change: string, name: string) =>
+  `location.pathname === ${JSON.stringify(`/changes/${change}/review`)} && document.querySelector('main h1')?.textContent === ${JSON.stringify(name)} && document.title === ${JSON.stringify(`${name} · seefore`)} && document.querySelector('.empty-state') !== null && {
+    says: ${texts('.empty-state')}[0],
+    current: document.querySelector('nav[aria-label="Change sections"] a.active .nav-text')?.textContent,
+    rows: document.querySelectorAll('ul[aria-label="Points"]').length,
+  }`;
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME ? 'Review says why it lists no point: its reader found nothing, the change has no review, or the check refuses its file; and a point that is not there is missing' : `skipped: there is no Chrome at ${CHROME}`,
+  async () => {
+    await inChrome(async (send, address) => {
+      await send('Page.navigate', { url: `${address}/changes/orders-on-paper-only/review` });
+      expect(await waitFor(send, unlisted('orders-on-paper-only', 'Orders on paper only'))).toEqual({ says: 'Nothing found. The reader read the change and found nothing.', current: 'Review', rows: 0 });
+      await send('Page.navigate', { url: `${address}/changes/orders-by-post/review/no-such-point` });
+      const missing = `document.querySelector('.empty-state') !== null && document.title === 'Orders by post · seefore' && {
+        says: ${texts('.empty-state')}[0],
+        back: ${hrefs('.empty-state a')},
+        current: document.querySelector('nav[aria-label="Change sections"] a.active .nav-text')?.textContent,
+      }`;
+      expect(await waitFor(send, missing)).toEqual({ says: 'No such record. Back to Review', back: ['/changes/orders-by-post/review'], current: 'Review' });
+    });
+    // A copy of the shop where one change has no review, and the other's has a severity the check refuses.
+    const folder = await mkdtemp(join(tmpdir(), 'seefore-shop-'));
+    try {
+      await cp(SHOP, folder, { recursive: true });
+      await rm(join(folder, 'reviews', 'orders-on-paper-only.yaml'));
+      await writeFile(join(folder, 'reviews', 'orders-by-post.yaml'), 'read: "4c1d9a70"\npoints:\n  never-saved:\n    name: An order is never saved\n    severity: high\n    about: [stores/orders]\n    finding: No step writes the store.\n');
+      await inChrome(async (send, address) => {
+        await send('Page.navigate', { url: `${address}/changes/orders-on-paper-only/review` });
+        expect(await waitFor(send, unlisted('orders-on-paper-only', 'Orders on paper only'))).toEqual({
+          says: 'No review yet. A review of this change is written in reviews/orders-on-paper-only.yaml.',
+          current: 'Review',
+          rows: 0,
+        });
+        await send('Page.navigate', { url: `${address}/changes/orders-by-post/review` });
+        expect(await waitFor(send, unlisted('orders-by-post', 'Orders by post'))).toEqual({
+          says: 'The review cannot be read. seefore check says what is wrong in reviews/orders-by-post.yaml.',
+          current: 'Review',
+          rows: 0,
+        });
+      }, folder);
+    } finally {
+      await rm(folder, { recursive: true, force: true });
+    }
+  },
   20_000,
 );
 

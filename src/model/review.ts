@@ -9,9 +9,10 @@ export type Status = (typeof STATUSES)[number];
 /**
  * What a point is about, as the page shows it: the address as written; the name of what it
  * names, which is the address itself when it names nothing; for a step of a flow, the step's
- * words; the record it names, for its tile; and where it leads, when it leads anywhere.
+ * words; the record it names, for its tile; where it leads, when it leads anywhere; and
+ * whether it is the need of the change, which is no record.
  */
-export type About = { address: string; label: string; step?: string; record?: ModelRecord; to?: string };
+export type About = { address: string; label: string; step?: string; record?: ModelRecord; to?: string; need?: true };
 
 /** One point of a review, as its page reads it. */
 export type Point = { id: string; name: string; severity: Severity; status: Status; about: About[]; finding?: string; recommendation?: string; comments: string[] };

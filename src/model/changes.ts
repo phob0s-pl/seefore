@@ -213,7 +213,7 @@ export function changesOf(records: readonly ModelRecord[], laid: readonly Laid[]
   for (const record of records) if (record.kind === 'reviews' && !written.has(record.id)) written.set(record.id, record);
   const reviews = new Map<string, Review | undefined>();
   const about = (id: string, address: string): About => {
-    if (address === 'need') return { address, label: 'Need', to: `/changes/${id}` };
+    if (address === 'need') return { address, label: 'Need', to: `/changes/${id}`, need: true };
     const hash = address.indexOf('#');
     const path = hash < 0 ? address : address.slice(0, hash);
     const split = parts(path);

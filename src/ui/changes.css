@@ -1,7 +1,7 @@
 /* Changes: the list, the sidebar of a change in place of the main one, its Records page and the
-   page of a record under it. The rows, the panel, the tile and the pills are ui.css's; an entry
-   of the sidebar is a .nav-link of shell.css; the title row is records.css's and the way back
-   flow.css's. */
+   page of a record under it, its Review and the page of a point. The rows, the panel, the tile
+   and the pills are ui.css's; an entry of the sidebar is a .nav-link of shell.css; the title row
+   is records.css's and the way back flow.css's. */
 
 /* A change's name is read whole in its row, on as many lines as it takes. */
 .changes-list .row-name-ellipsis {
@@ -67,14 +67,16 @@
   stroke-width: 1.8;
 }
 
-/* What the person answered when asked: a row a line, each whole, with a hairline between two.
-   A row is no link: nothing names a line. */
-.change-given {
+/* What the person answered when asked, and the comments on a point: a row a line, each whole,
+   with a hairline between two. A row is no link: nothing names a line. */
+.change-given,
+.review-comments {
   margin: 0;
   padding: 0;
   list-style: none;
 }
-.change-given > li {
+.change-given > li,
+.review-comments > li {
   margin-left: 20px;
   padding: 12px 20px 12px 0;
   font-size: 13.5px;
@@ -82,21 +84,27 @@
   color: var(--text-primary);
   overflow-wrap: anywhere;
 }
-.change-given > li + li {
+.change-given > li + li,
+.review-comments > li + li {
   border-top: var(--divider);
 }
 
 /* The Records page: a section for each list the change touches. A line of context is read whole
    in its row. A row of a change the check could not lay leads nowhere: it keeps the look of a
-   row, with no hover, and its hairline. */
-.change-records .row-name-ellipsis {
+   row, with no hover, and its hairline. So does a row of a point's About that leads nowhere,
+   among rows that are links. A point's name, a line of context and a step's words are read
+   whole too. */
+.change-records .row-name-ellipsis,
+.review-list .row-name-ellipsis,
+.review-about .row-name-ellipsis,
+.review-about .row-cell {
   white-space: normal;
   overflow-wrap: anywhere;
 }
 .change-row-still:hover {
   background: transparent;
 }
-.change-row-still + .change-row-still > .row-grid {
+.row-grid-item + .change-row-still > .row-grid {
   border-top: var(--divider);
 }
 /* The one line above the sections, and the line under a record's title row: quiet, at a width to read. */
