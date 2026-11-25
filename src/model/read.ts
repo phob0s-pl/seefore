@@ -10,7 +10,6 @@ import { SHAPES } from './records.ts';
 import { holdChange } from './change.ts';
 import type { ReadChange } from './change.ts';
 import { checkShape } from './shape.ts';
-import { sourceGone } from './source.ts';
 import { readYaml } from './yaml.ts';
 import { isMap, isSeq } from 'yaml';
 import type { YamlFile } from './yaml.ts';
@@ -19,14 +18,11 @@ import type { Position } from './problem.ts';
 /** One YAML file of a model: its path from the model's folder, with `/`, and its text. */
 export type SourceFile = { path: string; text: string };
 
-/** What the reading may ask of the disk: whether a path of `source` is there. With none, `source` is held by its form alone. */
-export type Asked = { exists?: (path: string) => boolean; folder?: (path: string) => boolean };
-
 /**
  * Reads a model from the texts of its YAML files. Each file is checked by itself, so a broken
  * file leaves the others read. With a marker that does not say format 1, no record is read.
  */
-export function readModel(files: readonly SourceFile[], asked: Asked = {}): ModelRead {
+export function readModel(files: readonly SourceFile[]): ModelRead {
   const problems: Problem[] = [];
   const records: ModelRecord[] = [];
   const entries: Entry[] = [];
@@ -48,8 +44,8 @@ export function readModel(files: readonly SourceFile[], asked: Asked = {}): Mode
     const whole = !problems.some((problem) => problem.severity === 'error' && outside(problem.file)) && entries.every((entry) => entry.ok || !outside(entry.file));
     const ruled = runRules(entries, whole, read.readable);
     // Each change that reads is held alone: against the model as it is today, and with the model as it would be.
-    const today = [...problems, ...ruled.problems, ...(asked.exists !== undefined ? sourceGone(entries, asked.exists, asked.folder) : [])];
-    const held = { files: sorted, entries, problems: today, read: (files: readonly SourceFile[]) => readModel(files, asked) };
+    const today = [...problems, ...ruled.problems];
+    const held = { files: sorted, entries, problems: today, read: readModel };
     const changed: Problem[] = [];
     const laid: Laid[] = [];
     for (const change of changes) {

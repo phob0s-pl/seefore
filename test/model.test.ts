@@ -112,8 +112,7 @@ test('a fault inside a step or a field has its own place and names it in words',
     ['value-invalid', 8, 21],
     ['value-too-big', 9, 23],
   ]);
-  // A step's `source` stands last among its keys.
-  expect(steps[0]?.message).toBe('`colour` is not a key of the first step. Its keys are `id`, `does`, `reply`, `after`, `name`, `only`, `description`, `data` and `source`.');
+  expect(steps[0]?.message).toBe('`colour` is not a key of the first step. Its keys are `id`, `does`, `reply`, `after`, `name`, `only`, `description` and `data`.');
   expect(steps[1]?.message).toMatch(/^`does` of the second step holds the id of a connection, a part or a flow\./);
   expect(steps[2]?.message).toBe('`name` of the third step has 120 characters. It may have at most 100.');
 
@@ -125,6 +124,68 @@ test('a fault inside a step or a field has its own place and names it in words',
     ['data/data-order.yaml', 'key-missing', 4, '`name` is missing from the second field.'],
     ['data/data-parcel.yaml', 'field-twice', 5, "The third field has the name `items`, as the first field has. A field's name stands once in its record."],
   ]);
+});
+
+/** A shop with an app and a store, for what joins them. */
+const PARTS: SourceFile[] = [
+  { path: 'systems/system-shop.yaml', text: 'name: Shop\n' },
+  { path: 'apps/app-api.yaml', text: 'name: API\nin: system-shop\n' },
+  { path: 'stores/store-orders.yaml', text: 'name: Orders\nin: system-shop\nkind: database\n' },
+];
+
+test('`source` is no key: a part, a connection and a step that bear it are each refused as a key that is not theirs', () => {
+  const said = (...files: SourceFile[]) => problemsOf(...PARTS, ...files).map((problem) => [problem.rule, problem.file, problem.line, problem.field, problem.message]);
+  expect(said({ path: 'apps/app-web.yaml', text: 'name: Web\nin: system-shop\nsource: [web/]\n' })).toEqual([
+    ['key-unknown', 'apps/app-web.yaml', 3, 'source', '`source` is not a key of an app. Its keys are `name`, `in`, `only`, `description`, `kind`, `technology` and `owner`.'],
+  ]);
+  expect(said({ path: 'connections/connection-api-reads-orders.yaml', text: 'from: app-api\nto: store-orders\naccess: read\nsource: [api/orders.go]\n' })).toEqual([
+    [
+      'key-unknown',
+      'connections/connection-api-reads-orders.yaml',
+      4,
+      'source',
+      '`source` is not a key of a connection. Its keys are `from`, `to`, `via`, `opens`, `access`, `name`, `only`, `description` and `technology`.',
+    ],
+  ]);
+  expect(said({ path: 'features/feature-selling.yaml', text: 'name: Selling\n' }, flow('  - {id: sells, does: app-api, name: Sells the tea, source: [api/sell.go]}\n'))).toEqual([
+    ['key-unknown', 'flows/flow-a-sale.yaml', 6, 'steps', '`source` is not a key of the first step. Its keys are `id`, `does`, `reply`, `after`, `name`, `only`, `description` and `data`.'],
+  ]);
+  // So it is for every other part, and for a record that a change adds.
+  expect(
+    said(
+      { path: 'stores/store-carts.yaml', text: 'name: Carts\nin: system-shop\nsource: [db/]\n' },
+      { path: 'components/component-cart.yaml', text: 'name: Cart\nin: app-api\nsource: [api/cart/]\n' },
+      { path: 'infrastructure/infra-proxy.yaml', text: 'name: Proxy\nsource: [deploy/proxy.conf]\n' },
+      { path: 'changes/a-worker.yaml', text: 'name: A worker\nprompt: Add a worker.\nadd:\n  apps/app-worker: {name: Worker, in: system-shop, source: [worker/main.go]}\n' },
+    ).map(([rule, file, line, field]) => [rule, file, line, field]),
+  ).toEqual([
+    ['key-unknown', 'changes/a-worker.yaml', 4, 'add'],
+    ['key-unknown', 'components/component-cart.yaml', 3, 'source'],
+    ['key-unknown', 'infrastructure/infra-proxy.yaml', 2, 'source'],
+    ['key-unknown', 'stores/store-carts.yaml', 3, 'source'],
+  ]);
+});
+
+test('the check names what a list holds, and says that a key of one value may only be that', () => {
+  // Found in the first round of the skill `model`: "Take ids out of" a list of paths, and "`opens` must be one of `to`".
+  const fixes = (...files: SourceFile[]) => problemsOf(...PARTS, ...files).map((problem) => [problem.rule, problem.message, problem.fix]);
+  const given = Array.from({ length: 11 }, (_, index) => `Answer ${index + 1}.`).join(', ');
+  expect(fixes({ path: 'changes/a-change.yaml', text: `name: A change\nprompt: Make it so.\ngiven: [${given}]\n` })).toEqual([
+    ['value-too-big', '`given` is too long a list: it may have at most 10.', 'Take lines out of `given` until it has at most 10.'],
+  ]);
+  expect(fixes({ path: 'changes/a-change.yaml', text: 'name: A change\nprompt: Make it so.\ngiven: []\n' }).map((each) => each[2])).toEqual(['Give `given` at least one line, or delete the key.']);
+  expect(fixes({ path: 'connections/connection-api-calls-api.yaml', text: 'from: app-api\nto: app-api\nopens: from\n' }).map((each) => [each[1], each[2]])).toEqual([
+    ['`opens` may only be `to`. Otherwise take the key out.', 'Write `to`, or delete the key.'],
+  ]);
+  expect(fixes({ path: 'systems/system-bank.yaml', text: 'name: Bank\nexternal: yes\n' }).map((each) => each[1])).toEqual(['`external` may only be `true`. Otherwise take the key out.']);
+  // A part may talk to its own copies, and two connections may join the same two parts, one for each purpose.
+  expect(
+    fixes(
+      { path: 'connections/connection-api-syncs-api.yaml', text: 'from: app-api\nto: app-api\nname: Syncs with its copies\n' },
+      { path: 'connections/connection-api-reads-orders.yaml', text: 'from: app-api\nto: store-orders\naccess: read\nname: Reads orders\n' },
+      { path: 'connections/connection-api-writes-orders.yaml', text: 'from: app-api\nto: store-orders\naccess: write\nname: Saves orders\n' },
+    ),
+  ).toEqual([]);
 });
 
 test('a sentence cut by a comma inside a short mapping is told as that, and a key that is simply not known is not', () => {

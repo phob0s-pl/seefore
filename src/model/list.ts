@@ -27,7 +27,7 @@ function byPlace(a: ModelRecord, b: ModelRecord): number {
   return folders !== 0 ? folders : a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 }
 
-/** One record in a line: its path, its name, and what it has of what it is in, its two ends and what lies between them, its feature and steps, its kind and its source. */
+/** One record in a line: its path, its name, and what it has of what it is in, its two ends and what lies between them, its feature and steps, and its kind. */
 function recordLine(record: ModelRecord): string {
   const fields = record.fields;
   const parts = [`${record.kind}/${record.id}`, text(fields.name) ?? text(fields.must) ?? text(fields.prefer) ?? (record.kind === 'connections' ? 'No name' : record.id)];
@@ -43,7 +43,6 @@ function recordLine(record: ModelRecord): string {
     parts.push(steps === 1 ? '1 step' : `${steps} steps`);
   }
   if (text(fields.kind) !== undefined) parts.push(fields.kind as string);
-  if (Array.isArray(fields.source)) parts.push(fields.source.join(', '));
   return parts.join('  ');
 }
 

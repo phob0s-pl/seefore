@@ -66,7 +66,7 @@ const VERBS: readonly Verb[] = [
   {
     verb: 'list',
     call: 'seefore list [<folder>...] [--near=<id>] [--change=<id>] [--workdir=<dir>]',
-    what: 'One line a record: its path, its name, what it is in, its kind and its source',
+    what: 'One line a record: its path, its name, what it is in or its two ends, and its kind',
     options: [
       ['<folder>...', 'The records of those folders alone'],
       ['changes', 'One line a change: its path, its name and who is next'],
@@ -411,7 +411,7 @@ function check(model: ModelAnswer, json: boolean, io: Io): number {
   if (model.problems.length > 0) io.out('');
   const many = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`;
   // With no problem it says what was held, so that nobody takes the check for a look at the keys alone.
-  const summary = model.problems.length === 0 ? 'No problem: the keys are in form, every id that is named is there, and so is every path of `source`.' : `${many(errors, 'error')}, ${many(warnings, 'warning')}.`;
+  const summary = model.problems.length === 0 ? 'No problem: the keys are in form, and every id that is named is there.' : `${many(errors, 'error')}, ${many(warnings, 'warning')}.`;
   io.out(`${many(model.records.length, 'record')} read. ${summary}`);
   // A count is no problem, and the line says so: a line with no word before it was taken for a warning.
   for (const line of countLines(model.counts)) io.out(line.startsWith('Not counted') ? line : `Counted: ${line}`);

@@ -120,44 +120,6 @@ const partTechnology = ids('Name a technology by the id of its record in `techno
     'What it is built with, or the format it keeps: ids of records in technologies/, a set. Never a protocol a part only speaks. When it is built with one of several, name them all and say in the description that one is chosen.',
 });
 
-/** The most paths of `source`. */
-export const SOURCE_MAX = 3;
-
-/** A path of the code: on one line, with `/`, no `..`, no `*`, no `\\`, and no `/` at its start. */
-const SOURCE_PATH = /^(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$))[^*\\\n\r]*\S$/;
-
-/** `source`, with the words that say what it holds on the kind of record that bears it. */
-const sourceOf = (holds: string, leftOut: string, paths = 'one to three paths of a file or a folder') =>
-  z
-  .array(
-    z
-      .string()
-      .min(1)
-      .max(NOTE_MAX)
-      .regex(SOURCE_PATH, { error: 'A path in `source` is a file or a folder of the code, written with `/`, with no `..`, no `*` and no `/` at its start.' }),
-  )
-  .min(1)
-  .max(SOURCE_MAX)
-  .superRefine((paths, context) => {
-    const seen = new Set<string>();
-    paths.forEach((path, index) => {
-      if (seen.has(path)) context.addIssue({ code: 'custom', path: [index], message: '`source` has the same path twice. Keep one.' });
-      seen.add(path);
-    });
-  })
-  .meta({
-    description: `${holds}: ${paths}, counted from the folder that holds the model's folder, written with \`/\`. A path with \`..\`, with \`*\` or with \`/\` at its start is an error, and the check warns when a path is not there${paths.endsWith('files') ? ' or is a folder' : ''}. ${leftOut}`,
-  });
-
-const Source = sourceOf('Where its code lies', 'For a part built elsewhere, the file here that starts or pins it. Left out where nothing of it is at hand.');
-const StoreSource = sourceOf('What defines or names it, such as its schema, its migrations or the config that holds its address', 'Left out where nothing of it is at hand.');
-const ConnectionSource = sourceOf(
-  'Where the code shows it, a file in which the code or config of `from` names `to`',
-  'When `from` has no code here, a file of the far side: the route of `to` that takes its call, or, where `to` is a store, the code that reads what `from` writes there or writes what it reads; from a person, the entry point they use. Left out when no file is known to show it.',
-  'the paths of one to three files',
-);
-const StepSource = sourceOf('Where the code does it', 'Left out when no file is known to show it.', 'the paths of one to three files');
-
 const External = z.literal(true).meta({ description: '`true`: the people this model is kept for cannot change the system. Left out for a system of yours, and when nobody has said.' });
 
 const Kinds = (what: string, list: readonly string[]) => `${what}: ${list.join(', ')}.`;
@@ -248,7 +210,6 @@ export const AppSchema = z
       .optional(),
     technology: partTechnology.optional(),
     owner: Owner.optional(),
-    source: Source.optional(),
   })
   .meta({
     description:
@@ -266,7 +227,6 @@ export const StoreSchema = z
     kind: z.enum(STORE_KINDS).meta({ description: `${Kinds('What the store holds', STORE_KINDS)} A queue and a topic hold messages on their way; a bucket of objects is files.` }).optional(),
     technology: partTechnology.optional(),
     owner: Owner.optional(),
-    source: StoreSource.optional(),
   })
   .meta({
     description:
@@ -281,7 +241,6 @@ export const ComponentSchema = z
     description: Description.optional(),
     technology: partTechnology.optional(),
     owner: Owner.optional(),
-    source: Source.optional(),
   })
   .meta({ description: 'A responsibility inside one running app. It runs only as part of that app.' });
 
@@ -303,7 +262,6 @@ export const ConnectionSchema = z
     technology: ids('A phrase about how an exchange travels goes in the description.')
       .meta({ description: 'What the exchange is carried in, such as a protocol or a format: ids of records in technologies/, a set.' })
       .optional(),
-    source: ConnectionSource.optional(),
   })
   .meta({
     description:
@@ -320,7 +278,6 @@ export const InfrastructureSchema = z
     description: Description.optional(),
     technology: partTechnology.optional(),
     owner: Owner.optional(),
-    source: Source.optional(),
   })
   .meta({ description: 'A thing whose whole job is to pass exchanges on: a proxy, a gateway, a load balancer, a mail relay. Named in `via`.' });
 
@@ -371,7 +328,6 @@ const StepSchema = z
     data: ids('`data` holds the ids of records in `data/`.')
       .meta({ description: 'The ids of the data this step passes, records in data/: on a step on a connection, or on a reply. A list with no id twice.' })
       .optional(),
-    source: StepSource.optional(),
   })
   .meta({ description: 'One step of a flow: what happens on a connection, in a part or as a whole flow, or the answer to an earlier step.' });
 

@@ -19,17 +19,16 @@ one to write, and stop.
 
 1. **A step is what a file showed you in this session**: a file you opened, or a line a
    search showed you, where the code does it: a route or a handler that takes the thing, a
-   consumer that reads it, a client or a producer that sends it on, a query, a write. Its
-   path goes in the step's `source`. A comment or a name says what the code is meant to do:
-   a step, and each word of its `name`, rests on the lines that do it and on the condition
-   they stand under. Follow the code from hop to hop, from where the journey starts. What
-   you remember of this project, and what its documents say, may tell you where to look;
-   neither is a step.
+   consumer that reads it, a client or a producer that sends it on, a query, a write. A
+   comment or a name says what the code is meant to do: a step, and each word of its `name`,
+   rests on the lines that do it and on the condition they stand under. Follow the code from
+   hop to hop, from where the journey starts. What you remember of this project, and what
+   its documents say, may tell you where to look; neither is a step.
    - Code that several apps run is a step of the app that a file shows running it on this
      journey: the route, the consumer, the place where the task is registered.
    - Of a part with no code here, write only what its config here shows, or the code that
-     takes what it sends. Where the outcome hangs on what such a part does next and the
-     model holds that connection, open the file its `source` names and write the step from it.
+     takes what it sends. Where the outcome hangs on what such a part does next, search for
+     what takes it, by the name its config here gives: a route, a topic, a queue.
    - Where no file shows the next hop, the flow ends there: `ends` says what is true at that
      point, and your last message says where the trail ended.
 2. **A step stands on a record of the model.** `does` names the connection the thing travels
@@ -38,7 +37,7 @@ one to write, and stop.
    - a connection between the two parts for this purpose: the step is on it, whatever its
      name.
    - both parts, and no such connection: write the connection too, as
-     `seefore guide connections` says, with the file that shows it in `source`.
+     `seefore guide connections` says.
    - one of the parts is not in the model: write **no part**. The step gets its `name`, and
      neither `does` nor `data`; your last message asks.
 
@@ -64,22 +63,22 @@ one to write, and stop.
    - Where the shell cuts the list off and saves it to a file, read that file; or name the
      folders after `list`, all but `connections`, and take a part's connections from
      `seefore list --near=<id>`.
-   - Note the parts near the journey with their `source`, and the features, flows and data
-     that are there. A line shows no `access` and no `description`: open the record of each
-     connection you put a step on, and its `source` where the part behind it has no code
-     here.
+   - Note the parts near the journey, and the features, flows and data that are there. A
+     line shows no `access` and no `description`: open the record of each connection you
+     put a step on.
    - A flow of this journey that is there is mended in place: keep its id, and the ids of
      the steps that are still true.
 2. **Find where the journey starts**: who or what starts it, a person, a clock or a message,
-   and at which part. That part's `source` says where its code lies.
+   and at which part. Find that part's code by what it is: search for its entry point,
+   its route or its command.
 3. **Follow it hop by hop.** Read with the file tools: Glob lists, Grep searches, Read opens.
    The shell is for `seefore` alone, one command a call. At each part find where the thing
    arrives, what the part does with it that the outcome hangs on, and where it sends it on:
    search for the route, the topic, the queue, the client's name, and open the file that
-   answers. Open at most 40 files. Keep, for each step, the file that shows it.
+   answers. Open at most 40 files. Keep, for each step, the file and line that shows it.
 4. **Write the records** with the file tool, all in one message, in this order: the feature,
    the data, the connections the model lacked, the flow. Use a feature or a data record that
-   is there before you write one.
+   is there before you write one. No record holds a path of the code, in any key.
    - **The feature** is what the software does for somebody, under the name its own people
      use; many flows may belong to one.
    - **The flow**: `name` in the words of the one who starts it. An answer that travels back
@@ -89,15 +88,15 @@ one to write, and stop.
      code's own name in `description`, each in `data` of the steps on a connection that
      carry it. A field is one a file showed you in this session, written in words; with
      none seen, the record has no `fields`.
-5. **Hold every step against rule 1 once more**, before the check. A step whose `source`
-   names no file that a Read or a search of this session showed you doing it goes, with
-   each `reply` and `after` that names it. So does a number, a default or a field that no
-   such line shows.
+5. **Hold every step against rule 1 once more**, before the check, by what you kept. A step
+   with no file and line that a Read or a search of this session showed you goes, with each
+   `reply` and `after` that names it. So does a number, a default or a field that no such
+   line shows.
 6. Run `seefore check`. Mend what it says by its `Mend:` line, and check again; three rounds
    at most. Then say what is left.
 7. End with a short message:
-   - what you wrote: the feature, the flow and how many steps, the data, and each
-     connection you added to the model;
+   - what you wrote: the feature, the flow and its steps, one line each with the file and
+     line that shows it, the data, and each connection you added to the model;
    - **what the model lacks**, numbered: each part the journey passes and the model does
      not hold, also one whose act you wrote inside an app or left out: a person, a system,
      a store, a file that an app keeps on its own disk and a later step reads. With each:
@@ -107,12 +106,11 @@ one to write, and stop.
    - what in the model the code shows otherwise, at most five lines;
    - "Look at it with `seefore --server`. Next: another journey, or `/seefore:context`."
 8. **When the person says yes**, write each part they agreed to, as `seefore guide <its
-   folder>` says, with its `source`; write its connections; give the waiting steps their
-   `does` and their `data`; and run `seefore check` again. Write no part they did not
-   agree to.
+   folder>` says; write its connections; give the waiting steps their `does` and their
+   `data`; and run `seefore check` again. Write no part they did not agree to.
 
 ## The format
 
-Take no name, id or path from the examples below: they are of a tea shop.
+Take no name or id from the examples below: they are of a tea shop.
 
 !`seefore guide flows`

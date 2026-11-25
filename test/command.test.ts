@@ -160,7 +160,7 @@ const CLAUDE_LINES = [
   '## Architecture',
   "This system's architecture is a seefore model in `architecture/`: one YAML file a record.",
   'Before you add, remove or join parts, run `seefore list` and read its context.',
-  'When code moves, offer `/seefore:model`. For a design, offer `/seefore:change`.',
+  'When the parts of the code change, offer `/seefore:model`. For a design, offer `/seefore:change`.',
   'After the model changes, `seefore check` must show no error.',
 ];
 
@@ -239,7 +239,7 @@ test('every verb finds the model: the folder given, else this folder, else archi
 
   const checked = await runIn(folder, ['check']);
   expect(checked.code).toBe(0);
-  expect(checked.out[0]).toBe('0 records read. No problem: the keys are in form, every id that is named is there, and so is every path of `source`.');
+  expect(checked.out[0]).toBe('0 records read. No problem: the keys are in form, and every id that is named is there.');
   await mkdir(join(architecture, 'apps'));
   await writeFile(join(architecture, 'apps/app-api.yaml'), 'name: API\nin: system-shop\n');
   await mkdir(join(architecture, 'systems'));
@@ -278,13 +278,13 @@ const onShop = async (...args: string[]) => {
 test('list prints one line a record, those of a folder, those near one, the model with a change, and the changes', async () => {
   const all = await onShop('list');
   expect(all.code).toBe(0);
-  // A part with its source; a connection with its two ends; a flow with its feature and its steps.
-  expect(all.out).toContain('apps/app-order-api  Order API  in system-shop  service  code/order-api/');
+  // A part with what it is in and its kind, and nothing after; a connection with its two ends; a flow with its feature and its steps.
+  expect(all.out).toContain('apps/app-order-api  Order API  in system-shop  service');
   expect(all.out).toContain('connections/connection-customer-orders  Places an order  person-customer -> app-order-api');
   expect(all.out).toContain('flows/flow-placing-an-order  Placing an order  feature-ordering  3 steps');
   expect((await onShop('list', 'stores', 'technologies')).out).toEqual(['stores/store-orders  Orders  in system-shop  database', 'technologies/tech-go  Go']);
   const near = await onShop('list', '--near=tech-go');
-  expect(near.out).toEqual(['technologies/tech-go  Go', 'named by:', '  apps/app-order-api  Order API  in system-shop  service  code/order-api/']);
+  expect(near.out).toEqual(['technologies/tech-go  Go', 'named by:', '  apps/app-order-api  Order API  in system-shop  service']);
   // With the change: what it adds, updates and removes bears a sign, and what it removes is still listed.
   const change = await onShop('list', 'connections', 'technologies', '--change=orders-by-post');
   expect(change.out).toEqual([
@@ -311,7 +311,8 @@ test('guide prints the words of the format for a folder and for a skill, and the
   const apps = await lines('guide', 'apps');
   expect(apps.code).toBe(0);
   expect(apps.out[0]).toBe('# apps: one app a file');
-  expect(apps.out).toContain('  source (may be left out)');
+  expect(apps.out).toContain('  owner (may be left out)');
+  expect(apps.out.some((line) => line.trim().startsWith('source'))).toBe(false);
   // A skill's guide holds the guides of the folders it writes; with no topic, the topics.
   const model = await lines('guide', 'model');
   expect(model.out.filter((line) => line.startsWith('# ')).map((line) => line.split(':')[0])).toEqual(['# people', '# systems', '# apps', '# stores', '# components', '# connections', '# infrastructure', '# owners', '# technologies']);

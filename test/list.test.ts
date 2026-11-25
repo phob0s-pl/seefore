@@ -24,7 +24,7 @@ const MODEL: SourceFile[] = [
   file('people/person-customer', 'name: Customer\n'),
   file('people/person-clerk', 'name: Clerk\n'),
   file('systems/system-shop', 'name: Shop\n'),
-  file('apps/app-api', 'name: API\nin: system-shop\nkind: service\ntechnology: [tech-go]\nsource: [api/, api/main.go]\n'),
+  file('apps/app-api', 'name: API\nin: system-shop\nkind: service\ntechnology: [tech-go]\n'),
   file('stores/store-orders', 'name: Orders\nin: system-shop\nkind: database\n'),
   file('connections/connection-customer-orders', 'from: person-customer\nto: app-api\nname: Places an order\n'),
   file('connections/connection-api-writes-orders', 'from: app-api\nto: store-orders\naccess: write\n'),
@@ -65,12 +65,12 @@ test('the model is as the tests take it: only the broken change is faulted, and 
   expect(model.laid.map((laid) => laid.change)).toEqual(['done', 'fixing', 'ledger', 'waiting']);
 });
 
-test('a line a record, in the order of the folders and then of the ids: its path, its name, what it is in or its two ends or its feature, its kind and its source', () => {
+test('a line a record, in the order of the folders and then of the ids: its path, its name, what it is in or its two ends or its feature, and its kind', () => {
   expect(lines({})).toEqual([
     'people/person-clerk  Clerk',
     'people/person-customer  Customer',
     'systems/system-shop  Shop',
-    'apps/app-api  API  in system-shop  service  api/, api/main.go',
+    'apps/app-api  API  in system-shop  service',
     'stores/store-orders  Orders  in system-shop  database',
     'connections/connection-api-writes-orders  No name  app-api -> store-orders',
     'connections/connection-customer-orders  Places an order  person-customer -> app-api',
@@ -84,7 +84,7 @@ test('a line a record, in the order of the folders and then of the ids: its path
 
 test('some folders alone; a folder that is not there is an error that names the folders', () => {
   expect(lines({ folders: ['connections', 'apps'] })).toEqual([
-    'apps/app-api  API  in system-shop  service  api/, api/main.go',
+    'apps/app-api  API  in system-shop  service',
     'connections/connection-api-writes-orders  No name  app-api -> store-orders',
     'connections/connection-customer-orders  Places an order  person-customer -> app-api',
   ]);
@@ -98,7 +98,7 @@ test('some folders alone; a folder that is not there is an error that names the 
 
 test('near a record: its line, what it names, and what names it, a flow by its step and a rule by its selector among them', () => {
   expect(lines({ near: 'app-api' })).toEqual([
-    'apps/app-api  API  in system-shop  service  api/, api/main.go',
+    'apps/app-api  API  in system-shop  service',
     'names:',
     '  systems/system-shop  Shop',
     '  technologies/tech-go  Go',
@@ -109,10 +109,10 @@ test('near a record: its line, what it names, and what names it, a flow by its s
     '  rules/rule-api-in-go  The API is written in Go',
   ]);
   // A section with nothing in it is left out; a record may be asked for by its path too.
-  expect(lines({ near: 'tech-go' })).toEqual(['technologies/tech-go  Go', 'named by:', '  apps/app-api  API  in system-shop  service  api/, api/main.go', '  rules/rule-api-in-go  The API is written in Go']);
+  expect(lines({ near: 'tech-go' })).toEqual(['technologies/tech-go  Go', 'named by:', '  apps/app-api  API  in system-shop  service', '  rules/rule-api-in-go  The API is written in Go']);
   expect(lines({ near: 'people/person-clerk' })).toEqual(['people/person-clerk  Clerk']);
   // The folders asked for keep what is near.
-  expect(lines({ near: 'app-api', folders: ['flows'] })).toEqual(['apps/app-api  API  in system-shop  service  api/, api/main.go', 'named by:', '  flows/flow-placing  Placing an order  feature-ordering  2 steps']);
+  expect(lines({ near: 'app-api', folders: ['flows'] })).toEqual(['apps/app-api  API  in system-shop  service', 'named by:', '  flows/flow-placing  Placing an order  feature-ordering  2 steps']);
   expect(error({ near: 'app-apu' })).toBe('No record has the id `app-apu`. The nearest id is `app-api`.');
   expect(error({ near: 'app-elsewhere' })).toBe('No record has the id `app-elsewhere`.');
 });
@@ -122,7 +122,7 @@ test('the model as a change would make it: each record it adds, updates and remo
     '- people/person-clerk  Clerk',
     '  people/person-customer  Customer',
     '  systems/system-shop  Shop',
-    '~ apps/app-api  API  in system-shop  service  api/, api/main.go',
+    '~ apps/app-api  API  in system-shop  service',
     '+ stores/store-ledger  Ledger  in system-shop  database',
     '  stores/store-orders  Orders  in system-shop  database',
     '  connections/connection-api-writes-orders  No name  app-api -> store-orders',

@@ -30,19 +30,19 @@ export const EXAMPLES: Readonly<Record<string, { path: string; text: string }>> 
   systems: { path: 'systems/system-shop.yaml', text: ['name: Shop', 'description: Sells tea online and sends the orders out.', 'owner: owner-shop-team'].join('\n') },
   apps: {
     path: 'apps/app-order-api.yaml',
-    text: ['name: Order API', 'in: system-shop', 'kind: service', 'description: Takes the orders that customers place, and keeps them.', 'source: [services/orders/]'].join('\n'),
+    text: ['name: Order API', 'in: system-shop', 'kind: service', 'description: Takes the orders that customers place, and keeps them.'].join('\n'),
   },
   stores: {
     path: 'stores/store-orders.yaml',
-    text: ['name: Orders', 'in: system-shop', 'kind: database', 'technology: [tech-postgres]', 'description: Every order, from the moment it is placed.', 'source: [db/migrations/]'].join('\n'),
+    text: ['name: Orders', 'in: system-shop', 'kind: database', 'technology: [tech-postgres]', 'description: Every order, from the moment it is placed.'].join('\n'),
   },
   components: {
     path: 'components/component-checkout.yaml',
-    text: ['name: Checkout', 'in: app-order-api', 'description: Checks an order and works out what it costs.', 'source: [services/orders/checkout.go]'].join('\n'),
+    text: ['name: Checkout', 'in: app-order-api', 'description: Checks an order and works out what it costs.'].join('\n'),
   },
   connections: {
     path: 'connections/connection-customer-places-order.yaml',
-    text: ['from: person-customer', 'to: app-order-api', 'via: [infra-gateway]', 'name: Places an order', 'only: when the shop is open', 'source: [services/orders/routes.ts]'].join('\n'),
+    text: ['from: person-customer', 'to: app-order-api', 'via: [infra-gateway]', 'name: Places an order', 'only: when the shop is open'].join('\n'),
   },
   infrastructure: { path: 'infrastructure/infra-gateway.yaml', text: ['name: Gateway', 'in: system-shop', 'description: Takes every request from outside and passes it on.'].join('\n') },
   owners: { path: 'owners/owner-shop-team.yaml', text: ['name: Shop team', 'description: The developers who build and run the shop.'].join('\n') },
@@ -62,7 +62,6 @@ export const EXAMPLES: Readonly<Record<string, { path: string; text: string }>> 
       '  - id: checks',
       '    does: component-checkout',
       '    name: Checks the order and works out the price',
-      '    source: [services/orders/checkout.go]',
       '  - id: confirms',
       '    reply: places',
       '    name: Shows the number of the order',

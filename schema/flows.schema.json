@@ -107,18 +107,6 @@
               "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
             },
             "description": "The ids of the data this step passes, records in data/: on a step on a connection, or on a reply. A list with no id twice."
-          },
-          "source": {
-            "minItems": 1,
-            "maxItems": 3,
-            "type": "array",
-            "items": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 300,
-              "pattern": "^(?!\\/)(?!.*(?:^|\\/)\\.\\.(?:\\/|$))[^*\\\\\\n\\r]*\\S$"
-            },
-            "description": "Where the code does it: the paths of one to three files, counted from the folder that holds the model's folder, written with `/`. A path with `..`, with `*` or with `/` at its start is an error, and the check warns when a path is not there or is a folder. Left out when no file is known to show it."
           }
         },
         "required": [
