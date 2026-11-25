@@ -7,3 +7,10 @@ add:
     from: clerk
     to: order-api
     name: Types in a posted order
+update:
+  features/ordering:
+    description: Customers buy things online or by post, and the clerk sees what they bought.
+  apps/order-api:
+    technology: null
+remove:
+  - technologies/go

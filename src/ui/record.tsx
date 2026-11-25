@@ -8,7 +8,7 @@ import type { Context, SystemContext } from '../model/context.ts';
 import type { RuleOf, Rulebook } from '../model/rulebook.ts';
 import type { StepAt, Travel, Way } from '../model/travel.ts';
 import { KIND, typeWords } from './kinds.tsx';
-import { KindTile, Missing, ModelsPage, NameOf, RecordLink, TABS } from './models.tsx';
+import { addressOf, KindTile, Missing, ModelsPage, NameOf, RecordLink, TABS } from './models.tsx';
 import type { ModelState } from './shell.tsx';
 import { Facts, GridRow, Panel, Pill, RowList, Section, SectionStack, TextPanel, useTitle } from './ui.tsx';
 
@@ -36,8 +36,28 @@ export function RecordPage({ tab }: { tab: (typeof TABS)[number] }) {
   );
 }
 
-/** A record's page: its name with the tile of its kind and its marks, its description, then what its kind shows. */
-function RecordBody({ record, catalogue, travel, rulebook, context }: { record: ModelRecord; catalogue: Catalogue; travel: Travel; rulebook: Rulebook | undefined; context: Context | undefined }) {
+/**
+ * A record's page: its name with the tile of its kind and its marks, its description, then what its
+ * kind shows. Under a change the page draws the title row itself, and leaves the description out
+ * where it is a key that changes: `titled` and `described` say so.
+ */
+export function RecordBody({
+  record,
+  catalogue,
+  travel,
+  rulebook,
+  context,
+  titled = true,
+  described = true,
+}: {
+  record: ModelRecord;
+  catalogue: Catalogue;
+  travel: Travel;
+  rulebook: Rulebook | undefined;
+  context: Context | undefined;
+  titled?: boolean;
+  described?: boolean;
+}) {
   const { kind, fields } = record;
   const body =
     kind === 'people' ? (
@@ -55,24 +75,34 @@ function RecordBody({ record, catalogue, travel, rulebook, context }: { record: 
     );
   return (
     <>
-      <header className="record-title">
-        <KindTile kind={kind} size="lg" />
-        <h1 className="large-title">
-          <NameOf record={record} />
-        </h1>
-        {KIND[kind] !== undefined && (
-          <span className="record-marks">
-            <Pill kind={kind}>{typeWords(kind, fields.kind)}</Pill>
-            {kind === 'systems' && fields.external === true && <Pill>External</Pill>}
-          </span>
-        )}
-      </header>
+      {titled && (
+        <header className="record-title">
+          <KindTile kind={kind} size="lg" />
+          <h1 className="large-title">
+            <NameOf record={record} />
+          </h1>
+          <TypeMarks record={record} />
+        </header>
+      )}
       <SectionStack>
-        {typeof fields.description === 'string' && <TextPanel>{fields.description}</TextPanel>}
+        {described && typeof fields.description === 'string' && <TextPanel>{fields.description}</TextPanel>}
         {body}
-        <RulesOf rulebook={rulebook} id={record.id} />
+        <RulesOf rulebook={rulebook} catalogue={catalogue} id={record.id} />
       </SectionStack>
     </>
+  );
+}
+
+/** The marks of a thing's title row: the pill of its type, and "External" on a system outside. Any other record has none. */
+export function TypeMarks({ record, children }: { record: ModelRecord; children?: ReactNode }) {
+  const { kind, fields } = record;
+  if (KIND[kind] === undefined && children === undefined) return null;
+  return (
+    <span className="record-marks">
+      {KIND[kind] !== undefined && <Pill kind={kind}>{typeWords(kind, fields.kind)}</Pill>}
+      {kind === 'systems' && fields.external === true && <Pill>External</Pill>}
+      {children}
+    </span>
   );
 }
 
@@ -122,8 +152,11 @@ const HOW: Record<RuleOf['how'], string> = { breaks: 'Breaks it', debt: 'In debt
  * The Rules section, last on the page of a record and of a feature: each rule the record breaks,
  * is in debt of or, for a connection, is on a way that breaks, its name a link to its page.
  */
-export function RulesOf({ rulebook, id }: { rulebook: Rulebook | undefined; id: string }) {
-  const rows = (rulebook?.rulesOf(id) ?? []).map((each) => ({ key: each.rule, cells: [<Link to={`/rules/${each.rule}`}>{each.name ?? each.rule}</Link>, HOW[each.how]] }));
+export function RulesOf({ rulebook, catalogue, id }: { rulebook: Rulebook | undefined; catalogue: Catalogue; id: string }) {
+  const rows = (rulebook?.rulesOf(id) ?? []).map((each) => ({
+    key: each.rule,
+    cells: [<Link to={addressOf(catalogue, 'rules', each.rule)}>{each.name ?? each.rule}</Link>, HOW[each.how]],
+  }));
   return <Related title="Rules" rows={rows} widths={['auto', '220px']} />;
 }
 
@@ -195,7 +228,7 @@ function WayOf({ catalogue, way: { from, to, back } }: { catalogue: Catalogue; w
 const STEP = 'minmax(0, 1fr) 64px minmax(0, 1.5fr)';
 
 /** The Steps section: each step as one link to its flow, opened on that step. */
-function Steps({ steps }: { steps: readonly StepAt[] }) {
+function Steps({ steps, catalogue }: { steps: readonly StepAt[]; catalogue: Catalogue }) {
   if (steps.length === 0) return null;
   return (
     <Section title="Steps">
@@ -204,7 +237,7 @@ function Steps({ steps }: { steps: readonly StepAt[] }) {
           {steps.map((step) => (
             <GridRow
               key={`${step.flow} ${step.number}`}
-              to={`/flows/${step.flow}${step.step !== '' ? `#${encodeURIComponent(step.step)}` : ''}`}
+              to={`${addressOf(catalogue, 'flows', step.flow)}${step.step !== '' ? `#${encodeURIComponent(step.step)}` : ''}`}
               cols={STEP}
               tile={<KindTile kind="flows" size="sm" />}
               name={step.flowName}
@@ -343,7 +376,7 @@ function Connection({ record, catalogue, travel }: { record: ModelRecord; catalo
       {facts.length > 0 && <Facts rows={facts} />}
       <Related title="Passes through" rows={via} widths={['44px', 'auto', '200px']} />
       <Technologies record={record} catalogue={catalogue} />
-      <Steps steps={travel.stepsOn(record.id)} />
+      <Steps steps={travel.stepsOn(record.id)} catalogue={catalogue} />
       <Related title="Data" rows={data} widths={['auto', '360px']} />
     </>
   );
@@ -362,7 +395,7 @@ function Data({ record, catalogue, travel }: { record: ModelRecord; catalogue: C
   return (
     <>
       <Related title="Fields" rows={fields} widths={['240px', 'auto']} />
-      <Steps steps={travel.stepsWith(record.id)} />
+      <Steps steps={travel.stepsWith(record.id)} catalogue={catalogue} />
       <Related title="Connections" rows={ways} widths={['auto', '360px']} />
     </>
   );

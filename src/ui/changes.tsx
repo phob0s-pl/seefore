@@ -1,13 +1,18 @@
 import { ArrowLeft, PencilRuler } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Link, NavLink, useOutletContext, useParams } from 'react-router-dom';
-import type { Change, Changes } from '../model/changes.ts';
+import { addressUnder } from '../model/catalogue.ts';
+import type { Change, ChangeRow, Changes } from '../model/changes.ts';
+import { MarkPill, TouchedName, TouchedTile, Unlaid } from './change-record.tsx';
 import { Missing } from './models.tsx';
 import type { ModelState } from './shell.tsx';
 import { EmptyState, GridRow, IconTile, LargeTitle, Panel, RowList, Section, SectionStack, TextPanel, useTitle } from './ui.tsx';
 
 /** The name alone. */
 const COLS = 'minmax(0, 1fr)';
+
+/** The name, and the mark at the right. */
+const RECORD_COLS = 'minmax(0, 1fr) 110px';
 
 const LIST = { to: '/changes', title: 'Changes' };
 
@@ -81,9 +86,68 @@ function Need({ change }: { change: Change }) {
 }
 
 /**
+ * A record of the Records page: the tile of its kind, its name, and the mark of what the change
+ * does to it. It leads to the record under the change; for a change the check could not lay it
+ * is a row alone, with the same look.
+ */
+function RecordRow({ change, row }: { change: Change; row: ChangeRow }) {
+  const tile = <TouchedTile folder={row.touched.folder} record={row.record} size="sm" />;
+  const mark = <MarkPill verb={row.touched.verb} />;
+  if (change.laid) return <GridRow to={addressUnder(change.id, row.touched.path)} cols={RECORD_COLS} tile={tile} name={<TouchedName row={row} />} cells={[mark]} />;
+  return (
+    <li className="row row-grid-item change-row-still">
+      <div className="row-grid" style={{ gridTemplateColumns: RECORD_COLS }}>
+        <span className="row-grid-name">
+          {tile}
+          <span className="row-name row-name-ellipsis">
+            <TouchedName row={row} />
+          </span>
+        </span>
+        <span className="row-cell">{mark}</span>
+      </div>
+    </li>
+  );
+}
+
+/**
+ * The records a change adds, updates and removes, in a section for each of the page's own lists
+ * that it touches, each by name with its mark. A change that touches nothing is an input alone;
+ * one the check could not lay is read from its file, under the line that says why its rows lead
+ * nowhere.
+ */
+function Records({ change, changes }: { change: Change; changes: Changes }) {
+  if (change.touched.length === 0)
+    return (
+      <EmptyState title="No records yet.">
+        This change is an input alone. Write what it adds, updates and removes under <code>add</code>, <code>update</code> and <code>remove</code> in <code>changes/{change.id}.yaml</code>.
+      </EmptyState>
+    );
+  return (
+    <SectionStack>
+      {!change.laid && (
+        <p className="change-note">
+          <Unlaid />
+        </p>
+      )}
+      {changes.sections(change.id).map((section) => (
+        <Section key={section.title} title={section.title}>
+          <Panel lift className="change-records">
+            <RowList label={section.title}>
+              {section.rows.map((row) => (
+                <RecordRow key={row.touched.path} change={change} row={row} />
+              ))}
+            </RowList>
+          </Panel>
+        </Section>
+      ))}
+    </SectionStack>
+  );
+}
+
+/**
  * The page of a section of a change, under the change's name as its title: `/changes/<id>` for
- * Need, which shows what was asked for, and `/changes/<id>/records` for Records, for now only a
- * frame. The sidebar says which section is open. An id that names no change is missing.
+ * Need, which shows what was asked for, and `/changes/<id>/records` for Records, the records it
+ * touches. The sidebar says which section is open. An id that names no change is missing.
  */
 export function ChangePage({ section }: { section: Section }) {
   const { id = '' } = useParams();
@@ -95,20 +159,21 @@ export function ChangePage({ section }: { section: Section }) {
   return (
     <section className="change-frame" aria-label={SECTIONS.find((each) => each.section === section)?.word}>
       <LargeTitle>{change.name}</LargeTitle>
-      {section === 'need' && <Need change={change} />}
+      {section === 'need' ? <Need change={change} /> : <Records change={change} changes={changes} />}
     </section>
   );
 }
 
 /**
  * The sidebar of a change, in place of the main one: an entry for each
- * section with its number in a circle, and at the foot the way back to the list.
+ * section with its number in a circle, and at the foot the way back to the list. Records is
+ * current on its list and on the page of each record under it.
  */
 export function ChangeSidebar({ change }: { change: Change }) {
   return (
     <nav aria-label="Change sections" className="sidebar-navigation change-navigation">
       {SECTIONS.map((section, index) => (
-        <NavLink key={section.section} to={`/changes/${change.id}${section.path}`} end className="nav-link change-section-link">
+        <NavLink key={section.section} to={`/changes/${change.id}${section.path}`} end={section.section === 'need'} className="nav-link change-section-link">
           <span className="change-section-number">{index + 1}</span>
           <span className="nav-text">{section.word}</span>
         </NavLink>

@@ -7,7 +7,7 @@ import type { ModelRecord, Problem } from '../model/answer.ts';
 import type { Catalogue } from '../model/catalogue.ts';
 import type { RuleRead, RuleState, Rulebook, SelectorLine, WayRead } from '../model/rulebook.ts';
 import { KIND, typeWords } from './kinds.tsx';
-import { KindTile, Missing, NameOf, RecordLink } from './models.tsx';
+import { addressOf, KindTile, Missing, NameOf, RecordLink } from './models.tsx';
 import { Named, Related } from './record.tsx';
 import type { ModelState } from './shell.tsx';
 import { EmptyState, GridRow, IconTile, LargeTitle, Panel, Pill, RowList, RowListHeading, Section, SectionStack, TextPanel, useTitle } from './ui.tsx';
@@ -69,8 +69,8 @@ const StatePill = ({ state }: { state: RuleState }) => <Pill tone={STATE[state].
  */
 export function RulesList() {
   useTitle('Rules');
-  const { rulebook, line } = useRules();
-  if (rulebook === undefined) return line;
+  const { catalogue, rulebook, line } = useRules();
+  if (catalogue === undefined || rulebook === undefined) return line;
   return (
     <>
       <LargeTitle>Rules</LargeTitle>
@@ -86,7 +86,7 @@ export function RulesList() {
               {rulebook.rows.map((row) => (
                 <GridRow
                   key={row.id}
-                  to={`/rules/${row.id}`}
+                  to={addressOf(catalogue, 'rules', row.id)}
                   cols={COLS}
                   tile={<RuleTile state={row.state} size="sm" />}
                   name={row.name ?? row.id}
