@@ -111,7 +111,7 @@ that order, each on what the one before it left; D3 and D4 follow.
 | D5 | Changes on the page | An entry "Changes" in the sidebar: a list of the changes, and a page for each with its name and what the check says of it | The main session defines, Opus builds |
 | D6 | The need of a change on its page | On a change's page, what was asked for: the prompt, and what the person answered when asked | The main session |
 | D7 | The records of a change on its page | The Records page lists what a change adds, updates and removes, by the page's own lists. A record opens under the change's address: an updated one as before and after, key by key, then as it would be. Inside a change a link leads under the change if the change touches the record | The main session builds the model's part, Opus the pages |
-| D7b | The flow of a change on its page | The steps of a flow and the fields of data, before and after as lists. A flow under a change with its steps and its diagram | The main session defines, Opus builds |
+| D7b | A flow under a change | A flow opens under a change as the flow's own page. One the change adds or removes has only its mark. One it updates has one list of steps and one diagram, of today and of the change together: red for what goes, green for what comes, yellow for what changes. The fields of a data record, before and after as a list | The main session builds the model's part, Opus the pages, Fable reviews |
 | D8 | The diagram of a change | The architecture diagram as it would be with the change, with what is added, removed and changed marked on it | The main session defines, Opus builds |
 
 ### 5 Additional architecture context
