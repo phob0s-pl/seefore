@@ -187,7 +187,7 @@ const FADED = `(() => {
   return ids.length > 0 && ids;
 })()`;
 const unfaded = (send: Send) => waitFor(send, `document.querySelector('.faded') === null`);
-const SHOP_BOX = '.react-flow__node[data-id="shop"]';
+const SHOP_BOX = '.react-flow__node[data-id="system-shop"]';
 
 test.skipIf(!HAS_CHROME).concurrent(
   HAS_CHROME ? 'the built page, served by the command, draws a known box, an arrow and a band in Chrome' : `skipped: there is no Chrome at ${CHROME}`,
@@ -218,15 +218,15 @@ test.skipIf(!HAS_CHROME).concurrent(
         return link !== undefined;
       })()`;
       expect(await waitFor(send, click('Order API'))).toBe(true);
-      const page = `location.pathname === '/models/order-api' && {
-        shop: [...document.querySelectorAll('a[href="/models/shop"]')].some((link) => link.textContent === 'Shop'),
+      const page = `location.pathname === '/models/app-order-api' && {
+        shop: [...document.querySelectorAll('a[href="/models/system-shop"]')].some((link) => link.textContent === 'Shop'),
         sections: [...document.querySelectorAll('.section-label')].map((label) => label.textContent),
       }`;
       const read = (await waitFor(send, page)) as { shop: boolean; sections: string[] } | false;
       expect(read && read.shop).toBe(true);
       expect(read && read.sections).toContain('Is acted on by');
       expect(await waitFor(send, click('Shop'))).toBe(true);
-      expect(await waitFor(send, `location.pathname === '/models/shop' && document.title`)).toBe('Shop · seefore');
+      expect(await waitFor(send, `location.pathname === '/models/system-shop' && document.title`)).toBe('Shop · seefore');
       // The system's page has its context as one fact, its count; the lines are read on the page of the context.
       const context = `document.querySelector('.facts') !== null && {
         facts: [...document.querySelectorAll('.facts > div')].map((row) => row.innerText.replace(/\\s+/g, ' ').trim()),
@@ -246,11 +246,11 @@ test.skipIf(!HAS_CHROME).concurrent(
   () =>
     inChrome(async (send, address) => {
       await send('Page.navigate', { url: `${address}/` });
-      await click(send, await centreOf(send, '.react-flow__node[data-id="shop"]'));
+      await click(send, await centreOf(send, '.react-flow__node[data-id="system-shop"]'));
       const read = (await waitFor(send, PANEL)) as Read | false;
       expect(read).toMatchObject({ kind: 'System', name: 'Shop', text: 'Sells things online.', button: 'Open model details' });
       await click(send, await centreOf(send, 'aside[aria-label="Diagram inspector"] a.button'));
-      expect(await waitFor(send, `document.title === 'Shop · seefore' && location.pathname`)).toBe('/models/shop');
+      expect(await waitFor(send, `document.title === 'Shop · seefore' && location.pathname`)).toBe('/models/system-shop');
     }),
   20_000,
 );
@@ -260,7 +260,7 @@ test.skipIf(!HAS_CHROME).concurrent(
   () =>
     inChrome(async (send, address) => {
       await send('Page.navigate', { url: `${address}/` });
-      await click(send, await middleOf(send, 'customer->shop'));
+      await click(send, await middleOf(send, 'person-customer->system-shop'));
       const read = (await waitFor(send, PANEL)) as Read | false;
       expect(read).toMatchObject({ kind: 'Connection', name: 'Places an order', button: 'Open connection details', path: ['From Customer', 'To Order API'] });
     }),
@@ -272,7 +272,7 @@ test.skipIf(!HAS_CHROME).concurrent(
   () =>
     inChrome(async (send, address) => {
       await send('Page.navigate', { url: `${address}/?depth=containers` });
-      const app = '.react-flow__node[data-id="order-api"]';
+      const app = '.react-flow__node[data-id="app-order-api"]';
       await click(send, await centreOf(send, app));
       expect(await waitFor(send, PANEL)).toMatchObject({ kind: 'App · service', name: 'Order API' });
       await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
@@ -294,7 +294,7 @@ test.skipIf(!HAS_CHROME).concurrent(
       await send('Page.navigate', { url: `${address}/` });
       await move(send, await centreOf(send, SHOP_BOX));
       // The shop joins the customer; the clerk joins nothing.
-      expect(await waitFor(send, FADED)).toEqual(['clerk']);
+      expect(await waitFor(send, FADED)).toEqual(['person-clerk']);
       await move(send, await settled(send, EMPTY));
       expect(await unfaded(send)).toBe(true);
     }),
@@ -311,7 +311,7 @@ test.skipIf(!HAS_CHROME).concurrent(
       await move(send, await settled(send, EMPTY));
       // Past the wait, the hover is none and the pick's highlight holds.
       await pause(400);
-      expect((await send('Runtime.evaluate', { expression: FADED, returnByValue: true })).result?.result?.value).toEqual(['clerk']);
+      expect((await send('Runtime.evaluate', { expression: FADED, returnByValue: true })).result?.result?.value).toEqual(['person-clerk']);
       await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
       await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
       expect(await unfaded(send)).toBe(true);
@@ -324,9 +324,9 @@ test.skipIf(!HAS_CHROME).concurrent(
   () =>
     inChrome(async (send, address) => {
       await send('Page.navigate', { url: `${address}/` });
-      await move(send, await middleOf(send, 'customer->shop'));
+      await move(send, await middleOf(send, 'person-customer->system-shop'));
       expect(await waitFor(send, `document.querySelector('.diagram-hover-label[role="tooltip"]')?.textContent`)).toBe('Customer → Shop');
-      expect(await waitFor(send, FADED)).toEqual(['clerk']);
+      expect(await waitFor(send, FADED)).toEqual(['person-clerk']);
     }),
   20_000,
 );
@@ -339,11 +339,11 @@ test.skipIf(!HAS_CHROME).concurrent(
       const boxes = (count: number) => waitFor(send, `document.querySelectorAll('.architecture-node[data-id]').length === ${count}`);
       expect(await boxes(5)).toBe(true);
       await click(send, await centreOf(send, 'button[aria-label="Focus"]'));
-      await click(send, await centreOf(send, '[role="listbox"] [role="option"][href="/?depth=containers&focus=shop"]'));
+      await click(send, await centreOf(send, '[role="listbox"] [role="option"][href="/?depth=containers&focus=system-shop"]'));
       // The address, whether the list is open, and what the trigger says, once they are as wanted.
       const shows = (search: string, choice: string) =>
         waitFor(send, `location.search === ${JSON.stringify(search)} && document.querySelector('[role="listbox"]') === null && document.querySelector('button[aria-label="Focus"]').textContent === ${JSON.stringify(choice)}`);
-      expect(await shows('?depth=containers&focus=shop', 'Shop')).toBe(true);
+      expect(await shows('?depth=containers&focus=system-shop', 'Shop')).toBe(true);
       // The clerk has no line with the shop.
       expect(await boxes(4)).toBe(true);
       await click(send, await centreOf(send, 'button[aria-label="Go back"]'));
@@ -385,7 +385,7 @@ test.skipIf(!HAS_CHROME).concurrent(
   HAS_CHROME ? 'a flow opens on the whole of it; a click on a row puts the step in the address, fills the bar and lights one line; the down key moves on' : `skipped: there is no Chrome at ${CHROME}`,
   () =>
     inChrome(async (send, address) => {
-      await send('Page.navigate', { url: `${address}/flows/placing-an-order` });
+      await send('Page.navigate', { url: `${address}/flows/flow-placing-an-order` });
       const whole = await flowAt(send, '');
       expect(whole).toMatchObject({ current: null, stepped: [], faded: [] });
       expect(whole.bar).toContain('Placing an order');
@@ -393,15 +393,15 @@ test.skipIf(!HAS_CHROME).concurrent(
 
       await click(send, await centreOf(send, '[data-row="step"][data-step="saves"]'));
       const saves = await flowAt(send, '#saves');
-      expect(saves).toMatchObject({ current: 'saves', stepped: ['order-api->orders'], heads: [false, true] });
+      expect(saves).toMatchObject({ current: 'saves', stepped: ['app-order-api->store-orders'], heads: [false, true] });
       expect(saves.bar).toContain('2 of 3 Saves the order');
       expect(saves.bar).toContain('Order API to Orders Only when the customer has paid Data Order details');
-      expect(saves.faded).toEqual(['customer', 'customer->order-api']);
+      expect(saves.faded).toEqual(['person-customer', 'person-customer->app-order-api']);
 
       // The reply travels back along the customer's line: its one head is at the customer.
       await press(send, 'ArrowDown', 40);
       const confirms = await flowAt(send, '#confirms');
-      expect(confirms).toMatchObject({ current: 'confirms', stepped: ['customer->order-api'], heads: [true, false], faded: ['order-api->orders', 'orders'] });
+      expect(confirms).toMatchObject({ current: 'confirms', stepped: ['person-customer->app-order-api'], heads: [true, false], faded: ['app-order-api->store-orders', 'store-orders'] });
       expect(confirms.bar).toContain('3 of 3 Confirms the order');
       expect(confirms.bar).toContain('Order API replies to Customer Reply to 1, Places an order');
     }),
@@ -414,10 +414,10 @@ test.skipIf(!HAS_CHROME).concurrent(
     inChrome(async (send, address) => {
       // There is no list of flows apart: its old address leads to the features.
       await send('Page.navigate', { url: `${address}/flows` });
-      expect(await waitFor(send, `location.pathname === '/features' && [...document.querySelectorAll('main a')].map((link) => link.getAttribute('href')).join()`)).toBe('/features/ordering,/flows/placing-an-order');
+      expect(await waitFor(send, `location.pathname === '/features' && [...document.querySelectorAll('main a')].map((link) => link.getAttribute('href')).join()`)).toBe('/features/feature-ordering,/flows/flow-placing-an-order');
       expect(await waitFor(send, `document.querySelector('nav[aria-label="Main navigation"]')?.innerText.replace(/\\s+/g, ' ')`)).toBe('Architecture Context Features Models Rules Changes');
-      expect(await waitFor(send, `document.querySelector('a[href="/flows/placing-an-order"]')?.textContent`)).toBe('Placing an order');
-      await click(send, await centreOf(send, 'a[href="/flows/placing-an-order"]'));
+      expect(await waitFor(send, `document.querySelector('a[href="/flows/flow-placing-an-order"]')?.textContent`)).toBe('Placing an order');
+      await click(send, await centreOf(send, 'a[href="/flows/flow-placing-an-order"]'));
       await flowAt(send, '');
       await click(send, await centreOf(send, '[data-row="step"][data-step="places"]'));
       await press(send, 'ArrowDown', 40);
@@ -433,13 +433,13 @@ test.skipIf(!HAS_CHROME).concurrent(
   () =>
     inChrome(async (send, address) => {
       await send('Page.navigate', { url: `${address}/features` });
-      expect(await waitFor(send, `document.querySelector('a[href="/features/ordering"]')?.innerText.replace(/\\s+/g, ' ')`)).toBe('Ordering');
-      await click(send, await centreOf(send, 'a[href="/features/ordering"]'));
-      const page = `location.pathname === '/features/ordering' && document.title === 'Ordering · seefore' && [...document.querySelectorAll('.section-label')].map((label) => label.textContent)`;
+      expect(await waitFor(send, `document.querySelector('a[href="/features/feature-ordering"]')?.innerText.replace(/\\s+/g, ' ')`)).toBe('Ordering');
+      await click(send, await centreOf(send, 'a[href="/features/feature-ordering"]'));
+      const page = `location.pathname === '/features/feature-ordering' && document.title === 'Ordering · seefore' && [...document.querySelectorAll('.section-label')].map((label) => label.textContent)`;
       expect(await waitFor(send, page)).toEqual(['Flows', 'From its flows', 'Data']);
       expect(await waitFor(send, `[...document.querySelectorAll('.facts dt')].map((label) => label.textContent).join()`)).toBe('For');
-      await click(send, await centreOf(send, 'section[aria-label="Flows"] a[href="/flows/placing-an-order"]'));
-      expect(await waitFor(send, `document.title === 'Placing an order · seefore' && location.pathname`)).toBe('/flows/placing-an-order');
+      await click(send, await centreOf(send, 'section[aria-label="Flows"] a[href="/flows/flow-placing-an-order"]'));
+      expect(await waitFor(send, `document.title === 'Placing an order · seefore' && location.pathname`)).toBe('/flows/flow-placing-an-order');
     }),
   20_000,
 );
@@ -449,8 +449,8 @@ test.skipIf(!HAS_CHROME).concurrent(
   () =>
     inChrome(async (send, address) => {
       await send('Page.navigate', { url: `${address}/data` });
-      await click(send, await centreOf(send, 'a[href="/data/order-details"]'));
-      const page = `location.pathname === '/data/order-details' && document.querySelector('section[aria-label="Connections"]') !== null && {
+      await click(send, await centreOf(send, 'a[href="/data/data-order-details"]'));
+      const page = `location.pathname === '/data/data-order-details' && document.querySelector('section[aria-label="Connections"]') !== null && {
         tab: document.querySelector('.models-tabs a.active')?.textContent,
         fields: [...document.querySelectorAll('section[aria-label="Fields"] tr')].map((row) => row.innerText.replace(/\\s+/g, ' ').trim()),
         ways: [...document.querySelectorAll('section[aria-label="Connections"] td')].map((cell) => cell.textContent),
@@ -460,7 +460,7 @@ test.skipIf(!HAS_CHROME).concurrent(
         fields: ['items What is bought, and how many of each', 'address'],
         ways: ['Customer to Order API', 'Order API to Orders'],
       });
-      await click(send, await centreOf(send, 'section[aria-label="Steps"] a[href="/flows/placing-an-order#saves"]'));
+      await click(send, await centreOf(send, 'section[aria-label="Steps"] a[href="/flows/flow-placing-an-order#saves"]'));
       expect(await waitFor(send, `location.hash === '#saves' && document.querySelector('[aria-current="step"]')?.getAttribute('data-step')`)).toBe('saves');
     }),
   20_000,
@@ -486,8 +486,8 @@ test.skipIf(!HAS_CHROME).concurrent(
         lit: 'Rules',
         dot: false,
       });
-      await click(send, await centreOf(send, 'a[href="/rules/orders-written-by-the-api"]'));
-      const page = `location.pathname === '/rules/orders-written-by-the-api' && document.title === 'The orders are written only by the Order API · seefore' && document.querySelector('section[aria-label="Looked at"]') !== null && {
+      await click(send, await centreOf(send, 'a[href="/rules/rule-orders-written-by-the-api"]'));
+      const page = `location.pathname === '/rules/rule-orders-written-by-the-api' && document.title === 'The orders are written only by the Order API · seefore' && document.querySelector('section[aria-label="Looked at"]') !== null && {
         crumbs: document.querySelector('nav[aria-label="Breadcrumb"]')?.innerText.replace(/\\s+/g, ' '),
         pills: ${texts('.record-marks .pill')},
         sections: ${texts('.section-label')},
@@ -514,7 +514,7 @@ test.skipIf(!HAS_CHROME).concurrent(
     const folder = await mkdtemp(join(tmpdir(), 'seefore-shop-'));
     try {
       await cp(SHOP, folder, { recursive: true });
-      await writeFile(join(folder, 'rules', 'stores-name-technology.yaml'), 'name: Every store names its technology\neach: {kind: stores}\nmust: {technology: any}\n');
+      await writeFile(join(folder, 'rules', 'rule-stores-name-technology.yaml'), 'name: Every store names its technology\neach: {kind: stores}\nmust: {technology: any}\n');
       await inChrome(async (send, address) => {
         await send('Page.navigate', { url: `${address}/rules` });
         const list = `document.querySelector('.nav-dot') !== null && {
@@ -525,19 +525,19 @@ test.skipIf(!HAS_CHROME).concurrent(
           dot: 'A rule is broken',
           rows: ['Every store names its technology Broken', 'The orders are written only by the Order API Holds'],
         });
-        await click(send, await centreOf(send, 'a[href="/rules/stores-name-technology"]'));
-        const breaks = `location.pathname === '/rules/stores-name-technology' && document.querySelector('section[aria-label="Where it breaks"] li') !== null && {
+        await click(send, await centreOf(send, 'a[href="/rules/rule-stores-name-technology"]'));
+        const breaks = `location.pathname === '/rules/rule-stores-name-technology' && document.querySelector('section[aria-label="Where it breaks"] li') !== null && {
           says: document.querySelector('section[aria-label="Where it breaks"] .panel-text')?.textContent,
           rows: ${texts('section[aria-label="Where it breaks"] li')},
         }`;
         expect(await waitFor(send, breaks)).toEqual({ says: 'The one record it looks at does not match Must.', rows: ['Orders Store · database Does not match technology any'] });
-        await click(send, await centreOf(send, 'section[aria-label="Where it breaks"] a[href="/models/orders"]'));
-        const record = `location.pathname === '/models/orders' && document.querySelector('section[aria-label="Rules"]') !== null && {
+        await click(send, await centreOf(send, 'section[aria-label="Where it breaks"] a[href="/models/store-orders"]'));
+        const record = `location.pathname === '/models/store-orders' && document.querySelector('section[aria-label="Rules"]') !== null && {
           last: [...document.querySelectorAll('.section-label')].at(-1)?.textContent,
           rules: ${texts('section[aria-label="Rules"] tr')},
           link: document.querySelector('section[aria-label="Rules"] a')?.getAttribute('href'),
         }`;
-        expect(await waitFor(send, record)).toEqual({ last: 'Rules', rules: ['Every store names its technology Breaks it'], link: '/rules/stores-name-technology' });
+        expect(await waitFor(send, record)).toEqual({ last: 'Rules', rules: ['Every store names its technology Breaks it'], link: '/rules/rule-stores-name-technology' });
       }, folder);
     } finally {
       await rm(folder, { recursive: true, force: true });
@@ -563,11 +563,11 @@ test.skipIf(!HAS_CHROME).concurrent(
         lit: 'Context',
         sections: ['Global', 'Of one system'],
         rows: ['An order is never lost once the customer has been told it is placed. Must', 'A new store is a PostgreSQL database. Prefer', 'Shop', 'A new feature goes into the Order API. Prefer'],
-        links: ['/context/orders-are-never-lost', '/context/a-new-store-is-postgresql', '/models/shop', '/context/features-go-into-the-order-api'],
+        links: ['/context/context-orders-are-never-lost', '/context/context-a-new-store-is-postgresql', '/models/system-shop', '/context/context-features-go-into-the-order-api'],
       });
-      await click(send, await centreOf(send, '.context-list a[href="/context/orders-are-never-lost"]'));
+      await click(send, await centreOf(send, '.context-list a[href="/context/context-orders-are-never-lost"]'));
       // The window's title is set a moment after the page is drawn, so the wait is for it too.
-      const page = `location.pathname === '/context/orders-are-never-lost' && document.querySelector('.context-title') !== null && document.title.startsWith('An order') && {
+      const page = `location.pathname === '/context/context-orders-are-never-lost' && document.querySelector('.context-title') !== null && document.title.startsWith('An order') && {
         lit: document.querySelector('nav[aria-label="Main navigation"] a.active')?.textContent,
         window: document.title,
         crumbs: document.querySelector('nav[aria-label="Breadcrumb"]') !== null,
@@ -597,11 +597,11 @@ test.skipIf(!HAS_CHROME).concurrent(
   HAS_CHROME ? "a line about one system names it, the system's fact Context leads back to the list, and a line leads to the others of its group" : `skipped: there is no Chrome at ${CHROME}`,
   () =>
     inChrome(async (send, address) => {
-      await send('Page.navigate', { url: `${address}/context/features-go-into-the-order-api` });
+      await send('Page.navigate', { url: `${address}/context/context-features-go-into-the-order-api` });
       // The page of a line, once it shows the sentence: the address changes before the page is drawn anew.
       const at = (id: string, sentence: string) => `location.pathname === ${JSON.stringify(`/context/${id}`)} && document.querySelector('.context-title h1')?.textContent === ${JSON.stringify(sentence)}`;
       const onList = `location.pathname === '/context' && document.querySelector('main h1')?.textContent === 'Context' && document.querySelectorAll('.context-list .row').length`;
-      expect(await waitFor(send, at('features-go-into-the-order-api', 'A new feature goes into the Order API.'))).toBe(true);
+      expect(await waitFor(send, at('context-features-go-into-the-order-api', 'A new feature goes into the Order API.'))).toBe(true);
       // It is about the shop alone, and no other line is: its page ends with the facts.
       expect(await waitFor(send, `({ marks: ${texts('.context-title .pill')}, facts: ${texts('.facts > div')}, others: document.querySelectorAll('.context-list .row').length })`)).toEqual({
         marks: ['Prefer'],
@@ -609,20 +609,20 @@ test.skipIf(!HAS_CHROME).concurrent(
         others: 0,
       });
       // The system it names opens the system, whose fact Context counts the lines that name it and leads to the list.
-      await click(send, await centreOf(send, '.facts a[href="/models/shop"]'));
-      const fact = `location.pathname === '/models/shop' && document.title === 'Shop · seefore' && [...document.querySelectorAll('.facts > div')].find((row) => row.querySelector('dt').textContent === 'Context')`;
+      await click(send, await centreOf(send, '.facts a[href="/models/system-shop"]'));
+      const fact = `location.pathname === '/models/system-shop' && document.title === 'Shop · seefore' && [...document.querySelectorAll('.facts > div')].find((row) => row.querySelector('dt').textContent === 'Context')`;
       expect(await waitFor(send, `(() => { const row = ${fact}; return row && [row.querySelector('dd').textContent, row.querySelector('a')?.getAttribute('href')]; })()`)).toEqual(['1 prefer', '/context']);
       await click(send, await centreOf(send, '.facts a[href="/context"]'));
       expect(await waitFor(send, onList)).toBe(4);
       // A global line leads to the other global line, and the entry in the sidebar leads back.
-      await click(send, await centreOf(send, '.context-list a[href="/context/a-new-store-is-postgresql"]'));
-      expect(await waitFor(send, at('a-new-store-is-postgresql', 'A new store is a PostgreSQL database.'))).toBe(true);
-      await click(send, await centreOf(send, '.context-list a[href="/context/orders-are-never-lost"]'));
-      expect(await waitFor(send, at('orders-are-never-lost', 'An order is never lost once the customer has been told it is placed.'))).toBe(true);
+      await click(send, await centreOf(send, '.context-list a[href="/context/context-a-new-store-is-postgresql"]'));
+      expect(await waitFor(send, at('context-a-new-store-is-postgresql', 'A new store is a PostgreSQL database.'))).toBe(true);
+      await click(send, await centreOf(send, '.context-list a[href="/context/context-orders-are-never-lost"]'));
+      expect(await waitFor(send, at('context-orders-are-never-lost', 'An order is never lost once the customer has been told it is placed.'))).toBe(true);
       await click(send, await centreOf(send, 'nav[aria-label="Main navigation"] a[href="/context"]'));
       expect(await waitFor(send, onList)).toBe(4);
       // An id that names no line is missing; so is the id of a record that is no line.
-      await send('Page.navigate', { url: `${address}/context/shop` });
+      await send('Page.navigate', { url: `${address}/context/system-shop` });
       expect(await waitFor(send, `document.querySelector('.empty-state') !== null && ${texts('.empty-state')}[0]`)).toBe('No such record. Back to Context');
     }),
   20_000,
@@ -691,7 +691,7 @@ test.skipIf(!HAS_CHROME).concurrent(
         current: null,
       });
       // The id of a record that is no change: the change is looked for in `changes/` alone.
-      await send('Page.navigate', { url: `${address}/changes/shop` });
+      await send('Page.navigate', { url: `${address}/changes/system-shop` });
       expect(await waitFor(send, `document.querySelector('.empty-state') !== null && { says: ${texts('.empty-state')}[0], sidebar: ${SIDEBAR} }`)).toEqual({
         says: 'No such record. Back to Changes',
         sidebar: { main: 'Architecture Context Features Models Rules Changes', change: null, current: null },
@@ -727,13 +727,13 @@ test.skipIf(!HAS_CHROME).concurrent(
         // Updated is yellow on every page of a change.
         tones: ['pill tone-caution', 'pill tone-caution', 'pill tone-success', 'pill tone-caution', 'pill tone-success', 'pill tone-danger', 'pill tone-caution'],
         links: [
-          '/changes/orders-by-post/records/features/ordering',
-          '/changes/orders-by-post/records/flows/placing-an-order',
-          '/changes/orders-by-post/records/flows/taking-a-posted-order',
-          '/changes/orders-by-post/records/apps/order-api',
-          '/changes/orders-by-post/records/connections/clerk-orders',
-          '/changes/orders-by-post/records/technologies/go',
-          '/changes/orders-by-post/records/data/order-details',
+          '/changes/orders-by-post/records/features/feature-ordering',
+          '/changes/orders-by-post/records/flows/flow-placing-an-order',
+          '/changes/orders-by-post/records/flows/flow-taking-a-posted-order',
+          '/changes/orders-by-post/records/apps/app-order-api',
+          '/changes/orders-by-post/records/connections/connection-clerk-orders',
+          '/changes/orders-by-post/records/technologies/tech-go',
+          '/changes/orders-by-post/records/data/data-order-details',
         ],
       });
     }),
@@ -745,8 +745,8 @@ test.skipIf(!HAS_CHROME).concurrent(
   () =>
     inChrome(async (send, address) => {
       await send('Page.navigate', { url: `${address}/changes/orders-by-post/records` });
-      await click(send, await centreOf(send, 'main a[href="/changes/orders-by-post/records/features/ordering"]'));
-      const page = `(() => { const read = ${onRecord('features/ordering', 'Ordering')}; return read && document.querySelector('.breadcrumb') !== null && {
+      await click(send, await centreOf(send, 'main a[href="/changes/orders-by-post/records/features/feature-ordering"]'));
+      const page = `(() => { const read = ${onRecord('features/feature-ordering', 'Ordering')}; return read && document.querySelector('.breadcrumb') !== null && {
         ...read,
         crumbs: ${texts('.breadcrumb')}[0],
         back: ${hrefs('.breadcrumb a')},
@@ -781,30 +781,30 @@ test.skipIf(!HAS_CHROME).concurrent(
   HAS_CHROME ? 'under a change a link to a record it touches stays under the change, and a link to any other opens the system' : `skipped: there is no Chrome at ${CHROME}`,
   () =>
     inChrome(async (send, address) => {
-      await send('Page.navigate', { url: `${address}/changes/orders-by-post/records/connections/clerk-orders` });
+      await send('Page.navigate', { url: `${address}/changes/orders-by-post/records/connections/connection-clerk-orders` });
       // The added connection: the clerk is not touched, the Order API is.
-      expect(await waitFor(send, `(() => { const read = ${onRecord('connections/clerk-orders', 'Types in a posted order')}; return read && document.querySelector('.connection-path a') !== null && { line: document.querySelector('.change-record-line') !== null, ends: ${hrefs('.connection-path a')} }; })()`)).toEqual({
+      expect(await waitFor(send, `(() => { const read = ${onRecord('connections/connection-clerk-orders', 'Types in a posted order')}; return read && document.querySelector('.connection-path a') !== null && { line: document.querySelector('.change-record-line') !== null, ends: ${hrefs('.connection-path a')} }; })()`)).toEqual({
         // An added record has no line under its title: its mark says it.
         line: false,
-        ends: ['/actors/clerk', '/changes/orders-by-post/records/apps/order-api'],
+        ends: ['/actors/person-clerk', '/changes/orders-by-post/records/apps/app-order-api'],
       });
-      await click(send, await centreOf(send, '.connection-path a[href="/changes/orders-by-post/records/apps/order-api"]'));
+      await click(send, await centreOf(send, '.connection-path a[href="/changes/orders-by-post/records/apps/app-order-api"]'));
       // The Order API as it would be: its technology taken out, the one it had removed by the change too.
-      expect(await waitFor(send, `(() => { const read = ${onRecord('apps/order-api', 'Order API')}; return read && document.querySelector('.facts a') !== null && { current: read.current, diff: ${DIFF}, removed: ${hrefs('section[aria-label="Before and after"] a')}, in: ${hrefs('.facts a')} }; })()`)).toEqual({
+      expect(await waitFor(send, `(() => { const read = ${onRecord('apps/app-order-api', 'Order API')}; return read && document.querySelector('.facts a') !== null && { current: read.current, diff: ${DIFF}, removed: ${hrefs('section[aria-label="Before and after"] a')}, in: ${hrefs('.facts a')} }; })()`)).toEqual({
         current: 'Records',
         // The key goes whole: the other side says so once, and the id bears no mark of its own.
         diff: [['technology', 'Go', 'Taken out']],
-        removed: ['/changes/orders-by-post/records/technologies/go'],
-        in: ['/models/shop'],
+        removed: ['/changes/orders-by-post/records/technologies/tech-go'],
+        in: ['/models/system-shop'],
       });
-      await click(send, await centreOf(send, '.facts a[href="/models/shop"]'));
-      expect(await waitFor(send, `location.pathname === '/models/shop' && document.title === 'Shop · seefore' && ${SIDEBAR}`)).toEqual({ main: 'Architecture Context Features Models Rules Changes', change: null, current: null });
+      await click(send, await centreOf(send, '.facts a[href="/models/system-shop"]'));
+      expect(await waitFor(send, `location.pathname === '/models/system-shop' && document.title === 'Shop · seefore' && ${SIDEBAR}`)).toEqual({ main: 'Architecture Context Features Models Rules Changes', change: null, current: null });
       // A removed record is shown as it is today, with its way to the system; what names it and is touched stays under the change.
-      await send('Page.navigate', { url: `${address}/changes/orders-by-post/records/technologies/go` });
-      expect(await waitFor(send, `(() => { const read = ${onRecord('technologies/go', 'Go')}; return read && document.querySelector('section[aria-label="Used by"] a') !== null && { line: ${texts('.change-record-line')}[0], open: ${hrefs('.change-record-line a')}, usedBy: ${hrefs('section[aria-label="Used by"] a')} }; })()`)).toEqual({
+      await send('Page.navigate', { url: `${address}/changes/orders-by-post/records/technologies/tech-go` });
+      expect(await waitFor(send, `(() => { const read = ${onRecord('technologies/tech-go', 'Go')}; return read && document.querySelector('section[aria-label="Used by"] a') !== null && { line: ${texts('.change-record-line')}[0], open: ${hrefs('.change-record-line a')}, usedBy: ${hrefs('section[aria-label="Used by"] a')} }; })()`)).toEqual({
         line: 'Removed by this change. This is the record as it is today. Open it in the system',
-        open: ['/technologies/go'],
-        usedBy: ['/changes/orders-by-post/records/apps/order-api'],
+        open: ['/technologies/tech-go'],
+        usedBy: ['/changes/orders-by-post/records/apps/app-order-api'],
       });
     }),
   20_000,
@@ -823,7 +823,7 @@ test.skipIf(!HAS_CHROME).concurrent(
       expect(await waitFor(send, `(() => { const read = ${onChange('/changes/orders-by-post')}; return read && read.change !== null && ${HOME} !== null && ${GROUP}; })()`)).toEqual(['Home', 'Go back', 'Go forward']);
       await click(send, await centreOf(send, '.history-controls a[aria-label="Home"]'));
       expect(await waitFor(send, `location.pathname === '/' && document.querySelector('nav[aria-label="Main navigation"]') !== null && ${HOME} === null`)).toBe(true);
-      await send('Page.navigate', { url: `${address}/flows/placing-an-order` });
+      await send('Page.navigate', { url: `${address}/flows/flow-placing-an-order` });
       expect(await waitFor(send, `document.querySelector('.sidebar-slot [data-row="step"]') !== null && ${GROUP}`)).toEqual(['Home', 'Go back', 'Go forward']);
       await click(send, await centreOf(send, '.history-controls a[aria-label="Home"]'));
       expect(await waitFor(send, `location.pathname === '/' && document.querySelector('nav[aria-label="Main navigation"]') !== null && ${HOME} === null`)).toBe(true);
@@ -850,8 +850,8 @@ test.skipIf(!HAS_CHROME).concurrent(
   () =>
     inChrome(async (send, address) => {
       await send('Page.navigate', { url: `${address}/changes/orders-by-post/records` });
-      await click(send, await centreOf(send, 'main a[href="/changes/orders-by-post/records/flows/placing-an-order"]'));
-      expect(await waitFor(send, `${onFlowUnder('placing-an-order', 'Placing an order')} && ${AROUND}`)).toEqual({
+      await click(send, await centreOf(send, 'main a[href="/changes/orders-by-post/records/flows/flow-placing-an-order"]'));
+      expect(await waitFor(send, `${onFlowUnder('flow-placing-an-order', 'Placing an order')} && ${AROUND}`)).toEqual({
         // The flow's steps take the place of the change's sidebar, as on a flow's own page.
         sidebar: { main: null, change: null, current: null },
         home: true,
@@ -869,8 +869,8 @@ test.skipIf(!HAS_CHROME).concurrent(
       });
       // "Records" in the way back leads to the list, and the flow the change adds opens with its mark and no colour on a step.
       await click(send, await centreOf(send, '.breadcrumb a[href="/changes/orders-by-post/records"]'));
-      await click(send, await centreOf(send, 'main a[href="/changes/orders-by-post/records/flows/taking-a-posted-order"]'));
-      expect(await waitFor(send, `${onFlowUnder('taking-a-posted-order', 'Taking a posted order')} && ${AROUND}`)).toMatchObject({
+      await click(send, await centreOf(send, 'main a[href="/changes/orders-by-post/records/flows/flow-taking-a-posted-order"]'));
+      expect(await waitFor(send, `${onFlowUnder('flow-taking-a-posted-order', 'Taking a posted order')} && ${AROUND}`)).toMatchObject({
         crumbs: 'Orders by post / Records / Taking a posted order',
         mark: ['pill tone-success Added'],
         starts: 'Starts An order comes by post',
@@ -887,13 +887,13 @@ test.skipIf(!HAS_CHROME).concurrent(
   HAS_CHROME ? 'under a change a removed step is picked like any other: the bar says "Was step" and "Removed" with its words of today, the down key moves on, and an updated step has its words of today under its changed line' : `skipped: there is no Chrome at ${CHROME}`,
   () =>
     inChrome(async (send, address) => {
-      await send('Page.navigate', { url: `${address}/changes/orders-by-post/records/flows/placing-an-order` });
-      expect(await waitFor(send, onFlowUnder('placing-an-order', 'Placing an order'))).toBe(true);
+      await send('Page.navigate', { url: `${address}/changes/orders-by-post/records/flows/flow-placing-an-order` });
+      expect(await waitFor(send, onFlowUnder('flow-placing-an-order', 'Placing an order'))).toBe(true);
       await flowAt(send, '');
       await click(send, await centreOf(send, '[data-row="step"][data-step="saves"]'));
       const saves = await flowAt(send, '#saves');
       // It is shown as it is today, and lights the line it walks today.
-      expect(saves).toMatchObject({ current: 'saves', stepped: ['order-api->orders'] });
+      expect(saves).toMatchObject({ current: 'saves', stepped: ['app-order-api->store-orders'] });
       expect(saves.bar).toContain('Was step 2 Saves the order Removed');
       expect(saves.bar).toContain('Order API to Orders Only when the customer has paid Data Order details');
       await press(send, 'ArrowDown', 40);
@@ -930,32 +930,32 @@ test.skipIf(!HAS_CHROME).concurrent(
   HAS_CHROME ? "on a flow the change updates the diagram's boxes and lines bear their marks and a legend says them; on the flow's own page nothing does" : `skipped: there is no Chrome at ${CHROME}`,
   () =>
     inChrome(async (send, address) => {
-      await send('Page.navigate', { url: `${address}/changes/orders-by-post/records/flows/placing-an-order` });
-      expect(await waitFor(send, `${onFlowUnder('placing-an-order', 'Placing an order')} && ${MARKS}`)).toEqual({
+      await send('Page.navigate', { url: `${address}/changes/orders-by-post/records/flows/flow-placing-an-order` });
+      expect(await waitFor(send, `${onFlowUnder('flow-placing-an-order', 'Placing an order')} && ${MARKS}`)).toEqual({
         // The flow no longer passes the store of orders, newly passes the clerk, and passes the Order API, which the change updates.
         boxes: [
-          ['clerk', 'added', 'mark-added'],
-          ['customer', null, ''],
-          ['order-api', 'updated', 'mark-updated'],
-          ['orders', 'removed', 'mark-removed'],
-          ['shop', null, ''],
+          ['app-order-api', 'updated', 'mark-updated'],
+          ['person-clerk', 'added', 'mark-added'],
+          ['person-customer', null, ''],
+          ['store-orders', 'removed', 'mark-removed'],
+          ['system-shop', null, ''],
         ],
         // A red line is dashed; the others are not. The colours are those of the theme.
         lines: [
-          ['clerk->order-api', 'mark-added', 'rgb(101, 213, 128)', 'none'],
-          ['customer->order-api', '', 'rgb(129, 139, 152)', 'none'],
-          ['order-api->orders', 'mark-removed', 'rgb(255, 117, 109)', '6px, 4px'],
+          ['app-order-api->store-orders', 'mark-removed', 'rgb(255, 117, 109)', '6px, 4px'],
+          ['person-clerk->app-order-api', 'mark-added', 'rgb(101, 213, 128)', 'none'],
+          ['person-customer->app-order-api', '', 'rgb(129, 139, 152)', 'none'],
         ],
-        signs: ['clerk Newly passed', 'order-api Updated by the change', 'orders No longer passed'],
+        signs: ['app-order-api Updated by the change', 'person-clerk Newly passed', 'store-orders No longer passed'],
         legend: ['+ Newly passed', '− No longer passed', '~ Updated by the change'],
       });
-      await send('Page.navigate', { url: `${address}/flows/placing-an-order` });
-      expect(await waitFor(send, `location.pathname === '/flows/placing-an-order' && document.querySelector('.react-flow__node') !== null && ${MARKS}`)).toMatchObject({
+      await send('Page.navigate', { url: `${address}/flows/flow-placing-an-order` });
+      expect(await waitFor(send, `location.pathname === '/flows/flow-placing-an-order' && document.querySelector('.react-flow__node') !== null && ${MARKS}`)).toMatchObject({
         boxes: [
-          ['customer', null, ''],
-          ['order-api', null, ''],
-          ['orders', null, ''],
-          ['shop', null, ''],
+          ['app-order-api', null, ''],
+          ['person-customer', null, ''],
+          ['store-orders', null, ''],
+          ['system-shop', null, ''],
         ],
         signs: [],
         legend: [],
@@ -979,24 +979,24 @@ test.skipIf(!HAS_CHROME).concurrent(
   HAS_CHROME ? 'under a change a red box opens its panel with the sentence that the flow no longer passes it, and a yellow one with the pill Updated and its button under the change' : `skipped: there is no Chrome at ${CHROME}`,
   () =>
     inChrome(async (send, address) => {
-      await send('Page.navigate', { url: `${address}/changes/orders-by-post/records/flows/placing-an-order` });
-      await click(send, await centreOf(send, '.react-flow__node[data-id="orders"]'));
+      await send('Page.navigate', { url: `${address}/changes/orders-by-post/records/flows/flow-placing-an-order` });
+      await click(send, await centreOf(send, '.react-flow__node[data-id="store-orders"]'));
       // The store of orders is not a record the change names: no pill, and its button leads to the system.
       expect(await waitFor(send, `(() => { const read = ${PANEL_UNDER}; return read && read.name === 'Orders' && read; })()`)).toEqual({
         name: 'Orders',
         pills: [],
         passes: 'With this change the flow no longer passes it.',
-        button: '/models/orders',
+        button: '/models/store-orders',
       });
       await press(send, 'Escape', 27);
       expect(await closed(send)).toBe(true);
       // The Order API is in both and the change updates it: its pill, no sentence, and its button under the change.
-      await click(send, await centreOf(send, '.react-flow__node[data-id="order-api"]'));
+      await click(send, await centreOf(send, '.react-flow__node[data-id="app-order-api"]'));
       expect(await waitFor(send, `(() => { const read = ${PANEL_UNDER}; return read && read.name === 'Order API' && read; })()`)).toEqual({
         name: 'Order API',
         pills: ['pill tone-caution Updated'],
         passes: null,
-        button: '/changes/orders-by-post/records/apps/order-api',
+        button: '/changes/orders-by-post/records/apps/app-order-api',
       });
     }),
   20_000,
@@ -1007,8 +1007,8 @@ test.skipIf(!HAS_CHROME).concurrent(
   () =>
     inChrome(async (send, address) => {
       // The third case: a flow the change removes. Its steps, its bar and its diagram are today's, and only the flow bears a mark.
-      await send('Page.navigate', { url: `${address}/changes/orders-on-paper-only/records/flows/placing-an-order` });
-      const removed = `location.pathname === '/changes/orders-on-paper-only/records/flows/placing-an-order' && document.title === 'Placing an order · seefore' && document.querySelector('.react-flow__node') !== null && {
+      await send('Page.navigate', { url: `${address}/changes/orders-on-paper-only/records/flows/flow-placing-an-order` });
+      const removed = `location.pathname === '/changes/orders-on-paper-only/records/flows/flow-placing-an-order' && document.title === 'Placing an order · seefore' && document.querySelector('.react-flow__node') !== null && {
         back: ${hrefs('nav[aria-label="Breadcrumb"] a')},
         mark: ${texts('.header-slot .pill')},
         line: ${texts('.flow-bar-removed')}[0],
@@ -1021,7 +1021,7 @@ test.skipIf(!HAS_CHROME).concurrent(
         back: ['/changes/orders-on-paper-only', '/changes/orders-on-paper-only/records'],
         mark: ['Removed'],
         line: 'Removed by this change. This is the flow as it is today. Open it in the system',
-        system: '/flows/placing-an-order',
+        system: '/flows/flow-placing-an-order',
         rows: [
           ['1', 'places', null],
           ['2', 'saves', null],
@@ -1031,8 +1031,8 @@ test.skipIf(!HAS_CHROME).concurrent(
         legend: false,
       });
       // The fields of a data record, before and after: one list, a field that changes with today's words under it, one that comes, one that goes.
-      await send('Page.navigate', { url: `${address}/changes/orders-by-post/records/data/order-details` });
-      const fields = `location.pathname === '/changes/orders-by-post/records/data/order-details' && document.querySelector('.change-field') !== null && [...document.querySelectorAll('.change-field')].map((row) => [row.querySelector('.change-field-name').textContent, row.dataset.mark ?? null, row.querySelector('.flow-step-mark')?.textContent ?? null, row.querySelector('.change-field-text')?.textContent ?? null, row.querySelector('.change-field-today')?.textContent ?? null])`;
+      await send('Page.navigate', { url: `${address}/changes/orders-by-post/records/data/data-order-details` });
+      const fields = `location.pathname === '/changes/orders-by-post/records/data/data-order-details' && document.querySelector('.change-field') !== null && [...document.querySelectorAll('.change-field')].map((row) => [row.querySelector('.change-field-name').textContent, row.dataset.mark ?? null, row.querySelector('.flow-step-mark')?.textContent ?? null, row.querySelector('.change-field-text')?.textContent ?? null, row.querySelector('.change-field-today')?.textContent ?? null])`;
       expect(await waitFor(send, fields)).toEqual([
         ['items', 'updated', 'Updated', 'What is bought, how many of each, and at what price', 'Today: What is bought, and how many of each'],
         // A field that goes stands where it stood, ahead of one that comes there.
@@ -1065,15 +1065,15 @@ test.skipIf(!HAS_CHROME).concurrent(
   HAS_CHROME ? 'an updated flow has a switch in the top bar: Changes, and Result, the flow as it would be with no colour; the step picked stays, and a step that goes is let go' : `skipped: there is no Chrome at ${CHROME}`,
   () =>
     inChrome(async (send, address) => {
-      await send('Page.navigate', { url: `${address}/changes/orders-by-post/records/flows/placing-an-order#confirms` });
-      expect(await waitFor(send, `${onFlowUnder('placing-an-order', 'Placing an order')} && ${inView('Changes', '#confirms')}`)).toMatchObject({
+      await send('Page.navigate', { url: `${address}/changes/orders-by-post/records/flows/flow-placing-an-order#confirms` });
+      expect(await waitFor(send, `${onFlowUnder('flow-placing-an-order', 'Placing an order')} && ${inView('Changes', '#confirms')}`)).toMatchObject({
         search: '',
         tabs: [
           ['Changes', 'page'],
           ['Result', null],
         ],
         current: 'confirms',
-        boxes: ['clerk', 'customer', 'order-api', 'orders', 'shop'],
+        boxes: ['app-order-api', 'person-clerk', 'person-customer', 'store-orders', 'system-shop'],
         legend: true,
       });
       // Result: the steps as they would be, the step picked still picked, and nothing of today: no step that goes, no box only today's flow passes, no colour, no legend.
@@ -1092,7 +1092,7 @@ test.skipIf(!HAS_CHROME).concurrent(
           ['confirms', null, '3'],
         ],
         current: 'confirms',
-        boxes: ['clerk', 'customer', 'order-api', 'shop'],
+        boxes: ['app-order-api', 'person-clerk', 'person-customer', 'system-shop'],
         marked: 0,
         legend: false,
         today: 0,
@@ -1108,8 +1108,8 @@ test.skipIf(!HAS_CHROME).concurrent(
       await click(send, await centreOf(send, OTHER_VIEW));
       expect(await waitFor(send, inView('Result', ''))).toMatchObject({ search: '?view=result', current: null });
       // A flow the change adds is one view: it has no switch.
-      await send('Page.navigate', { url: `${address}/changes/orders-by-post/records/flows/taking-a-posted-order` });
-      expect(await waitFor(send, `${onFlowUnder('taking-a-posted-order', 'Taking a posted order')} && document.querySelectorAll('.react-flow__edge-path[d^="M"]').length > 0 && { tabs: document.querySelectorAll('nav[aria-label="View"]').length }`)).toEqual({ tabs: 0 });
+      await send('Page.navigate', { url: `${address}/changes/orders-by-post/records/flows/flow-taking-a-posted-order` });
+      expect(await waitFor(send, `${onFlowUnder('flow-taking-a-posted-order', 'Taking a posted order')} && document.querySelectorAll('.react-flow__edge-path[d^="M"]').length > 0 && { tabs: document.querySelectorAll('nav[aria-label="View"]').length }`)).toEqual({ tabs: 0 });
     }),
   20_000,
 );
@@ -1205,13 +1205,13 @@ test.skipIf(!HAS_CHROME).concurrent(
         tile: 'block',
         pills: ['pill tone-danger Block', 'pill tone-danger Reopened'],
         sections: ['Finding', 'Recommendation', 'About', 'Comments'],
-        finding: ['The change takes the step `saves` out of `placing-an-order` and puts `types-in` in its place. No step of that flow writes the store of orders any more, so an order that is confirmed is kept nowhere.'],
+        finding: ['The change takes the step `saves` out of `flow-placing-an-order` and puts `types-in` in its place. No step of that flow writes the store of orders any more, so an order that is confirmed is kept nowhere.'],
         recommendation: ['The flow says where an order is written before it is confirmed.'],
         // A step by its flow's name and its own words, a line of context by its sentence, a store by its name.
         about: ['Placing an order Types in a posted order', 'An order is never lost once the customer has been told it is placed.', 'Orders'],
         // The flow is touched by the change, the line of context and the store are not.
-        leads: ['/changes/orders-by-post/records/flows/placing-an-order#types-in', '/context/orders-are-never-lost', '/models/orders'],
-        comments: ['The step that types the order in now says that the Order API keeps it.', 'A description says it. No step walks `api-writes-orders`, so the flow still ends at the clerk.'],
+        leads: ['/changes/orders-by-post/records/flows/flow-placing-an-order#types-in', '/context/context-orders-are-never-lost', '/models/store-orders'],
+        comments: ['The step that types the order in now says that the Order API keeps it.', 'A description says it. No step walks `connection-api-writes-orders`, so the flow still ends at the clerk.'],
       });
       // "Review" in the way back leads to the list, and the next row to its point: a step, and the need.
       await click(send, await centreOf(send, '.breadcrumb a[href="/changes/orders-by-post/review"]'));
@@ -1220,17 +1220,17 @@ test.skipIf(!HAS_CHROME).concurrent(
       expect(await waitFor(send, `${onPoint('no-way-to-confirm-by-post', 'Nothing says how an order that came by post is confirmed')} && ${POINT}`)).toMatchObject({
         pills: ['pill tone-danger Block', 'pill tone-warning Declined'],
         about: ['Placing an order Confirms the order by email', 'Need'],
-        leads: ['/changes/orders-by-post/records/flows/placing-an-order#confirms', '/changes/orders-by-post'],
+        leads: ['/changes/orders-by-post/records/flows/flow-placing-an-order#confirms', '/changes/orders-by-post'],
       });
       // The step opens its flow under the change, on that step.
-      await click(send, await centreOf(send, 'section[aria-label="About"] a[href="/changes/orders-by-post/records/flows/placing-an-order#confirms"]'));
-      expect(await waitFor(send, `${onFlowUnder('placing-an-order', 'Placing an order')} && location.hash === '#confirms' && document.querySelector('[data-row="step"][aria-current="step"]')?.getAttribute('data-step')`)).toBe('confirms');
+      await click(send, await centreOf(send, 'section[aria-label="About"] a[href="/changes/orders-by-post/records/flows/flow-placing-an-order#confirms"]'));
+      expect(await waitFor(send, `${onFlowUnder('flow-placing-an-order', 'Placing an order')} && location.hash === '#confirms' && document.querySelector('[data-row="step"][aria-current="step"]')?.getAttribute('data-step')`)).toBe('confirms');
       // A record the change updates and one it removes lead under the change.
       await send('Page.navigate', { url: `${address}/changes/orders-by-post/review/go-still-in-use` });
       expect(await waitFor(send, `${onPoint('go-still-in-use', 'The Order API loses its technology and nothing is named in its place')} && ${POINT}`)).toMatchObject({
         pills: ['pill tone-danger Block', 'pill tone-caution Fixed'],
         about: ['Order API', 'Go'],
-        leads: ['/changes/orders-by-post/records/apps/order-api', '/changes/orders-by-post/records/technologies/go'],
+        leads: ['/changes/orders-by-post/records/apps/app-order-api', '/changes/orders-by-post/records/technologies/tech-go'],
       });
       // A note with no recommendation has no section for it; an open point with no comments has none for them.
       await send('Page.navigate', { url: `${address}/changes/orders-by-post/review/sent-by-on-old-orders` });
@@ -1239,14 +1239,14 @@ test.skipIf(!HAS_CHROME).concurrent(
         pills: ['pill Note', 'pill tone-success Closed'],
         sections: ['Finding', 'About', 'Comments'],
         recommendation: [],
-        leads: ['/changes/orders-by-post/records/data/order-details'],
+        leads: ['/changes/orders-by-post/records/data/data-order-details'],
       });
       await send('Page.navigate', { url: `${address}/changes/orders-by-post/review/clerk-reads-nothing` });
       expect(await waitFor(send, `${onPoint('clerk-reads-nothing', 'The clerk types an order in and cannot see it afterwards')} && ${POINT}`)).toMatchObject({
         pills: ['pill tone-danger Block', 'pill Open'],
         sections: ['Finding', 'Recommendation', 'About'],
         comments: [],
-        leads: ['/changes/orders-by-post/records/connections/clerk-orders'],
+        leads: ['/changes/orders-by-post/records/connections/connection-clerk-orders'],
       });
     }),
   20_000,
@@ -1279,7 +1279,7 @@ test.skipIf(!HAS_CHROME).concurrent(
     try {
       await cp(SHOP, folder, { recursive: true });
       await rm(join(folder, 'reviews', 'orders-on-paper-only.yaml'));
-      await writeFile(join(folder, 'reviews', 'orders-by-post.yaml'), 'read: "4c1d9a70"\npoints:\n  never-saved:\n    name: An order is never saved\n    severity: high\n    about: [stores/orders]\n    finding: No step writes the store.\n');
+      await writeFile(join(folder, 'reviews', 'orders-by-post.yaml'), 'read: "4c1d9a70"\npoints:\n  never-saved:\n    name: An order is never saved\n    severity: high\n    about: [stores/store-orders]\n    finding: No step writes the store.\n');
       await inChrome(async (send, address) => {
         await send('Page.navigate', { url: `${address}/changes/orders-on-paper-only/review` });
         expect(await waitFor(send, unlisted('orders-on-paper-only', 'Orders on paper only'))).toEqual({

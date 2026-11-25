@@ -1,4 +1,4 @@
-import { CST, Lexer, LineCounter, isMap, isNode, isPair, isScalar, parseAllDocuments, visit } from 'yaml';
+import { CST, Lexer, LineCounter, isMap, isNode, isPair, isScalar, parseAllDocuments, parseDocument, visit } from 'yaml';
 import type { Document, YAMLError, YAMLMap } from 'yaml';
 import { START, error, quote } from './problem.ts';
 import type { Position, Problem } from './problem.ts';
@@ -136,6 +136,15 @@ export function peekTop(text: string, key: string): unknown {
   if (written.length !== 1) return undefined;
   const value: unknown = doc.contents.get(key);
   return value;
+}
+
+/**
+ * Parses a text as `readYaml` does, YAML 1.2 with its core types, without holding it to
+ * seefore's rules: comments and the like are kept, for a tool that rewrites a value where it is
+ * written. Each node's range is an offset into the text as given.
+ */
+export function parseText(text: string): Document.Parsed {
+  return parseDocument(text.replace(/\r(?!\n)/g, '\n'), { uniqueKeys: true, prettyErrors: false, version: '1.2', schema: 'core' });
 }
 
 /** The place of a key in a mapping, or of the mapping itself when the key is not there. */

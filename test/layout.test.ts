@@ -13,7 +13,7 @@ const elk = new ELK.default();
 
 const person = (id: string): SourceFile => ({ path: `people/${id}.yaml`, text: `name: ${id}\n` });
 const system = (id: string, external = false): SourceFile => ({ path: `systems/${id}.yaml`, text: `name: ${id}\n${external ? 'external: true\n' : ''}` });
-const connection = (from: string, to: string): SourceFile => ({ path: `connections/${from}-${to}.yaml`, text: `from: ${from}\nto: ${to}\n` });
+const connection = (from: string, to: string): SourceFile => ({ path: `connections/connection-${from}-${to}.yaml`, text: `from: ${from}\nto: ${to}\n` });
 const people = (count: number): string[] => Array.from({ length: count }, (_, i) => `person-${String(i + 1).padStart(2, '0')}`);
 
 async function laidOut(depth: Depth, ...files: SourceFile[]): Promise<Layout> {
@@ -29,24 +29,24 @@ const centre = (layout: Layout, id: string): number => {
 
 /** A shop that calls a person back and is called by a bank: left to itself, ELK would put both on its right. */
 const SHOP = [
-  person('customer'),
-  system('shop'),
-  system('stock'),
-  system('bank', true),
-  system('mail', true),
-  { path: 'apps/web.yaml', text: 'name: Web\nin: shop\n' },
-  connection('shop', 'customer'),
-  connection('bank', 'shop'),
-  connection('shop', 'stock'),
-  connection('stock', 'mail'),
-  connection('mail', 'customer'),
+  person('person-customer'),
+  system('system-shop'),
+  system('system-stock'),
+  system('system-bank', true),
+  system('system-mail', true),
+  { path: 'apps/app-web.yaml', text: 'name: Web\nin: system-shop\n' },
+  connection('system-shop', 'person-customer'),
+  connection('system-bank', 'system-shop'),
+  connection('system-shop', 'system-stock'),
+  connection('system-stock', 'system-mail'),
+  connection('system-mail', 'person-customer'),
 ];
 
 test('at the Systems depth the zones are columns in order, each with its band and title', async () => {
   const layout = await laidOut('systems', ...SHOP);
-  const left = Math.max(centre(layout, 'customer'), centre(layout, 'bank'));
-  expect(left).toBeLessThan(Math.min(centre(layout, 'shop'), centre(layout, 'stock')));
-  expect(Math.max(centre(layout, 'shop'), centre(layout, 'stock'))).toBeLessThan(centre(layout, 'mail'));
+  const left = Math.max(centre(layout, 'person-customer'), centre(layout, 'system-bank'));
+  expect(left).toBeLessThan(Math.min(centre(layout, 'system-shop'), centre(layout, 'system-stock')));
+  expect(Math.max(centre(layout, 'system-shop'), centre(layout, 'system-stock'))).toBeLessThan(centre(layout, 'system-mail'));
   expect(layout.bands.map((band) => band.title)).toEqual(['People and callers', 'Our systems', 'External systems']);
   const [first, second, third] = layout.bands;
   expect(first && second && third && first.x + first.width <= second.x && second.x + second.width <= third.x).toBe(true);
@@ -55,14 +55,14 @@ test('at the Systems depth the zones are columns in order, each with its band an
 test('below the Systems depth the people stand first, and there are no bands', async () => {
   const layout = await laidOut('containers', ...SHOP);
   expect(layout.bands).toEqual([]);
-  const others = layout.placed.filter((each) => each.box.in === undefined && each.box.id !== 'customer');
+  const others = layout.placed.filter((each) => each.box.in === undefined && each.box.id !== 'person-customer');
   expect(Math.max(...others.map((each) => each.x))).toBeGreaterThan(0);
-  for (const other of others) expect(placeOf(layout, 'customer')?.x).toBeLessThan(other.x);
+  for (const other of others) expect(placeOf(layout, 'person-customer')?.x).toBeLessThan(other.x);
 });
 
 test('a long column is split when the picture is too tall for the field', async () => {
   const many = people(14);
-  const layout = await laidOut('systems', system('core'), system('mail', true), system('maps', true), connection('core', 'mail'), connection('core', 'maps'), ...many.map(person), ...many.map((id) => connection(id, 'core')));
+  const layout = await laidOut('systems', system('system-core'), system('system-mail', true), system('system-maps', true), connection('system-core', 'system-mail'), connection('system-core', 'system-maps'), ...many.map(person), ...many.map((id) => connection(id, 'system-core')));
   const columns = new Set(many.map((id) => placeOf(layout, id)?.x));
   expect(columns.size).toBeGreaterThan(1);
   expect(columns.size).toBeLessThanOrEqual(3);
@@ -70,8 +70,8 @@ test('a long column is split when the picture is too tall for the field', async 
 
 test('a long column is not split when the picture is wide', async () => {
   const many = people(7);
-  const chain = ['a', 'b', 'c', 'd', 'e', 'f'];
-  const layout = await laidOut('systems', ...chain.map((id) => system(id)), ...chain.slice(1).map((id, i) => connection(chain[i] as string, id)), ...many.map(person), ...many.map((id) => connection(id, 'a')));
+  const chain = ['system-a', 'system-b', 'system-c', 'system-d', 'system-e', 'system-f'];
+  const layout = await laidOut('systems', ...chain.map((id) => system(id)), ...chain.slice(1).map((id, i) => connection(chain[i] as string, id)), ...many.map(person), ...many.map((id) => connection(id, 'system-a')));
   const box = layout.bands.reduce((all, band) => ({ width: Math.max(all.width, band.x + band.width), height: band.height }), { width: 0, height: 0 });
   expect(box.width).toBeGreaterThan(box.height * 1.415);
   expect(new Set(many.map((id) => placeOf(layout, id)?.x)).size).toBe(1);
@@ -84,10 +84,10 @@ test('the same model gives the same places twice', async () => {
 
 test('a box with many lines grows taller, so that their ends stand apart; a box with one keeps its size', async () => {
   const many = people(10);
-  const layout = await laidOut('systems', system('core'), ...many.map(person), ...many.map((id) => connection(id, 'core')));
-  expect(placeOf(layout, 'core')?.height).toBeGreaterThan(10 * 12);
+  const layout = await laidOut('systems', system('system-core'), ...many.map(person), ...many.map((id) => connection(id, 'system-core')));
+  expect(placeOf(layout, 'system-core')?.height).toBeGreaterThan(10 * 12);
   expect(placeOf(layout, 'person-01')?.height).toBe(84);
-  const ends = many.map((id) => layout.routes.get(`${id}->core`)?.at(-1)?.y ?? 0).sort((a, b) => a - b);
+  const ends = many.map((id) => layout.routes.get(`${id}->system-core`)?.at(-1)?.y ?? 0).sort((a, b) => a - b);
   for (let i = 1; i < ends.length; i++) expect((ends[i] ?? 0) - (ends[i - 1] ?? 0)).toBeGreaterThanOrEqual(12 - 0.5);
 });
 
@@ -109,69 +109,69 @@ test('a click means the line it is nearest to, also where two lines run close', 
 
 /** A system in which one app writes a queue and a database, and another reads both. */
 const WORKS: SourceFile[] = [
-  system('works'),
-  { path: 'apps/writer.yaml', text: 'name: Writer\nin: works\n' },
-  { path: 'apps/reader.yaml', text: 'name: Reader\nin: works\n' },
-  { path: 'stores/jobs.yaml', text: 'name: Jobs\nin: works\nkind: queue\n' },
-  { path: 'stores/ledger.yaml', text: 'name: Ledger\nin: works\nkind: database\n' },
-  { path: 'connections/writer-puts-jobs.yaml', text: 'from: writer\nto: jobs\naccess: write\n' },
-  { path: 'connections/reader-takes-jobs.yaml', text: 'from: reader\nto: jobs\naccess: read\n' },
-  { path: 'connections/writer-keeps-ledger.yaml', text: 'from: writer\nto: ledger\naccess: write\n' },
-  { path: 'connections/reader-reads-ledger.yaml', text: 'from: reader\nto: ledger\naccess: read\n' },
+  system('system-works'),
+  { path: 'apps/app-writer.yaml', text: 'name: Writer\nin: system-works\n' },
+  { path: 'apps/app-reader.yaml', text: 'name: Reader\nin: system-works\n' },
+  { path: 'stores/store-jobs.yaml', text: 'name: Jobs\nin: system-works\nkind: queue\n' },
+  { path: 'stores/store-ledger.yaml', text: 'name: Ledger\nin: system-works\nkind: database\n' },
+  { path: 'connections/connection-writer-puts-jobs.yaml', text: 'from: app-writer\nto: store-jobs\naccess: write\n' },
+  { path: 'connections/connection-reader-takes-jobs.yaml', text: 'from: app-reader\nto: store-jobs\naccess: read\n' },
+  { path: 'connections/connection-writer-keeps-ledger.yaml', text: 'from: app-writer\nto: store-ledger\naccess: write\n' },
+  { path: 'connections/connection-reader-reads-ledger.yaml', text: 'from: app-reader\nto: store-ledger\naccess: read\n' },
 ];
 
 test('a queue stands between the app that writes it and the app that only reads it, and a database does not', async () => {
   const layout = await laidOut('containers', ...WORKS);
   // All four stand in the one frame, so their places can be compared as they are.
-  expect(centre(layout, 'writer')).toBeLessThan(centre(layout, 'jobs'));
-  expect(centre(layout, 'jobs')).toBeLessThan(centre(layout, 'reader'));
-  expect(centre(layout, 'reader')).toBeLessThan(centre(layout, 'ledger'));
+  expect(centre(layout, 'app-writer')).toBeLessThan(centre(layout, 'store-jobs'));
+  expect(centre(layout, 'store-jobs')).toBeLessThan(centre(layout, 'app-reader'));
+  expect(centre(layout, 'app-reader')).toBeLessThan(centre(layout, 'store-ledger'));
 });
 
 test('the line of a reader is still drawn from the reader to the queue, where its head stands', async () => {
   const layout = await laidOut('containers', ...WORKS);
-  const frame = placeOf(layout, 'works');
-  const reader = placeOf(layout, 'reader');
-  const jobs = placeOf(layout, 'jobs');
-  const route = layout.routes.get('reader->jobs') ?? [];
+  const frame = placeOf(layout, 'system-works');
+  const reader = placeOf(layout, 'app-reader');
+  const jobs = placeOf(layout, 'store-jobs');
+  const route = layout.routes.get('app-reader->store-jobs') ?? [];
   expect(frame && reader && jobs && route.length >= 2).toBe(true);
   if (!frame || !reader || !jobs) return;
   // The route starts on the reader's left side and ends on the queue's right side.
   expect(route[0]?.x).toBeCloseTo(frame.x + reader.x, 3);
   expect(route.at(-1)?.x).toBeCloseTo(frame.x + jobs.x + jobs.width, 3);
   // The line of the writer is as it was: from the writer's right side to the queue's left.
-  expect(layout.routes.get('writer->jobs')?.at(-1)?.x).toBeCloseTo(frame.x + jobs.x, 3);
+  expect(layout.routes.get('app-writer->store-jobs')?.at(-1)?.x).toBeCloseTo(frame.x + jobs.x, 3);
 });
 
 test('a person who reads a queue stays on the left, and that line is not turned round', async () => {
-  const layout = await laidOut('containers', ...WORKS, person('ops'), { path: 'connections/ops-watches-jobs.yaml', text: 'from: ops\nto: jobs\naccess: read\n' });
-  const frame = placeOf(layout, 'works');
-  const ops = placeOf(layout, 'ops');
-  const jobs = placeOf(layout, 'jobs');
+  const layout = await laidOut('containers', ...WORKS, person('person-ops'), { path: 'connections/connection-ops-watches-jobs.yaml', text: 'from: person-ops\nto: store-jobs\naccess: read\n' });
+  const frame = placeOf(layout, 'system-works');
+  const ops = placeOf(layout, 'person-ops');
+  const jobs = placeOf(layout, 'store-jobs');
   expect(frame && ops && jobs).toBeTruthy();
   if (!frame || !ops || !jobs) return;
   expect(ops.x + ops.width).toBeLessThan(frame.x);
   // The line runs straight on from the person's right side to the queue's left side, and never
   // past the queue.
-  const route = layout.routes.get('ops->jobs') ?? [];
+  const route = layout.routes.get('person-ops->store-jobs') ?? [];
   expect(route[0]?.x).toBeCloseTo(ops.x + ops.width, 3);
   expect(route.at(-1)?.x).toBeCloseTo(frame.x + jobs.x, 3);
   expect(Math.max(...route.map((point) => point.x))).toBeLessThanOrEqual(frame.x + jobs.x + 0.001);
   // The app that reads the queue is still laid out after it.
-  expect(centre(layout, 'jobs')).toBeLessThan(centre(layout, 'reader'));
+  expect(centre(layout, 'store-jobs')).toBeLessThan(centre(layout, 'app-reader'));
 });
 
 test("a flow's own diagram is read top to bottom, with tight gaps, and the model's stays as it is", async () => {
-  const files = [system('works'), ...WORKS.slice(1)];
+  const files = [system('system-works'), ...WORKS.slice(1)];
   const read = readModel([{ path: 'seefore.yaml', text: 'format: 1\nname: Test\n' }, ...files]);
   const view = viewOf(read.records, 'containers');
   const across = await layOut(view, 'containers', elk);
   const down = await layOut(view, 'containers', elk, 'flow');
   const at = (layout: Layout, id: string) => layout.placed.find((each) => each.box.id === id);
   // Left to right, the writer stands left of the queue; top to bottom, above it.
-  expect((at(across, 'writer')?.x ?? 0) + (at(across, 'writer')?.width ?? 0)).toBeLessThan(at(across, 'jobs')?.x ?? 0);
-  expect((at(down, 'writer')?.y ?? 0) + (at(down, 'writer')?.height ?? 0)).toBeLessThan(at(down, 'jobs')?.y ?? 0);
+  expect((at(across, 'app-writer')?.x ?? 0) + (at(across, 'app-writer')?.width ?? 0)).toBeLessThan(at(across, 'store-jobs')?.x ?? 0);
+  expect((at(down, 'app-writer')?.y ?? 0) + (at(down, 'app-writer')?.height ?? 0)).toBeLessThan(at(down, 'store-jobs')?.y ?? 0);
   // And it is narrower than it was wide: the frame's own size says so.
-  expect(at(down, 'works')?.width ?? 0).toBeLessThan(at(across, 'works')?.width ?? 0);
+  expect(at(down, 'system-works')?.width ?? 0).toBeLessThan(at(across, 'system-works')?.width ?? 0);
   expect(await layOut(view, 'containers', elk)).toEqual(across);
 });

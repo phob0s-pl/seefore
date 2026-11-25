@@ -44,7 +44,7 @@ type Named = { verb: Verb; path: string; folder: string; id: string; key: unknow
 /** What is wrong with a path, or nothing: a path is a folder a change may name, and an id. */
 function pathFault(path: string): string | undefined {
   const at = path.indexOf('/');
-  if (at < 0) return `${quote(path)} is not the path of a record. A path is a folder and an id, as \`apps/ledger\`.`;
+  if (at < 0) return `${quote(path)} is not the path of a record. A path is a folder and an id, as \`apps/app-ledger\`.`;
   const folder = path.slice(0, at);
   const id = path.slice(at + 1);
   if (folder === 'changes') return `${quote(path)} names a change. A change adds, updates and removes records of the model, and no change.`;

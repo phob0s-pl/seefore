@@ -1,3 +1,0 @@
-from: customer
-to: order-api
-name: Places an order

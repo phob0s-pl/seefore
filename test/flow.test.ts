@@ -15,43 +15,43 @@ const connection = (id: string, from: string, to: string, name: string): SourceF
  */
 const SHOP: SourceFile[] = [
   file('seefore.yaml', 'format: 1\nname: Shop\n'),
-  file('people/fan.yaml', 'name: Fan\n'),
-  file('systems/shop.yaml', 'name: Shop\n'),
-  file('systems/bank.yaml', 'name: Bank\nexternal: true\n'),
-  file('systems/mailer.yaml', 'name: Mailer\nexternal: true\n'),
-  file('apps/web.yaml', 'name: Web\nin: shop\n'),
-  file('apps/api.yaml', 'name: API\nin: shop\n'),
-  file('components/checkout.yaml', 'name: Checkout\nin: api\n'),
-  file('components/cart.yaml', 'name: Cart\nin: api\n'),
-  file('stores/orders.yaml', 'name: Orders\nin: shop\n'),
-  connection('fan-uses-web', 'fan', 'web', 'Opens the shop'),
-  connection('web-calls-checkout', 'web', 'checkout', 'Asks to pay'),
-  connection('checkout-pays', 'checkout', 'bank', 'Charges the card'),
-  connection('bank-calls-back', 'bank', 'checkout', 'Reports the payment'),
-  connection('web-reads-orders', 'web', 'orders', 'Reads the orders'),
-  connection('cart-mails', 'cart', 'mailer', 'Mails a receipt'),
-  file('features/paying.yaml', 'name: Paying\n'),
-  file('features/accounts.yaml', 'name: Accounts\n'),
-  file('data/payment.yaml', 'name: Payment\n'),
+  file('people/person-fan.yaml', 'name: Fan\n'),
+  file('systems/system-shop.yaml', 'name: Shop\n'),
+  file('systems/system-bank.yaml', 'name: Bank\nexternal: true\n'),
+  file('systems/system-mailer.yaml', 'name: Mailer\nexternal: true\n'),
+  file('apps/app-web.yaml', 'name: Web\nin: system-shop\n'),
+  file('apps/app-api.yaml', 'name: API\nin: system-shop\n'),
+  file('components/component-checkout.yaml', 'name: Checkout\nin: app-api\n'),
+  file('components/component-cart.yaml', 'name: Cart\nin: app-api\n'),
+  file('stores/store-orders.yaml', 'name: Orders\nin: system-shop\n'),
+  connection('connection-fan-uses-web', 'person-fan', 'app-web', 'Opens the shop'),
+  connection('connection-web-calls-checkout', 'app-web', 'component-checkout', 'Asks to pay'),
+  connection('connection-checkout-pays', 'component-checkout', 'system-bank', 'Charges the card'),
+  connection('connection-bank-calls-back', 'system-bank', 'component-checkout', 'Reports the payment'),
+  connection('connection-web-reads-orders', 'app-web', 'store-orders', 'Reads the orders'),
+  connection('connection-cart-mails', 'component-cart', 'system-mailer', 'Mails a receipt'),
+  file('features/feature-paying.yaml', 'name: Paying\n'),
+  file('features/feature-accounts.yaml', 'name: Accounts\n'),
+  file('data/data-payment.yaml', 'name: Payment\n'),
   file(
-    'flows/pays.yaml',
+    'flows/flow-pays.yaml',
     `name: Paying for an order
 starts: A fan pays
 ends: The order is paid
 only: in Europe
-feature: paying
+feature: feature-paying
 steps:
-  - {id: opens, does: fan-uses-web}
-  - {id: asks, does: web-calls-checkout}
-  - {id: charges, does: checkout-pays, only: when the fan pays by card}
-  - {id: link, reply: charges, name: A link, only: when the fan pays by card, data: [payment]}
-  - {id: calls-back, does: bank-calls-back, only: when the fan pays by card}
-  - {id: keeps, does: checkout, name: Keeps the payment}
+  - {id: opens, does: connection-fan-uses-web}
+  - {id: asks, does: connection-web-calls-checkout}
+  - {id: charges, does: connection-checkout-pays, only: when the fan pays by card}
+  - {id: link, reply: charges, name: A link, only: when the fan pays by card, data: [data-payment]}
+  - {id: calls-back, does: connection-bank-calls-back, only: when the fan pays by card}
+  - {id: keeps, does: component-checkout, name: Keeps the payment}
   - {id: tells, after: [asks], name: Tells the fan}
-  - {id: receipt, does: receipt, only: when the fan pays by card}
+  - {id: receipt, does: flow-receipt, only: when the fan pays by card}
 `,
   ),
-  file('flows/receipt.yaml', 'name: Sending a receipt\nstarts: A payment\nends: A receipt is sent\nfeature: paying\nsteps:\n  - {id: mails, does: cart-mails}\n'),
+  file('flows/flow-receipt.yaml', 'name: Sending a receipt\nstarts: A payment\nends: A receipt is sent\nfeature: feature-paying\nsteps:\n  - {id: mails, does: connection-cart-mails}\n'),
 ];
 
 const records = (...files: SourceFile[]) => {
@@ -64,25 +64,25 @@ const drawn = ({ boxes, arrows }: View) => ({
   boxes: boxes.map((box) => `${box.frame ? `[${box.id}]` : box.id}${box.in ? ` in ${box.in}` : ''}`),
   arrows: arrows.map((arrow) => `${arrow.from} > ${arrow.to}: ${arrow.connections.join(' ')}${arrow.back ? ` < ${arrow.back.join(' ')}` : ''}`),
 });
-const steps = (...files: SourceFile[]): FlowStep[] => flowSteps(records(...files), 'pays')?.steps ?? [];
+const steps = (...files: SourceFile[]): FlowStep[] => flowSteps(records(...files), 'flow-pays')?.steps ?? [];
 const step = (id: string, ...files: SourceFile[]): FlowStep | undefined => steps(...files).find((each) => each.id === id);
 
 test("the view of a flow holds the lines its steps walk, their ends, the parts it happens in and their frames, and nothing else", () => {
-  expect(drawn(flowView(records(), 'pays'))).toEqual({
+  expect(drawn(flowView(records(), 'flow-pays'))).toEqual({
     // No orders, no cart, no mailer: the flow it runs adds nothing.
-    boxes: ['fan', 'bank', '[shop]', '[api] in shop', 'web in shop', 'checkout in api'],
+    boxes: ['person-fan', 'system-bank', '[system-shop]', '[app-api] in system-shop', 'app-web in system-shop', 'component-checkout in app-api'],
     // The two ways between Checkout and the bank are one arrow, from the box that comes first.
-    arrows: ['fan > web: fan-uses-web', 'bank > checkout: bank-calls-back < checkout-pays', 'web > checkout: web-calls-checkout'],
+    arrows: ['person-fan > app-web: connection-fan-uses-web', 'system-bank > component-checkout: connection-bank-calls-back < connection-checkout-pays', 'app-web > component-checkout: connection-web-calls-checkout'],
   });
-  expect(flowView(records(), 'receipt').boxes.map((box) => box.id)).toEqual(['mailer', 'shop', 'api', 'cart']);
-  expect(flowView(records(), 'nothing')).toEqual({ boxes: [], arrows: [] });
+  expect(flowView(records(), 'flow-receipt').boxes.map((box) => box.id)).toEqual(['system-mailer', 'system-shop', 'app-api', 'component-cart']);
+  expect(flowView(records(), 'flow-nothing')).toEqual({ boxes: [], arrows: [] });
 });
 
 test('a step on a connection says who acts on what, and lights its arrow the way it travels', () => {
-  expect(step('opens')).toMatchObject({ number: 1, happens: 'Opens the shop', kind: 'connection', acts: 'Fan to Web', lights: { arrow: 'fan->web', back: false } });
+  expect(step('opens')).toMatchObject({ number: 1, happens: 'Opens the shop', kind: 'connection', acts: 'Fan to Web', lights: { arrow: 'person-fan->app-web', back: false } });
   // Checkout to the bank is held in the arrow's `back`: it travels from the arrow's end to its start.
-  expect(step('charges')).toMatchObject({ acts: 'Checkout to Bank', lights: { arrow: 'bank->checkout', back: true } });
-  expect(step('calls-back')).toMatchObject({ acts: 'Bank to Checkout', lights: { arrow: 'bank->checkout', back: false } });
+  expect(step('charges')).toMatchObject({ acts: 'Checkout to Bank', lights: { arrow: 'system-bank->component-checkout', back: true } });
+  expect(step('calls-back')).toMatchObject({ acts: 'Bank to Checkout', lights: { arrow: 'system-bank->component-checkout', back: false } });
 });
 
 test('a reply reads "replies to" with the number of its step, and lights its arrow back towards that step', () => {
@@ -92,8 +92,8 @@ test('a reply reads "replies to" with the number of its step, and lights its arr
     kind: 'reply',
     acts: 'Bank replies to Checkout',
     reply: { number: 3, words: 'Charges the card' },
-    data: [{ id: 'payment', name: 'Payment' }],
-    lights: { arrow: 'bank->checkout', back: false },
+    data: [{ id: 'data-payment', name: 'Payment' }],
+    lights: { arrow: 'system-bank->component-checkout', back: false },
   });
 });
 
@@ -124,43 +124,43 @@ test('a strand names what it follows, and runs from its first step to the end or
   ]);
   expect(step('tells')?.after).toEqual([{ number: 2, words: 'Asks to pay' }]);
   const more = file(
-    'flows/pays.yaml',
-    'name: Paying\nstarts: A fan pays\nends: Paid\nfeature: paying\nsteps:\n  - {id: opens, does: fan-uses-web}\n  - {id: asks, does: web-calls-checkout}\n  - {id: tells, after: [opens, asks], name: Tells the fan}\n',
+    'flows/flow-pays.yaml',
+    'name: Paying\nstarts: A fan pays\nends: Paid\nfeature: feature-paying\nsteps:\n  - {id: opens, does: connection-fan-uses-web}\n  - {id: asks, does: connection-web-calls-checkout}\n  - {id: tells, after: [opens, asks], name: Tells the fan}\n',
   );
-  const read = readModel([...SHOP.filter((each) => each.path !== 'flows/pays.yaml'), more]);
-  expect(flowSteps(read.records, 'pays')?.steps[2]).toMatchObject({ strand: 'Also after 1 and 2', inStrand: true });
+  const read = readModel([...SHOP.filter((each) => each.path !== 'flows/flow-pays.yaml'), more]);
+  expect(flowSteps(read.records, 'flow-pays')?.steps[2]).toMatchObject({ strand: 'Also after 1 and 2', inStrand: true });
 });
 
 test('a step in a part, one with no place and one that runs a flow read as such; only the part is lit', () => {
-  expect(step('keeps')).toMatchObject({ kind: 'part', acts: 'In Checkout', lights: { box: 'checkout' } });
+  expect(step('keeps')).toMatchObject({ kind: 'part', acts: 'In Checkout', lights: { box: 'component-checkout' } });
   expect(step('tells')).toMatchObject({ kind: 'unplaced', acts: 'Where this happens is not known' });
   expect(step('tells')?.lights).toBeUndefined();
-  expect(step('receipt')).toMatchObject({ kind: 'flow', happens: 'Sending a receipt', acts: 'Runs Sending a receipt', runs: 'receipt' });
+  expect(step('receipt')).toMatchObject({ kind: 'flow', happens: 'Sending a receipt', acts: 'Runs Sending a receipt', runs: 'flow-receipt' });
   expect(step('receipt')?.lights).toBeUndefined();
   // A box lights itself and the frames it is in; an arrow lights as a pick of it does.
-  const view = flowView(records(), 'pays');
-  expect(litByStep(view, { box: 'checkout' })).toEqual({ boxes: ['shop', 'api', 'checkout'], arrows: [] });
-  expect(litByStep(view, { arrow: 'fan->web', back: false })).toEqual({ boxes: ['fan', 'shop', 'web'], arrows: ['fan->web'] });
+  const view = flowView(records(), 'flow-pays');
+  expect(litByStep(view, { box: 'component-checkout' })).toEqual({ boxes: ['system-shop', 'app-api', 'component-checkout'], arrows: [] });
+  expect(litByStep(view, { arrow: 'person-fan->app-web', back: false })).toEqual({ boxes: ['person-fan', 'system-shop', 'app-web'], arrows: ['person-fan->app-web'] });
 });
 
 test('the head of a flow, with its feature', () => {
-  expect(flowSteps(records(), 'pays')).toMatchObject({ name: 'Paying for an order', starts: 'A fan pays', ends: 'The order is paid', only: 'in Europe', feature: { id: 'paying', name: 'Paying' } });
-  expect(flowSteps(records(), 'shop')).toBeUndefined();
+  expect(flowSteps(records(), 'flow-pays')).toMatchObject({ name: 'Paying for an order', starts: 'A fan pays', ends: 'The order is paid', only: 'in Europe', feature: { id: 'feature-paying', name: 'Paying' } });
+  expect(flowSteps(records(), 'system-shop')).toBeUndefined();
 });
 
 test('a step whose `does` names nothing, and a reply to a step that is not there, say what can be said', () => {
   const broken = file(
-    'flows/broken.yaml',
-    'name: Broken\nstarts: Something\nends: Nothing\nfeature: lost\nsteps:\n  - {id: lost, does: nowhere}\n  - {id: answer, reply: missing, name: An answer}\n',
+    'flows/flow-broken.yaml',
+    'name: Broken\nstarts: Something\nends: Nothing\nfeature: feature-lost\nsteps:\n  - {id: lost, does: connection-nowhere}\n  - {id: answer, reply: missing, name: An answer}\n',
   );
   const read = readModel([...SHOP, broken]);
   expect(read.problems.length).toBeGreaterThan(0);
-  expect(flowSteps(read.records, 'broken')).toMatchObject({
-    feature: { id: 'lost', name: 'lost' },
+  expect(flowSteps(read.records, 'flow-broken')).toMatchObject({
+    feature: { id: 'feature-lost', name: 'feature-lost' },
     steps: [
       { number: 1, happens: 'lost', kind: 'unplaced', acts: 'Where this happens is not known', after: [] },
       { number: 2, happens: 'An answer', kind: 'unplaced', acts: 'Where this happens is not known' },
     ],
   });
-  expect(flowView(read.records, 'broken')).toEqual({ boxes: [], arrows: [] });
+  expect(flowView(read.records, 'flow-broken')).toEqual({ boxes: [], arrows: [] });
 });
