@@ -109,7 +109,7 @@ that order, each on what the one before it left; D3 and D4 follow.
 | D3 | Decisions | One page: what a decision is, and when one is asked, assumed or just made | Fable |
 | D4 | The review of a change | One page: who reads a change, what they say, and how the reading ends | Fable |
 | D5 | Changes on the page | An entry "Changes" in the sidebar: a list of the changes, and a page for each with its name and what the check says of it | The main session defines, Opus builds |
-| D6 | The need of a change on its page | On a change's page, what was asked for: the prompt, and what the person answered when asked | The main session defines, Opus builds |
+| D6 | The need of a change on its page | On a change's page, what was asked for: the prompt, and what the person answered when asked | The main session |
 | D7 | The records of a change on its page | On a change's page, the records it adds, updates and removes. An updated record is shown as before and after, key by key, and a flow step by step | The main session defines, Opus builds |
 | D8 | The diagram of a change | The architecture diagram as it would be with the change, with what is added, removed and changed marked on it | The main session defines, Opus builds |
 

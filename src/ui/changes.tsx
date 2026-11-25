@@ -4,7 +4,7 @@ import { Link, NavLink, useOutletContext, useParams } from 'react-router-dom';
 import type { Change, Changes } from '../model/changes.ts';
 import { Missing } from './models.tsx';
 import type { ModelState } from './shell.tsx';
-import { EmptyState, GridRow, IconTile, LargeTitle, Panel, RowList, useTitle } from './ui.tsx';
+import { EmptyState, GridRow, IconTile, LargeTitle, Panel, RowList, Section, SectionStack, TextPanel, useTitle } from './ui.tsx';
 
 /** The name alone. */
 const COLS = 'minmax(0, 1fr)';
@@ -54,9 +54,36 @@ export function ChangesList() {
 }
 
 /**
- * The page of a section of a change, `/changes/<id>` for Need and `/changes/<id>/records` for
- * Records: for now only a frame, the change's name as its title. The sidebar says which section
- * is open. An id that names no change is missing.
+ * What was asked for: the prompt as prose, and under it what the person answered when asked,
+ * a row a line. A change with no answers has no section for them.
+ */
+function Need({ change }: { change: Change }) {
+  return (
+    <SectionStack>
+      {change.prompt !== undefined && (
+        <Section title="Prompt">
+          <TextPanel>{change.prompt}</TextPanel>
+        </Section>
+      )}
+      {change.given.length > 0 && (
+        <Section title="Given">
+          <Panel>
+            <ul className="change-given">
+              {change.given.map((line, index) => (
+                <li key={index}>{line}</li>
+              ))}
+            </ul>
+          </Panel>
+        </Section>
+      )}
+    </SectionStack>
+  );
+}
+
+/**
+ * The page of a section of a change, under the change's name as its title: `/changes/<id>` for
+ * Need, which shows what was asked for, and `/changes/<id>/records` for Records, for now only a
+ * frame. The sidebar says which section is open. An id that names no change is missing.
  */
 export function ChangePage({ section }: { section: Section }) {
   const { id = '' } = useParams();
@@ -68,6 +95,7 @@ export function ChangePage({ section }: { section: Section }) {
   return (
     <section className="change-frame" aria-label={SECTIONS.find((each) => each.section === section)?.word}>
       <LargeTitle>{change.name}</LargeTitle>
+      {section === 'need' && <Need change={change} />}
     </section>
   );
 }

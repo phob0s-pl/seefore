@@ -64,3 +64,22 @@
   height: 15px;
   stroke-width: 1.8;
 }
+
+/* What the person answered when asked: a row a line, each whole, with a hairline between two.
+   A row is no link: nothing names a line. */
+.change-given {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.change-given > li {
+  margin-left: 20px;
+  padding: 12px 20px 12px 0;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+.change-given > li + li {
+  border-top: var(--divider);
+}

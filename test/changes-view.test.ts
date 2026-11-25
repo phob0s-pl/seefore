@@ -24,14 +24,14 @@ test('the changes stand by name, without regard to capitals, and one with no nam
     change('ledger', 'name: a ledger for settlement\nprompt: Move settlement onto a ledger.\nadd:\n  apps/ledger: {name: Ledger, in: shop}\n'),
     change('archive', 'name: Archive the old orders\nprompt: Keep the old orders apart.\n'),
   );
-  expect(read.all).toEqual([
+  expect(read.all).toMatchObject([
     { id: 'ledger', name: 'a ledger for settlement' },
     { id: 'archive', name: 'Archive the old orders' },
     { id: 'post', name: 'Orders by post' },
   ]);
   // The check tells a change with no name; the page shows it all the same, under its id.
   const faulty = changesOf([record('changes', 'zebra', { name: 'Zebra', prompt: 'A.' }), record('changes', 'nameless', { prompt: 'B.' }), record('changes', 'numbered', { name: 7, prompt: 'C.' })]);
-  expect(faulty.all).toEqual([
+  expect(faulty.all).toMatchObject([
     { id: 'zebra', name: 'Zebra' },
     { id: 'nameless', name: 'nameless' },
     { id: 'numbered', name: 'numbered' },
@@ -40,12 +40,31 @@ test('the changes stand by name, without regard to capitals, and one with no nam
 
 test('a change is found by its id, also one that another record has, and another record is no change', () => {
   const read = changes(change('shop', 'name: A second shop\nprompt: Open a second shop.\n'), change('post', 'name: Orders by post\nprompt: Take orders by post.\n'));
-  expect(read.change('post')).toEqual({ id: 'post', name: 'Orders by post' });
+  expect(read.change('post')).toMatchObject({ id: 'post', name: 'Orders by post' });
   // The change `shop` is read from `changes/`, not the system of that id.
-  expect(read.change('shop')).toEqual({ id: 'shop', name: 'A second shop' });
+  expect(read.change('shop')).toMatchObject({ id: 'shop', name: 'A second shop' });
   const without = changes(change('post', 'name: Orders by post\nprompt: Take orders by post.\n'));
   expect(without.change('shop')).toBeUndefined();
   expect(without.change('nobody')).toBeUndefined();
+});
+
+test('a change has its input: the prompt, and what the person answered when asked, line by line', () => {
+  const read = changes(
+    change('post', 'name: Orders by post\nprompt: |-\n  Some customers cannot pay online.\n\n  Let a clerk type in an order that came by post.\ngiven:\n  - A clerk types in a few orders a day.\n  - A posted order is paid on delivery.\n'),
+    change('archive', 'name: Archive the old orders\nprompt: Keep orders for seven years.\n'),
+  );
+  expect(read.change('post')).toEqual({
+    id: 'post',
+    name: 'Orders by post',
+    prompt: 'Some customers cannot pay online.\n\nLet a clerk type in an order that came by post.',
+    given: ['A clerk types in a few orders a day.', 'A posted order is paid on delivery.'],
+  });
+  // A change that was asked nothing has no line, and no empty heading follows from it.
+  expect(read.change('archive')).toEqual({ id: 'archive', name: 'Archive the old orders', prompt: 'Keep orders for seven years.', given: [] });
+  // The check tells a prompt or a line that is no text; the page leaves it out.
+  const faulty = changesOf([record('changes', 'odd', { name: 'Odd', prompt: 7, given: ['A line.', 3, '  ', 'Another.'] }), record('changes', 'worse', { name: 'Worse', given: 'One line.' })]);
+  expect(faulty.change('odd')).toEqual({ id: 'odd', name: 'Odd', given: ['A line.', 'Another.'] });
+  expect(faulty.change('worse')).toEqual({ id: 'worse', name: 'Worse', given: [] });
 });
 
 test('a model with no change has none, and finds none', () => {

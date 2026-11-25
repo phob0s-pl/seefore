@@ -640,7 +640,7 @@ const onChange = (path: string) => `location.pathname === ${JSON.stringify(path)
 const ON_CHANGES = `location.pathname === '/changes' && document.querySelector('ul[aria-label="Changes"] > li') !== null && ${SIDEBAR}`;
 
 test.skipIf(!HAS_CHROME).concurrent(
-  HAS_CHROME ? 'the entry Changes opens the list, and a row opens the change with its own sidebar, Need current' : `skipped: there is no Chrome at ${CHROME}`,
+  HAS_CHROME ? 'the entry Changes opens the list, and a row opens the change with its own sidebar, on Need: the prompt and what was answered' : `skipped: there is no Chrome at ${CHROME}`,
   () =>
     inChrome(async (send, address) => {
       await send('Page.navigate', { url: `${address}/` });
@@ -662,11 +662,14 @@ test.skipIf(!HAS_CHROME).concurrent(
         links: ['/changes/orders-by-post'],
       });
       await click(send, await centreOf(send, 'ul[aria-label="Changes"] a[href="/changes/orders-by-post"]'));
-      expect(await waitFor(send, `(() => { const read = ${onChange('/changes/orders-by-post')}; return read && read.change !== null && { ...read, page: document.querySelector('main').innerText.trim() }; })()`)).toEqual({
+      const need = `{ sections: ${texts('main .section-label')}, prompt: ${texts('section[aria-label="Prompt"] .panel-text')}, given: ${texts('section[aria-label="Given"] .change-given > li')} }`;
+      expect(await waitFor(send, `(() => { const read = ${onChange('/changes/orders-by-post')}; return read && read.change !== null && document.querySelector('main .section-label') !== null && { ...read, ...${need} }; })()`)).toEqual({
         main: null,
         change: '1 Need 2 Records All changes',
         current: 'Need',
-        page: 'Orders by post',
+        sections: ['Prompt', 'Given'],
+        prompt: ['The clerk takes orders that come by post, and types them into the shop.'],
+        given: ['A posted order is placed as an order made online is.'],
       });
     }),
   20_000,
@@ -679,7 +682,8 @@ test.skipIf(!HAS_CHROME).concurrent(
       await send('Page.navigate', { url: `${address}/changes/orders-by-post` });
       expect(await waitFor(send, `(() => { const read = ${onChange('/changes/orders-by-post')}; return read && read.current; })()`)).toBe('Need');
       await click(send, await centreOf(send, 'nav[aria-label="Change sections"] a[href="/changes/orders-by-post/records"]'));
-      expect(await waitFor(send, `(() => { const read = ${onChange('/changes/orders-by-post/records')}; return read && read.current === 'Records' && read; })()`)).toMatchObject({ main: null, current: 'Records' });
+      // Records is a frame until its own stage: the name alone.
+      expect(await waitFor(send, `(() => { const read = ${onChange('/changes/orders-by-post/records')}; return read && read.current === 'Records' && { ...read, page: document.querySelector('main').innerText.trim() }; })()`)).toMatchObject({ main: null, current: 'Records', page: 'Orders by post' });
       await click(send, await centreOf(send, 'nav[aria-label="Change sections"] a[href="/changes"]'));
       expect(await waitFor(send, `(() => { const read = ${ON_CHANGES}; return read && read.main !== null && read; })()`)).toEqual({
         main: 'Architecture Context Features Models Rules Changes',
