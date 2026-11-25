@@ -246,6 +246,8 @@ test('every verb finds the model: the folder given, else this folder, else archi
   await writeFile(join(architecture, 'systems/system-shop.yaml'), 'name: Shop\n');
   expect((await runIn(folder, ['rename', 'app-api', 'app-backend'])).code).toBe(0);
   expect(await listFiles(architecture)).toContain('apps/app-backend.yaml');
+  // A count is said as a count, so that nobody takes it for a warning.
+  expect((await runIn(folder, ['check'])).out).toContain('Counted: 1 app that no connection names: `app-backend`.');
 });
 
 test('--help says the verbs, a line each, and the options of one', async () => {

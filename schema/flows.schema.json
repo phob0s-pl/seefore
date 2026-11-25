@@ -65,7 +65,7 @@
             "type": "string",
             "maxLength": 80,
             "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
-            "description": "The id of an earlier step of this flow that names a connection: its answer travels back. Never with `does`."
+            "description": "The id of an earlier step of this flow that names a connection, and not one that ends at a store: its answer travels back. Never with `does`."
           },
           "after": {
             "minItems": 1,
@@ -75,14 +75,14 @@
               "maxLength": 80,
               "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
             },
-            "description": "The ids of earlier steps this one comes after, where that is not the step above."
+            "description": "The ids of earlier steps this one comes after, where that is not the step above. It comes after each of them that happens."
           },
           "name": {
             "type": "string",
             "minLength": 1,
             "maxLength": 100,
             "pattern": "^\\S(?:[^\\n\\r\\u0085\\u2028\\u2029]*\\S)?$",
-            "description": "What happens, verb first: one line of 1 to 100 characters. Left out where the name of the connection or of the flow in `does` says it."
+            "description": "What happens, verb first: one line of 1 to 100 characters. Left out where the name of the connection or of the flow in `does` says it. A reply always has one: it says what comes back."
           },
           "only": {
             "type": "string",

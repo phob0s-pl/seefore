@@ -413,7 +413,8 @@ function check(model: ModelAnswer, json: boolean, io: Io): number {
   // With no problem it says what was held, so that nobody takes the check for a look at the keys alone.
   const summary = model.problems.length === 0 ? 'No problem: the keys are in form, every id that is named is there, and so is every path of `source`.' : `${many(errors, 'error')}, ${many(warnings, 'warning')}.`;
   io.out(`${many(model.records.length, 'record')} read. ${summary}`);
-  for (const line of countLines(model.counts)) io.out(line);
+  // A count is no problem, and the line says so: a line with no word before it was taken for a warning.
+  for (const line of countLines(model.counts)) io.out(line.startsWith('Not counted') ? line : `Counted: ${line}`);
   const rulings = rulingsLine(model.rulings);
   if (rulings !== undefined) io.out(rulings);
   return errors > 0 ? 1 : 0;

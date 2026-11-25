@@ -239,7 +239,7 @@ test('the three counts: a feature alone, a step unplaced, and data and an owner 
     '2 owners or data records that nothing names: `owner-sales`, `data-order`.',
     undefined,
     '1 feature that no flow names and that touches nothing: `feature-returns`.',
-    '1 step with neither `does` nor `reply`, in `flow-sale`.',
+    '1 step with neither `does` nor `reply`: `flow-sale#who-pays`.',
   ]);
 });
 

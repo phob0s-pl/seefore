@@ -354,13 +354,13 @@ const StepSchema = z
       .meta({ description: 'The id of a connection (one part acts on another), of a part (it happens there) or of a flow (it runs here, whole). Never with `reply`.' })
       .optional(),
     reply: id('reply', 'holds the id of an earlier step of this flow.')
-      .meta({ description: 'The id of an earlier step of this flow that names a connection: its answer travels back. Never with `does`.' })
+      .meta({ description: 'The id of an earlier step of this flow that names a connection, and not one that ends at a store: its answer travels back. Never with `does`.' })
       .optional(),
     after: ids('`after` holds the ids of earlier steps of this flow.')
-      .meta({ description: 'The ids of earlier steps this one comes after, where that is not the step above.' })
+      .meta({ description: 'The ids of earlier steps this one comes after, where that is not the step above. It comes after each of them that happens.' })
       .optional(),
     name: oneLine('name', NAME_MAX)
-      .meta({ description: 'What happens, verb first: one line of 1 to 100 characters. Left out where the name of the connection or of the flow in `does` says it.' })
+      .meta({ description: 'What happens, verb first: one line of 1 to 100 characters. Left out where the name of the connection or of the flow in `does` says it. A reply always has one: it says what comes back.' })
       .optional(),
     only: Only.optional(),
     description: prose(NOTE_MAX).meta({ description: 'A sentence or two of 1 to 300 characters: a wait, a retry, a refusal.' }).optional(),
