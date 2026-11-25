@@ -1,0 +1,3 @@
+from: app-order-api
+to: store-orders
+access: write

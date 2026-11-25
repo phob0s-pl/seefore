@@ -34,7 +34,7 @@ const FIXES: Record<string, string> = {
   'id-invalid': 'Rename the file so that its name, without `.yaml`, is a good id: lowercase letters and digits in groups joined by single hyphens, a letter first, at most 80 characters. Change every field that names the old id.',
   'field-twice': 'Keep one of the two fields, or give each a name of its own.',
   'context-line': 'Give the line one of `must` and `prefer`, and a `why`.',
-  'change-path': 'Name the record by its folder and its id, as `apps/ledger`: the name of its file without `.yaml`.',
+  'change-path': 'Name the record by its folder and its id, as `apps/app-ledger`: the name of its file without `.yaml`.',
   'change-twice': 'Keep the record in one place of the change. A record that is replaced by another takes another id.',
   'change-no-effect': 'Take the line out.',
   'record-extension': 'Rename the file so that it ends in `.yaml`, in lowercase.',

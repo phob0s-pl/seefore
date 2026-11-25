@@ -5,25 +5,36 @@
  * the whole model, or of one system, and that no record of the architecture says. The
  * fifteenth, `changes`, holds what is proposed: the records a change adds, updates and removes.
  * The sixteenth, `reviews`, holds what a reader found in a change: a file for each change.
+ *
+ * `word` is the first word of the id of every record of the folder, as `app` in `app-gateway`:
+ * an id says its kind. A change and a review have none: they are no records of the model.
  */
 export const KINDS = [
-  { folder: 'people', one: 'person', many: 'people' },
-  { folder: 'systems', one: 'system', many: 'systems' },
-  { folder: 'apps', one: 'app', many: 'apps' },
-  { folder: 'stores', one: 'store', many: 'stores' },
-  { folder: 'components', one: 'component', many: 'components' },
-  { folder: 'connections', one: 'connection', many: 'connections' },
-  { folder: 'infrastructure', one: 'piece of infrastructure', many: 'pieces of infrastructure' },
-  { folder: 'owners', one: 'owner', many: 'owners' },
-  { folder: 'technologies', one: 'technology', many: 'technologies' },
-  { folder: 'features', one: 'feature', many: 'features' },
-  { folder: 'flows', one: 'flow', many: 'flows' },
-  { folder: 'data', one: 'data record', many: 'data records' },
-  { folder: 'rules', one: 'rule', many: 'rules' },
-  { folder: 'context', one: 'line of context', many: 'lines of context' },
+  { folder: 'people', one: 'person', many: 'people', word: 'person' },
+  { folder: 'systems', one: 'system', many: 'systems', word: 'system' },
+  { folder: 'apps', one: 'app', many: 'apps', word: 'app' },
+  { folder: 'stores', one: 'store', many: 'stores', word: 'store' },
+  { folder: 'components', one: 'component', many: 'components', word: 'component' },
+  { folder: 'connections', one: 'connection', many: 'connections', word: 'connection' },
+  { folder: 'infrastructure', one: 'piece of infrastructure', many: 'pieces of infrastructure', word: 'infra' },
+  { folder: 'owners', one: 'owner', many: 'owners', word: 'owner' },
+  { folder: 'technologies', one: 'technology', many: 'technologies', word: 'tech' },
+  { folder: 'features', one: 'feature', many: 'features', word: 'feature' },
+  { folder: 'flows', one: 'flow', many: 'flows', word: 'flow' },
+  { folder: 'data', one: 'data record', many: 'data records', word: 'data' },
+  { folder: 'rules', one: 'rule', many: 'rules', word: 'rule' },
+  { folder: 'context', one: 'line of context', many: 'lines of context', word: 'context' },
   { folder: 'changes', one: 'change', many: 'changes' },
   { folder: 'reviews', one: 'review', many: 'reviews' },
 ] as const;
+
+/** The first word of an id in each folder of the model, as `apps` to `app`. */
+export const WORDS: Readonly<Record<string, string>> = Object.fromEntries(KINDS.flatMap((kind) => ('word' in kind ? [[kind.folder, kind.word]] : [])));
+
+/** The folder whose word an id begins with, as `app-gateway` to `apps`; nothing for an id with no folder's word, or with nothing after it. */
+export function folderOfId(id: string): string | undefined {
+  return Object.keys(WORDS).find((folder) => id.startsWith(`${WORDS[folder]}-`) && id.length > `${WORDS[folder]}-`.length);
+}
 
 /** Whether a folder holds records of the architecture: every folder but `rules`, `context`, `changes` and `reviews`. */
 export const ofArchitecture = (kind: string): boolean => kind !== 'rules' && kind !== 'context' && kind !== 'changes' && kind !== 'reviews';

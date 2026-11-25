@@ -4,7 +4,7 @@ import { CHANGED_FOLDERS, KINDS } from './kinds.ts';
 import { MarkerSchema, SHAPES } from './records.ts';
 import { knownKeys } from './shape.ts';
 
-/** A key of `add`, `update` or an item of `remove`: the path of a record of a folder, as `apps/ledger`. */
+/** A key of `add`, `update` or an item of `remove`: the path of a record of a folder, as `apps/app-ledger`. */
 const pathOf = (folder: string): string => `^${folder}/${ID.source.slice(1, -1)}$`;
 
 /**

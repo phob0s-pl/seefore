@@ -1,6 +1,6 @@
 import type { Count, Found, Place, Problem, Ruling } from './answer.ts';
 import { judgeRules, ruleReferences, ruleShape } from './judge.ts';
-import { NOUNS } from './kinds.ts';
+import { NOUNS, WORDS, folderOfId } from './kinds.ts';
 import { buildModel, listOf, stepsOf, textOf } from './model.ts';
 import type { Entry, Model } from './model.ts';
 import { START, capital, list, quote } from './problem.ts';
@@ -53,7 +53,7 @@ const named = (entries: readonly Entry[]) => list(entries.map((entry) => entry.f
 // ---- references: what each field may name, and what to say when it names the wrong thing
 
 /** A field that names records: on a record of `folder`, or on each step of a flow when `step`. `ways`: in a rule of ways. */
-type Field = { folder: string; field: string; kinds: readonly string[]; many?: true; step?: true; ways?: boolean };
+export type Field = { folder: string; field: string; kinds: readonly string[]; many?: true; step?: true; ways?: boolean };
 
 const ENDS = ['people', 'systems', 'apps', 'stores', 'components', 'infrastructure'];
 const PARTS = ['systems', 'apps', 'stores', 'components', 'infrastructure'];
@@ -61,7 +61,8 @@ const NEEDS_OWNER_OR_TECH = ['apps', 'stores', 'components', 'infrastructure'];
 /** The kinds that are not parts or connections: what `touches`, `from` and `to` never name. */
 const NOT_THINGS = ['owners', 'technologies', 'features', 'flows', 'data', 'rules', 'context', 'changes', 'reviews'];
 
-const FIELDS: Field[] = [
+/** Every field of a record that names records, with the kinds it may name. A rule's own are found by `ruleReferences`. */
+export const FIELDS: readonly Field[] = [
   { folder: 'apps', field: 'in', kinds: ['systems'] },
   { folder: 'stores', field: 'in', kinds: ['systems', 'apps'] },
   { folder: 'components', field: 'in', kinds: ['apps'] },
@@ -137,13 +138,13 @@ const WRONG: Wrong[] = [
     field: 'owner',
     found: ['people', 'systems', 'apps', 'stores', 'components', 'connections', 'infrastructure', 'technologies', 'features', 'flows', 'data', 'rules', 'context', 'changes', 'reviews'],
     says: '`owner` names an owner, a record in `owners/`.',
-    fix: 'Write `owners/<id>.yaml` with a `name` for the team, and name that id in `owner`. If a record of another kind has the id you want, keep both and name the owner for what it is for.',
+    fix: 'Write `owners/owner-<name>.yaml` with a `name` for the team, and name that id in `owner`.',
   },
   {
     field: 'technology',
     found: ['people', 'systems', 'apps', 'stores', 'components', 'connections', 'infrastructure', 'owners', 'features', 'flows', 'data', 'rules', 'context', 'changes', 'reviews'],
     says: '`technology` names technologies, records in `technologies/`.',
-    fix: 'Write `technologies/<id>.yaml` with a `name`, and name that id in `technology`. If a record of another kind has the id you want, keep both and keep the product\'s name for the technology.',
+    fix: 'Write `technologies/tech-<name>.yaml` with a `name`, and name that id in `technology`.',
   },
   {
     field: 'touches',
@@ -317,32 +318,40 @@ function onWhat(model: Model, does: string | undefined): { on: 'connection' | 'p
 
 // ---- the rules
 
-const idTwice: Rule = {
-  id: 'id-twice',
+const idKind: Rule = {
+  id: 'id-kind',
   gives: 'error',
-  says: 'An id names one record in the whole model, whatever its folder.',
+  says: 'An id begins with the word of its folder, as `app-gateway` in `apps/`.',
   check(model) {
     const findings: Finding[] = [];
-    const seen = new Set<string>();
     for (const entry of model.entries) {
-      const same = model.claims(entry.id);
-      if (same.length < 2 || seen.has(entry.id)) continue;
-      seen.add(entry.id);
-      const [first, second] = same as [Entry, Entry];
-      const kinds = same.map((each) => each.kind);
-      const how = kinds.includes('features')
-        ? 'Give the feature the word its users say, as `sales-reporting` where the component is `sales-reports`.'
-        : kinds.includes('data')
-          ? 'Give the data a second word, as `ticket-scan` where an app is `scan`.'
-          : kinds.includes('flows')
-            ? 'Name the flow for its task, as `placing-an-order` where a store is `orders`.'
-            : "Name the part for what it is for, and keep the product's name for the technology.";
-      findings.push({
-        entry: first,
-        second: { entry: second },
-        message: `${quote(entry.id)} is the id of ${same.length} records: ${named(same)}. An id names one record in the whole model, whatever its folder.`,
-        fix: `Keep both records. ${how} Rename one file, and change every field that names it.`,
-      });
+      const word = WORDS[entry.kind];
+      if (word === undefined || folderOfId(entry.id) === entry.kind) continue;
+      // The command takes an id, or the path where two files hold the id.
+      const old = model.claims(entry.id).length > 1 ? `${entry.kind}/${entry.id}` : entry.id;
+      const noun = NOUNS[entry.kind] as string;
+      const other = folderOfId(entry.id);
+      if (entry.id === word) {
+        findings.push({
+          entry,
+          message: `The id ${quote(entry.id)} is the word of its folder alone. An id says its kind as its first word, and then what the record is.`,
+          fix: `Give it a name after the word: run \`seefore rename ${old} ${word}-<name>\`.`,
+        });
+      } else if (other !== undefined) {
+        // It bears another folder's word: the folder says the kind, and the id may be a name that begins with that word.
+        findings.push({
+          entry,
+          message: `The id ${quote(entry.id)} begins with \`${WORDS[other]}-\`, the word of \`${other}/\`, and this file is in \`${entry.kind}/\`. An id says its kind as its first word, and the folder says the kind.`,
+          fix: `If it is ${noun}, run \`seefore rename ${old} ${word}-${entry.id}\`. If it is ${NOUNS[other]}, move the file to \`${other}/\`.`,
+        });
+      } else {
+        const elsewhere = entry.kind === 'technologies' ? 'app' : 'tech';
+        findings.push({
+          entry,
+          message: `The id ${quote(entry.id)} does not begin with \`${word}-\`. An id says its kind as its first word, and this file is in \`${entry.kind}/\`.`,
+          fix: `Run \`seefore rename ${old} ${word}-${entry.id}\`. If it is not ${noun}, give it the word of what it is, as \`${elsewhere}-${entry.id}\`: that moves the file.`,
+        });
+      }
     }
     return findings;
   },
@@ -763,7 +772,7 @@ const stepUnplaced: Rule = {
 
 /** All the rules, in the order they are listed. */
 export const RULES: readonly Rule[] = [
-  idTwice,
+  idKind,
   referenceUnknown,
   referenceWrongKind,
   accessNotStore,

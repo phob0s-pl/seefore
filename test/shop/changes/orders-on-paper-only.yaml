@@ -3,4 +3,4 @@ prompt: The shop closes its site at the end of the year. Orders come by post alo
 given:
   - The clerk goes on typing the posted orders in.
 remove:
-  - flows/placing-an-order
+  - flows/flow-placing-an-order

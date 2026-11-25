@@ -39,7 +39,7 @@ export function idProblem(id: string, subject = quote(id)): string | undefined {
   if (id !== id.toLowerCase()) return `${subject} is not an id: an id is written in lowercase, like ${quote(suggest(id))}.`;
   return (
     `${subject} is not an id. An id is lowercase letters and digits in groups joined by ` +
-    `single hyphens, and starts with a letter, like ${quote('order-events')}.`
+    `single hyphens, and starts with a letter, like ${quote('store-order-events')}.`
   );
 }
 
@@ -58,5 +58,5 @@ function suggest(id: string): string {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
   // The form is in lowercase, so asking about it never comes back here.
-  return isId(hyphened) ? hyphened : 'order-events';
+  return isId(hyphened) ? hyphened : 'store-order-events';
 }

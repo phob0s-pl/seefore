@@ -9,7 +9,7 @@ const MARKER: SourceFile = {
   path: 'seefore.yaml',
   text: 'format: 1\nname: Shop\n',
 };
-const SHOP: SourceFile = { path: 'systems/shop.yaml', text: 'name: Shop\n' };
+const SHOP: SourceFile = { path: 'systems/system-shop.yaml', text: 'name: Shop\n' };
 const change = (id: string, text: string): SourceFile => ({
   path: `changes/${id}.yaml`,
   text,
@@ -25,7 +25,7 @@ const record = (kind: string, id: string, fields: Record<string, unknown>): Mode
 test('the changes stand by name, without regard to capitals, and one with no name of text after them under its id', () => {
   const read = changes(
     change('post', 'name: Orders by post\nprompt: Take orders by post.\n'),
-    change('ledger', 'name: a ledger for settlement\nprompt: Move settlement onto a ledger.\nadd:\n  apps/ledger: {name: Ledger, in: shop}\n'),
+    change('ledger', 'name: a ledger for settlement\nprompt: Move settlement onto a ledger.\nadd:\n  apps/app-ledger: {name: Ledger, in: system-shop}\n'),
     change('archive', 'name: Archive the old orders\nprompt: Keep the old orders apart.\n'),
   );
   expect(read.all).toMatchObject([
@@ -43,12 +43,12 @@ test('the changes stand by name, without regard to capitals, and one with no nam
 });
 
 test('a change is found by its id, also one that another record has, and another record is no change', () => {
-  const read = changes(change('shop', 'name: A second shop\nprompt: Open a second shop.\n'), change('post', 'name: Orders by post\nprompt: Take orders by post.\n'));
+  const read = changes(change('system-shop', 'name: A second shop\nprompt: Open a second shop.\n'), change('post', 'name: Orders by post\nprompt: Take orders by post.\n'));
   expect(read.change('post')).toMatchObject({ id: 'post', name: 'Orders by post' });
-  // The change `shop` is read from `changes/`, not the system of that id.
-  expect(read.change('shop')).toMatchObject({ id: 'shop', name: 'A second shop' });
+  // The change `system-shop` is read from `changes/`, not the system of that id.
+  expect(read.change('system-shop')).toMatchObject({ id: 'system-shop', name: 'A second shop' });
   const without = changes(change('post', 'name: Orders by post\nprompt: Take orders by post.\n'));
-  expect(without.change('shop')).toBeUndefined();
+  expect(without.change('system-shop')).toBeUndefined();
   expect(without.change('nobody')).toBeUndefined();
 });
 
@@ -74,7 +74,7 @@ test('a change has its input: the prompt, and what the person answered when aske
 test('a model with no change has none, and finds none', () => {
   const read = changes();
   expect(read.all).toEqual([]);
-  expect(read.change('shop')).toBeUndefined();
+  expect(read.change('system-shop')).toBeUndefined();
 });
 
 // ---- the records of a change: a small shop, and one change that adds, updates and removes
@@ -82,28 +82,28 @@ test('a model with no change has none, and finds none', () => {
 const file = (path: string, text: string): SourceFile => ({ path: `${path}.yaml`, text });
 const MODEL: SourceFile[] = [
   MARKER,
-  file('systems/shop', 'name: Shop\ndescription: Sells things online.\n'),
-  file('systems/bank', 'name: Bank\nexternal: true\n'),
-  file('apps/api', 'name: API\nin: shop\ntechnology: [go]\n'),
-  file('stores/orders', 'name: Orders\nin: shop\nkind: database\n'),
-  file('people/customer', 'name: Customer\n'),
-  file('technologies/go', 'name: Go\n'),
-  file('technologies/rust', 'name: Rust\n'),
-  file('connections/customer-orders', 'from: customer\nto: api\nname: Places an order\n'),
-  file('connections/api-writes-orders', 'from: api\nto: orders\naccess: write\nname: Saves the order\n'),
-  file('connections/api-calls-bank', 'from: api\nto: bank\n'),
-  file('context/orders-are-kept', 'must: An order is never lost.\nwhy: The shop promises it.\n'),
+  file('systems/system-shop', 'name: Shop\ndescription: Sells things online.\n'),
+  file('systems/system-bank', 'name: Bank\nexternal: true\n'),
+  file('apps/app-api', 'name: API\nin: system-shop\ntechnology: [tech-go]\n'),
+  file('stores/store-orders', 'name: Orders\nin: system-shop\nkind: database\n'),
+  file('people/person-customer', 'name: Customer\n'),
+  file('technologies/tech-go', 'name: Go\n'),
+  file('technologies/tech-rust', 'name: Rust\n'),
+  file('connections/connection-customer-orders', 'from: person-customer\nto: app-api\nname: Places an order\n'),
+  file('connections/connection-api-writes-orders', 'from: app-api\nto: store-orders\naccess: write\nname: Saves the order\n'),
+  file('connections/connection-api-calls-bank', 'from: app-api\nto: system-bank\n'),
+  file('context/context-orders-are-kept', 'must: An order is never lost.\nwhy: The shop promises it.\n'),
 ];
 const BODY = [
   'add:',
-  '  apps/worker: {name: Worker, in: shop}',
-  '  connections/api-calls-worker: {from: api, to: worker}',
-  '  context/workers-are-few: {prefer: One worker is enough., why: Orders are few.}',
+  '  apps/app-worker: {name: Worker, in: system-shop}',
+  '  connections/connection-api-calls-worker: {from: app-api, to: app-worker}',
+  '  context/context-workers-are-few: {prefer: One worker is enough., why: Orders are few.}',
   'update:',
-  '  systems/shop: {description: null}',
-  '  apps/api: {name: Order API, description: Takes the orders., technology: [rust]}',
+  '  systems/system-shop: {description: null}',
+  '  apps/app-api: {name: Order API, description: Takes the orders., technology: [tech-rust]}',
   'remove:',
-  '  - connections/api-calls-bank',
+  '  - connections/connection-api-calls-bank',
   '',
 ].join('\n');
 /** The model with one change of the body given, as the answer gives it. */
@@ -119,12 +119,12 @@ test('a change names the records it touches, in the order of its file, with what
   expect(found.change('more-hands')).toMatchObject({
     laid: true,
     touched: [
-      { path: 'apps/worker', folder: 'apps', id: 'worker', verb: 'add', keys: [] },
-      { path: 'connections/api-calls-worker', folder: 'connections', id: 'api-calls-worker', verb: 'add', keys: [] },
-      { path: 'context/workers-are-few', folder: 'context', id: 'workers-are-few', verb: 'add', keys: [] },
-      { path: 'systems/shop', folder: 'systems', id: 'shop', verb: 'update', keys: ['description'] },
-      { path: 'apps/api', folder: 'apps', id: 'api', verb: 'update', keys: ['name', 'description', 'technology'] },
-      { path: 'connections/api-calls-bank', folder: 'connections', id: 'api-calls-bank', verb: 'remove', keys: [] },
+      { path: 'apps/app-worker', folder: 'apps', id: 'app-worker', verb: 'add', keys: [] },
+      { path: 'connections/connection-api-calls-worker', folder: 'connections', id: 'connection-api-calls-worker', verb: 'add', keys: [] },
+      { path: 'context/context-workers-are-few', folder: 'context', id: 'context-workers-are-few', verb: 'add', keys: [] },
+      { path: 'systems/system-shop', folder: 'systems', id: 'system-shop', verb: 'update', keys: ['description'] },
+      { path: 'apps/app-api', folder: 'apps', id: 'app-api', verb: 'update', keys: ['name', 'description', 'technology'] },
+      { path: 'connections/connection-api-calls-bank', folder: 'connections', id: 'connection-api-calls-bank', verb: 'remove', keys: [] },
     ],
   });
   // An input alone touches nothing, and is laid all the same.
@@ -135,15 +135,15 @@ test('the model as it would be: what a change adds is in, what it removes is out
   const { read, changes: found } = laidChanges(BODY);
   const world = found.world('more-hands');
   const fields = new Map(world?.records.map((each) => [`${each.kind}/${each.id}`, each.fields]));
-  expect(fields.get('apps/worker')).toEqual({ name: 'Worker', in: 'shop' });
-  expect(fields.has('connections/api-calls-bank')).toBe(false);
-  expect(fields.get('systems/shop')).toEqual({ name: 'Shop' });
-  expect(fields.get('apps/api')).toEqual({ name: 'Order API', in: 'shop', technology: ['rust'], description: 'Takes the orders.' });
+  expect(fields.get('apps/app-worker')).toEqual({ name: 'Worker', in: 'system-shop' });
+  expect(fields.has('connections/connection-api-calls-bank')).toBe(false);
+  expect(fields.get('systems/system-shop')).toEqual({ name: 'Shop' });
+  expect(fields.get('apps/app-api')).toEqual({ name: 'Order API', in: 'system-shop', technology: ['tech-rust'], description: 'Takes the orders.' });
   // A record the change does not touch is today's very record, and no change is in the world.
-  expect(world?.records.find((each) => each.id === 'orders')).toBe(read.records.find((each) => each.id === 'orders'));
+  expect(world?.records.find((each) => each.id === 'store-orders')).toBe(read.records.find((each) => each.id === 'store-orders'));
   expect(world?.records.some((each) => each.kind === 'changes')).toBe(false);
   expect(world?.records.length).toBe(read.records.length - 1 + 3 - 1);
-  expect([...(world?.touch.paths ?? [])]).toEqual(['apps/worker', 'connections/api-calls-worker', 'context/workers-are-few', 'systems/shop', 'apps/api', 'connections/api-calls-bank']);
+  expect([...(world?.touch.paths ?? [])]).toEqual(['apps/app-worker', 'connections/connection-api-calls-worker', 'context/context-workers-are-few', 'systems/system-shop', 'apps/app-api', 'connections/connection-api-calls-bank']);
   expect(found.world('nobody')).toBeUndefined();
 });
 
@@ -152,18 +152,18 @@ test('a link leads under the change to a record the change touches, and into the
   const world = found.world('more-hands');
   const under = catalogueOf(world?.records ?? [], world?.touch);
   const at = (kind: string, id: string) => under.address({ kind, id, file: '', fields: {} });
-  expect(at('apps', 'worker')).toBe('/changes/more-hands/records/apps/worker');
-  expect(at('apps', 'api')).toBe('/changes/more-hands/records/apps/api');
-  expect(at('context', 'workers-are-few')).toBe('/changes/more-hands/records/context/workers-are-few');
-  expect(at('stores', 'orders')).toBe('/models/orders');
-  expect(at('people', 'customer')).toBe('/actors/customer');
-  expect(at('context', 'orders-are-kept')).toBe('/context/orders-are-kept');
+  expect(at('apps', 'app-worker')).toBe('/changes/more-hands/records/apps/app-worker');
+  expect(at('apps', 'app-api')).toBe('/changes/more-hands/records/apps/app-api');
+  expect(at('context', 'context-workers-are-few')).toBe('/changes/more-hands/records/context/context-workers-are-few');
+  expect(at('stores', 'store-orders')).toBe('/models/store-orders');
+  expect(at('people', 'person-customer')).toBe('/actors/person-customer');
+  expect(at('context', 'context-orders-are-kept')).toBe('/context/context-orders-are-kept');
   // A removed record is drawn from the model of today, whose catalogue is told the same.
   const today = catalogueOf(read.records, found.touch('more-hands'));
-  expect(today.address({ kind: 'connections', id: 'api-calls-bank', file: '', fields: {} })).toBe('/changes/more-hands/records/connections/api-calls-bank');
-  expect(today.address({ kind: 'systems', id: 'bank', file: '', fields: {} })).toBe('/models/bank');
+  expect(today.address({ kind: 'connections', id: 'connection-api-calls-bank', file: '', fields: {} })).toBe('/changes/more-hands/records/connections/connection-api-calls-bank');
+  expect(today.address({ kind: 'systems', id: 'system-bank', file: '', fields: {} })).toBe('/models/system-bank');
   // Outside a change every address is the system's.
-  expect(catalogueOf(read.records).address({ kind: 'apps', id: 'api', file: '', fields: {} })).toBe('/models/api');
+  expect(catalogueOf(read.records).address({ kind: 'apps', id: 'app-api', file: '', fields: {} })).toBe('/models/app-api');
 });
 
 test('the sections of Records are the page own lists in its order, the rows by name, each with the record to show', () => {
@@ -180,7 +180,7 @@ test('the sections of Records are the page own lists in its order, the rows by n
     ],
     [
       'Connections',
-      // Two with one name stand by their ids: `api-calls-bank` before `api-calls-worker`.
+      // Two with one name stand by their ids: `connection-api-calls-bank` before `connection-api-calls-worker`.
       [
         ['No name', 'remove'],
         ['No name', 'add'],
@@ -189,33 +189,33 @@ test('the sections of Records are the page own lists in its order, the rows by n
   ]);
   // An updated record is shown as it would be, a removed one as it is.
   const rows = found.sections('more-hands').flatMap((section) => section.rows);
-  expect(rows.find((row) => row.touched.id === 'api')?.record?.fields.name).toBe('Order API');
-  expect(rows.find((row) => row.touched.id === 'api-calls-bank')?.record?.fields).toEqual({ from: 'api', to: 'bank' });
+  expect(rows.find((row) => row.touched.id === 'app-api')?.record?.fields.name).toBe('Order API');
+  expect(rows.find((row) => row.touched.id === 'connection-api-calls-bank')?.record?.fields).toEqual({ from: 'app-api', to: 'system-bank' });
   expect(laidChanges('').changes.sections('more-hands')).toEqual([]);
 });
 
 test('one record of a change by its path, and before and after of each key an update writes', () => {
   const { changes: found } = laidChanges(BODY);
-  expect(found.record('more-hands', 'apps/api')).toMatchObject({ touched: { verb: 'update' }, today: { fields: { name: 'API' } }, after: { fields: { name: 'Order API' } } });
-  expect(found.record('more-hands', 'apps/worker')).toMatchObject({ touched: { verb: 'add' }, after: { fields: { name: 'Worker' } } });
-  expect(found.record('more-hands', 'apps/worker')?.today).toBeUndefined();
-  expect(found.record('more-hands', 'connections/api-calls-bank')).toMatchObject({ touched: { verb: 'remove' }, today: { fields: { to: 'bank' } } });
-  expect(found.record('more-hands', 'connections/api-calls-bank')?.after).toBeUndefined();
+  expect(found.record('more-hands', 'apps/app-api')).toMatchObject({ touched: { verb: 'update' }, today: { fields: { name: 'API' } }, after: { fields: { name: 'Order API' } } });
+  expect(found.record('more-hands', 'apps/app-worker')).toMatchObject({ touched: { verb: 'add' }, after: { fields: { name: 'Worker' } } });
+  expect(found.record('more-hands', 'apps/app-worker')?.today).toBeUndefined();
+  expect(found.record('more-hands', 'connections/connection-api-calls-bank')).toMatchObject({ touched: { verb: 'remove' }, today: { fields: { to: 'system-bank' } } });
+  expect(found.record('more-hands', 'connections/connection-api-calls-bank')?.after).toBeUndefined();
   // A record the change does not touch is none of its records.
-  expect(found.record('more-hands', 'stores/orders')).toBeUndefined();
+  expect(found.record('more-hands', 'stores/store-orders')).toBeUndefined();
   // A text that changes, a key that is new, a list, and a key that is taken out.
-  expect(found.differences('more-hands', 'apps/api')).toEqual([
+  expect(found.differences('more-hands', 'apps/app-api')).toEqual([
     { key: 'name', before: 'API', after: 'Order API' },
     { key: 'description', after: 'Takes the orders.' },
-    { key: 'technology', before: ['go'], after: ['rust'] },
+    { key: 'technology', before: ['tech-go'], after: ['tech-rust'] },
   ]);
-  expect(found.differences('more-hands', 'systems/shop')).toEqual([{ key: 'description', before: 'Sells things online.' }]);
-  expect(found.differences('more-hands', 'apps/worker')).toEqual([]);
+  expect(found.differences('more-hands', 'systems/system-shop')).toEqual([{ key: 'description', before: 'Sells things online.' }]);
+  expect(found.differences('more-hands', 'apps/app-worker')).toEqual([]);
 });
 
 test('a change with an error of its own is not laid: its rows are read from its file, and it has no model as it would be', () => {
   // The change updates a record that is not there.
-  const { read, changes: found } = laidChanges('add:\n  apps/worker: {name: Worker, in: shop}\nupdate:\n  apps/apy: {name: Order API}\n  apps/api: {name: Order API}\nremove:\n  - connections/api-calls-bank\n');
+  const { read, changes: found } = laidChanges('add:\n  apps/app-worker: {name: Worker, in: system-shop}\nupdate:\n  apps/app-apy: {name: Order API}\n  apps/app-api: {name: Order API}\nremove:\n  - connections/connection-api-calls-bank\n');
   expect(read.problems.map((problem) => problem.rule)).toEqual(['change-no-record']);
   expect(read.laid).toEqual([]);
   expect(found.change('more-hands')?.laid).toBe(false);
@@ -226,11 +226,11 @@ test('a change with an error of its own is not laid: its rows are read from its 
       'Software',
       [
         ['API', 'update', 'API'],
-        ['apy', 'update', undefined],
+        ['app-apy', 'update', undefined],
         ['Worker', 'add', 'Worker'],
       ],
     ],
     ['Connections', [['No name', 'remove', undefined]]],
   ]);
-  expect(found.differences('more-hands', 'apps/api')).toEqual([]);
+  expect(found.differences('more-hands', 'apps/app-api')).toEqual([]);
 });

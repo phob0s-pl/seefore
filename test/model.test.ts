@@ -3,7 +3,7 @@ import { readModel } from '../src/model/read.ts';
 import type { SourceFile } from '../src/model/read.ts';
 
 const MARKER = { path: 'seefore.yaml', text: 'format: 1\nname: Shop\n' };
-const ALICE = { path: 'people/alice.yaml', text: 'name: Alice\n' };
+const ALICE = { path: 'people/person-alice.yaml', text: 'name: Alice\n' };
 
 /** The first problem of a small model of a marker, one good record and the given files. */
 function problemsOf(...files: SourceFile[]) {
@@ -14,33 +14,33 @@ test('a small good model is read, with its name and its records', () => {
   const read = readModel([
     MARKER,
     ALICE,
-    { path: 'systems/shop.yaml', text: 'name: Shop\n' },
-    { path: 'technologies/go.yaml', text: 'name: Go\n' },
-    { path: 'apps/order-api.yaml', text: 'name: Order API\nin: shop\nkind: service\ntechnology: [go]\n' },
-    { path: 'connections/a-to-b.yaml', text: 'from: alice\nto: order-api\n' },
+    { path: 'systems/system-shop.yaml', text: 'name: Shop\n' },
+    { path: 'technologies/tech-go.yaml', text: 'name: Go\n' },
+    { path: 'apps/app-order-api.yaml', text: 'name: Order API\nin: system-shop\nkind: service\ntechnology: [tech-go]\n' },
+    { path: 'connections/connection-a-to-b.yaml', text: 'from: person-alice\nto: app-order-api\n' },
   ]);
   expect(read.problems).toEqual([]);
   expect(read.name).toBe('Shop');
-  expect(read.records.map((record) => `${record.kind}/${record.id}`)).toEqual(['apps/order-api', 'connections/a-to-b', 'people/alice', 'systems/shop', 'technologies/go']);
-  expect(read.records[0]?.fields).toEqual({ name: 'Order API', in: 'shop', kind: 'service', technology: ['go'] });
+  expect(read.records.map((record) => `${record.kind}/${record.id}`)).toEqual(['apps/app-order-api', 'connections/connection-a-to-b', 'people/person-alice', 'systems/system-shop', 'technologies/tech-go']);
+  expect(read.records[0]?.fields).toEqual({ name: 'Order API', in: 'system-shop', kind: 'service', technology: ['tech-go'] });
 });
 
 test('a key that is not known is a problem, with the keys that are', () => {
-  const [problem] = problemsOf({ path: 'apps/api.yaml', text: 'name: API\nin: shop\ncolour: red\n' });
-  expect(problem).toMatchObject({ file: 'apps/api.yaml', line: 3, rule: 'key-unknown', severity: 'error', record: 'api' });
+  const [problem] = problemsOf({ path: 'apps/app-api.yaml', text: 'name: API\nin: system-shop\ncolour: red\n' });
+  expect(problem).toMatchObject({ file: 'apps/app-api.yaml', line: 3, rule: 'key-unknown', severity: 'error', record: 'app-api' });
   expect(problem?.message).toContain('`colour` is not a key of an app');
   expect(problem?.fix).toContain('`in`');
 });
 
 test('a key that is missing is a problem', () => {
-  const [problem] = problemsOf({ path: 'apps/api.yaml', text: 'name: API\n' });
-  expect(problem).toMatchObject({ rule: 'key-missing', file: 'apps/api.yaml', field: 'in', severity: 'error' });
+  const [problem] = problemsOf({ path: 'apps/app-api.yaml', text: 'name: API\n' });
+  expect(problem).toMatchObject({ rule: 'key-missing', file: 'apps/app-api.yaml', field: 'in', severity: 'error' });
   expect(problem?.message).toContain('`in` is missing');
   expect(problem?.fix).toContain('The id of the system the app is part of');
 });
 
 test('a value of the wrong kind is a problem', () => {
-  const [problem] = problemsOf({ path: 'apps/api.yaml', text: 'name: API\nin: shop\nkind: wizard\n' });
+  const [problem] = problemsOf({ path: 'apps/app-api.yaml', text: 'name: API\nin: system-shop\nkind: wizard\n' });
   expect(problem).toMatchObject({ rule: 'value-not-allowed', line: 3 });
   expect(problem?.message).toContain('`service`');
 });
@@ -52,7 +52,7 @@ test('an id that is not allowed is a problem, and the record is left out', () =>
 });
 
 test('a comment is a problem', () => {
-  const [problem] = problemsOf({ path: 'people/bob.yaml', text: 'name: Bob\n# a note\n' });
+  const [problem] = problemsOf({ path: 'people/person-bob.yaml', text: 'name: Bob\n# a note\n' });
   expect(problem).toMatchObject({ rule: 'yaml-comment', line: 2 });
 });
 
@@ -75,18 +75,18 @@ test('a file in a folder that is not known is a warning, and says which are know
 });
 
 /** A flow of the selling feature, with the steps given as lines of YAML. */
-const flow = (steps: string, head = 'feature: selling\n') => ({ path: 'flows/a-sale.yaml', text: `name: Selling\nstarts: A clerk sells\nends: It is sold\n${head}steps:\n${steps}` });
+const flow = (steps: string, head = 'feature: feature-selling\n') => ({ path: 'flows/flow-a-sale.yaml', text: `name: Selling\nstarts: A clerk sells\nends: It is sold\n${head}steps:\n${steps}` });
 
 test('a small good model with a feature, a flow and a data record reads with no problem, and counts nothing', () => {
   const read = readModel([
     MARKER,
     ALICE,
-    { path: 'systems/shop.yaml', text: 'name: Shop\n' },
-    { path: 'apps/api.yaml', text: 'name: API\nin: shop\n' },
-    { path: 'connections/asks.yaml', text: 'from: alice\nto: api\nname: Asks for the account\n' },
-    { path: 'features/selling.yaml', text: 'name: Selling\ntouches: [api]\n' },
-    { path: 'data/account-details.yaml', text: 'name: Account details\nfields:\n  - {name: id, description: The account number}\n  - {name: balance}\n' },
-    flow('  - {id: asks, does: asks}\n  - {id: gets, reply: asks, name: The account, data: [account-details]}\n  - {id: shows, does: api, name: Shows the balance, after: [gets]}\n'),
+    { path: 'systems/system-shop.yaml', text: 'name: Shop\n' },
+    { path: 'apps/app-api.yaml', text: 'name: API\nin: system-shop\n' },
+    { path: 'connections/connection-asks.yaml', text: 'from: person-alice\nto: app-api\nname: Asks for the account\n' },
+    { path: 'features/feature-selling.yaml', text: 'name: Selling\ntouches: [app-api]\n' },
+    { path: 'data/data-account-details.yaml', text: 'name: Account details\nfields:\n  - {name: id, description: The account number}\n  - {name: balance}\n' },
+    flow('  - {id: asks, does: connection-asks}\n  - {id: gets, reply: asks, name: The account, data: [data-account-details]}\n  - {id: shows, does: app-api, name: Shows the balance, after: [gets]}\n'),
   ]);
   expect(read.problems).toEqual([]);
   expect(read.records.map((record) => record.kind)).toEqual(['apps', 'connections', 'data', 'features', 'flows', 'people', 'systems']);
@@ -100,7 +100,7 @@ test('a small good model with a feature, a flow and a data record reads with no 
 
 test('a flow with no feature is a problem of its file', () => {
   const [problem] = problemsOf(flow('  - {id: a, name: A}\n', ''));
-  expect(problem).toMatchObject({ rule: 'key-missing', file: 'flows/a-sale.yaml', field: 'feature', line: 1 });
+  expect(problem).toMatchObject({ rule: 'key-missing', file: 'flows/flow-a-sale.yaml', field: 'feature', line: 1 });
   expect(problem?.message).toBe('`feature` is missing from a flow.');
 });
 
@@ -116,26 +116,26 @@ test('a fault inside a step or a field has its own place and names it in words',
   expect(steps[2]?.message).toBe('`name` of the third step has 120 characters. It may have at most 100.');
 
   const fields = problemsOf(
-    { path: 'data/order.yaml', text: 'name: Order\nfields:\n  - name: items\n  - description: Where it goes\n' },
-    { path: 'data/parcel.yaml', text: 'name: Parcel\nfields:\n  - name: items\n  - name: weight\n  - name: items\n' },
+    { path: 'data/data-order.yaml', text: 'name: Order\nfields:\n  - name: items\n  - description: Where it goes\n' },
+    { path: 'data/data-parcel.yaml', text: 'name: Parcel\nfields:\n  - name: items\n  - name: weight\n  - name: items\n' },
   );
   expect(fields.map(({ file, rule, line, message }) => [file, rule, line, message])).toEqual([
-    ['data/order.yaml', 'key-missing', 4, '`name` is missing from the second field.'],
-    ['data/parcel.yaml', 'field-twice', 5, "The third field has the name `items`, as the first field has. A field's name stands once in its record."],
+    ['data/data-order.yaml', 'key-missing', 4, '`name` is missing from the second field.'],
+    ['data/data-parcel.yaml', 'field-twice', 5, "The third field has the name `items`, as the first field has. A field's name stands once in its record."],
   ]);
 });
 
 test('a sentence cut by a comma inside a short mapping is told as that, and a key that is simply not known is not', () => {
-  const [cut] = problemsOf({ path: 'data/order.yaml', text: 'name: Order\nfields:\n  - {name: items, description: What is bought, and how many}\n' });
+  const [cut] = problemsOf({ path: 'data/data-order.yaml', text: 'name: Order\nfields:\n  - {name: items, description: What is bought, and how many}\n' });
   expect(cut).toMatchObject({ rule: 'key-unknown', line: 3 });
   expect(cut?.message).toContain('`and how many` is not a key of the first field');
   expect(cut?.fix).toContain('A comma inside `{ }` starts a new key');
-  const [plain] = problemsOf({ path: 'data/order.yaml', text: 'name: Order\nfields:\n  - {name: items, colour: red}\n' });
+  const [plain] = problemsOf({ path: 'data/data-order.yaml', text: 'name: Order\nfields:\n  - {name: items, colour: red}\n' });
   expect(plain?.fix).toContain('Delete the key `colour`');
 });
 
 test('a broken file leaves the others read', () => {
-  const read = readModel([MARKER, ALICE, { path: 'people/bob.yaml', text: 'name: [\n' }]);
-  expect(read.records.map((record) => record.id)).toEqual(['alice']);
+  const read = readModel([MARKER, ALICE, { path: 'people/person-bob.yaml', text: 'name: [\n' }]);
+  expect(read.records.map((record) => record.id)).toEqual(['person-alice']);
   expect(read.problems).toHaveLength(1);
 });
