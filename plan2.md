@@ -70,6 +70,7 @@ and B3 use are in `research/paths.md`, out of Git.
 | B7 | The highlight on the diagram | The mouse over a box or a line fades all but it and what it joins, and a pick holds the same | Opus |
 | B8 | A focus on the diagram | At Containers one system, at Components one app, opened, with what it has a line with as closed boxes | Opus |
 | B9 | The store rule of the layout | A queue or a topic stands between those who write it and those who read it | Main session builds, Opus reviews |
+| B10 | Ids that say their kind | Every id begins with the word of its folder, as `app-gateway` and `tech-prometheus`, and the check holds it. `seefore rename` changes an id in every place that names it, and moves a record to another kind. Every model and test is migrated | Fable and Astra plan, Opus builds `rename` and migrates the tests, the main session the rule and the models |
 
 ### 3 Flows and features
 
