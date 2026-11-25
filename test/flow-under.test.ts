@@ -298,6 +298,43 @@ test('a step that goes opens no strand over the steps that stay, and a condition
   expect(flow?.steps[3]).toMatchObject({ conditioned: true, after: [{ number: 1, words: 'Places an order' }] });
 });
 
+test("a step's source is one of its own keys: written otherwise, the step is updated, with today's paths", () => {
+  const model = withFlow([
+    '  - {id: places, does: connection-customer-orders}',
+    '  - {id: reads, does: connection-api-reads-orders, source: [api/orders/read.go]}',
+    '  - {id: saves, does: connection-api-writes-orders, source: [api/orders/save.go, api/db.go]}',
+    '  - {id: hands-on, does: connection-api-calls-worker}',
+    '  - {id: notes, does: connection-worker-writes-audit, source: [worker/audit.go]}',
+    '  - {id: confirms, reply: places, name: Confirms the order}',
+  ]);
+  expect(readModel(model).problems).toEqual([]);
+  const { read, flow } = underModel(
+    model,
+    [
+      'update:',
+      '  flows/flow-placing:',
+      '    steps:',
+      '      - places',
+      '      - {id: reads, does: connection-api-reads-orders, source: [api/orders/find.go]}',
+      '      - {id: saves, does: connection-api-writes-orders}',
+      '      - {id: hands-on, does: connection-api-calls-worker, source: [worker/main.go]}',
+      '      - notes',
+      '      - confirms',
+      '',
+    ].join('\n'),
+  );
+  expect(read.problems).toEqual([]);
+  // A path that changes says today's; one that is new has nothing for today; one taken out is gone. A step whose paths stay is the same.
+  expect(flow?.steps.map((step) => [step.id, step.mark, step.source, step.was])).toEqual([
+    ['places', 'same', [], []],
+    ['reads', 'updated', ['api/orders/find.go'], [{ key: 'source', today: 'api/orders/read.go' }]],
+    ['saves', 'updated', [], [{ key: 'source', today: 'api/orders/save.go, api/db.go', gone: true }]],
+    ['hands-on', 'updated', ['worker/main.go'], [{ key: 'source' }]],
+    ['notes', 'same', ['worker/audit.go'], []],
+    ['confirms', 'same', [], []],
+  ]);
+});
+
 test('a flow with a step id twice has no step told from another: it is shown as it would be, with no mark', () => {
   // The change gives a second step the id `reads`; the check tells it, and the change is laid all the same.
   const { read, flow } = under('update:\n  flows/flow-placing:\n    description: Twice.\n    steps:\n      - places\n      - reads\n      - {id: reads, does: connection-api-calls-worker}\n      - confirms\n');

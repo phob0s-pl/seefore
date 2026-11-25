@@ -34,8 +34,8 @@ work as "With several agents" says below.
    showed you, where this app's code or config names the far end: a client, an address, a
    queue or topic name, a route, a query. Its path goes in the connection's `source`. Code
    that several apps run counts only with a file that says this app runs it; for an app with
-   no code here, its config here or the route that takes its call. With none, leave the
-   connection out and name it in your last message. A name that sounds related is no evidence.
+   no code here, its config, or the far side's code that takes its call or reads what it writes.
+   With none, leave it out and name it at the end. A name that sounds related is no evidence.
 4. **Write what the files show.** Not what you remember of this project, and not what its
    documents say it will be. A document may tell you where to look; a file you opened is what
    you write from.

@@ -82,7 +82,7 @@
             "minLength": 1,
             "maxLength": 100,
             "pattern": "^\\S(?:[^\\n\\r\\u0085\\u2028\\u2029]*\\S)?$",
-            "description": "What happens, verb first: one line of 1 to 100 characters. Left out where the name of the connection or of the flow in `does` says it. A reply always has one: it says what comes back."
+            "description": "What happens, verb first: one line of 1 to 100 characters. Left out only where the name of the connection or of the flow in `does` says this step and no more. A reply always has one: it says what comes back. A step that happens once for each of several things says \"each\", as in `Weighs each tea of the order`. Where copies of one app take turns, it says which copy acts."
           },
           "only": {
             "type": "string",
@@ -107,6 +107,18 @@
               "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
             },
             "description": "The ids of the data this step passes, records in data/: on a step on a connection, or on a reply. A list with no id twice."
+          },
+          "source": {
+            "minItems": 1,
+            "maxItems": 3,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300,
+              "pattern": "^(?!\\/)(?!.*(?:^|\\/)\\.\\.(?:\\/|$))[^*\\\\\\n\\r]*\\S$"
+            },
+            "description": "Where the code does it: the paths of one to three files, counted from the folder that holds the model's folder, written with `/`. A path with `..`, with `*` or with `/` at its start is an error, and the check warns when a path is not there or is a folder. Left out when no file is known to show it."
           }
         },
         "required": [
@@ -126,5 +138,5 @@
     "steps"
   ],
   "additionalProperties": false,
-  "description": "One path through the model, told for one outcome: what starts it, the acts in order, each on a record the model holds, and what is true at the end."
+  "description": "One path through the model, told for one outcome: what starts it, the acts in order, each on a record the model holds, and what is true at the end. It has one start and tells one way. Another way to the same outcome is a flow of its own; where the ways part for a few steps only, each of those steps has `only`, and the step at which they meet names the last step of each in `after`."
 }

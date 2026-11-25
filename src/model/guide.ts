@@ -62,6 +62,7 @@ export const EXAMPLES: Readonly<Record<string, { path: string; text: string }>> 
       '  - id: checks',
       '    does: component-checkout',
       '    name: Checks the order and works out the price',
+      '    source: [services/orders/checkout.go]',
       '  - id: confirms',
       '    reply: places',
       '    name: Shows the number of the order',
@@ -240,7 +241,9 @@ function idLine(folder: string, where = true): string {
   const id = example.slice(folder.length + 1, -'.yaml'.length);
   if (folder === 'changes') return `Its id is its own, with no word of a folder before it: the name of its file, as \`${id}\` in ${example}.`;
   if (folder === 'reviews') return `It is named as its change: the review of changes/${id}.yaml is ${example}. Its id is that of the change.`;
-  return `Its id begins with \`${WORDS[folder]}-\` and says what it is, as \`${id}\`: the name of its file, ${example}${where ? ", in the model's folder, which is the one that holds `seefore.yaml`" : ''}.`;
+  // A flow is named by its task, as a doing; every other record by what it is.
+  const says = folder === 'flows' ? 'says the task as a doing' : 'says what it is';
+  return `Its id begins with \`${WORDS[folder]}-\` and ${says}, as \`${id}\`: the name of its file, ${example}${where ? ", in the model's folder, which is the one that holds `seefore.yaml`" : ''}.`;
 }
 
 /**

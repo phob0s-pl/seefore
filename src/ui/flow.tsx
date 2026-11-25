@@ -397,6 +397,15 @@ function StepLines({ step, catalogue, onData }: { step: StepShown; catalogue: Ca
           </>
         )}
       </Line>
+      {/* Where the code does it: paths as written, counted from the folder that holds the model's folder, as a part's page shows them. */}
+      <Line was={was.get('source')}>
+        {step.source.length > 0 && (
+          <>
+            <span className="flow-bar-label">Source</span>
+            <span className="record-source">{step.source.join(', ')}</span>
+          </>
+        )}
+      </Line>
     </>
   );
 }

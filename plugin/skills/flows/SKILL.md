@@ -19,11 +19,12 @@ one to write, and stop.
 
 1. **A step is what a file showed you in this session**: a file you opened, or a line a
    search showed you, where the code does it: a route or a handler that takes the thing, a
-   consumer that reads it, a client or a producer that sends it on, a query, a write. A
-   comment or a name says what the code is meant to do: a step, and each word of its `name`,
-   rests on the lines that do it and on the condition they stand under. Follow the code from
-   hop to hop, from where the journey starts. What you remember of this project, and what
-   its documents say, may tell you where to look; neither is a step.
+   consumer that reads it, a client or a producer that sends it on, a query, a write. Its
+   path goes in the step's `source`. A comment or a name says what the code is meant to do:
+   a step, and each word of its `name`, rests on the lines that do it and on the condition
+   they stand under. Follow the code from hop to hop, from where the journey starts. What
+   you remember of this project, and what its documents say, may tell you where to look;
+   neither is a step.
    - Code that several apps run is a step of the app that a file shows running it on this
      journey: the route, the consumer, the place where the task is registered.
    - Of a part with no code here, write only what its config here shows, or the code that
@@ -88,10 +89,10 @@ one to write, and stop.
      code's own name in `description`, each in `data` of the steps on a connection that
      carry it. A field is one a file showed you in this session, written in words; with
      none seen, the record has no `fields`.
-5. **Hold every step against rule 1 once more, in writing**, before the check: one line a
-   step, its id, then the file and line that a Read or a search of this session showed you.
-   A step with none goes, with each `reply` and `after` that names it. So does a number, a
-   default or a field that no such line shows.
+5. **Hold every step against rule 1 once more**, before the check. A step whose `source`
+   names no file that a Read or a search of this session showed you doing it goes, with
+   each `reply` and `after` that names it. So does a number, a default or a field that no
+   such line shows.
 6. Run `seefore check`. Mend what it says by its `Mend:` line, and check again; three rounds
    at most. Then say what is left.
 7. End with a short message:

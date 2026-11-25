@@ -66,6 +66,29 @@ test('a folder: what a record is, the word of its ids, each key needed or not wi
   expect(rules).toContain('Its keys are those of `way` in `never`, above.');
 });
 
+test("the guide of flows says that a flow tells one way, that its id says the task as a doing, how a step is named and where its code is", () => {
+  // As read, with the lines joined.
+  const words = (topic: string) => text(topic).replace(/\s+/g, ' ');
+  const flows = words('flows');
+  expect(flows).toContain(
+    'and what is true at the end. It has one start and tells one way. Another way to the same outcome is a flow of its own; where the ways part for a few steps only, each of those steps has `only`, and the step at which they meet names the last step of each in `after`. ',
+  );
+  expect(flows).toContain('Its id begins with `flow-` and says the task as a doing, as `flow-placing-an-order`: the name of its file, flows/flow-placing-an-order.yaml.');
+  expect(flows).toContain(
+    'name (may be left out) What happens, verb first: one line of 1 to 100 characters. Left out only where the name of the connection or of the flow in `does` says this step and no more. A reply always has one: it says what comes back. A step that happens once for each of several things says "each", as in `Weighs each tea of the order`. Where copies of one app take turns, it says which copy acts. ',
+  );
+  // A step's `source` stands last among its keys.
+  expect(flows).toContain(
+    'reply. A list with no id twice. source (may be left out) Where the code does it: the paths of one to three files, counted from the folder that holds the model\'s folder, written with `/`. A path with `..`, with `*` or with `/` at its start is an error, and the check warns when a path is not there or is a folder. Left out when no file is known to show it. Example,',
+  );
+  expect(flows).toContain('name: Checks the order and works out the price source: [services/orders/checkout.go] - id: confirms');
+  expect(words('connections')).toContain(
+    'When `from` has no code here, a file of the far side: the route of `to` that takes its call, or, where `to` is a store, the code that reads what `from` writes there or writes what it reads; from a person, the entry point they use. Left out when no file is known to show it.',
+  );
+  // Every other folder's id says what it is.
+  for (const folder of FOLDERS.filter((each) => each !== 'flows' && each !== 'changes' && each !== 'reviews')) expect(words(folder), folder).toContain(' and says what it is, as ');
+});
+
 test('every key of every shape is in the guide of its folder, and every line of a guide has at most 100 characters', () => {
   for (const folder of FOLDERS) {
     const guide = text(folder);

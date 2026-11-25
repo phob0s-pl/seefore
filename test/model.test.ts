@@ -112,7 +112,8 @@ test('a fault inside a step or a field has its own place and names it in words',
     ['value-invalid', 8, 21],
     ['value-too-big', 9, 23],
   ]);
-  expect(steps[0]?.message).toContain('`colour` is not a key of the first step. Its keys are `id`, `does`');
+  // A step's `source` stands last among its keys.
+  expect(steps[0]?.message).toBe('`colour` is not a key of the first step. Its keys are `id`, `does`, `reply`, `after`, `name`, `only`, `description`, `data` and `source`.');
   expect(steps[1]?.message).toMatch(/^`does` of the second step holds the id of a connection, a part or a flow\./);
   expect(steps[2]?.message).toBe('`name` of the third step has 120 characters. It may have at most 100.');
 

@@ -153,9 +153,10 @@ const Source = sourceOf('Where its code lies', 'For a part built elsewhere, the 
 const StoreSource = sourceOf('What defines or names it, such as its schema, its migrations or the config that holds its address', 'Left out where nothing of it is at hand.');
 const ConnectionSource = sourceOf(
   'Where the code shows it, a file in which the code or config of `from` names `to`',
-  'When `from` has no code here, the route of `to` that takes its call; from a person, the entry point they use. Left out when nobody has looked.',
+  'When `from` has no code here, a file of the far side: the route of `to` that takes its call, or, where `to` is a store, the code that reads what `from` writes there or writes what it reads; from a person, the entry point they use. Left out when no file is known to show it.',
   'the paths of one to three files',
 );
+const StepSource = sourceOf('Where the code does it', 'Left out when no file is known to show it.', 'the paths of one to three files');
 
 const External = z.literal(true).meta({ description: '`true`: the people this model is kept for cannot change the system. Left out for a system of yours, and when nobody has said.' });
 
@@ -360,13 +361,17 @@ const StepSchema = z
       .meta({ description: 'The ids of earlier steps this one comes after, where that is not the step above. It comes after each of them that happens.' })
       .optional(),
     name: oneLine('name', NAME_MAX)
-      .meta({ description: 'What happens, verb first: one line of 1 to 100 characters. Left out where the name of the connection or of the flow in `does` says it. A reply always has one: it says what comes back.' })
+      .meta({
+        description:
+          'What happens, verb first: one line of 1 to 100 characters. Left out only where the name of the connection or of the flow in `does` says this step and no more. A reply always has one: it says what comes back. A step that happens once for each of several things says "each", as in `Weighs each tea of the order`. Where copies of one app take turns, it says which copy acts.',
+      })
       .optional(),
     only: Only.optional(),
     description: prose(NOTE_MAX).meta({ description: 'A sentence or two of 1 to 300 characters: a wait, a retry, a refusal.' }).optional(),
     data: ids('`data` holds the ids of records in `data/`.')
       .meta({ description: 'The ids of the data this step passes, records in data/: on a step on a connection, or on a reply. A list with no id twice.' })
       .optional(),
+    source: StepSource.optional(),
   })
   .meta({ description: 'One step of a flow: what happens on a connection, in a part or as a whole flow, or the answer to an earlier step.' });
 
@@ -383,7 +388,10 @@ export const FlowSchema = z
       .min(1)
       .meta({ description: 'The steps in order, at least one, each a mapping with its own `id`.' }),
   })
-  .meta({ description: 'One path through the model, told for one outcome: what starts it, the acts in order, each on a record the model holds, and what is true at the end.' });
+  .meta({
+    description:
+      'One path through the model, told for one outcome: what starts it, the acts in order, each on a record the model holds, and what is true at the end. It has one start and tells one way. Another way to the same outcome is a flow of its own; where the ways part for a few steps only, each of those steps has `only`, and the step at which they meet names the last step of each in `after`.',
+  });
 
 const FieldSchema = z
   .strictObject({

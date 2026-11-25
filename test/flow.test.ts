@@ -46,7 +46,7 @@ steps:
   - {id: charges, does: connection-checkout-pays, only: when the fan pays by card}
   - {id: link, reply: charges, name: A link, only: when the fan pays by card, data: [data-payment]}
   - {id: calls-back, does: connection-bank-calls-back, only: when the fan pays by card}
-  - {id: keeps, does: component-checkout, name: Keeps the payment}
+  - {id: keeps, does: component-checkout, name: Keeps the payment, source: [shop/checkout/keep.ts, shop/ledger.ts]}
   - {id: tells, after: [asks], name: Tells the fan}
   - {id: receipt, does: flow-receipt, only: when the fan pays by card}
 `,
@@ -141,6 +141,12 @@ test('a step in a part, one with no place and one that runs a flow read as such;
   const view = flowView(records(), 'flow-pays');
   expect(litByStep(view, { box: 'component-checkout' })).toEqual({ boxes: ['system-shop', 'app-api', 'component-checkout'], arrows: [] });
   expect(litByStep(view, { arrow: 'person-fan->app-web', back: false })).toEqual({ boxes: ['person-fan', 'system-shop', 'app-web'], arrows: ['person-fan->app-web'] });
+});
+
+test('a step has the paths of the code that does it, as written, and none when it names none', () => {
+  expect(step('keeps')?.source).toEqual(['shop/checkout/keep.ts', 'shop/ledger.ts']);
+  expect(steps().filter((each) => each.source.length > 0).map((each) => each.id)).toEqual(['keeps']);
+  expect(step('opens')?.source).toEqual([]);
 });
 
 test('the head of a flow, with its feature', () => {

@@ -42,6 +42,8 @@ export type FlowStep = {
   description?: string;
   /** The data it passes, by id and name. */
   data: { id: string; name: string }[];
+  /** The paths of the files where the code does it, as written; none when no file is known. */
+  source: string[];
   /** What it lights on the flow's view; nothing for a step with no place or one that runs a flow. */
   lights?: Lights;
   /** The id of the flow it runs. */
@@ -70,6 +72,9 @@ export type FlowRead = {
 
 
 const text = (value: unknown): string | undefined => (typeof value === 'string' ? value : undefined);
+
+/** The paths of a list, as written; none for what is no list. */
+const paths = (value: unknown): string[] => (Array.isArray(value) ? value.filter((path): path is string => typeof path === 'string') : []);
 
 /** Words joined as people join them: "1", "1 and 5", "1, 3 and 5". */
 const joined = (words: readonly string[]): string => (words.length <= 1 ? words.join('') : `${words.slice(0, -1).join(', ')} and ${words[words.length - 1]}`);
@@ -217,6 +222,7 @@ export function flowSteps(records: readonly ModelRecord[], flowId: string): Flow
       ...(only !== undefined ? { only } : {}),
       ...(description !== undefined ? { description } : {}),
       data: step.data.map((id) => ({ id, name: nameOf(id) })),
+      source: paths(step.fields.source),
       ...(lights !== undefined ? { lights } : {}),
       ...(kind === 'flow' && on !== undefined ? { runs: on.id } : {}),
       ...(group !== undefined ? { group } : {}),
@@ -280,7 +286,7 @@ export type FlowUnder = {
 };
 
 /** The keys of a step that are its own: a step is updated when one of them is written otherwise. */
-const STEP_KEYS = ['does', 'reply', 'after', 'name', 'only', 'description', 'data'] as const;
+const STEP_KEYS = ['does', 'reply', 'after', 'name', 'only', 'description', 'data', 'source'] as const;
 /** The keys of a flow that its head shows. */
 const FLOW_KEYS = ['name', 'feature', 'only', 'description', 'starts', 'ends'] as const;
 
@@ -464,8 +470,9 @@ export function flowUnder(
         only: now.only,
         description: now.description,
         data: now.data.length > 0 ? joined(now.data.map((each) => each.name)) : undefined,
+        source: now.source.length > 0 ? now.source.join(', ') : undefined,
       };
-      for (const key of ['reply', 'after', 'only', 'description', 'data'] as const)
+      for (const key of ['reply', 'after', 'only', 'description', 'data', 'source'] as const)
         if (!sameValue(rawWas[key], rawWill[key])) changed.push({ key, ...(said[key] !== undefined ? { today: said[key] } : {}), ...(!(key in rawWill) ? { gone: true as const } : {}) });
     }
     // A step that goes names the steps it followed by the numbers they bear in this list, and opens no strand of its own.
