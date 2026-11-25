@@ -69,6 +69,7 @@ key `source` on a part and the key `decided` on a change; the rest of the review
 ## The stages
 
 A stage's parts are named when it starts, as in plan 2. Runs are counted against the limit.
+The specs of plan 3 lie in `specs/plan3/`, since plan 2 has stages of the same names.
 
 ### A The process and the skills
 
@@ -172,8 +173,8 @@ Added to the owner's six: without it nothing shows that somebody else can use it
 
 ## What is not known
 
-- **Whether a headless session can be resumed with a played person's answer.** D and E rest
-  on it, and A3 proves it first.
+- **Whether a headless session resumes well with a played person's answer.** The vendor's
+  documents say it can; D and E rest on it, and A3 tries it first.
 - **How much of a well-known repository an assistant knows without reading it.** The private
   system is the only guard.
 - **Whether 120 lines hold `model`, and whether two rounds are enough.**
