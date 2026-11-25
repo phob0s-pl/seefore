@@ -157,7 +157,11 @@ test('a step that stays and is put on another connection leaves its old line and
     [5, 'notes', 'updated'],
     [6, 'confirms', 'same'],
   ]);
-  expect(flow?.steps[4]?.was).toEqual([{ key: 'does', today: 'Worker to Audit' }, { key: 'name' }]);
+  // Who acts on what, and the title, each with what it says today.
+  expect(flow?.steps[4]?.was).toEqual([
+    { key: 'does', today: 'Worker to Audit' },
+    { key: 'name', today: 'Notes it' },
+  ]);
   expect(flow?.steps[4]?.acts).toBe('API to Orders');
   // Its old line and the box at the far end are drawn still, and marked as passed no more.
   expect(flow?.view.boxes.some((box) => box.id === 'audit')).toBe(true);
@@ -217,4 +221,94 @@ test('the fields of a data record before and after are one list, matched by name
   expect(fieldRows(today, undefined)?.map((row) => row.mark)).toEqual(['removed', 'removed', 'removed']);
   expect(fieldRows('text', after)).toBeUndefined();
   expect(fieldRows(today, [{ description: 'No name' }])).toBeUndefined();
+});
+
+// ---- each row is read from its own side
+
+/** The flow `placing` with its text given, in place of the model's. */
+const withFlow = (steps: string[]): SourceFile[] => [
+  ...MODEL.filter((each) => each.path !== 'flows/placing.yaml'),
+  file('flows/placing', ['name: Placing an order', 'starts: A customer places an order', 'ends: The order is kept', 'feature: ordering', 'steps:', ...steps, ''].join('\n')),
+];
+const underModel = (model: SourceFile[], body: string) => {
+  const read = readModel([...model, file('changes/more', `name: More\nprompt: Make it so.\n${body}`)]);
+  return { read, flow: changesOf(read.records, read.laid).flow('more', 'placing') };
+};
+
+test('a reply that goes is read against the step it answers as that step is today, and lights today own line', () => {
+  // `places` stays and is put on another connection; the reply to it goes.
+  const { read, flow } = under('update:\n  flows/placing:\n    steps:\n      - {id: places, does: api-calls-worker}\n      - reads\n      - saves\n      - hands-on\n      - notes\n');
+  expect(read.problems).toEqual([]);
+  const gone = flow?.steps.find((step) => step.id === 'confirms');
+  expect(gone).toMatchObject({ mark: 'removed', number: 6, happens: 'Confirms the order', acts: 'API replies to Customer', kind: 'reply' });
+  // It names the step it answered by the number that step bears in the list, with today's words for it.
+  expect(gone?.reply).toEqual({ number: 1, words: 'Places an order' });
+  // It lights the line it travelled today, backwards, and not the line `places` is put on.
+  const line = flow?.view.arrows.find((arrow) => arrow.connections.includes('customer-orders'));
+  expect(gone?.lights).toEqual({ arrow: line?.id, back: true });
+  expect(flow?.marks.get('customer-orders')).toBe('removed');
+  expect(flow?.marks.get('customer')).toBe('removed');
+  // The step that stays reads as it would be, with today's words under what changed.
+  expect(flow?.steps[0]).toMatchObject({ id: 'places', mark: 'updated', happens: 'Hands the order on', acts: 'API to Worker' });
+  expect(flow?.steps[0]?.was).toEqual([
+    { key: 'does', today: 'Customer to API' },
+    { key: 'name', today: 'Places an order' },
+  ]);
+});
+
+test('a step that goes keeps today name and ends of its connection, also where the change rewrites that connection', () => {
+  const steps = '    steps: [places, saves, hands-on, confirms]\n';
+  // The change renames the connection of `reads` and moves an end of the connection of `notes`; both steps go.
+  const { read, flow } = under(`update:\n  connections/api-reads-orders: {name: Looks the order up}\n  connections/worker-writes-audit: {from: api}\n  flows/placing:\n${steps}`);
+  expect(read.problems).toEqual([]);
+  const step = (id: string) => flow?.steps.find((each) => each.id === id);
+  expect(step('reads')).toMatchObject({ mark: 'removed', happens: 'Reads the order', acts: 'API to Orders' });
+  expect(step('notes')).toMatchObject({ mark: 'removed', happens: 'Notes it', acts: 'Worker to Audit' });
+  // The line of `notes` is drawn between its ends of today, and no box bears a mark that neither side passes.
+  const line = flow?.view.arrows.find((arrow) => arrow.connections.includes('worker-writes-audit'));
+  expect([line?.from, line?.to]).toEqual(['worker', 'audit']);
+  expect(step('notes')?.lights).toEqual({ arrow: line?.id, back: false });
+  expect(flow?.view.boxes.map((box) => [box.id, flow.marks.get(box.id)]).filter(([, mark]) => mark === 'added')).toEqual([]);
+  expect(flow?.marks.get('audit')).toBe('removed');
+  expect(flow?.marks.get('worker')).toBe('same');
+});
+
+test('a step that goes opens no strand over the steps that stay, and a condition stands over its first step in the list', () => {
+  const model = withFlow([
+    '  - {id: places, does: customer-orders}',
+    '  - {id: reads, does: api-reads-orders}',
+    '  - {id: saves, does: api-writes-orders, only: when the customer has paid}',
+    '  - {id: hands-on, does: api-calls-worker, after: [places], only: when the customer has paid}',
+    '  - {id: notes, does: worker-writes-audit}',
+    '  - {id: confirms, reply: places, name: Confirms the order}',
+  ]);
+  expect(readModel(model).problems).toEqual([]);
+  // The step with `after` goes: after the change no step opens a strand.
+  const { read, flow } = underModel(model, 'update:\n  flows/placing:\n    steps: [places, reads, saves, notes, confirms]\n');
+  expect(read.problems).toEqual([]);
+  expect(flow?.steps.map((step) => [step.id, step.mark, step.strand ?? null, step.group ?? null])).toEqual([
+    ['places', 'same', null, null],
+    ['reads', 'same', null, null],
+    ['saves', 'same', null, 'Only when the customer has paid'],
+    // It stands under the condition it shares with the step before it, and says what it came after in its bar, not as a heading.
+    ['hands-on', 'removed', null, null],
+    ['notes', 'same', null, null],
+    ['confirms', 'same', null, null],
+  ]);
+  expect(flow?.steps[3]).toMatchObject({ conditioned: true, after: [{ number: 1, words: 'Places an order' }] });
+});
+
+test('a flow with a step id twice has no step told from another: it is shown as it would be, with no mark', () => {
+  // The change gives a second step the id `reads`; the check tells it, and the change is laid all the same.
+  const { read, flow } = under('update:\n  flows/placing:\n    description: Twice.\n    steps:\n      - places\n      - reads\n      - {id: reads, does: api-calls-worker}\n      - confirms\n');
+  expect(read.problems.map((problem) => problem.rule)).toEqual(['step-twice']);
+  expect(flow?.steps.map((step) => [step.number, step.id, step.mark])).toEqual([
+    [1, 'places', 'same'],
+    [2, 'reads', 'same'],
+    [3, 'reads', 'same'],
+    [4, 'confirms', 'same'],
+  ]);
+  expect(flow?.count).toBe(4);
+  expect(flow?.marks.size).toBe(0);
+  expect(flow?.was).toEqual([{ key: 'description', today: 'How an order is placed.' }]);
 });

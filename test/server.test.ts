@@ -34,6 +34,7 @@ test('/api/model answers with the name, the records and the problems, read anew 
   expect(first.records.map((record) => record.id)).toEqual([
     'order-api',
     'orders-by-post',
+    'orders-on-paper-only',
     'api-writes-orders',
     'customer-orders',
     'a-new-store-is-postgresql',

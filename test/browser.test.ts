@@ -658,8 +658,8 @@ test.skipIf(!HAS_CHROME).concurrent(
         current: null,
         title: 'Changes',
         lit: 'Changes',
-        rows: ['Orders by post'],
-        links: ['/changes/orders-by-post'],
+        rows: ['Orders by post', 'Orders on paper only'],
+        links: ['/changes/orders-by-post', '/changes/orders-on-paper-only'],
       });
       await click(send, await centreOf(send, 'ul[aria-label="Changes"] a[href="/changes/orders-by-post"]'));
       const need = `{ sections: ${texts('main .section-label')}, prompt: ${texts('section[aria-label="Prompt"] .panel-text')}, given: ${texts('section[aria-label="Given"] .change-given > li')} }`;
@@ -722,10 +722,10 @@ test.skipIf(!HAS_CHROME).concurrent(
       }; })()`;
       expect(await waitFor(send, records)).toEqual({
         current: 'Records',
-        sections: ['Features', 'Flows', 'Software', 'Connections', 'Technologies'],
-        rows: ['Ordering Updated', 'Placing an order Updated', 'Taking a posted order Added', 'Order API Updated', 'Types in a posted order Added', 'Go Removed'],
+        sections: ['Features', 'Flows', 'Software', 'Connections', 'Technologies', 'Data'],
+        rows: ['Ordering Updated', 'Placing an order Updated', 'Taking a posted order Added', 'Order API Updated', 'Types in a posted order Added', 'Go Removed', 'Order details Updated'],
         // Updated is yellow on every page of a change.
-        tones: ['pill tone-caution', 'pill tone-caution', 'pill tone-success', 'pill tone-caution', 'pill tone-success', 'pill tone-danger'],
+        tones: ['pill tone-caution', 'pill tone-caution', 'pill tone-success', 'pill tone-caution', 'pill tone-success', 'pill tone-danger', 'pill tone-caution'],
         links: [
           '/changes/orders-by-post/records/features/ordering',
           '/changes/orders-by-post/records/flows/placing-an-order',
@@ -733,6 +733,7 @@ test.skipIf(!HAS_CHROME).concurrent(
           '/changes/orders-by-post/records/apps/order-api',
           '/changes/orders-by-post/records/connections/clerk-orders',
           '/changes/orders-by-post/records/technologies/go',
+          '/changes/orders-by-post/records/data/order-details',
         ],
       });
     }),
@@ -1000,3 +1001,45 @@ test.skipIf(!HAS_CHROME).concurrent(
     }),
   20_000,
 );
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME ? 'a flow that a change removes opens as it is today with its line and no colour, and the fields of a data record read as one list' : `skipped: there is no Chrome at ${CHROME}`,
+  () =>
+    inChrome(async (send, address) => {
+      // The third case: a flow the change removes. Its steps, its bar and its diagram are today's, and only the flow bears a mark.
+      await send('Page.navigate', { url: `${address}/changes/orders-on-paper-only/records/flows/placing-an-order` });
+      const removed = `location.pathname === '/changes/orders-on-paper-only/records/flows/placing-an-order' && document.title === 'Placing an order · seefore' && document.querySelector('.react-flow__node') !== null && {
+        back: ${hrefs('nav[aria-label="Breadcrumb"] a')},
+        mark: ${texts('.header-slot .pill')},
+        line: ${texts('.flow-bar-removed')}[0],
+        system: document.querySelector('.flow-bar-removed a')?.getAttribute('href'),
+        rows: [...document.querySelectorAll('.desktop-sidebar [data-row="step"]')].map((row) => [row.querySelector('.flow-step-number').textContent, row.dataset.step, row.dataset.mark ?? null]),
+        marked: document.querySelectorAll('.react-flow__node [data-mark], .react-flow__edge[class*="mark-"]').length,
+        legend: document.querySelector('[aria-label="Legend"]') !== null,
+      }`;
+      expect(await waitFor(send, removed)).toEqual({
+        back: ['/changes/orders-on-paper-only', '/changes/orders-on-paper-only/records'],
+        mark: ['Removed'],
+        line: 'Removed by this change. This is the flow as it is today. Open it in the system',
+        system: '/flows/placing-an-order',
+        rows: [
+          ['1', 'places', null],
+          ['2', 'saves', null],
+          ['3', 'confirms', null],
+        ],
+        marked: 0,
+        legend: false,
+      });
+      // The fields of a data record, before and after: one list, a field that changes with today's words under it, one that comes, one that goes.
+      await send('Page.navigate', { url: `${address}/changes/orders-by-post/records/data/order-details` });
+      const fields = `location.pathname === '/changes/orders-by-post/records/data/order-details' && document.querySelector('.change-field') !== null && [...document.querySelectorAll('.change-field')].map((row) => [row.querySelector('.change-field-name').textContent, row.dataset.mark ?? null, row.querySelector('.flow-step-mark')?.textContent ?? null, row.querySelector('.change-field-text')?.textContent ?? null, row.querySelector('.change-field-today')?.textContent ?? null])`;
+      expect(await waitFor(send, fields)).toEqual([
+        ['items', 'updated', 'Updated', 'What is bought, how many of each, and at what price', 'Today: What is bought, and how many of each'],
+        // A field that goes stands where it stood, ahead of one that comes there.
+        ['address', 'removed', 'Removed', null, null],
+        ['sent by', 'added', 'Added', 'Online or by post', null],
+      ]);
+    }),
+  20_000,
+);
+

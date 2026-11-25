@@ -119,7 +119,7 @@ export function ChangeRecordPage() {
   const { touched, today, after } = found;
   // A flow opens as its own page, under the change, once the check has laid the change.
   const under = touched.folder === 'flows' ? changes.flow(id, touched.id) : undefined;
-  if (under !== undefined) return <FlowUnderPage key={path} change={change} changes={changes} under={under} label={label} system={addressOf(catalogue, 'flows', touched.id)} slots={slots} />;
+  if (under !== undefined) return <FlowUnderPage key={`${change.id}/${path}`} change={change} changes={changes} under={under} label={label} system={addressOf(catalogue, 'flows', touched.id)} slots={slots} />;
   const shown = touched.verb === 'remove' ? today : after;
   const read = change.laid ? readUnder(changes, answer.records, id, touched.verb === 'remove' ? 'today' : 'after') : undefined;
   if (shown === undefined || read === undefined) return <EmptyState title={<Unlaid />}>{back}</EmptyState>;

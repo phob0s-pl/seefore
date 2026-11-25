@@ -25,6 +25,12 @@ update:
     description: Customers buy things online or by post, and the clerk sees what they bought.
   apps/order-api:
     technology: null
+  data/order-details:
+    fields:
+      - name: items
+        description: What is bought, how many of each, and at what price
+      - name: sent by
+        description: Online or by post
   flows/placing-an-order:
     starts: A customer places an order online
     steps:

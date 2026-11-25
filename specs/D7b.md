@@ -39,24 +39,27 @@ own page (C4): its steps in the sidebar, the bar of the current step, its diagra
 | Stays | As today |
 
 - **The numbers are those the flow would have.** "Reply to 5" and "4 of 12" count that flow.
-- **A step that goes can be picked**, like any row: the bar says "Was step 1" and shows it
-  as it is today, and the diagram lights its line. The arrow keys walk every row.
+- **A step that goes is read as it is today**: today's name and ends of its connection, also
+  where the change rewrites that connection. It can be picked, like any row: the bar says
+  "Was step 1", and the diagram lights the line it walks today. It names the steps it came
+  after by the numbers they bear in the list, and opens no strand of its own.
 - **No meaning lies in the colour alone**: each coloured row has its word.
 
 ## The bar of the current step
 
-An updated step is shown as it would be. A line whose key changed has a yellow rule, and
-under it, quiet, "Today: " and today's words; "Today: nothing" where the key is new; "Taken
-out" over today's words where it goes. With no step picked, the flow's own keys that change
-read the same way.
+An updated step is shown as it would be. A line that reads otherwise than today has a yellow
+rule, and under it, quiet, "Today: " and today's words; "Today: nothing" where the key is
+new; "Taken out" over today's words where it goes. Who acts on what and the title are
+always there: each bears the rule when its words differ, whichever key made them differ.
+With no step picked, the flow's own keys that change read the same way.
 
 ## The diagram of an updated flow
 
 | Part | What it is |
 | --- | --- |
-| What is drawn | Every box, frame and line the flow passes today and every one it would pass, as one picture, laid out once. A step picked lays nothing out anew |
+| What is drawn | Every box, frame and line the flow passes today and every one it would pass, as one picture, laid out once. What only today's flow passes is drawn as it is today. A step picked lays nothing out anew |
 | Green, red | Green when only the flow as it would be passes it; red when only today's does. This comes before yellow |
-| Yellow | It is in both, and the change updates its record. A line of several connections is yellow when one of them differs while another stays |
+| Yellow | It is in both, and the change updates its record. A line of several connections is yellow when they do not all bear one mark: its panel says which comes, goes or changes |
 | On a box | The border keeps the colour of its kind. Inside: a band down the left side, a faint wash, and a round sign at the top right: +, − or ~ |
 | On a frame, a line | A frame's outline takes the colour, with the sign by its name. A line's stroke and head take it; a red line is dashed |
 | The current step | The outline and the brightness say it, as today. A coloured line keeps its colour and thickens |
@@ -87,8 +90,11 @@ description differs, and today's words under an updated one.
 
 ## Tests
 
-Eight of the model: the one list and its numbers; what makes a step updated; a step that
-only moves; the marks of boxes and lines; what a removed step lights; a flow added and one
-removed; no flow where the change names none; the fields of a data record. Four in the
-browser: the three cases open with their mark; the list's colours and a removed step
-picked; the diagram's marks and legend; a panel's sentence and where its button leads.
+Thirteen of the model: the one list and its numbers; what makes a step updated; a step
+that only moves; the marks of boxes and lines; a step put on another connection; what a
+removed step lights; a reply that goes; a step that goes on a connection the change
+rewrites; strands and conditions in the one list; an id twice; a flow added and one removed;
+no flow where the change names none; the fields of a data record. Five in the browser: an
+updated and an added flow open with their mark; the list's colours and a removed step
+picked; the diagram's marks and legend; a panel's sentence and its button; a removed flow,
+and the fields of a data record.
