@@ -21,13 +21,13 @@ const check = (kind: string, record: unknown): boolean => {
 };
 
 test('the schemas of a feature, a flow and data pass a good record and refuse a bad one', () => {
-  expect(check('features', { name: 'Sales reports', touches: ['promoter', 'loader'], owner: 'sales' })).toBe(true);
+  expect(check('features', { name: 'Sales reports', touches: ['person-promoter', 'app-loader'], owner: 'owner-sales' })).toBe(true);
   expect(check('features', { name: 'Sales reports', touches: [] })).toBe(false);
-  const step = { id: 'gets', reply: 'asks', name: 'The account', data: ['account-details'], after: ['asks'] };
-  expect(check('flows', { name: 'Paying', starts: 'A fan pays', ends: 'The fan has paid', feature: 'payments', steps: [{ id: 'asks', does: 'app-asks' }, step] })).toBe(true);
+  const step = { id: 'gets', reply: 'asks', name: 'The account', data: ['data-account-details'], after: ['asks'] };
+  expect(check('flows', { name: 'Paying', starts: 'A fan pays', ends: 'The fan has paid', feature: 'feature-payments', steps: [{ id: 'asks', does: 'app-asks' }, step] })).toBe(true);
   expect(check('flows', { name: 'Paying', starts: 'A fan pays', ends: 'The fan has paid', steps: [step] })).toBe(false);
-  expect(check('flows', { name: 'Paying', starts: 'A fan pays', ends: 'The fan has paid', feature: 'payments', steps: [{ ...step, colour: 'red' }] })).toBe(false);
-  expect(check('flows', { name: 'Paying', starts: 'x'.repeat(201), ends: 'Paid', feature: 'payments', steps: [step] })).toBe(false);
+  expect(check('flows', { name: 'Paying', starts: 'A fan pays', ends: 'The fan has paid', feature: 'feature-payments', steps: [{ ...step, colour: 'red' }] })).toBe(false);
+  expect(check('flows', { name: 'Paying', starts: 'x'.repeat(201), ends: 'Paid', feature: 'feature-payments', steps: [step] })).toBe(false);
   expect(check('data', { name: 'Account details', fields: [{ name: 'balance', description: 'What is owed' }] })).toBe(true);
   expect(check('data', { name: 'Account details', fields: [{ description: 'What is owed' }] })).toBe(false);
 });
@@ -47,7 +47,7 @@ test('the schema of a change’s input passes a prompt with a name, with or with
 
 test('the schema of a line of context passes one of must and prefer with a why, and refuses the rest; a system has no such key', () => {
   expect(check('context', { must: 'No order is lost.', why: 'The promise.' })).toBe(true);
-  expect(check('context', { prefer: 'One service.', why: 'One team.', system: 'shop' })).toBe(true);
+  expect(check('context', { prefer: 'One service.', why: 'One team.', system: 'system-shop' })).toBe(true);
   expect(check('context', { must: 'No order is lost.', prefer: 'One service.', why: 'Both.' })).toBe(false);
   expect(check('context', { why: 'Neither.' })).toBe(false);
   expect(check('context', { must: 'No order is lost.' })).toBe(false);
@@ -59,48 +59,48 @@ test('the schema of a line of context passes one of must and prefer with a why, 
 test('the schema of a change holds its body: a record under add by the schema of its folder, the keys under update by its kind, and paths', () => {
   const input = { name: 'Settlement from a ledger', prompt: 'Move Settlement onto a ledger.' };
   const body = {
-    add: { 'apps/ledger': { name: 'Ledger', in: 'boxwick', kind: 'service' }, 'context/payouts-to-the-cent': { must: 'A payout is worked out to the cent.', why: 'Finance asks for it.' } },
-    update: { 'apps/settlement': { description: 'Reads the ledger.', owner: null }, 'flows/paying-promoters': { steps: ['works-out', { id: 'reads-entries', does: 'settlement-reads-ledger' }] } },
-    remove: ['connections/settlement-reads-orders'],
+    add: { 'apps/app-ledger': { name: 'Ledger', in: 'system-boxwick', kind: 'service' }, 'context/context-payouts-to-the-cent': { must: 'A payout is worked out to the cent.', why: 'Finance asks for it.' } },
+    update: { 'apps/app-settlement': { description: 'Reads the ledger.', owner: null }, 'flows/flow-paying-promoters': { steps: ['works-out', { id: 'reads-entries', does: 'connection-settlement-reads-ledger' }] } },
+    remove: ['connections/connection-settlement-reads-orders'],
   };
   expect(check('changes', { ...input, ...body })).toBe(true);
   expect(check('changes', input)).toBe(true);
   // A record under `add` is held whole; a key under `update` is one of its kind; a path is a folder and an id.
-  expect(check('changes', { ...input, add: { 'apps/ledger': { in: 'boxwick' } } })).toBe(false);
-  expect(check('changes', { ...input, add: { 'apps/ledger': { name: 'Ledger', in: 'boxwick', colour: 'red' } } })).toBe(false);
-  expect(check('changes', { ...input, update: { 'apps/settlement': { colour: 'red' } } })).toBe(false);
-  expect(check('changes', { ...input, update: { 'apps/settlement': {} } })).toBe(false);
+  expect(check('changes', { ...input, add: { 'apps/app-ledger': { in: 'system-boxwick' } } })).toBe(false);
+  expect(check('changes', { ...input, add: { 'apps/app-ledger': { name: 'Ledger', in: 'system-boxwick', colour: 'red' } } })).toBe(false);
+  expect(check('changes', { ...input, update: { 'apps/app-settlement': { colour: 'red' } } })).toBe(false);
+  expect(check('changes', { ...input, update: { 'apps/app-settlement': {} } })).toBe(false);
   expect(check('changes', { ...input, add: { ledger: { name: 'Ledger', in: 'boxwick' } } })).toBe(false);
   expect(check('changes', { ...input, add: { 'changes/other': { name: 'Other', prompt: 'Another.' } } })).toBe(false);
   expect(check('changes', { ...input, remove: ['apps/Ledger'] })).toBe(false);
-  expect(check('changes', { ...input, remove: ['apps/ledger', 'apps/ledger'] })).toBe(false);
+  expect(check('changes', { ...input, remove: ['apps/app-ledger', 'apps/app-ledger'] })).toBe(false);
 });
 
 test('a schema passes a good record and refuses a bad one', () => {
-  expect(check('apps', { name: 'Order API', in: 'shop', kind: 'service', technology: ['go'] })).toBe(true);
-  expect(check('connections', { from: 'a', to: 'b', access: 'read' })).toBe(true);
+  expect(check('apps', { name: 'Order API', in: 'system-shop', kind: 'service', technology: ['tech-go'] })).toBe(true);
+  expect(check('connections', { from: 'app-a', to: 'app-b', access: 'read' })).toBe(true);
   expect(check('people', { name: 'Alice' })).toBe(true);
-  expect(check('apps', { name: 'API', in: 'shop', colour: 'red' })).toBe(false);
-  expect(check('apps', { name: 'API', in: 'shop', kind: 'wizard' })).toBe(false);
+  expect(check('apps', { name: 'API', in: 'system-shop', colour: 'red' })).toBe(false);
+  expect(check('apps', { name: 'API', in: 'system-shop', kind: 'wizard' })).toBe(false);
   expect(check('apps', { name: 'API' })).toBe(false);
 });
 
 test('the schema of a rule passes a good rule of each form and refuses a bad one', () => {
-  expect(check('rules', { name: 'Only the API writes orders', each: { to: { id: 'orders' }, access: ['write', 'read-write'] }, must: { from: { id: 'api' } }, debt: ['worker-writes-orders'] })).toBe(true);
+  expect(check('rules', { name: 'Only the API writes orders', each: { to: { id: 'store-orders' }, access: ['write', 'read-write'] }, must: { from: { id: 'app-api' } }, debt: ['connection-worker-writes-orders'] })).toBe(true);
   expect(check('rules', { name: 'No browser reaches outside', never: { from: { kind: 'browser' }, to: { external: true, not: { owner: 'none' } }, via: 'any' } })).toBe(true);
-  expect(check('rules', { name: 'People pass the gateway', each: { way: { from: { kind: 'people' }, to: { kind: ['database', 'files'] } } }, must: { through: { within: 'gateway' } } })).toBe(true);
+  expect(check('rules', { name: 'People pass the gateway', each: { way: { from: { kind: 'people' }, to: { kind: ['database', 'files'] } } }, must: { through: { within: 'infra-gateway' } } })).toBe(true);
   expect(check('rules', { name: 'Red', never: { from: { not: { colour: 'red' } } } })).toBe(false);
   expect(check('rules', { name: 'Wizards', never: { kind: 'wizard' } })).toBe(false);
-  expect(check('rules', { name: 'From a to anywhere', never: { way: { from: { id: 'a' } } } })).toBe(true);
+  expect(check('rules', { name: 'From a to anywhere', never: { way: { from: { id: 'app-a' } } } })).toBe(true);
   expect(check('rules', { name: 'No end', never: { way: {} } })).toBe(false);
-  expect(check('rules', { name: 'A way deep in a selector', never: { from: { way: { to: { id: 'a' } } } } })).toBe(false);
-  expect(check('rules', { name: 'Through in never', never: { through: { id: 'a' } } })).toBe(false);
-  expect(check('rules', { never: { id: 'a' } })).toBe(false);
+  expect(check('rules', { name: 'A way deep in a selector', never: { from: { way: { to: { id: 'app-a' } } } } })).toBe(false);
+  expect(check('rules', { name: 'Through in never', never: { through: { id: 'app-a' } } })).toBe(false);
+  expect(check('rules', { never: { id: 'app-a' } })).toBe(false);
   expect(check('rules', { name: 'Empty', never: {} })).toBe(false);
 });
 
 test('the schema of a review passes one with points and one with none, and refuses a point with a wrong word, address or id', () => {
-  const point = { name: 'An order is typed in and never saved', severity: 'block', about: ['flows/placing-an-order#types-in', 'stores/orders', 'need'], finding: 'No step writes the store.' };
+  const point = { name: 'An order is typed in and never saved', severity: 'block', about: ['flows/flow-placing-an-order#types-in', 'stores/store-orders', 'need'], finding: 'No step writes the store.' };
   expect(check('reviews', { read: '4c1d9a70' })).toBe(true);
   expect(check('reviews', { read: '4c1d9a70', points: { 'never-saved': { ...point, recommendation: 'The flow says where.', status: 'reopened', comments: ['It says so now.', 'A description says it.'] } } })).toBe(true);
   expect(check('reviews', { points: { 'never-saved': point } })).toBe(false);
