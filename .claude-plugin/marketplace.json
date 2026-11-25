@@ -1,0 +1,14 @@
+{
+  "name": "seefore",
+  "owner": { "name": "seefore" },
+  "metadata": {
+    "description": "The plugin of seefore, from a checkout of its repository."
+  },
+  "plugins": [
+    {
+      "name": "seefore",
+      "source": "./plugin",
+      "description": "Five skills that write and keep a seefore model of a system's architecture: its parts, its journeys, its context, and the changes to it with their reviews."
+    }
+  ]
+}

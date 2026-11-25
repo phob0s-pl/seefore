@@ -3,3 +3,4 @@ in: system-shop
 kind: service
 technology:
   - tech-go
+source: [code/order-api/]

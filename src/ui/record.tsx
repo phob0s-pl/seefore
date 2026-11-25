@@ -290,6 +290,7 @@ function Technologies({ record, catalogue }: { record: ModelRecord; catalogue: C
  */
 function Thing({ record, catalogue, travel, lines }: { record: ModelRecord; catalogue: Catalogue; travel: Travel; lines: SystemContext | undefined }) {
   const owner = catalogue.owner(record.id);
+  const sources = Array.isArray(record.fields.source) ? record.fields.source.filter((path): path is string => typeof path === 'string') : [];
   const facts: Fact[] = [
     { label: 'Type', value: typeWords(record.kind, record.fields.kind) },
     ...(typeof record.fields.in === 'string' ? [{ label: 'In', value: <RecordLink catalogue={catalogue} id={record.fields.in} /> }] : []),
@@ -308,6 +309,8 @@ function Thing({ record, catalogue, travel, lines }: { record: ModelRecord; cata
       : []),
     ...onlyFact(catalogue, record),
     ...(lines !== undefined ? [{ label: 'Context', value: <Link to="/context">{countWords(lines.lines)}</Link> }] : []),
+    // Where its code lies: paths as written, counted from the folder that holds the model's folder.
+    ...(sources.length > 0 ? [{ label: 'Source', value: <span className="record-source">{sources.join(', ')}</span> }] : []),
   ];
   return (
     <>

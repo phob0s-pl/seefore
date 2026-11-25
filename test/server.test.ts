@@ -24,8 +24,11 @@ async function serve(folder: string, page = SMALL): Promise<string> {
 }
 
 test('/api/model answers with the name, the records and the problems, read anew at each request', async () => {
-  const folder = await mkdtemp(join(tmpdir(), 'seefore-'));
+  // The model is copied with the code beside it: a path of `source` is counted from the folder that holds the model's folder.
+  const base = await mkdtemp(join(tmpdir(), 'seefore-'));
+  const folder = join(base, 'shop');
   await cp(SMALL, folder, { recursive: true });
+  await cp(join(SMALL, '..', 'code'), join(base, 'code'), { recursive: true });
   const address = await serve(folder);
   const get = async (): Promise<ModelAnswer> => (await fetch(`${address}/api/model`)).json() as Promise<ModelAnswer>;
 

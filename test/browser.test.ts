@@ -218,13 +218,16 @@ test.skipIf(!HAS_CHROME).concurrent(
         return link !== undefined;
       })()`;
       expect(await waitFor(send, click('Order API'))).toBe(true);
-      const page = `location.pathname === '/models/app-order-api' && {
+      const page = `location.pathname === '/models/app-order-api' && document.querySelector('.facts') !== null && {
         shop: [...document.querySelectorAll('a[href="/models/system-shop"]')].some((link) => link.textContent === 'Shop'),
         sections: [...document.querySelectorAll('.section-label')].map((label) => label.textContent),
+        facts: [...document.querySelectorAll('.facts > div')].map((row) => row.innerText.replace(/\\s+/g, ' ').trim()),
       }`;
-      const read = (await waitFor(send, page)) as { shop: boolean; sections: string[] } | false;
+      const read = (await waitFor(send, page)) as { shop: boolean; sections: string[]; facts: string[] } | false;
       expect(read && read.shop).toBe(true);
       expect(read && read.sections).toContain('Is acted on by');
+      // A part that names where its code lies shows the path among its facts, as written.
+      expect(read && read.facts).toEqual(['Type App · service', 'In Shop', 'Source code/order-api/']);
       expect(await waitFor(send, click('Shop'))).toBe(true);
       expect(await waitFor(send, `location.pathname === '/models/system-shop' && document.title`)).toBe('Shop · seefore');
       // The system's page has its context as one fact, its count; the lines are read on the page of the context.
