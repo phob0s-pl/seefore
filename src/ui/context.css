@@ -1,0 +1,28 @@
+/* Context: the list of each system's lines, and the page of one line. No colour on a line: on
+   these pages colour says a state, and a line has none. The rows, the panels, the tiles and
+   the pills are ui.css's. */
+
+/* A sentence is read whole in its row, on as many lines as it takes. */
+.context-list .row-name-ellipsis,
+.context-list .row-cell {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* The page of a line: its sentence is its title, smaller than a name, at a width to read. */
+.context-title > .large-title {
+  flex: 0 1 auto;
+  max-width: 860px;
+  font-size: 24px;
+  line-height: 32px;
+  letter-spacing: -0.02em;
+  text-wrap: pretty;
+}
+
+/* The system of a line, and "External" beside an outside one. */
+.context-system {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}

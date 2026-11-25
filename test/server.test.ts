@@ -31,7 +31,23 @@ test('/api/model answers with the name, the records and the problems, read anew 
 
   const first = await get();
   expect(first).toMatchObject({ folder: basename(folder), name: 'Shop', problems: [] });
-  expect(first.records.map((record) => record.id)).toEqual(['order-api', 'api-writes-orders', 'customer-orders', 'order-details', 'ordering', 'placing-an-order', 'clerk', 'customer', 'orders-written-by-the-api', 'orders', 'shop', 'go']);
+  expect(first.records.map((record) => record.id)).toEqual([
+    'order-api',
+    'api-writes-orders',
+    'customer-orders',
+    'a-new-store-is-postgresql',
+    'features-go-into-the-order-api',
+    'orders-are-never-lost',
+    'order-details',
+    'ordering',
+    'placing-an-order',
+    'clerk',
+    'customer',
+    'orders-written-by-the-api',
+    'orders',
+    'shop',
+    'go',
+  ]);
   expect(first.rulings).toMatchObject([{ rule: 'orders-written-by-the-api', state: 'holds', chosen: ['api-writes-orders'] }]);
   await writeFile(join(folder, 'people', 'bob.yaml'), 'name: Bob\ncolour: red\n');
   expect((await get()).problems.map((problem) => problem.rule)).toEqual(['key-unknown']);

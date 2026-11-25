@@ -1,7 +1,8 @@
 /**
- * The thirteen kinds of record, a folder each, with its words. The first twelve are the
- * architecture, in the order the page shows them; the thirteenth, `rules`, holds the rules of a
- * team's own, which choose among the other twelve. The page shows no rule.
+ * The fourteen kinds of record, a folder each, with its words. The first twelve are the
+ * architecture, in the order the page shows them. The thirteenth, `rules`, holds the rules of a
+ * team's own, which choose among the twelve. The fourteenth, `context`, holds what is true of
+ * the whole model, or of one system, and that no record of the architecture says.
  */
 export const KINDS = [
   { folder: 'people', one: 'person', many: 'people' },
@@ -17,7 +18,11 @@ export const KINDS = [
   { folder: 'flows', one: 'flow', many: 'flows' },
   { folder: 'data', one: 'data record', many: 'data records' },
   { folder: 'rules', one: 'rule', many: 'rules' },
+  { folder: 'context', one: 'line of context', many: 'lines of context' },
 ] as const;
+
+/** Whether a folder holds records of the architecture: every folder but `rules` and `context`. */
+export const ofArchitecture = (kind: string): boolean => kind !== 'rules' && kind !== 'context';
 
 /** What each folder's records are called in a message, with their article. */
 export const NOUNS: Record<string, string> = {
@@ -34,6 +39,7 @@ export const NOUNS: Record<string, string> = {
   flows: 'a flow',
   data: 'data',
   rules: 'a rule',
+  context: 'a line of context',
 };
 
 /** What one record of each folder is called where the record itself is meant: "`colour` is not a key of a data record". */

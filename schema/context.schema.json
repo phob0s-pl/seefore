@@ -1,0 +1,50 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "must": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 300,
+      "pattern": "^\\S(?:[^\\n\\r\\u0085\\u2028\\u2029]*\\S)?$",
+      "description": "A line that binds: a design that goes against it is wrong. A sentence or two on one line, 1 to 300 characters. Never with `prefer`."
+    },
+    "prefer": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 300,
+      "pattern": "^\\S(?:[^\\n\\r\\u0085\\u2028\\u2029]*\\S)?$",
+      "description": "A line that decides between designs that are allowed. It may yield, and its `why` says when. A sentence or two on one line, 1 to 300 characters. Never with `must`."
+    },
+    "why": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 300,
+      "pattern": "^\\S(?:[^\\n\\r\\u0085\\u2028\\u2029]*\\S)?$",
+      "description": "Its reason, and where it comes from: a contract, a decision, a person who can vouch. One line of 1 to 300 characters."
+    },
+    "system": {
+      "type": "string",
+      "maxLength": 80,
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+      "description": "The one system the line is about: the id of a record in `systems/`, yours or an outside one. Left out, the line is about the whole model."
+    }
+  },
+  "required": [
+    "why"
+  ],
+  "additionalProperties": false,
+  "description": "A line of context: what is true of the whole model, or of the one system it names, and that no record of the architecture says. `must` or `prefer`, and `why`. A limit with its reason, never a description.",
+  "oneOf": [
+    {
+      "required": [
+        "must"
+      ]
+    },
+    {
+      "required": [
+        "prefer"
+      ]
+    }
+  ]
+}

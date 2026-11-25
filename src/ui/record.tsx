@@ -3,6 +3,8 @@ import { ArrowDown } from 'lucide-react';
 import { Link, useOutletContext, useParams } from 'react-router-dom';
 import type { ModelRecord } from '../model/answer.ts';
 import type { Catalogue } from '../model/catalogue.ts';
+import { countWords } from '../model/context.ts';
+import type { Context, SystemContext } from '../model/context.ts';
 import type { RuleOf, Rulebook } from '../model/rulebook.ts';
 import type { StepAt, Travel, Way } from '../model/travel.ts';
 import { KIND, typeWords } from './kinds.tsx';
@@ -20,26 +22,28 @@ export const ids = (value: unknown): string[] => (Array.isArray(value) ? value.f
 /** The page of one record, at `<list>/<id>`; an id that names no record of that list's kinds is missing. */
 export function RecordPage({ tab }: { tab: (typeof TABS)[number] }) {
   const { id = '' } = useParams();
-  const { catalogue, travel, rulebook } = useOutletContext<ModelState>();
+  const { catalogue, travel, rulebook, context } = useOutletContext<ModelState>();
   const found = catalogue?.record(id);
   const record = found !== undefined && catalogue?.address(found) === `${tab.to}/${id}` ? found : undefined;
   const name = record?.fields.name;
   useTitle(typeof name === 'string' ? name : record?.kind === 'connections' ? 'No name' : (record?.id ?? 'Models'));
   return (
     <ModelsPage>
-      {(catalogue) => (record !== undefined && travel !== undefined ? <RecordBody record={record} catalogue={catalogue} travel={travel} rulebook={rulebook} /> : <Missing list={tab} />)}
+      {(catalogue) =>
+        record !== undefined && travel !== undefined ? <RecordBody record={record} catalogue={catalogue} travel={travel} rulebook={rulebook} context={context} /> : <Missing list={tab} />
+      }
     </ModelsPage>
   );
 }
 
 /** A record's page: its name with the tile of its kind and its marks, its description, then what its kind shows. */
-function RecordBody({ record, catalogue, travel, rulebook }: { record: ModelRecord; catalogue: Catalogue; travel: Travel; rulebook: Rulebook | undefined }) {
+function RecordBody({ record, catalogue, travel, rulebook, context }: { record: ModelRecord; catalogue: Catalogue; travel: Travel; rulebook: Rulebook | undefined; context: Context | undefined }) {
   const { kind, fields } = record;
   const body =
     kind === 'people' ? (
       <Person record={record} catalogue={catalogue} travel={travel} />
     ) : KIND[kind] !== undefined ? (
-      <Thing record={record} catalogue={catalogue} travel={travel} />
+      <Thing record={record} catalogue={catalogue} travel={travel} lines={context?.system(record.id)} />
     ) : kind === 'connections' ? (
       <Connection record={record} catalogue={catalogue} travel={travel} />
     ) : kind === 'technologies' ? (
@@ -247,36 +251,11 @@ function Technologies({ record, catalogue }: { record: ModelRecord; catalogue: C
   return <Related title="Technologies" rows={rows} />;
 }
 
-/** One line of a system's context, as its record holds it. */
-type ContextLine = { must?: unknown; prefer?: unknown; why?: unknown };
-
 /**
- * The Context section of a system: each line with whether it binds ("Must") or may yield
- * ("Prefer"), the sentence, and under it its reason. Left out when the system has no context.
+ * A system, an app, a store, a component or a piece of infrastructure. A system with lines of
+ * context has the fact Context, its count, which leads to the list of the context.
  */
-function SystemContext({ record }: { record: ModelRecord }) {
-  const lines = Array.isArray(record.fields.context) ? (record.fields.context as ContextLine[]) : [];
-  const rows = lines.flatMap((line, index) => {
-    const says = typeof line.must === 'string' ? line.must : typeof line.prefer === 'string' ? line.prefer : undefined;
-    if (says === undefined) return [];
-    return [
-      {
-        key: `${index}`,
-        cells: [
-          <Pill>{typeof line.must === 'string' ? 'Must' : 'Prefer'}</Pill>,
-          <div className="context-line">
-            <span className="context-says">{says}</span>
-            {typeof line.why === 'string' && <span className="context-why">{line.why}</span>}
-          </div>,
-        ],
-      },
-    ];
-  });
-  return <Related title="Context" rows={rows} widths={['96px', 'auto']} />;
-}
-
-/** A system, an app, a store, a component or a piece of infrastructure. */
-function Thing({ record, catalogue, travel }: { record: ModelRecord; catalogue: Catalogue; travel: Travel }) {
+function Thing({ record, catalogue, travel, lines }: { record: ModelRecord; catalogue: Catalogue; travel: Travel; lines: SystemContext | undefined }) {
   const owner = catalogue.owner(record.id);
   const facts: Fact[] = [
     { label: 'Type', value: typeWords(record.kind, record.fields.kind) },
@@ -295,11 +274,11 @@ function Thing({ record, catalogue, travel }: { record: ModelRecord; catalogue: 
         ]
       : []),
     ...onlyFact(catalogue, record),
+    ...(lines !== undefined ? [{ label: 'Context', value: <Link to="/context">{countWords(lines.lines)}</Link> }] : []),
   ];
   return (
     <>
       <Facts rows={facts} />
-      {record.kind === 'systems' && <SystemContext record={record} />}
       <Related title="Inside it" rows={thingRows(catalogue, catalogue.inside(record.id))} widths={['auto', '200px']} />
       <Technologies record={record} catalogue={catalogue} />
       <Acts record={record} catalogue={catalogue} />

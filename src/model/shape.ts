@@ -172,7 +172,7 @@ function written(path: Path): string | undefined {
 const ORDINALS = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth', 'tenth'];
 
 /** The lists whose items are mappings, and what one item is called. */
-const ITEMS: Record<string, string> = { steps: 'step', fields: 'field', context: 'line of `context`' };
+const ITEMS: Record<string, string> = { steps: 'step', fields: 'field' };
 
 /** An item of a list in words: "the third step", or "step 12" past the tenth. */
 function nth(index: number, item: string): string {

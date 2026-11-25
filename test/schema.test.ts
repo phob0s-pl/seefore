@@ -39,15 +39,15 @@ test('the schema of a change’s input passes a prompt with a name, with or with
   expect(check('changes', { ...input, given: Array.from({ length: 11 }, (_, at) => `Answer ${at}`) })).toBe(false);
 });
 
-test('the schema of a system passes lines of context with one of must and prefer and a why, and refuses the rest', () => {
-  const system = { name: 'Shop' };
-  expect(check('systems', { ...system, context: [{ must: 'No order is lost.', why: 'The promise.' }, { prefer: 'One service.', why: 'One team.' }] })).toBe(true);
-  expect(check('systems', { ...system, context: [{ must: 'No order is lost.', prefer: 'One service.', why: 'Both.' }] })).toBe(false);
-  expect(check('systems', { ...system, context: [{ why: 'Neither.' }] })).toBe(false);
-  expect(check('systems', { ...system, context: [{ must: 'No order is lost.' }] })).toBe(false);
-  expect(check('systems', { ...system, context: [{ must: 'No order is lost.', why: 'The promise.', source: 'A contract' }] })).toBe(false);
-  expect(check('systems', { ...system, context: [] })).toBe(false);
-  expect(check('systems', { ...system, context: Array.from({ length: 13 }, (_, at) => ({ must: `Sentence ${at}.`, why: 'A reason.' })) })).toBe(false);
+test('the schema of a line of context passes one of must and prefer with a why, and refuses the rest; a system has no such key', () => {
+  expect(check('context', { must: 'No order is lost.', why: 'The promise.' })).toBe(true);
+  expect(check('context', { prefer: 'One service.', why: 'One team.', system: 'shop' })).toBe(true);
+  expect(check('context', { must: 'No order is lost.', prefer: 'One service.', why: 'Both.' })).toBe(false);
+  expect(check('context', { why: 'Neither.' })).toBe(false);
+  expect(check('context', { must: 'No order is lost.' })).toBe(false);
+  expect(check('context', { must: 'No order is lost.', why: 'The promise.', name: 'A name' })).toBe(false);
+  expect(check('context', { must: 'No order is lost.', why: 'The promise.', system: 'Not an id' })).toBe(false);
+  expect(check('systems', { name: 'Shop', context: [{ must: 'No order is lost.', why: 'The promise.' }] })).toBe(false);
 });
 
 test('a schema passes a good record and refuses a bad one', () => {

@@ -1,8 +1,9 @@
 # JSON Schemas
 
-One schema for each of the thirteen kinds of record (`apps.schema.json`, `people.schema.json`
-and so on, with `features.schema.json`, `flows.schema.json`, `data.schema.json` and
-`rules.schema.json`, the rules of a team's own), one for the marker (`seefore.schema.json`) and
+One schema for each of the fourteen kinds of record (`apps.schema.json`, `people.schema.json`
+and so on, with `features.schema.json`, `flows.schema.json`, `data.schema.json`,
+`rules.schema.json`, the rules of a team's own, and `context.schema.json`, the lines of
+context), one for the marker (`seefore.schema.json`) and
 one for the input of a change (`changes.schema.json`), which no folder is read with yet. They
 are written from the `zod` shapes in
 `src/model/records.ts` by `npm run schema`; a test fails if they differ. Edit the shapes, not these.

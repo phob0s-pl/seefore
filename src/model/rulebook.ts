@@ -196,6 +196,7 @@ export function rulebookOf({ records, rulings, problems }: Pick<ModelRead, 'reco
   const rules = new Map<string, ModelRecord>();
   const others = new Map<string, ModelRecord>();
   for (const record of records) {
+    if (record.kind === 'context') continue;
     const into = record.kind === 'rules' ? rules : others;
     if (!into.has(record.id)) into.set(record.id, record);
   }

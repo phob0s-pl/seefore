@@ -124,10 +124,10 @@ export const PersonSchema = z
   .strictObject({ name: Name, only: Only.optional(), description: Description.optional() })
   .meta({ description: 'A kind of person who uses the software, runs it or takes part in an exchange. A role, not an individual.' });
 
-/** The most lines of a system's `context`: a dozen sentences, not a handbook. */
+/** The most lines of context that are global, and the most about one system: a dozen sentences, not a handbook. Over it the check warns. */
 export const CONTEXT_MAX = 12;
 
-/** One text of a line of `context`: a sentence or two on one line, 1 to 300 characters. `key` is named in the messages. */
+/** One text of a line of context: a sentence or two on one line, 1 to 300 characters. `key` is named in the messages. */
 function contextText(key: string) {
   return z
     .string()
@@ -145,57 +145,40 @@ function contextText(key: string) {
 }
 
 /**
- * One line of a system's context: a sentence that binds (`must`) or one that decides between
- * designs that are allowed (`prefer`), and its reason. The key says how strong the line is.
+ * A line of context, a record of its own: a sentence that binds (`must`) or one that decides
+ * between designs that are allowed (`prefer`), and its reason. It is about the whole model, or
+ * about the one system it names. The key says how strong the line is; the sentence is its name.
  */
-const ContextLineSchema = z
+export const ContextSchema = z
   .strictObject({
     must: contextText('must').meta({ description: 'A line that binds: a design that goes against it is wrong. A sentence or two on one line, 1 to 300 characters. Never with `prefer`.' }).optional(),
     prefer: contextText('prefer')
       .meta({ description: 'A line that decides between designs that are allowed. It may yield, and its `why` says when. A sentence or two on one line, 1 to 300 characters. Never with `must`.' })
       .optional(),
     why: contextText('why').meta({ description: 'Its reason, and where it comes from: a contract, a decision, a person who can vouch. One line of 1 to 300 characters.' }),
+    system: id('system', 'holds the id of a record in `systems/`.')
+      .meta({ description: 'The one system the line is about: the id of a record in `systems/`, yours or an outside one. Left out, the line is about the whole model.' })
+      .optional(),
   })
-  .meta({
-    description: 'One line of context: `must` or `prefer`, and `why`.',
-    oneOf: [{ required: ['must'] }, { required: ['prefer'] }],
-  });
-
-const Context = z
-  .array(ContextLineSchema)
-  .min(1)
-  .max(CONTEXT_MAX)
-  .superRefine((lines, context) => {
-    const first = new Map<string, number>();
-    lines.forEach((line, index) => {
-      const which = capital(label(['context', index]));
-      if (line.must !== undefined && line.prefer !== undefined) {
-        context.addIssue({ code: 'custom', path: [index, 'prefer'], params: { code: 'context-line' }, message: `${which} has both \`must\` and \`prefer\`. A line binds or it decides between designs: keep one of the two, or write two lines.` });
-        return;
-      }
-      const says = line.must ?? line.prefer;
-      if (says === undefined) {
-        context.addIssue({ code: 'custom', path: [index], params: { code: 'context-line' }, message: `${which} has neither \`must\` nor \`prefer\`. Write the sentence under \`must\` if it binds, under \`prefer\` if it may yield.` });
-        return;
-      }
-      const before = first.get(says);
-      if (before === undefined) first.set(says, index);
-      else
-        context.addIssue({
-          code: 'custom',
-          path: [index],
-          params: { code: 'context-line' },
-          message: `${capital(label(['context', index]))} says the same as ${label(['context', before])}. Keep one.`,
-        });
-    });
+  .superRefine((line, context) => {
+    if (line.must !== undefined && line.prefer !== undefined)
+      context.addIssue({
+        code: 'custom',
+        path: ['prefer'],
+        params: { code: 'context-line' },
+        message: 'This line has both `must` and `prefer`. A line binds or it decides between designs: keep one of the two, or write two files.',
+      });
+    else if (line.must === undefined && line.prefer === undefined)
+      context.addIssue({ code: 'custom', path: [], params: { code: 'context-line' }, message: 'This line has neither `must` nor `prefer`. Write the sentence under `must` if it binds, under `prefer` if it may yield.' });
   })
   .meta({
     description:
-      'What is true of this system and its team and that no other record holds: 1 to 12 lines, each `must` or `prefer` with its `why`. A limit with its reason, never a description. Left out when there is nothing to say.',
+      'A line of context: what is true of the whole model, or of the one system it names, and that no record of the architecture says. `must` or `prefer`, and `why`. A limit with its reason, never a description.',
+    oneOf: [{ required: ['must'] }, { required: ['prefer'] }],
   });
 
 export const SystemSchema = z
-  .strictObject({ name: Name, only: Only.optional(), description: Description.optional(), external: External.optional(), owner: Owner.optional(), context: Context.optional() })
+  .strictObject({ name: Name, only: Only.optional(), description: Description.optional(), external: External.optional(), owner: Owner.optional() })
   .meta({ description: 'Software its users see as one whole, ours or somebody else\'s. Nothing is above it. C4 calls it a software system.' });
 
 export const AppSchema = z
@@ -587,6 +570,7 @@ export const SHAPES = {
   flows: FlowSchema,
   data: DataSchema,
   rules: RuleSchema,
+  context: ContextSchema,
 } as const;
 
 /** The marker `seefore.yaml`: the format, and the name of the model. */
