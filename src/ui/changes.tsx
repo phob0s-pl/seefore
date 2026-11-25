@@ -73,13 +73,12 @@ export function ChangePage({ section }: { section: Section }) {
 }
 
 /**
- * The sidebar of a change, in place of the main one: the label "Sections", an entry for each
+ * The sidebar of a change, in place of the main one: an entry for each
  * section with its number in a circle, and at the foot the way back to the list.
  */
 export function ChangeSidebar({ change }: { change: Change }) {
   return (
     <nav aria-label="Change sections" className="sidebar-navigation change-navigation">
-      <span className="change-sections-label">Sections</span>
       {SECTIONS.map((section, index) => (
         <NavLink key={section.section} to={`/changes/${change.id}${section.path}`} end className="nav-link change-section-link">
           <span className="change-section-number">{index + 1}</span>

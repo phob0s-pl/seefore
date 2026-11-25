@@ -664,7 +664,7 @@ test.skipIf(!HAS_CHROME).concurrent(
       await click(send, await centreOf(send, 'ul[aria-label="Changes"] a[href="/changes/orders-by-post"]'));
       expect(await waitFor(send, `(() => { const read = ${onChange('/changes/orders-by-post')}; return read && read.change !== null && { ...read, page: document.querySelector('main').innerText.trim() }; })()`)).toEqual({
         main: null,
-        change: 'Sections 1 Need 2 Records All changes',
+        change: '1 Need 2 Records All changes',
         current: 'Need',
         page: 'Orders by post',
       });

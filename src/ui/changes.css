@@ -7,15 +7,8 @@
   overflow-wrap: anywhere;
 }
 
-/* The sidebar of a change: a quiet label, its sections, and the way back at its foot. */
-.change-sections-label {
-  padding: 16px 12px 6px;
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 14px;
-  color: var(--text-tertiary);
-}
-/* An entry's circle stands where an icon stands in the main entries. */
+/* The sidebar of a change: its sections, and the way back at its foot. An entry's circle stands
+   where an icon stands in the main entries. */
 .change-navigation .nav-link {
   min-height: 34px;
   padding-left: 9px;
