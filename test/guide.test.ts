@@ -52,7 +52,8 @@ test('a folder: what a record is, the word of its ids, each key needed or not wi
     "apps/app-order-api.yaml, in the model's folder, which is the one that holds `seefore.yaml`.",
   ]);
   expect(apps).toContain('\nKeys:\n  name (needed)\n    What people call it: one line of 1 to 100 characters, with no space at either end.\n  in (needed)\n');
-  expect(apps).toContain('\n  source (may be left out)\n    Where its code lies: one to three paths of a file or a folder,');
+  // A part's keys end at `owner`: none says where its code lies.
+  expect(apps).toContain('\n  owner (may be left out)\n    The id of the owner, a record in owners/, who answers for the part. Left out, it is that of what\n    the part is in.\n\nExample, apps/app-order-api.yaml:\n');
   expect(apps).toContain(`\nExample, apps/app-order-api.yaml:\n${EXAMPLES.apps?.text.split('\n').map((line) => `  ${line}`).join('\n')}`);
   // A nested shape shows its keys under the key that holds it.
   expect(text('data')).toContain('\n  fields (may be left out)\n    What it holds: a list of at least one field, each with a `name` that stands once.\n    One thing a data record holds');
@@ -66,7 +67,26 @@ test('a folder: what a record is, the word of its ids, each key needed or not wi
   expect(rules).toContain('Its keys are those of `way` in `never`, above.');
 });
 
-test('every key of every shape is in the guide of its folder, and every line of a guide has at most 100 characters', () => {
+test("the guide of flows says that a flow tells one way, that its id says the task as a doing, and how a step is named", () => {
+  // As read, with the lines joined.
+  const words = (topic: string) => text(topic).replace(/\s+/g, ' ');
+  const flows = words('flows');
+  expect(flows).toContain(
+    'and what is true at the end. It has one start and tells one way. Another way to the same outcome is a flow of its own; where the ways part for a few steps only, each of those steps has `only`, and the step at which they meet names the last step of each in `after`. ',
+  );
+  expect(flows).toContain('Its id begins with `flow-` and says the task as a doing, as `flow-placing-an-order`: the name of its file, flows/flow-placing-an-order.yaml.');
+  expect(flows).toContain(
+    'name (may be left out) What happens, verb first: one line of 1 to 100 characters. Left out only where the name of the connection or of the flow in `does` says this step and no more. A reply always has one: it says what comes back. A step that happens once for each of several things says "each", as in `Weighs each tea of the order`. Where copies of one app take turns, it says which copy acts. ',
+  );
+  // A step's keys end at `data`, and the step of the example names no file.
+  expect(flows).toContain('data (may be left out) The ids of the data this step passes, records in data/: on a step on a connection, or on a reply. A list with no id twice. Example, flows/flow-placing-an-order.yaml:');
+  expect(flows).toContain('name: Checks the order and works out the price - id: confirms');
+  // Every other folder's id says what it is.
+  for (const folder of FOLDERS.filter((each) => each !== 'flows' && each !== 'changes' && each !== 'reviews')) expect(words(folder), folder).toContain(' and says what it is, as ');
+});
+
+test('every key of every shape is in the guide of its folder, no guide speaks of `source`, and every line of a guide has at most 100 characters', () => {
+  for (const topic of TOPICS) expect(text(topic), topic).not.toMatch(/`source`|^\s*source:/m);
   for (const folder of FOLDERS) {
     const guide = text(folder);
     for (const key of keysOf(folder)) expect(guide, `${folder}: ${key}`).toMatch(new RegExp(`^ +${key} \\((needed|may be left out)\\)$`, 'm'));

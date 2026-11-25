@@ -226,8 +226,8 @@ test.skipIf(!HAS_CHROME).concurrent(
       const read = (await waitFor(send, page)) as { shop: boolean; sections: string[]; facts: string[] } | false;
       expect(read && read.shop).toBe(true);
       expect(read && read.sections).toContain('Is acted on by');
-      // A part that names where its code lies shows the path among its facts, as written.
-      expect(read && read.facts).toEqual(['Type App · service', 'In Shop', 'Source code/order-api/']);
+      // A part's facts are its type and what it is in, and no path of the code.
+      expect(read && read.facts).toEqual(['Type App · service', 'In Shop']);
       expect(await waitFor(send, click('Shop'))).toBe(true);
       expect(await waitFor(send, `location.pathname === '/models/system-shop' && document.title`)).toBe('Shop · seefore');
       // The system's page has its context as one fact, its count; the lines are read on the page of the context.

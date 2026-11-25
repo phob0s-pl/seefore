@@ -57,18 +57,6 @@
       "maxLength": 80,
       "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
       "description": "The id of the owner, a record in owners/, who answers for the part. Left out, it is that of what the part is in."
-    },
-    "source": {
-      "minItems": 1,
-      "maxItems": 3,
-      "type": "array",
-      "items": {
-        "type": "string",
-        "minLength": 1,
-        "maxLength": 300,
-        "pattern": "^(?!\\/)(?!.*(?:^|\\/)\\.\\.(?:\\/|$))[^*\\\\\\n\\r]*\\S$"
-      },
-      "description": "Where its code lies: one to three paths of a file or a folder, counted from the folder that holds the model's folder, written with `/`. A path with `..`, with `*` or with `/` at its start is an error, and the check warns when a path is not there. For a part built elsewhere, the file here that starts or pins it. Left out where nothing of it is at hand."
     }
   },
   "required": [

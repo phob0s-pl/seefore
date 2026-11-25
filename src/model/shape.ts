@@ -177,7 +177,7 @@ const itemOf = (path: Path): string => {
   return (typeof key === 'string' ? ITEMS[key] : undefined) ?? 'id';
 };
 
-const ITEMS: Record<string, string> = { steps: 'step', fields: 'field', source: 'path', comments: 'line', given: 'line', about: 'address' };
+const ITEMS: Record<string, string> = { steps: 'step', fields: 'field', comments: 'line', given: 'line', about: 'address' };
 
 /** An item of a list in words: "the third step", or "step 12" past the tenth. */
 function nth(index: number, item: string): string {

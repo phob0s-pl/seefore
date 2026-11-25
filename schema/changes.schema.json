@@ -118,8 +118,7 @@
               "description",
               "kind",
               "technology",
-              "owner",
-              "source"
+              "owner"
             ]
           }
         },
@@ -134,8 +133,7 @@
               "description",
               "kind",
               "technology",
-              "owner",
-              "source"
+              "owner"
             ]
           }
         },
@@ -149,8 +147,7 @@
               "only",
               "description",
               "technology",
-              "owner",
-              "source"
+              "owner"
             ]
           }
         },
@@ -167,8 +164,7 @@
               "name",
               "only",
               "description",
-              "technology",
-              "source"
+              "technology"
             ]
           }
         },
@@ -182,8 +178,7 @@
               "only",
               "description",
               "technology",
-              "owner",
-              "source"
+              "owner"
             ]
           }
         },

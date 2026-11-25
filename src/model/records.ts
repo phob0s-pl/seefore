@@ -120,43 +120,6 @@ const partTechnology = ids('Name a technology by the id of its record in `techno
     'What it is built with, or the format it keeps: ids of records in technologies/, a set. Never a protocol a part only speaks. When it is built with one of several, name them all and say in the description that one is chosen.',
 });
 
-/** The most paths of `source`. */
-export const SOURCE_MAX = 3;
-
-/** A path of the code: on one line, with `/`, no `..`, no `*`, no `\\`, and no `/` at its start. */
-const SOURCE_PATH = /^(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$))[^*\\\n\r]*\S$/;
-
-/** `source`, with the words that say what it holds on the kind of record that bears it. */
-const sourceOf = (holds: string, leftOut: string, paths = 'one to three paths of a file or a folder') =>
-  z
-  .array(
-    z
-      .string()
-      .min(1)
-      .max(NOTE_MAX)
-      .regex(SOURCE_PATH, { error: 'A path in `source` is a file or a folder of the code, written with `/`, with no `..`, no `*` and no `/` at its start.' }),
-  )
-  .min(1)
-  .max(SOURCE_MAX)
-  .superRefine((paths, context) => {
-    const seen = new Set<string>();
-    paths.forEach((path, index) => {
-      if (seen.has(path)) context.addIssue({ code: 'custom', path: [index], message: '`source` has the same path twice. Keep one.' });
-      seen.add(path);
-    });
-  })
-  .meta({
-    description: `${holds}: ${paths}, counted from the folder that holds the model's folder, written with \`/\`. A path with \`..\`, with \`*\` or with \`/\` at its start is an error, and the check warns when a path is not there${paths.endsWith('files') ? ' or is a folder' : ''}. ${leftOut}`,
-  });
-
-const Source = sourceOf('Where its code lies', 'For a part built elsewhere, the file here that starts or pins it. Left out where nothing of it is at hand.');
-const StoreSource = sourceOf('What defines or names it, such as its schema, its migrations or the config that holds its address', 'Left out where nothing of it is at hand.');
-const ConnectionSource = sourceOf(
-  'Where the code shows it, a file in which the code or config of `from` names `to`',
-  'When `from` has no code here, the route of `to` that takes its call; from a person, the entry point they use. Left out when nobody has looked.',
-  'the paths of one to three files',
-);
-
 const External = z.literal(true).meta({ description: '`true`: the people this model is kept for cannot change the system. Left out for a system of yours, and when nobody has said.' });
 
 const Kinds = (what: string, list: readonly string[]) => `${what}: ${list.join(', ')}.`;
@@ -247,7 +210,6 @@ export const AppSchema = z
       .optional(),
     technology: partTechnology.optional(),
     owner: Owner.optional(),
-    source: Source.optional(),
   })
   .meta({
     description:
@@ -265,7 +227,6 @@ export const StoreSchema = z
     kind: z.enum(STORE_KINDS).meta({ description: `${Kinds('What the store holds', STORE_KINDS)} A queue and a topic hold messages on their way; a bucket of objects is files.` }).optional(),
     technology: partTechnology.optional(),
     owner: Owner.optional(),
-    source: StoreSource.optional(),
   })
   .meta({
     description:
@@ -280,7 +241,6 @@ export const ComponentSchema = z
     description: Description.optional(),
     technology: partTechnology.optional(),
     owner: Owner.optional(),
-    source: Source.optional(),
   })
   .meta({ description: 'A responsibility inside one running app. It runs only as part of that app.' });
 
@@ -302,7 +262,6 @@ export const ConnectionSchema = z
     technology: ids('A phrase about how an exchange travels goes in the description.')
       .meta({ description: 'What the exchange is carried in, such as a protocol or a format: ids of records in technologies/, a set.' })
       .optional(),
-    source: ConnectionSource.optional(),
   })
   .meta({
     description:
@@ -319,7 +278,6 @@ export const InfrastructureSchema = z
     description: Description.optional(),
     technology: partTechnology.optional(),
     owner: Owner.optional(),
-    source: Source.optional(),
   })
   .meta({ description: 'A thing whose whole job is to pass exchanges on: a proxy, a gateway, a load balancer, a mail relay. Named in `via`.' });
 
@@ -354,13 +312,16 @@ const StepSchema = z
       .meta({ description: 'The id of a connection (one part acts on another), of a part (it happens there) or of a flow (it runs here, whole). Never with `reply`.' })
       .optional(),
     reply: id('reply', 'holds the id of an earlier step of this flow.')
-      .meta({ description: 'The id of an earlier step of this flow that names a connection: its answer travels back. Never with `does`.' })
+      .meta({ description: 'The id of an earlier step of this flow that names a connection, and not one that ends at a store: its answer travels back. An answer that comes back over several connections is a reply to each of their steps, the last first. Never with `does`.' })
       .optional(),
     after: ids('`after` holds the ids of earlier steps of this flow.')
-      .meta({ description: 'The ids of earlier steps this one comes after, where that is not the step above.' })
+      .meta({ description: 'The ids of earlier steps this one comes after, where that is not the step above. It comes after each of them that happens.' })
       .optional(),
     name: oneLine('name', NAME_MAX)
-      .meta({ description: 'What happens, verb first: one line of 1 to 100 characters. Left out where the name of the connection or of the flow in `does` says it.' })
+      .meta({
+        description:
+          'What happens, verb first: one line of 1 to 100 characters. Left out only where the name of the connection or of the flow in `does` says this step and no more. A reply always has one: it says what comes back. A step that happens once for each of several things says "each", as in `Weighs each tea of the order`. Where copies of one app take turns, it says which copy acts.',
+      })
       .optional(),
     only: Only.optional(),
     description: prose(NOTE_MAX).meta({ description: 'A sentence or two of 1 to 300 characters: a wait, a retry, a refusal.' }).optional(),
@@ -383,7 +344,10 @@ export const FlowSchema = z
       .min(1)
       .meta({ description: 'The steps in order, at least one, each a mapping with its own `id`.' }),
   })
-  .meta({ description: 'One path through the model, told for one outcome: what starts it, the acts in order, each on a record the model holds, and what is true at the end.' });
+  .meta({
+    description:
+      'One path through the model, told for one outcome: what starts it, the acts in order, each on a record the model holds, and what is true at the end. It has one start and tells one way. Another way to the same outcome is a flow of its own; where the ways part for a few steps only, each of those steps has `only`, and the step at which they meet names the last step of each in `after`.',
+  });
 
 const FieldSchema = z
   .strictObject({

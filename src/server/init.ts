@@ -42,7 +42,7 @@ export function claudeLines(folder: string): string[] {
     '## Architecture',
     `This system's architecture is a seefore model in \`${folder}\`: one YAML file a record.`,
     'Before you add, remove or join parts, run `seefore list` and read its context.',
-    'When code moves, offer `/seefore:model`. For a design, offer `/seefore:change`.',
+    'When the parts of the code change, offer `/seefore:model`. For a design, offer `/seefore:change`.',
     'After the model changes, `seefore check` must show no error.',
   ];
 }

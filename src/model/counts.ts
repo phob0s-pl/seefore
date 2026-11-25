@@ -70,7 +70,8 @@ export function countLine(count: Count): string | undefined {
     case 'step-unplaced':
       if (count.checked === null) return `Not counted until the errors are mended: ${LOOKS_FOR[count.rule]}.`;
       if (n === 0) return undefined;
-      return `${n} ${many ? 'steps' : 'step'} with neither \`does\` nor \`reply\`, in ${list([...new Set(count.found.map((item) => item.record ?? ''))])}.`;
+      // Each step by its address, `flow#step`, which the rule's own message begins with.
+      return `${n} ${many ? 'steps' : 'step'} with neither \`does\` nor \`reply\`: ${list(count.found.map((item) => /^`([^`]+)`/.exec(item.message)?.[1] ?? item.record ?? ''))}.`;
   }
   if (count.checked === null) return `Not counted until the errors are mended: ${count.says}`;
   return n > 0 ? `${n} found: ${count.says}` : undefined;
