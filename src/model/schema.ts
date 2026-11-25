@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ID } from './id.ts';
+import { ID, ID_MAX } from './id.ts';
 import { CHANGED_FOLDERS, KINDS } from './kinds.ts';
 import { MarkerSchema, SHAPES } from './records.ts';
 import { knownKeys } from './shape.ts';
@@ -34,6 +34,8 @@ export function schemas(): Record<string, string> {
   const write = (name: string, shape: z.ZodType): void => {
     const schema = z.toJSONSchema(shape, { target: 'draft-7', io: 'input' });
     if (name === 'changes') withBody(schema as never);
+    // A point's id is the key it stands under.
+    if (name === 'reviews') (schema as unknown as { properties: { points: Record<string, unknown> } }).properties.points.propertyNames = { pattern: ID.source, maxLength: ID_MAX };
     files[`${name}.schema.json`] = JSON.stringify(schema, null, 2) + '\n';
   };
   for (const { folder } of KINDS) write(folder, SHAPES[folder]);

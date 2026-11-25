@@ -1,0 +1,50 @@
+read: "4c1d9a70"
+points:
+  posted-order-not-saved:
+    name: A posted order is typed in and never saved
+    severity: block
+    about: [flows/placing-an-order#types-in, context/orders-are-never-lost, stores/orders]
+    finding: >-
+      The change takes the step `saves` out of `placing-an-order` and puts `types-in` in its
+      place. No step of that flow writes the store of orders any more, so an order that is
+      confirmed is kept nowhere.
+    recommendation: The flow says where an order is written before it is confirmed.
+    status: reopened
+    comments:
+      - The step that types the order in now says that the Order API keeps it.
+      - A description says it. No step walks `api-writes-orders`, so the flow still ends at the clerk.
+  no-way-to-confirm-by-post:
+    name: Nothing says how an order that came by post is confirmed
+    severity: block
+    about: [flows/placing-an-order#confirms, need]
+    finding: >-
+      The step `confirms` answers the customer by email, only when the customer gave an
+      address. A posted order has none, and the need says a posted order is placed as one
+      made online is.
+    recommendation: Ask the person how the customer of a posted order is told.
+    status: declined
+    comments:
+      - The clerk writes back by post. That is outside the shop, so the model does not say it.
+  go-still-in-use:
+    name: The Order API loses its technology and nothing is named in its place
+    severity: block
+    about: [apps/order-api, technologies/go]
+    finding: The change removes `technologies/go` and takes `technology` out of `order-api`.
+    recommendation: The Order API names what it is written in, or the technology stays.
+    status: fixed
+    comments:
+      - Go is kept on purpose out of the model. The need does not ask for it.
+  clerk-reads-nothing:
+    name: The clerk types an order in and cannot see it afterwards
+    severity: block
+    about: [connections/clerk-orders]
+    finding: The connection `clerk-orders` is the clerk's only one. The feature says the clerk sees what was bought.
+    recommendation: The model says by which connection the clerk sees an order.
+  sent-by-on-old-orders:
+    name: Orders kept before the change have no `sent by`
+    severity: note
+    about: [data/order-details]
+    finding: The field is new, and nothing says what it holds for an order that is there already.
+    status: closed
+    comments:
+      - The field's description now says that an order with none was made online.

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { ID, ID_MAX, idProblem } from './id.ts';
+import { CHANGED_FOLDERS } from './kinds.ts';
 import { capital, quote } from './problem.ts';
 import { label } from './shape.ts';
 
@@ -575,6 +576,84 @@ export const ChangeSchema = z
       'A change: its input (the prompt a person gave, what they answered when asked, and a name written last), and its body, the records it adds, updates and removes. With no body it is an input alone.',
   });
 
+/** How heavy a point of a review is: a block must be answered, and a note waits for nobody. */
+export const SEVERITIES = ['block', 'note'] as const;
+/** Where a point of a review stands, and so who is next: the corrector, the reviewer or the person. */
+export const STATUSES = ['open', 'fixed', 'declined', 'closed', 'reopened'] as const;
+/** The most characters of the finding of a point. */
+export const FINDING_MAX = 500;
+/** The most addresses a point is about. */
+export const ABOUT_MAX = 3;
+
+const ID_TEXT = ID.source.slice(1, -1);
+/** What a point is about: a record as `folder/id`, a step as `flows/<id>#<step>`, or the word `need`. */
+const ABOUT = new RegExp(`^(?:need|(?:${CHANGED_FOLDERS.join('|')})/${ID_TEXT}|flows/${ID_TEXT}#${ID_TEXT})$`);
+
+/** Text of 1 to `max` characters that is not blank, under the key `field`. */
+function said(field: string, max: number) {
+  return z
+    .string()
+    .min(1)
+    .max(max)
+    .regex(/\S/, { error: (issue) => `${subject(issue.path, field)} is empty.` });
+}
+
+/** One point of a review: one fault of the change, said by the reviewer, and what became of it. */
+const PointSchema = z.strictObject({
+  name: oneLine('name', NAME_MAX).meta({ description: 'The fault, as one sentence that reads alone: one line of 1 to 100 characters. No remedy and no word of severity.' }),
+  severity: z.enum(SEVERITIES).meta({ description: '`block`: the point must be answered before the reading can end. `note`: nobody must answer it, and nothing waits for it.' }),
+  about: z
+    .array(z.string().regex(ABOUT, { error: 'An address in `about` is a record as `folder/id`, a step of a flow as `flows/<id>#<step>`, or the word `need`.' }))
+    .min(1)
+    .max(ABOUT_MAX)
+    .superRefine((addresses, context) => {
+      const seen = new Set<string>();
+      addresses.forEach((address, index) => {
+        if (seen.has(address)) context.addIssue({ code: 'custom', path: [index], message: '`about` has the same address twice. Keep one.' });
+        seen.add(address);
+      });
+    })
+    .meta({ description: 'Where to look: one to three addresses, the nearest first, none twice. A record is `folder/id`, a step of a flow `flows/<id>#<step>`, the need the word `need`.' }),
+  finding: said('finding', FINDING_MAX).meta({ description: 'One fault, in 1 to 500 characters: what the records say, by their ids, and what goes wrong for whom. No remedy.' }),
+  recommendation: said('recommendation', NOTE_MAX)
+    .meta({ description: 'What must be true of the change for the point to close, in 1 to 300 characters; or a question for the person. An outcome, not a design. May be left out on a note.' })
+    .optional(),
+  status: z
+    .enum(STATUSES)
+    .meta({ description: 'Where the point stands. Left out, it is `open`. The corrector sets `fixed` or `declined`; the reviewer, at the second reading, `closed` or `reopened`.' })
+    .optional(),
+  comments: z
+    .array(oneLine('comment', NOTE_MAX))
+    .min(1)
+    .meta({ description: 'One line of 1 to 300 characters added at each change of status, by who changes it. No line is rewritten or taken out.' })
+    .optional(),
+});
+
+/**
+ * The review of a change: what a reader found in it. Its file is named by its change's id. With
+ * no points, the reader found nothing, which is a full answer.
+ */
+export const ReviewSchema = z
+  .strictObject({
+    read: z
+      .string()
+      .regex(/^[0-9a-f]{8}$/, { error: '`read` is the mark of the change as it was read: eight characters, each a digit or a letter from a to f. Put it in quotes.' })
+      .meta({ description: 'The mark of the change as it was read: eight characters, each a digit or a letter from a to f, in quotes.' }),
+    // A point's id is held here and not as the shape of the key, so that a point with a wrong id has its own faults told too.
+    points: z
+      .record(z.string(), PointSchema)
+      .refine((points) => Object.keys(points).length > 0, { error: '`points` is empty. Leave it out when nothing is found.' })
+      .superRefine((points, context) => {
+        for (const id of Object.keys(points)) {
+          const wrong = idProblem(id);
+          if (wrong !== undefined) context.addIssue({ code: 'custom', path: [id], message: `${wrong} A point's id is the key it stands under.` });
+        }
+      })
+      .meta({ description: 'The points, each under its id, the weightiest first. Left out when nothing is found.' })
+      .optional(),
+  })
+  .meta({ description: 'The review of a change, in a file named by the change\'s id: the mark of the change as it was read, and the points that the reader found.' });
+
 /** The shape of each kind's file, by folder. */
 export const SHAPES = {
   people: PersonSchema,
@@ -592,6 +671,7 @@ export const SHAPES = {
   rules: RuleSchema,
   context: ContextSchema,
   changes: ChangeSchema,
+  reviews: ReviewSchema,
 } as const;
 
 /** The marker `seefore.yaml`: the format, and the name of the model. */

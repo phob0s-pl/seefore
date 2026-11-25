@@ -98,3 +98,18 @@ test('the schema of a rule passes a good rule of each form and refuses a bad one
   expect(check('rules', { never: { id: 'a' } })).toBe(false);
   expect(check('rules', { name: 'Empty', never: {} })).toBe(false);
 });
+
+test('the schema of a review passes one with points and one with none, and refuses a point with a wrong word, address or id', () => {
+  const point = { name: 'An order is typed in and never saved', severity: 'block', about: ['flows/placing-an-order#types-in', 'stores/orders', 'need'], finding: 'No step writes the store.' };
+  expect(check('reviews', { read: '4c1d9a70' })).toBe(true);
+  expect(check('reviews', { read: '4c1d9a70', points: { 'never-saved': { ...point, recommendation: 'The flow says where.', status: 'reopened', comments: ['It says so now.', 'A description says it.'] } } })).toBe(true);
+  expect(check('reviews', { points: { 'never-saved': point } })).toBe(false);
+  expect(check('reviews', { read: '4C1D9A70' })).toBe(false);
+  expect(check('reviews', { read: '4c1d9a70', points: { 'Never saved': point } })).toBe(false);
+  expect(check('reviews', { read: '4c1d9a70', points: { 'never-saved': { ...point, severity: 'high' } } })).toBe(false);
+  expect(check('reviews', { read: '4c1d9a70', points: { 'never-saved': { ...point, status: 'done' } } })).toBe(false);
+  expect(check('reviews', { read: '4c1d9a70', points: { 'never-saved': { ...point, about: ['changes/orders-by-post'] } } })).toBe(false);
+  expect(check('reviews', { read: '4c1d9a70', points: { 'never-saved': { ...point, about: [] } } })).toBe(false);
+  expect(check('reviews', { read: '4c1d9a70', points: { 'never-saved': { ...point, who: 'A reviewer' } } })).toBe(false);
+});
+
