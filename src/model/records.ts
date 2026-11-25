@@ -146,7 +146,7 @@ const sourceOf = (holds: string, leftOut: string, paths = 'one to three paths of
     });
   })
   .meta({
-    description: `${holds}: ${paths}, counted from the folder that holds the model's folder, written with \`/\`. A path with \`..\`, with \`*\` or with \`/\` at its start is an error, and the check warns when a path is not there. ${leftOut}`,
+    description: `${holds}: ${paths}, counted from the folder that holds the model's folder, written with \`/\`. A path with \`..\`, with \`*\` or with \`/\` at its start is an error, and the check warns when a path is not there${paths.endsWith('files') ? ' or is a folder' : ''}. ${leftOut}`,
   });
 
 const Source = sourceOf('Where its code lies', 'For a part built elsewhere, the file here that starts or pins it. Left out where nothing of it is at hand.');
@@ -258,7 +258,7 @@ export const StoreSchema = z
   .strictObject({
     name: Name,
     in: id('in', 'holds the id of the system it is part of, a record in `systems/`, or of the app that keeps it, a record in `apps/`.').meta({
-      description: 'The id of the system the store is part of, a record in systems/, or of the one app that keeps it, a record in apps/: the app, when no other app reads or writes the store.',
+      description: 'The id of the system the store is part of, a record in systems/, or of the one app that keeps it, a record in apps/: the app, when no other app reads or writes the store. One that reaches it through that app does not count.',
     }),
     only: Only.optional(),
     description: Description.optional(),

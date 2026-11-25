@@ -13,7 +13,7 @@
       "type": "string",
       "maxLength": 80,
       "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
-      "description": "The id of the system the store is part of, a record in systems/, or of the one app that keeps it, a record in apps/: the app, when no other app reads or writes the store."
+      "description": "The id of the system the store is part of, a record in systems/, or of the one app that keeps it, a record in apps/: the app, when no other app reads or writes the store. One that reaches it through that app does not count."
     },
     "only": {
       "type": "string",

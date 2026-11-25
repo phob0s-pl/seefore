@@ -65,7 +65,7 @@ work as "With several agents" says below.
    command that writes them is refused. Write in this order, so that each names only what is
    already there: systems, technologies, owners, people, apps, stores, components,
    infrastructure, connections.
-   - The system is what its users see as one; a system outside it bears `external: true`.
+   - The system is what its users see as one; only another maker's system is `external: true`.
    - A connection's id is `connection-`, who acts, what it does, on what.
    - A person is a kind of user that an entry point shows: who opens the pages, runs the
      command or calls the API. Write the few there are. An owner is written only when a
@@ -78,9 +78,9 @@ work as "With several agents" says below.
 7. End with a short message:
    - what you wrote, as counts by folder;
    - what you took where the code left a choice, at most five lines;
-   - what you did not find, such as who owns a part, and each line of an agent you left out;
+   - what you did not find, such as who owns a part; each line of an agent you left out, and why;
    - **which folders you did not open**; where they are many and the tree holds thousands
-     of files, that `--parallel-agents=4` reads more of it, for about twice the cost;
+     of files, that `--parallel-agents=4` reads more of it, for two to three times the cost;
    - "Look at the diagram with `seefore --server`. Next: `/seefore:flows <a journey>`."
 
 ## With several agents
