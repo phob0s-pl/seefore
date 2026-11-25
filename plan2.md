@@ -112,4 +112,4 @@ process is in `research/stage-15-22/`, out of Git.
 | E1 | Rules of a team's own | A team writes what must hold in `rules/`: nothing like this, or each of these is like that. `seefore check` judges each from the model alone | Fable defines, Opus builds |
 | E2 | Rules on the page | The rules on the page: each with its state, what it looks at and what breaks it | Opus |
 | E3 | The context of a system | A system's record holds up to twelve lines of context, each `must` or `prefer` with its `why`. The check holds their form and the system's page shows them | The main session |
-| E4 | The context on a page of its own | An entry "Context" in the sidebar: one page with each system's lines in two columns, what binds and what it prefers, each with its reason | Opus |
+| E4 | The context on pages of its own | An entry "Context" in the sidebar: a list of each system with its lines, as the list of features is, and a page for each line with its reason | Opus, then the main session |

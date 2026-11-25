@@ -4,7 +4,7 @@ import { Link, useOutletContext, useParams } from 'react-router-dom';
 import type { ModelRecord } from '../model/answer.ts';
 import type { Catalogue } from '../model/catalogue.ts';
 import { countWords } from '../model/context.ts';
-import type { Band, Context } from '../model/context.ts';
+import type { Context, SystemContext } from '../model/context.ts';
 import type { RuleOf, Rulebook } from '../model/rulebook.ts';
 import type { StepAt, Travel, Way } from '../model/travel.ts';
 import { KIND, typeWords } from './kinds.tsx';
@@ -43,7 +43,7 @@ function RecordBody({ record, catalogue, travel, rulebook, context }: { record: 
     kind === 'people' ? (
       <Person record={record} catalogue={catalogue} travel={travel} />
     ) : KIND[kind] !== undefined ? (
-      <Thing record={record} catalogue={catalogue} travel={travel} band={context?.band(record.id)} />
+      <Thing record={record} catalogue={catalogue} travel={travel} lines={context?.system(record.id)} />
     ) : kind === 'connections' ? (
       <Connection record={record} catalogue={catalogue} travel={travel} />
     ) : kind === 'technologies' ? (
@@ -253,9 +253,9 @@ function Technologies({ record, catalogue }: { record: ModelRecord; catalogue: C
 
 /**
  * A system, an app, a store, a component or a piece of infrastructure. A system with lines of
- * context has the fact Context, its count, which leads to its band on the page of the context.
+ * context has the fact Context, its count, which leads to the list of the context.
  */
-function Thing({ record, catalogue, travel, band }: { record: ModelRecord; catalogue: Catalogue; travel: Travel; band: Band | undefined }) {
+function Thing({ record, catalogue, travel, lines }: { record: ModelRecord; catalogue: Catalogue; travel: Travel; lines: SystemContext | undefined }) {
   const owner = catalogue.owner(record.id);
   const facts: Fact[] = [
     { label: 'Type', value: typeWords(record.kind, record.fields.kind) },
@@ -274,7 +274,7 @@ function Thing({ record, catalogue, travel, band }: { record: ModelRecord; catal
         ]
       : []),
     ...onlyFact(catalogue, record),
-    ...(band !== undefined ? [{ label: 'Context', value: <Link to={`/context#${band.id}`}>{countWords(band)}</Link> }] : []),
+    ...(lines !== undefined ? [{ label: 'Context', value: <Link to="/context">{countWords(lines)}</Link> }] : []),
   ];
   return (
     <>

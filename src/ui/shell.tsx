@@ -139,7 +139,9 @@ export function Shell() {
   const reading = flowId !== undefined && (state.catalogue === undefined ? state.failed === undefined : state.catalogue.record(flowId)?.kind === 'flows');
   // The page of a rule puts its breadcrumb in the top bar too, and keeps the navigation.
   const onRule = useMatch('/rules/:id') !== null;
-  const crumbed = reading || onRule;
+  // So does the page of a line of context.
+  const onLine = useMatch('/context/:system/:place') !== null;
+  const crumbed = reading || onRule || onLine;
   const [steps, setSteps] = useState<HTMLElement | null>(null);
   const [crumbs, setCrumbs] = useState<HTMLElement | null>(null);
   const handed = useMemo((): ModelState => (crumbed ? { ...state, slots: { steps: reading ? steps : null, crumbs } } : state), [state, crumbed, reading, steps, crumbs]);

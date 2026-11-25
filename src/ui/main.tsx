@@ -17,7 +17,7 @@ import './flow.css';
 import './rules.css';
 import './context.css';
 import { Architecture } from './architecture.tsx';
-import { ContextPage } from './context.tsx';
+import { ContextLinePage, ContextList } from './context.tsx';
 import { FlowPage } from './flow.tsx';
 import { FeaturePage, FeaturesList } from './features.tsx';
 import { ActorsList, ConnectionsList, DataList, OwnersList, SoftwareList, TABS, TechnologiesList } from './models.tsx';
@@ -35,7 +35,8 @@ if (root !== null) {
         <Routes>
           <Route element={<Shell />}>
             <Route index element={<Architecture />} />
-            <Route path="context" element={<ContextPage />} />
+            <Route path="context" element={<ContextList />} />
+            <Route path="context/:system/:place" element={<ContextLinePage />} />
             <Route path="features" element={<FeaturesList />} />
             <Route path="features/:id" element={<FeaturePage />} />
             <Route path="flows" element={<Navigate to="/features" replace />} />

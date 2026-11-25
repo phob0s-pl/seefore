@@ -547,67 +547,70 @@ test.skipIf(!HAS_CHROME).concurrent(
 );
 
 test.skipIf(!HAS_CHROME).concurrent(
-  HAS_CHROME ? 'the entry Context opens its page, and a must stands under Must with its reason under it' : `skipped: there is no Chrome at ${CHROME}`,
+  HAS_CHROME ? 'the entry Context opens the list of each system with its lines, and a line opens its page with its reason' : `skipped: there is no Chrome at ${CHROME}`,
   () =>
     inChrome(async (send, address) => {
       await send('Page.navigate', { url: `${address}/` });
       await click(send, await centreOf(send, 'nav[aria-label="Main navigation"] a[href="/context"]'));
-      const view = `location.pathname === '/context' && document.title === 'Context · seefore' && document.querySelector('#shop li') !== null && {
+      const list = `location.pathname === '/context' && document.title === 'Context · seefore' && document.querySelector('.context-list .row') !== null && {
         lit: document.querySelector('nav[aria-label="Main navigation"] a.active')?.textContent,
-        bands: [...document.querySelectorAll('.context-band')].map((band) => band.id),
-        names: document.querySelector('.context-index') !== null,
-        row: document.querySelector('#shop .context-band-row').innerText.replace(/\\s+/g, ' ').trim(),
-        columns: [...document.querySelectorAll('#shop .context-column')].map((column) => [column.querySelector('h3').textContent, ...[...column.querySelectorAll('li')].map((line) => line.innerText.replace(/\\s+/g, ' ').trim())]),
-        under: [...document.querySelectorAll('#shop li')].every((line) => line.children[1].getBoundingClientRect().top >= line.children[0].getBoundingClientRect().bottom),
-        side: (([must, prefer]) => must.right < prefer.left && must.top === prefer.top)([...document.querySelectorAll('#shop .context-column')].map((column) => column.getBoundingClientRect())),
+        rows: ${texts('.context-list .row')},
+        links: [...document.querySelectorAll('.context-list .row a')].map((link) => link.getAttribute('href')),
       }`;
-      expect(await waitFor(send, view)).toEqual({
+      // The system, with its count, then its lines, the one that binds first.
+      expect(await waitFor(send, list)).toEqual({
         lit: 'Context',
-        bands: ['shop'],
-        names: false,
-        row: 'Shop',
-        columns: [
-          ['Must', 'An order is never lost once the customer has been told it is placed. It is what the shop promises its customers.'],
-          ['Prefer', 'A new feature goes into the Order API. One team runs it. It yields where another team must own the feature.'],
-        ],
-        under: true,
-        side: true,
+        rows: ['Shop 1 must · 1 prefer', 'An order is never lost once the customer has been told it is placed. Must', 'A new feature goes into the Order API. Prefer'],
+        links: ['/models/shop', '/context/shop/1', '/context/shop/2'],
+      });
+      await click(send, await centreOf(send, '.context-list a[href="/context/shop/1"]'));
+      const page = `location.pathname === '/context/shop/1' && document.querySelector('.context-title') !== null && {
+        lit: document.querySelector('nav[aria-label="Main navigation"] a.active')?.textContent,
+        window: document.title,
+        crumbs: ${texts('nav[aria-label="Breadcrumb"]')}[0],
+        title: document.querySelector('.context-title h1').textContent,
+        marks: ${texts('.context-title .pill')},
+        why: ${texts('section[aria-label="Why"] .panel')},
+        facts: ${texts('.facts > div')},
+        others: ${texts('.context-list .row')},
+      }`;
+      expect(await waitFor(send, page)).toEqual({
+        lit: 'Context',
+        window: 'An order is never lost once the customer has been told it is placed. · seefore',
+        crumbs: 'Context / An order is never lost once the customer has been told it is placed.',
+        title: 'An order is never lost once the customer has been told it is placed.',
+        marks: ['Must'],
+        why: ['It is what the shop promises its customers.'],
+        facts: ['Kind Must. A design that goes against it is wrong.', 'System Shop'],
+        others: ['A new feature goes into the Order API. Prefer'],
       });
     }),
   20_000,
 );
 
 test.skipIf(!HAS_CHROME).concurrent(
-  HAS_CHROME ? "a system's name on the page of the context opens its page, and the fact Context there leads back to its band" : `skipped: there is no Chrome at ${CHROME}`,
-  async () => {
-    // A copy of the shop with two systems of its own more, before it by name, and one outside after it: the shop's band starts below the window.
-    const folder = await mkdtemp(join(tmpdir(), 'seefore-shop-'));
-    const lines = (name: string) => `name: ${name}\ncontext:\n${[1, 2, 3, 4].map((n) => `  - must: Line ${n} of ${name}.\n    why: The reason of line ${n}.\n`).join('')}`;
-    try {
-      await cp(SHOP, folder, { recursive: true });
-      await writeFile(join(folder, 'systems', 'archive.yaml'), lines('Archive'));
-      await writeFile(join(folder, 'systems', 'billing.yaml'), lines('Billing'));
-      await writeFile(join(folder, 'systems', 'post.yaml'), `external: true\n${lines('Post')}`);
-      await inChrome(async (send, address) => {
-        await send('Page.navigate', { url: `${address}/context` });
-        // The names under the title lead to each band; the shop's is brought into view.
-        expect(await waitFor(send, `document.querySelector('.context-index') !== null && ${texts('.context-index')}[0]`)).toBe('Archive · Billing · Shop · Post');
-        const inView = `location.pathname + location.hash === '/context#shop' && document.getElementById('shop') !== null && (() => {
-          const box = document.getElementById('shop').getBoundingClientRect();
-          return scrollY > 0 && box.top >= 0 && box.top < 120;
-        })()`;
-        await click(send, await centreOf(send, '.context-index a[href="/context#shop"]'));
-        expect(await waitFor(send, inView)).toBe(true);
-        await click(send, await centreOf(send, '#shop a[href="/models/shop"]'));
-        const fact = `location.pathname === '/models/shop' && document.title === 'Shop · seefore' && [...document.querySelectorAll('.facts > div')].find((row) => row.querySelector('dt').textContent === 'Context')`;
-        expect(await waitFor(send, `(() => { const row = ${fact}; return row && [row.querySelector('dd').textContent, row.querySelector('a')?.getAttribute('href')]; })()`)).toEqual(['1 must · 1 prefer', '/context#shop']);
-        // The fact leads back to the band, which the page brings into view once it is drawn.
-        await click(send, await centreOf(send, '.facts a[href="/context#shop"]'));
-        expect(await waitFor(send, inView)).toBe(true);
-      }, folder);
-    } finally {
-      await rm(folder, { recursive: true, force: true });
-    }
-  },
+  HAS_CHROME ? "a line's page leads to the system's other lines, back to the list and to its system, whose fact Context leads back" : `skipped: there is no Chrome at ${CHROME}`,
+  () =>
+    inChrome(async (send, address) => {
+      await send('Page.navigate', { url: `${address}/context/shop/2` });
+      // The page of a line, once it shows the sentence: the address changes before the page is drawn anew.
+      const at = (path: string, sentence: string) => `location.pathname === ${JSON.stringify(path)} && document.querySelector('.context-title h1')?.textContent === ${JSON.stringify(sentence)}`;
+      expect(await waitFor(send, at('/context/shop/2', 'A new feature goes into the Order API.'))).toBe(true);
+      expect(await waitFor(send, `${texts('.context-title .pill')}[0]`)).toBe('Prefer');
+      // The other line of the system, then the way back in the top bar.
+      await click(send, await centreOf(send, '.context-list a[href="/context/shop/1"]'));
+      expect(await waitFor(send, at('/context/shop/1', 'An order is never lost once the customer has been told it is placed.'))).toBe(true);
+      await click(send, await centreOf(send, 'nav[aria-label="Breadcrumb"] a[href="/context"]'));
+      expect(await waitFor(send, `location.pathname === '/context' && document.querySelector('main h1')?.textContent === 'Context' && document.querySelectorAll('.context-list .row').length`)).toBe(3);
+      // The system's row opens the system, and its fact Context leads back to the list.
+      await click(send, await centreOf(send, '.context-list a[href="/models/shop"]'));
+      const fact = `location.pathname === '/models/shop' && document.title === 'Shop · seefore' && [...document.querySelectorAll('.facts > div')].find((row) => row.querySelector('dt').textContent === 'Context')`;
+      expect(await waitFor(send, `(() => { const row = ${fact}; return row && [row.querySelector('dd').textContent, row.querySelector('a')?.getAttribute('href')]; })()`)).toEqual(['1 must · 1 prefer', '/context']);
+      await click(send, await centreOf(send, '.facts a[href="/context"]'));
+      expect(await waitFor(send, `location.pathname === '/context' && document.querySelector('main h1')?.textContent === 'Context' && document.querySelectorAll('.context-list .row').length`)).toBe(3);
+      // A place with no line, and a system with none, are missing.
+      await send('Page.navigate', { url: `${address}/context/shop/9` });
+      expect(await waitFor(send, `document.querySelector('.empty-state') !== null && ${texts('.empty-state')}[0]`)).toBe('No such record. Back to Context');
+    }),
   20_000,
 );

@@ -1,118 +1,153 @@
-import { Fragment, useEffect } from 'react';
-import { Link, useLocation, useOutletContext } from 'react-router-dom';
-import type { Band, ContextLine } from '../model/context.ts';
-import { KindTile } from './models.tsx';
+import { Lock, Scale } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+import { Fragment } from 'react';
+import type { ReactNode } from 'react';
+import { createPortal } from 'react-dom';
+import { Link, useOutletContext, useParams } from 'react-router-dom';
+import type { Catalogue } from '../model/catalogue.ts';
+import { countWords } from '../model/context.ts';
+import type { Context, ContextKind, ContextLine, SystemContext } from '../model/context.ts';
+import { KindTile, Missing, RecordLink } from './models.tsx';
 import type { ModelState } from './shell.tsx';
-import { EmptyState, LargeTitle, Panel, Pill, useTitle } from './ui.tsx';
+import { EmptyState, Facts, GridRow, IconTile, LargeTitle, Panel, Pill, RowList, Section, SectionStack, TextPanel, useTitle } from './ui.tsx';
 
-/** What each kind of line means, beside its word over its column. */
-const KINDS = [
-  { key: 'must', word: 'Must', means: 'A design that goes against one of these is wrong.' },
-  { key: 'prefer', word: 'Prefer', means: 'Each decides between allowed designs, and may yield.' },
-] as const;
+/** A line and, at its right, its kind. */
+const COLS = 'minmax(0, 1fr) 150px';
 
-/** The id an address names after `#`, or none. */
-function idInHash(hash: string): string {
-  try {
-    return decodeURIComponent(hash.slice(1));
-  } catch {
-    return '';
-  }
+const LIST = { to: '/context', title: 'Context' };
+
+/** Each kind of line: its word, what it means, and the icon that leads its rows. */
+const KINDS: Record<ContextKind, { word: string; means: string; icon: LucideIcon }> = {
+  must: { word: 'Must', means: 'A design that goes against it is wrong.', icon: Lock },
+  prefer: { word: 'Prefer', means: 'It decides between designs that are allowed, and may yield.', icon: Scale },
+};
+
+/** What a page of the context shows while the model is read, or why it cannot be. */
+function useModel(): { context?: Context; catalogue?: Catalogue; crumbs?: HTMLElement | null; line?: ReactNode } {
+  const { context, catalogue, failed, slots } = useOutletContext<ModelState>();
+  if (failed !== undefined) return { line: <p className="page-line failed">{failed}</p> };
+  if (context === undefined || catalogue === undefined) return { line: <p className="page-line">Reading…</p> };
+  return { context, catalogue, crumbs: slots?.crumbs ?? null };
+}
+
+/** A line as a row of a list: its sentence, and its kind at the right. It leads to the line's page. */
+function LineRow({ system, line, depth }: { system: SystemContext; line: ContextLine; depth?: number }) {
+  const kind = KINDS[line.kind];
+  return <GridRow to={`/context/${system.id}/${line.place}`} cols={COLS} tile={<IconTile icon={kind.icon} size="sm" />} name={line.sentence} cells={[<Pill>{kind.word}</Pill>]} depth={depth} />;
 }
 
 /**
- * The page of the context, `/context`: under its title a band for each system that has lines,
- * the team's own first, each with what binds it and what it prefers, side by side, and why.
- * While the model is read, and when it cannot be, it says so as the rules do.
+ * The list of the context, `/context`: each system that has lines, the team's own first, and
+ * under it its lines, those that bind first. A line leads to its page, where its reason stands.
  */
-export function ContextPage() {
+export function ContextList() {
   useTitle('Context');
-  const { context, failed } = useOutletContext<ModelState>();
-  if (failed !== undefined) return <p className="page-line failed">{failed}</p>;
-  if (context === undefined) return <p className="page-line">Reading…</p>;
+  const { context, catalogue, line } = useModel();
+  if (context === undefined || catalogue === undefined) return line;
   return (
     <>
       <LargeTitle>Context</LargeTitle>
-      {context.bands.length === 0 ? (
+      {context.systems.length === 0 ? (
         <EmptyState title="No context yet.">
           Write <code>context</code> in a system's file in <code>systems/</code>: lines of <code>must</code> or <code>prefer</code>, each with its <code>why</code>.
         </EmptyState>
       ) : (
-        <Bands bands={context.bands} />
+        <Panel lift className="context-list">
+          <RowList label="Context">
+            {context.systems.map((system) => (
+              <Fragment key={system.id}>
+                <GridRow
+                  to={`/models/${system.id}`}
+                  cols={COLS}
+                  tile={<KindTile kind="systems" size="sm" />}
+                  name={system.name}
+                  marks={system.external && <Pill size="xs">External</Pill>}
+                  cells={[countWords(system)]}
+                  strong
+                />
+                {system.lines.map((each) => (
+                  <LineRow key={each.place} system={system} line={each} depth={1} />
+                ))}
+              </Fragment>
+            ))}
+          </RowList>
+        </Panel>
       )}
     </>
+  );
+}
+
+/** The way back, in the top bar: "Context / <the sentence>". */
+function Crumbs({ title }: { title: string }) {
+  return (
+    <nav aria-label="Breadcrumb" className="breadcrumb">
+      <Link to="/context">Context</Link>
+      <span className="breadcrumb-gap" aria-hidden="true">
+        /
+      </span>
+      <span className="breadcrumb-here" aria-current="page">
+        {title}
+      </span>
+    </nav>
   );
 }
 
 /**
- * The bands, and with more than one the names that lead to each. The band the address names is
- * brought into view once the bands are drawn, and again at each link to it, also at a link to
- * the band the address already names: the address is the same, but the place is new.
+ * The page of one line, `/context/<system>/<place>`: its sentence, its kind, why it stands, the
+ * system it is of, and that system's other lines. An address that names no line is missing.
  */
-function Bands({ bands }: { bands: readonly Band[] }) {
-  const { hash, key } = useLocation();
-  useEffect(() => {
-    const id = idInHash(hash);
-    // Among the bands only: a system may have the id of another part of the window.
-    if (id !== '') document.querySelector(`.context-band[id="${CSS.escape(id)}"]`)?.scrollIntoView({ block: 'start' });
-  }, [hash, key]);
+export function ContextLinePage() {
+  const { system: id = '', place = '' } = useParams();
+  const { context, catalogue, crumbs, line: waiting } = useModel();
+  const system = context?.system(id);
+  const line = /^[1-9]\d*$/.test(place) ? context?.line(id, Number(place)) : undefined;
+  useTitle(line?.sentence ?? 'Context');
+  if (context === undefined || catalogue === undefined) return waiting;
+  if (system === undefined || line === undefined) return <Missing list={LIST} />;
+  const kind = KINDS[line.kind];
+  const others = system.lines.filter((each) => each.place !== line.place);
   return (
     <>
-      {bands.length > 1 && (
-        <nav className="context-index" aria-label="Systems">
-          {bands.map((band, index) => (
-            <Fragment key={band.id}>
-              {index > 0 && <span aria-hidden="true"> · </span>}
-              <Link to={`/context#${band.id}`}>{band.name}</Link>
-            </Fragment>
-          ))}
-        </nav>
-      )}
-      <div className="context-bands">
-        {bands.map((band) => (
-          <BandOf key={band.id} band={band} />
-        ))}
-      </div>
+      {crumbs != null && createPortal(<Crumbs title={line.sentence} />, crumbs)}
+      <header className="record-title context-title">
+        <IconTile icon={kind.icon} size="lg" />
+        <h1 className="large-title">{line.sentence}</h1>
+        <span className="record-marks">
+          <Pill>{kind.word}</Pill>
+        </span>
+      </header>
+      <SectionStack>
+        {line.reason !== undefined && (
+          <Section title="Why">
+            <TextPanel>{line.reason}</TextPanel>
+          </Section>
+        )}
+        <Facts
+          rows={[
+            { label: 'Kind', value: `${kind.word}. ${kind.means}` },
+            {
+              label: 'System',
+              value: (
+                <span className="context-system">
+                  <RecordLink catalogue={catalogue} id={system.id} />
+                  {system.external && <Pill size="xs">External</Pill>}
+                </span>
+              ),
+            },
+          ]}
+        />
+        {others.length > 0 && (
+          <Section title={`The other lines of ${system.name}`}>
+            <Panel className="context-list">
+              <RowList label={`The other lines of ${system.name}`}>
+                {others.map((each) => (
+                  <LineRow key={each.place} system={system} line={each} />
+                ))}
+              </RowList>
+            </Panel>
+          </Section>
+        )}
+      </SectionStack>
     </>
-  );
-}
-
-/** One system's band: its tile and name, then a column for each kind it has lines of, Must first. */
-function BandOf({ band }: { band: Band }) {
-  return (
-    <section id={band.id} className="context-band" aria-label={band.name}>
-      <header className="context-band-row">
-        <KindTile kind="systems" />
-        <h2 className="context-band-name">
-          <Link to={`/models/${band.id}`}>{band.name}</Link>
-        </h2>
-        {band.external && <Pill>External</Pill>}
-      </header>
-      <div className="context-columns">
-        {KINDS.map((kind) => (band[kind.key].length > 0 ? <Column key={kind.key} word={kind.word} means={kind.means} lines={band[kind.key]} /> : null))}
-      </div>
-    </section>
-  );
-}
-
-/** A column: its word and what it means, then its lines in one panel, in the order of the file. */
-function Column({ word, means, lines }: { word: string; means: string; lines: readonly ContextLine[] }) {
-  return (
-    <section className="context-column" aria-label={word}>
-      <header className="context-heading">
-        <h3>{word}</h3>
-        <p>{means}</p>
-      </header>
-      <Panel>
-        <ul className="context-lines">
-          {lines.map((line, index) => (
-            <li key={index} className="context-line">
-              <p className="context-sentence">{line.sentence}</p>
-              {line.reason !== undefined && <p className="context-reason">{line.reason}</p>}
-            </li>
-          ))}
-        </ul>
-      </Panel>
-    </section>
   );
 }
