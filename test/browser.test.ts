@@ -558,11 +558,11 @@ test.skipIf(!HAS_CHROME).concurrent(
         rows: ${texts('.context-list .row')},
         links: [...document.querySelectorAll('.context-list .row a')].map((link) => link.getAttribute('href')),
       }`;
-      // The global lines, the one that binds first; then the system with its count, and its line set in under it.
+      // The global lines, the one that binds first; then the system, and its line set in under it.
       expect(await waitFor(send, list)).toEqual({
         lit: 'Context',
         sections: ['Global', 'Of one system'],
-        rows: ['An order is never lost once the customer has been told it is placed. Must', 'A new store is a PostgreSQL database. Prefer', 'Shop 1 prefer', 'A new feature goes into the Order API. Prefer'],
+        rows: ['An order is never lost once the customer has been told it is placed. Must', 'A new store is a PostgreSQL database. Prefer', 'Shop', 'A new feature goes into the Order API. Prefer'],
         links: ['/context/orders-are-never-lost', '/context/a-new-store-is-postgresql', '/models/shop', '/context/features-go-into-the-order-api'],
       });
       await click(send, await centreOf(send, '.context-list a[href="/context/orders-are-never-lost"]'));

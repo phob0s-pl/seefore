@@ -5,7 +5,6 @@ import type { ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useOutletContext, useParams } from 'react-router-dom';
 import type { Catalogue } from '../model/catalogue.ts';
-import { countWords } from '../model/context.ts';
 import type { Context, ContextKind, ContextLine } from '../model/context.ts';
 import { KindTile, Missing, RecordLink } from './models.tsx';
 import type { ModelState } from './shell.tsx';
@@ -98,7 +97,6 @@ export function ContextList() {
                         tile={<KindTile kind="systems" size="sm" />}
                         name={system.known ? system.name : <span className="dangling">{system.id}</span>}
                         marks={system.external && <Pill size="xs">External</Pill>}
-                        cells={[countWords(system.lines)]}
                         strong
                       />
                       {system.lines.map((each) => (
