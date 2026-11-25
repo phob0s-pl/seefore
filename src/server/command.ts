@@ -7,7 +7,7 @@ import { readFolder, readTexts, writeRenamed } from './files.ts';
 import { guideText } from '../model/guide.ts';
 import { listLines } from '../model/list.ts';
 import { HOST, startServer } from './server.ts';
-import { countLine, rulingsLine } from '../model/counts.ts';
+import { countLines, rulingsLine } from '../model/counts.ts';
 import { readRenames, renameRecords } from '../model/rename.ts';
 import type { Rename, RenameAccount } from '../model/rename.ts';
 import { ARCHITECTURE, init } from './init.ts';
@@ -347,12 +347,10 @@ function check(model: ModelAnswer, json: boolean, io: Io): number {
   }
   if (model.problems.length > 0) io.out('');
   const many = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`;
-  const summary = model.problems.length === 0 ? 'No problem of form.' : `${many(errors, 'error')}, ${many(warnings, 'warning')}.`;
+  // With no problem it says what was held, so that nobody takes the check for a look at the keys alone.
+  const summary = model.problems.length === 0 ? 'No problem: the keys are in form, every id that is named is there, and so is every path of `source`.' : `${many(errors, 'error')}, ${many(warnings, 'warning')}.`;
   io.out(`${many(model.records.length, 'record')} read. ${summary}`);
-  for (const count of model.counts) {
-    const line = countLine(count);
-    if (line !== undefined) io.out(line);
-  }
+  for (const line of countLines(model.counts)) io.out(line);
   const rulings = rulingsLine(model.rulings);
   if (rulings !== undefined) io.out(rulings);
   return errors > 0 ? 1 : 0;

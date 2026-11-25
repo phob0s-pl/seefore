@@ -68,7 +68,7 @@
         "maxLength": 300,
         "pattern": "^(?!\\/)(?!.*(?:^|\\/)\\.\\.(?:\\/|$))[^*\\\\\\n\\r]*\\S$"
       },
-      "description": "Where its code lies: one to three paths of a file or a folder, counted from the folder that holds the model's folder, written with `/`. For a part built elsewhere, the file here that starts or pins it. The check warns when a path is not there. Left out where nothing of it is at hand."
+      "description": "Where its code lies: one to three paths of a file or a folder, counted from the folder that holds the model's folder, written with `/`. A path with `..`, with `*` or with `/` at its start is an error, and the check warns when a path is not there. For a part built elsewhere, the file here that starts or pins it. Left out where nothing of it is at hand."
     }
   },
   "required": [
@@ -76,5 +76,5 @@
     "in"
   ],
   "additionalProperties": false,
-  "description": "Code that runs as a unit of its own: started, deployed or scaled apart from the rest. One code started under two commands or roles is two apps; copies of one are one app. A part built elsewhere and started or pinned here is an app too. In one system. C4 calls it a container."
+  "description": "Code that runs as a unit of its own: started, deployed or scaled apart from the rest. One code that a deploy file or config starts under two commands or roles is two apps; copies of one are one app. The subcommands a person types at a program are that program. A part built elsewhere and started or pinned here is an app too. In one system. C4 calls it a container."
 }

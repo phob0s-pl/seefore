@@ -71,7 +71,7 @@ export function checkShape<T>(file: string, yaml: YamlFile, schema: z.ZodType<T>
       case 'invalid_type': {
         if (issue.code === 'invalid_value' && doc.hasIn(path)) {
           const allowed = issue.values.map((value) => String(value));
-          problems.push(error(file, valuePosition(yaml, doc, path), 'value-not-allowed', notAllowed(path, allowed)));
+          problems.push(error(file, valuePosition(yaml, doc, path), 'value-not-allowed', notAllowed(path, allowed), allowed.length === 1 ? `Write ${list(allowed)}, or delete the key.` : undefined));
         } else if (!doc.hasIn(path)) {
           const owner = path.length <= 1 ? what : label(path.slice(0, -1));
           const key = quote(String(path[path.length - 1]));

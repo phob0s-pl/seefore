@@ -27,7 +27,7 @@
     "opens": {
       "type": "string",
       "const": "to",
-      "description": "`to`: the far side opened the channel this exchange goes down. Left out when the one that sends opened it, or nobody has said."
+      "description": "`to`: the far side opened the channel this exchange goes down, as when an agent dials out and the server sends down that tunnel: `from` the server, `to` the agent, `opens: to`. Left out when the one that sends opened it, or nobody has said."
     },
     "access": {
       "type": "string",
@@ -68,6 +68,18 @@
         "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
       },
       "description": "What the exchange is carried in, such as a protocol or a format: ids of records in technologies/, a set."
+    },
+    "source": {
+      "minItems": 1,
+      "maxItems": 3,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 300,
+        "pattern": "^(?!\\/)(?!.*(?:^|\\/)\\.\\.(?:\\/|$))[^*\\\\\\n\\r]*\\S$"
+      },
+      "description": "Where the code shows it, a file in which the code or config of `from` names `to`: one to three paths of a file or a folder, counted from the folder that holds the model's folder, written with `/`. A path with `..`, with `*` or with `/` at its start is an error, and the check warns when a path is not there. From a person, the entry point they use. Left out when nobody has looked."
     }
   },
   "required": [

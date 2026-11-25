@@ -238,7 +238,7 @@ test('every verb finds the model: the folder given, else this folder, else archi
 
   const checked = await runIn(folder, ['check']);
   expect(checked.code).toBe(0);
-  expect(checked.out[0]).toBe('0 records read. No problem of form.');
+  expect(checked.out[0]).toBe('0 records read. No problem: the keys are in form, every id that is named is there, and so is every path of `source`.');
   await mkdir(join(architecture, 'apps'));
   await writeFile(join(architecture, 'apps/app-api.yaml'), 'name: API\nin: system-shop\n');
   await mkdir(join(architecture, 'systems'));

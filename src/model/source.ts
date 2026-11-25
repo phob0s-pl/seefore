@@ -2,8 +2,8 @@ import type { Problem } from './answer.ts';
 import type { Entry } from './model.ts';
 import { START, quote, warning } from './problem.ts';
 
-/** The folders whose records may say where their code lies. */
-export const WITH_SOURCE: readonly string[] = ['apps', 'stores', 'components', 'infrastructure'];
+/** The folders whose records may say where their code lies, and for a connection where the code shows it. */
+export const WITH_SOURCE: readonly string[] = ['apps', 'stores', 'components', 'connections', 'infrastructure'];
 
 /**
  * `source-gone`: a path of `source` that is not there. `exists` says whether a path, counted

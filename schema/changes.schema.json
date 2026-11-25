@@ -167,7 +167,8 @@
               "name",
               "only",
               "description",
-              "technology"
+              "technology",
+              "source"
             ]
           }
         },

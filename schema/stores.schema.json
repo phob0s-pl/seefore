@@ -39,7 +39,7 @@
         "queue",
         "topic"
       ],
-      "description": "What the store holds. A queue and a topic hold messages on their way: database, files, cache, index, queue, topic."
+      "description": "What the store holds: database, files, cache, index, queue, topic. A queue and a topic hold messages on their way; a bucket of objects is files."
     },
     "technology": {
       "minItems": 1,
@@ -67,7 +67,7 @@
         "maxLength": 300,
         "pattern": "^(?!\\/)(?!.*(?:^|\\/)\\.\\.(?:\\/|$))[^*\\\\\\n\\r]*\\S$"
       },
-      "description": "Where its code lies: one to three paths of a file or a folder, counted from the folder that holds the model's folder, written with `/`. For a part built elsewhere, the file here that starts or pins it. The check warns when a path is not there. Left out where nothing of it is at hand."
+      "description": "What defines or names it, such as its schema, its migrations or the config that holds its address: one to three paths of a file or a folder, counted from the folder that holds the model's folder, written with `/`. A path with `..`, with `*` or with `/` at its start is an error, and the check warns when a path is not there. Left out where nothing of it is at hand."
     }
   },
   "required": [

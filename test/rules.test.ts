@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { expect, test } from 'vitest';
-import { countLine } from '../src/model/counts.ts';
+import { countLine, countLines } from '../src/model/counts.ts';
 import { readModel } from '../src/model/read.ts';
 import type { SourceFile } from '../src/model/read.ts';
 import { run } from '../src/server/command.ts';
@@ -234,9 +234,10 @@ test('the three counts: a feature alone, a step unplaced, and data and an owner 
     flow('flow-sale', '  - {id: asks, does: connection-asks}\n  - {id: who-pays, name: Who pays}\n'),
   ).counts;
   const found = Object.fromEntries(counts.map((count) => [count.rule, [count.checked, ...count.found.map((item) => item.record)]]));
-  expect(found).toEqual({ 'record-unused': [3, 'data-order', 'owner-sales'], 'feature-alone': [3, 'feature-returns'], 'step-unplaced': [1, 'flow-sale'] });
+  expect(found).toEqual({ 'record-unused': [3, 'data-order', 'owner-sales'], 'part-alone': [2], 'feature-alone': [3, 'feature-returns'], 'step-unplaced': [1, 'flow-sale'] });
   expect(counts.map(countLine)).toEqual([
     '2 owners or data records that nothing names: `owner-sales`, `data-order`.',
+    undefined,
     '1 feature that no flow names and that touches nothing: `feature-returns`.',
     '1 step with neither `does` nor `reply`, in `flow-sale`.',
   ]);
@@ -267,3 +268,25 @@ test('seefore check ends with 1 on an error and 0 on a warning, and --json gives
   expect(json.problems.map((problem: { rule: string }) => problem.rule)).toEqual(['via-end', 'reference-wrong-kind']);
   expect(json.counts[0]).toMatchObject({ rule: 'record-unused', checked: 0 });
 });
+
+test('part-alone is a count: an app, a store or a component that no connection names, and the counts that were not made are said in one line', () => {
+  const parts = [
+    file('apps/app-web.yaml', 'name: Web\nin: system-shop\n'),
+    file('apps/app-jobs.yaml', 'name: Jobs\nin: system-shop\n'),
+    file('components/component-cart.yaml', 'name: Cart\nin: app-web\n'),
+    file('components/component-mailer.yaml', 'name: Mailer\nin: app-jobs\n'),
+    file('stores/store-cache.yaml', 'name: Cache\nin: system-shop\n'),
+    // A connection at a component names its app too; what a connection passes through is named.
+    file('connections/connection-cart-asks.yaml', 'from: component-cart\nto: app-api\nvia: [app-jobs]\n'),
+  ];
+  const alone = read(...parts).counts.find((count) => count.rule === 'part-alone');
+  expect(alone?.found.map((item) => item.record)).toEqual(['component-mailer', 'store-cache', 'store-orders']);
+  expect(alone === undefined ? undefined : countLine(alone)).toBe('3 stores or components that no connection names: `store-cache`, `store-orders`, `component-mailer`.');
+  // A count is no problem: the model reads with none.
+  expect(read(...parts).problems).toEqual([]);
+  const broken = read(...parts, file('people/person-bob.yaml', 'name: [\n'));
+  expect(countLines(broken.counts)).toEqual([
+    'Not counted until the errors are mended: owners, technologies and data that nothing names; apps, stores and components that no connection names; features that no flow names and that touch nothing; steps with neither `does` nor `reply`.',
+  ]);
+});
+
