@@ -552,8 +552,28 @@ export const ChangeSchema = z
           "What the person answered when asked, each answer put into one line of 1 to 300 characters by the assistant: 1 to 10 lines, none twice. Nothing the prompt says already, and nothing the person did not say. Left out when nothing was asked.",
       })
       .optional(),
+    // The body. Each record in it is held by `change.ts`, at its place in the file: the shape of its folder, the model, and the model as it would be.
+    add: z
+      .record(z.string(), z.unknown())
+      .meta({ description: 'The records the change adds: each under its path, `folder/id`, whole, as its own file would hold it. The id is one that no record has.' })
+      .optional(),
+    update: z
+      .record(z.string(), z.unknown())
+      .meta({
+        description:
+          'The records the change updates: under the path of each, `folder/id`, only the keys that change, each as it will be. `null` takes a key out. In `steps` of a flow, a step that stays as it is is named by its id alone.',
+      })
+      .optional(),
+    remove: z
+      .array(z.string())
+      .min(1)
+      .meta({ description: 'The records the change removes: the path of each, `folder/id`. What still names one of them is told by the check.' })
+      .optional(),
   })
-  .meta({ description: 'The input of a change: the prompt a person gave, what they answered when asked, and a name written last. It names no record that is not there yet.' });
+  .meta({
+    description:
+      'A change: its input (the prompt a person gave, what they answered when asked, and a name written last), and its body, the records it adds, updates and removes. With no body it is an input alone.',
+  });
 
 /** The shape of each kind's file, by folder. */
 export const SHAPES = {
@@ -571,6 +591,7 @@ export const SHAPES = {
   data: DataSchema,
   rules: RuleSchema,
   context: ContextSchema,
+  changes: ChangeSchema,
 } as const;
 
 /** The marker `seefore.yaml`: the format, and the name of the model. */

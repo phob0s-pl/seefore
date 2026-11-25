@@ -1,5 +1,6 @@
 import type { ModelRecord } from './answer.ts';
 import { byName } from './catalogue.ts';
+import { ofArchitecture } from './kinds.ts';
 
 /**
  * What the pages of the context ask of the records of `context/`, worked out once: the lines
@@ -85,7 +86,7 @@ export function countWords(lines: readonly ContextLine[]): string {
 export function contextOf(records: readonly ModelRecord[]): Context {
   // An id names the first record that has it, as in the catalogue.
   const first = new Map<string, ModelRecord>();
-  for (const record of records) if (record.kind !== 'rules' && !first.has(record.id)) first.set(record.id, record);
+  for (const record of records) if ((ofArchitecture(record.kind) || record.kind === 'context') && !first.has(record.id)) first.set(record.id, record);
   const lines = [...first.values()].filter((record) => record.kind === 'context').flatMap((record) => lineOf(record) ?? []);
 
   const global = inOrder(lines.filter((line) => line.system === undefined));

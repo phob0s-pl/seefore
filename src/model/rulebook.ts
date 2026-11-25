@@ -1,5 +1,6 @@
 import type { ModelRead, ModelRecord, Problem, Ruling } from './answer.ts';
 import { byName } from './catalogue.ts';
+import { ofArchitecture } from './kinds.ts';
 
 /**
  * What the pages of the rules ask of `records`, `rulings` and `problems`, worked out and never
@@ -196,7 +197,7 @@ export function rulebookOf({ records, rulings, problems }: Pick<ModelRead, 'reco
   const rules = new Map<string, ModelRecord>();
   const others = new Map<string, ModelRecord>();
   for (const record of records) {
-    if (record.kind === 'context') continue;
+    if (record.kind !== 'rules' && !ofArchitecture(record.kind)) continue;
     const into = record.kind === 'rules' ? rules : others;
     if (!into.has(record.id)) into.set(record.id, record);
   }
