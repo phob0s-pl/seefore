@@ -36,6 +36,7 @@
 /* A row: Starts and Ends with their sentences, or a step with its number, what happens and who
    acts on what. The current row is lit as the current entry of the sidebar is. */
 .flow-row {
+  position: relative;
   display: flex;
   flex-shrink: 0;
   gap: 10px;
@@ -126,6 +127,69 @@
   overflow-wrap: anywhere;
 }
 
+/* A step under a change: a rule at the row's left edge and a small word at its right, in the
+   colour of what the change does: green where it comes, red where it goes, yellow where it
+   changes. A step that goes has a minus for its number and its first line struck through. A step
+   that only moved bears a quiet word and no colour. Starts and Ends bear the yellow of a change. */
+.flow-step-updated {
+  --mark: var(--caution);
+}
+.flow-step-added {
+  --mark: var(--success);
+}
+.flow-step-removed {
+  --mark: var(--danger);
+}
+.flow-step-added::before,
+.flow-step-removed::before,
+.flow-step-updated::before {
+  content: '';
+  position: absolute;
+  top: 5px;
+  bottom: 5px;
+  left: 0;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--mark);
+}
+.flow-step-mark {
+  flex-shrink: 0;
+  margin-top: 3px;
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: 0.01em;
+  color: var(--mark, var(--text-tertiary));
+}
+.flow-step-moved {
+  font-weight: 500;
+  color: var(--text-tertiary);
+}
+.flow-step-removed .flow-step-number {
+  border-color: var(--danger-border);
+  color: var(--danger);
+}
+.flow-step-removed .flow-step-happens {
+  text-decoration: line-through;
+  text-decoration-color: var(--danger);
+  color: var(--text-secondary);
+}
+.flow-end-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.flow-end-head > .flow-step-mark {
+  margin-top: 0;
+}
+.flow-end-today {
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--text-tertiary);
+  overflow-wrap: anywhere;
+}
+
 /* A condition or a strand: its words once above its steps, which stand indented on a thin rule. */
 .flow-run {
   display: flex;
@@ -150,9 +214,12 @@
   border-left: 1px solid var(--border-strong);
 }
 
-/* The way out, in the top bar: a pill of glass as tall as the choice of depth. */
+/* The way out, in the top bar: a pill of glass as tall as the choice of depth. Under a change,
+   the mark of the flow stands after it. */
 .header-slot {
   display: flex;
+  align-items: center;
+  gap: 10px;
   min-width: 0;
 }
 .breadcrumb {
@@ -313,6 +380,39 @@
 .flow-data-pill:hover {
   background: var(--info-tint-strong);
   color: var(--link-hover);
+}
+
+/* Under a change, a line whose key the change writes otherwise: a yellow rule at its left, and
+   today's words under it, quiet. The title bears the rule too when the name changes. A step that
+   only moved says so quietly after its title; a flow the change removes says so first. */
+.flow-bar-title > .pill {
+  align-self: center;
+}
+.flow-line-changed,
+.flow-bar-lines > .flow-line-today {
+  padding-left: 9px;
+  box-shadow: inset 3px 0 0 var(--caution);
+}
+.flow-bar-title > .flow-line-changed {
+  padding-left: 10px;
+}
+.flow-bar-lines > .flow-line-today {
+  font-size: 12px;
+  line-height: 17px;
+  color: var(--text-tertiary);
+}
+.flow-bar-lines > .flow-line-changed + .flow-line-today {
+  margin-top: 0;
+}
+.flow-bar-moved {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--text-tertiary);
+}
+.flow-bar-lines > .flow-bar-removed {
+  color: var(--text-tertiary);
 }
 
 /* A data record in the panel: each field's name, and its description under it. */

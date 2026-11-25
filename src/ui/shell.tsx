@@ -21,9 +21,9 @@ import { Button, ButtonLink, GlassGroup } from './ui.tsx';
 /**
  * What the shell knows of the model, and hands to the page: the answer and what the pages of
  * the records, of the rules, of the context and of the changes ask of it, worked out once, or
- * why there is none. On the page of a flow, the places the page fills itself: the sidebar under
- * the name, and the top bar after the arrows; on the page of a rule and on that of a record under
- * a change, the top bar alone.
+ * why there is none. On the page of a flow, in the system or under a change, the places the page
+ * fills itself: the sidebar under the name, and the top bar after the arrows; on the page of a
+ * rule and on that of a record under a change, the top bar alone.
  */
 export type ModelState = { answer?: ModelAnswer; catalogue?: Catalogue; travel?: Travel; rulebook?: Rulebook; context?: Context; changes?: Changes; failed?: string; slots?: Slots };
 
@@ -115,9 +115,9 @@ function FocusMenu({ depth, focus, choices }: { depth: Depth; focus: string | un
 /**
  * The window: the sidebar with the name and its entries, the top bar with a back and a forward
  * arrow and, on the Architecture page, the choice of depth and of focus, and the page beside
- * them. On the page of a flow, its steps stand in the sidebar and its breadcrumb in the top bar;
- * on the pages of a change, its sections stand in the sidebar. Where the sidebar is replaced, a
- * home button stands before the arrows.
+ * them. On the page of a flow, under a change too, its steps stand in the sidebar and its
+ * breadcrumb in the top bar; on the other pages of a change, its sections stand in the sidebar.
+ * Where the sidebar is replaced, a home button stands before the arrows.
  */
 export function Shell() {
   const navigate = useNavigate();
@@ -140,9 +140,14 @@ export function Shell() {
   // Models is current on each of its lists and on the page of every record.
   const inModels = TABS.some((tab) => pathname === tab.to || pathname.startsWith(`${tab.to}/`));
   // On the page of a flow the steps take the place of the navigation, while the model is read
-  // and once it has the flow. An address whose flow does not exist keeps the navigation.
+  // and once it has the flow. An address whose flow does not exist keeps the navigation. So it is
+  // for a flow under a change, once the change has the flow under it; else the change's own
+  // sidebar stands, as on the page of any record under it.
   const flowId = useMatch('/flows/:id')?.params.id;
-  const reading = flowId !== undefined && (state.catalogue === undefined ? state.failed === undefined : state.catalogue.record(flowId)?.kind === 'flows');
+  const flowUnder = useMatch('/changes/:id/records/flows/:flow')?.params;
+  const onFlow = flowId !== undefined && (state.catalogue === undefined ? state.failed === undefined : state.catalogue.record(flowId)?.kind === 'flows');
+  const onFlowUnder = flowUnder !== undefined && (state.changes === undefined ? state.failed === undefined : state.changes.flow(flowUnder.id ?? '', flowUnder.flow ?? '') !== undefined);
+  const reading = onFlow || onFlowUnder;
   // On the pages of a change its own sidebar takes the place of the navigation, once the model
   // has the change: Need, Records, and the page of each record under it. While the model is read,
   // and for an id that names no change, the navigation stays.

@@ -1,6 +1,8 @@
 import type { Laid, ModelRecord } from './answer.ts';
 import { byName } from './catalogue.ts';
 import type { Touch } from './catalogue.ts';
+import { flowUnder, orderOfBoth } from './flow.ts';
+import type { FlowUnder, Mark } from './flow.ts';
 
 /**
  * What the pages of the changes ask of the records of `changes/` and of what the check laid,
@@ -39,6 +41,13 @@ export type ChangeRecord = { touched: Touched; today?: ModelRecord; after?: Mode
 /** A key that an update writes: what it says today and what it will say. A side with nothing has no value. */
 export type Difference = { key: string; before?: unknown; after?: unknown };
 
+/**
+ * A field of a data record, before and after: its name, what the change does to it, and its
+ * description on each side. A field is matched by its name, and is updated when its description
+ * differs.
+ */
+export type FieldRow = { name: string; mark: Mark; today?: string; after?: string };
+
 /** What the pages ask of the changes. */
 export type Changes = {
   /** Every change, by name; one with no name after those with one, then by id. */
@@ -55,7 +64,37 @@ export type Changes = {
   record: (id: string, path: string) => ChangeRecord | undefined;
   /** Before and after of each key an update writes, in the file's order; none for any other record. */
   differences: (id: string, path: string) => Difference[];
+  /** A flow under a change: what the change does to each of its steps, boxes and lines. Nothing when the change does not name the flow, or the check could not lay the change. */
+  flow: (id: string, flow: string) => FlowUnder | undefined;
 };
+
+/** The fields of a data record as a list of names with their descriptions, or nothing when the value is no such list. */
+function fieldsOf(value: unknown): Map<string, string | undefined> | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const fields = new Map<string, string | undefined>();
+  for (const field of value) {
+    if (!isMapping(field) || typeof field.name !== 'string') return undefined;
+    fields.set(field.name, text(field.description));
+  }
+  return fields;
+}
+
+/**
+ * The fields of a data record before and after, as one list: those as they would be, in their
+ * order, with each field that goes put back where it stood. Nothing when a side is no list of
+ * fields; a side that is missing has none.
+ */
+export function fieldRows(before: unknown, after: unknown): FieldRow[] | undefined {
+  const was = before === undefined ? new Map<string, string | undefined>() : fieldsOf(before);
+  const will = after === undefined ? new Map<string, string | undefined>() : fieldsOf(after);
+  if (was === undefined || will === undefined) return undefined;
+  return orderOfBoth([...was.keys()], [...will.keys()]).map((name) => {
+    const today = was.get(name);
+    const then = will.get(name);
+    const mark: Mark = !will.has(name) ? 'removed' : !was.has(name) ? 'added' : today !== then ? 'updated' : 'same';
+    return { name, mark, ...(today !== undefined ? { today } : {}), ...(then !== undefined ? { after: then } : {}) };
+  });
+}
 
 /** The page's own lists, in its order, and the folders each holds. */
 const LISTS: readonly { title: string; folders: readonly string[] }[] = [
@@ -127,6 +166,7 @@ export function changesOf(records: readonly ModelRecord[], laid: readonly Laid[]
     return change === undefined ? undefined : { change: id, paths: new Set(change.touched.map((each) => each.path)) };
   };
   const worlds = new Map<string, World | undefined>();
+  const flows = new Map<string, FlowUnder | undefined>();
   const world = (id: string): World | undefined => {
     if (worlds.has(id)) return worlds.get(id);
     const touched = touch(id);
@@ -174,6 +214,14 @@ export function changesOf(records: readonly ModelRecord[], laid: readonly Laid[]
       const was = found.today?.fields ?? {};
       const will = found.after.fields;
       return found.touched.keys.map((key) => ({ key, ...(key in was ? { before: was[key] } : {}), ...(key in will ? { after: will[key] } : {}) }));
+    },
+    flow: (id, flow) => {
+      const key = `${id}\n${flow}`;
+      if (flows.has(key)) return flows.get(key);
+      const made = world(id);
+      const read = made === undefined ? undefined : flowUnder([...today.values()], made.records, byId.get(id)?.touched ?? [], flow);
+      flows.set(key, read);
+      return read;
     },
   };
 }

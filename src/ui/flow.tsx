@@ -3,14 +3,16 @@ import type { ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Link, useLocation, useNavigate, useOutletContext, useParams } from 'react-router-dom';
-import type { ModelRecord } from '../model/answer.ts';
 import type { Catalogue } from '../model/catalogue.ts';
+import type { Verb } from '../model/changes.ts';
 import { flowSteps, flowView } from '../model/flow.ts';
-import type { FlowRead, FlowStep } from '../model/flow.ts';
+import type { FlowRead, FlowStep, Mark, Was } from '../model/flow.ts';
+import type { View } from '../model/view.ts';
 import { Diagram } from './diagram.tsx';
 import { Inspector } from './inspector.tsx';
+import { addressOf } from './models.tsx';
 import type { ModelState, Slots } from './shell.tsx';
-import { Button, CanvasFrame, EmptyState, useTitle } from './ui.tsx';
+import { Button, CanvasFrame, EmptyState, MarkPill, useTitle } from './ui.tsx';
 
 /** Where the reader stands: before the first step, on a step by its place, or at the end. */
 type Place = 'starts' | number | 'ends';
@@ -26,7 +28,7 @@ function movesFrom(place: Place, last: number): { previous?: Place; next?: Place
 const joined = (words: readonly string[]): string => (words.length <= 1 ? words.join('') : `${words.slice(0, -1).join(', ')} and ${words[words.length - 1]}`);
 
 /** The step's id an address names after `#`, or none. */
-function stepInHash(hash: string): string {
+export function stepInHash(hash: string): string {
   try {
     return decodeURIComponent(hash.slice(1));
   } catch {
@@ -43,10 +45,11 @@ export function FlowPage() {
   const { id = '' } = useParams();
   const { answer, catalogue, failed, slots } = useOutletContext<ModelState>();
   const flow = useMemo(() => (answer ? flowSteps(answer.records, id) : undefined), [answer, id]);
+  const view = useMemo(() => (answer ? flowView(answer.records, id) : undefined), [answer, id]);
   useTitle(flow?.name ?? 'Flows');
   if (failed !== undefined) return <p className="page-line failed">{failed}</p>;
   if (answer === undefined || catalogue === undefined) return <p className="page-line">Reading…</p>;
-  if (flow === undefined) {
+  if (flow === undefined || view === undefined) {
     return (
       <EmptyState title="No such flow.">
         <Link className="text-link" to="/features">
@@ -56,15 +59,57 @@ export function FlowPage() {
     );
   }
   // Another flow is a page of its own: what was picked and laid out is let go.
-  return <FlowBody key={flow.id} flow={flow} records={answer.records} catalogue={catalogue} slots={slots} />;
+  return <FlowBody key={flow.id} flow={flow} steps={flow.steps} count={flow.steps.length} view={view} catalogue={catalogue} slots={slots} crumbs={<FeatureCrumbs flow={flow} catalogue={catalogue} />} />;
 }
 
+/** The way out of a flow in the system, in the top bar: Features, the feature, the flow. */
+function FeatureCrumbs({ flow, catalogue }: { flow: FlowRead; catalogue: Catalogue }) {
+  return (
+    <nav aria-label="Breadcrumb" className="breadcrumb">
+      <Link to="/features">Features</Link>
+      {flow.feature !== undefined && (
+        <>
+          <span className="breadcrumb-gap" aria-hidden="true">
+            /
+          </span>
+          <Link to={addressOf(catalogue, 'features', flow.feature.id)}>{flow.feature.name}</Link>
+        </>
+      )}
+      <span className="breadcrumb-gap" aria-hidden="true">
+        /
+      </span>
+      <span className="breadcrumb-here" aria-current="page">
+        {flow.name}
+      </span>
+    </nav>
+  );
+}
+
+/**
+ * A step as the list and the bar show it. Under a change it bears what the change does to it,
+ * today's words for each of its own keys written otherwise, and whether it only moved; on the
+ * flow's own page it bears none of these.
+ */
+export type StepShown = FlowStep & { mark?: Mark; was?: readonly Was[]; moved?: true };
+
+/** The word a row and a field bear for what a change does to them; a step that stays bears none. */
+export const MARK_WORDS: Partial<Record<Mark, string>> = { added: 'Added', removed: 'Removed', updated: 'Updated' };
+
+/** What a change does to a step, as the pill of a record says it. */
+const MARK_VERBS: Partial<Record<Mark, Verb>> = { added: 'add', removed: 'remove', updated: 'update' };
+
+/** No words of today: the flow's own page, and a flow a change adds or removes. */
+const NONE: readonly Was[] = [];
+
+/** A thing worth a line: not nothing, and not the `false` of a condition that does not hold. */
+const something = (node: ReactNode): boolean => node !== undefined && node !== null && node !== false && node !== '';
+
 /** A group of steps under words that stand once above them: a condition, or a strand. */
-type Run = { heading: string; rows: (FlowStep | Run)[] };
+type Run = { heading: string; rows: (StepShown | Run)[] };
 
 /** The steps as the bar of steps stands them: strands, and conditions inside them. */
-function runsOf(steps: readonly FlowStep[]): (FlowStep | Run)[] {
-  const top: (FlowStep | Run)[] = [];
+function runsOf(steps: readonly StepShown[]): (StepShown | Run)[] {
+  const top: (StepShown | Run)[] = [];
   let strand: Run | undefined;
   let group: Run | undefined;
   for (const step of steps) {
@@ -83,11 +128,42 @@ function runsOf(steps: readonly FlowStep[]): (FlowStep | Run)[] {
   return top;
 }
 
-function FlowBody({ flow, records, catalogue, slots }: { flow: FlowRead; records: readonly ModelRecord[]; catalogue: Catalogue; slots: Slots | undefined }) {
-  const view = useMemo(() => flowView(records, flow.id), [records, flow.id]);
+/**
+ * The page of a flow, drawn from what is handed to it: the flow's head; its steps, in the order the
+ * list stands them; how many steps the flow has, for "4 of 12"; the view of the diagram, laid out
+ * once; the catalogue its links and its panel are made with; and the way back for the top bar.
+ * Under a change, the steps bear their marks, `was` holds today's words of the flow's own keys
+ * that the change writes otherwise, `marks` what the change does to each box, arrow and connection
+ * of the view, `verbs` what it does to each record it names, by its path, and `system`, for a
+ * flow the change removes, its address in the system.
+ */
+export function FlowBody({
+  flow,
+  steps,
+  count,
+  view,
+  was = NONE,
+  marks,
+  verbs,
+  catalogue,
+  slots,
+  crumbs,
+  system,
+}: {
+  flow: FlowRead;
+  steps: readonly StepShown[];
+  count: number;
+  view: View;
+  was?: readonly Was[];
+  marks?: ReadonlyMap<string, Mark>;
+  verbs?: ReadonlyMap<string, Verb>;
+  catalogue: Catalogue;
+  slots: Slots | undefined;
+  crumbs: ReactNode;
+  system?: string;
+}) {
   const navigate = useNavigate();
-  const { pathname, hash } = useLocation();
-  const { steps } = flow;
+  const { pathname, search, hash } = useLocation();
   const wanted = stepInHash(hash);
   const index = wanted === '' ? -1 : steps.findIndex((step) => step.id === wanted);
   const step = index >= 0 ? steps[index] : undefined;
@@ -107,9 +183,10 @@ function FlowBody({ flow, records, catalogue, slots }: { flow: FlowRead; records
       at.current = to;
       setEnds(to === 'ends');
       const id = typeof to === 'number' ? steps[to]?.id : undefined;
-      void navigate({ pathname, hash: id !== undefined ? `#${encodeURIComponent(id)}` : '' }, { replace: true });
+      // What the address asks besides the step stays: under a change, which of the two views.
+      void navigate({ pathname, search, hash: id !== undefined ? `#${encodeURIComponent(id)}` : '' }, { replace: true });
     },
-    [navigate, pathname, steps],
+    [navigate, pathname, search, steps],
   );
   const last = steps.length - 1;
   const { previous, next } = movesFrom(place, last);
@@ -155,25 +232,52 @@ function FlowBody({ flow, records, catalogue, slots }: { flow: FlowRead; records
   const onPick = useCallback((id?: string) => setPanel(id === undefined ? undefined : { id, data: false }), []);
   const close = useCallback(() => setPanel(undefined), []);
 
-  const row = (each: FlowStep) => (
-    <button
-      key={`${each.number}`}
-      type="button"
-      className={`flow-row flow-step${each.kind === 'unplaced' ? ' flow-step-unplaced' : ''}`}
-      data-row="step"
-      data-step={each.id}
-      aria-current={each === step ? 'step' : undefined}
-      onClick={() => go(each.number - 1)}
-    >
-      <span className="flow-step-number">{each.number}</span>
-      <span className="flow-step-words">
-        <span className="flow-step-happens">{each.happens}</span>
-        <span className="flow-step-acts">{each.acts}</span>
-        {each.reply !== undefined && <span className="flow-step-acts">Reply to {each.reply.number}</span>}
-      </span>
-    </button>
-  );
-  const rows = (items: readonly (FlowStep | Run)[]): ReactNode[] =>
+  // A row's place in the list, which a step's number is not under a change: a step that goes keeps today's.
+  const places = useMemo(() => new Map(steps.map((each, at) => [each, at])), [steps]);
+  const row = (each: StepShown) => {
+    const at = places.get(each) ?? 0;
+    const mark = each.mark !== undefined && each.mark !== 'same' ? each.mark : undefined;
+    return (
+      <button
+        key={`${at}`}
+        type="button"
+        className={`flow-row flow-step${each.kind === 'unplaced' ? ' flow-step-unplaced' : ''}${mark !== undefined ? ` flow-step-${mark}` : ''}`}
+        data-row="step"
+        data-step={each.id}
+        data-mark={mark}
+        aria-current={each === step ? 'step' : undefined}
+        onClick={() => go(at)}
+      >
+        <span className="flow-step-number">{mark === 'removed' ? '−' : each.number}</span>
+        <span className="flow-step-words">
+          <span className="flow-step-happens">{each.happens}</span>
+          <span className="flow-step-acts">{each.acts}</span>
+          {each.reply !== undefined && <span className="flow-step-acts">Reply to {each.reply.number}</span>}
+        </span>
+        {mark !== undefined ? <span className="flow-step-mark">{MARK_WORDS[mark]}</span> : each.moved === true && <span className="flow-step-mark flow-step-moved">Moved</span>}
+      </button>
+    );
+  };
+  // Starts and Ends: the first and the last row. Under a change, one whose sentence changes bears the word and today's sentence.
+  const head = new Map(was.map((each) => [each.key, each]));
+  const end = (at: 'starts' | 'ends', label: string, text: string | undefined) => {
+    const changed = head.get(at);
+    return (
+      <button type="button" className={`flow-row flow-end${at === 'ends' && place === 'ends' ? ' current' : ''}${changed !== undefined ? ' flow-step-updated' : ''}`} data-row={at} onClick={() => go(at)}>
+        {changed !== undefined ? (
+          <span className="flow-end-head">
+            <span className="flow-end-label">{label}</span>
+            <span className="flow-step-mark">Updated</span>
+          </span>
+        ) : (
+          <span className="flow-end-label">{label}</span>
+        )}
+        <span className="flow-end-text">{changed?.gone === true ? 'Taken out' : text}</span>
+        {changed !== undefined && <span className="flow-end-today">Today: {changed.today ?? 'nothing'}</span>}
+      </button>
+    );
+  };
+  const rows = (items: readonly (StepShown | Run)[]): ReactNode[] =>
     items.map((item, at) =>
       'heading' in item ? (
         <div key={`run ${at}`} className="flow-run">
@@ -187,37 +291,16 @@ function FlowBody({ flow, records, catalogue, slots }: { flow: FlowRead; records
 
   const stepsList = (
     <nav aria-label="Steps" className="flow-steps" ref={list}>
-      <button type="button" className="flow-row flow-end" data-row="starts" onClick={() => go('starts')}>
-        <span className="flow-end-label">Starts</span>
-        <span className="flow-end-text">{flow.starts}</span>
-      </button>
+      {end('starts', 'Starts', flow.starts)}
       {rows(runsOf(steps))}
-      <button type="button" className={`flow-row flow-end${place === 'ends' ? ' current' : ''}`} data-row="ends" onClick={() => go('ends')}>
-        <span className="flow-end-label">Ends</span>
-        <span className="flow-end-text">{flow.ends}</span>
-      </button>
+      {end('ends', 'Ends', flow.ends)}
     </nav>
   );
 
-  const crumbs = (
-    <nav aria-label="Breadcrumb" className="breadcrumb">
-      <Link to="/features">Features</Link>
-      {flow.feature !== undefined && (
-        <>
-          <span className="breadcrumb-gap" aria-hidden="true">
-            /
-          </span>
-          <Link to={`/features/${flow.feature.id}`}>{flow.feature.name}</Link>
-        </>
-      )}
-      <span className="breadcrumb-gap" aria-hidden="true">
-        /
-      </span>
-      <span className="breadcrumb-here" aria-current="page">
-        {flow.name}
-      </span>
-    </nav>
-  );
+  // The title of the bar, and today's words for it when the change renames the step or the flow.
+  const named = (step !== undefined ? step.was : was)?.find((each) => each.key === 'name');
+  const mark = step?.mark !== undefined && step.mark !== 'same' ? step.mark : undefined;
+  const verb = mark !== undefined ? MARK_VERBS[mark] : undefined;
 
   return (
     <div className="flow-page">
@@ -226,12 +309,9 @@ function FlowBody({ flow, records, catalogue, slots }: { flow: FlowRead; records
       <section aria-label="Current step" className="flow-bar">
         <div className="flow-bar-head">
           <h2 className="flow-bar-title">
-            {step !== undefined && (
-              <span className="flow-bar-count">
-                {step.number} of {steps.length}
-              </span>
-            )}
-            <span>{step !== undefined ? step.happens : flow.name}</span>
+            {step !== undefined && <span className="flow-bar-count">{mark === 'removed' ? `Was step ${step.number}` : `${step.number} of ${count}`}</span>}
+            <span className={named !== undefined ? 'flow-line-changed' : undefined}>{step !== undefined ? step.happens : flow.name}</span>
+            {verb !== undefined ? <MarkPill verb={verb} /> : step?.moved === true && <span className="flow-bar-moved">Moved</span>}
           </h2>
           <div className="flow-bar-moves">
             <Button variant="outline" size="icon" aria-label="Previous step" disabled={previous === undefined} onClick={() => previous !== undefined && go(previous)}>
@@ -242,7 +322,10 @@ function FlowBody({ flow, records, catalogue, slots }: { flow: FlowRead; records
             </Button>
           </div>
         </div>
-        <div className="flow-bar-lines">{step !== undefined ? <StepLines step={step} onData={(id) => setPanel({ id, data: true })} /> : <FlowLines flow={flow} />}</div>
+        <div className="flow-bar-lines">
+          {named !== undefined && <Today was={named} />}
+          {step !== undefined ? <StepLines step={step} catalogue={catalogue} onData={(id) => setPanel({ id, data: true })} /> : <FlowLines flow={flow} was={head} catalogue={catalogue} system={system} />}
+        </div>
       </section>
       {view.boxes.length === 0 ? (
         <CanvasFrame label="Architecture diagram">
@@ -251,64 +334,105 @@ function FlowBody({ flow, records, catalogue, slots }: { flow: FlowRead; records
           </div>
         </CanvasFrame>
       ) : (
-        <Diagram view={view} depth="components" shape="flow" picked={panel !== undefined && !panel.data ? panel.id : undefined} onPick={onPick} step={step?.lights}>
-          {panel !== undefined && <Inspector picked={panel.id} view={view} catalogue={catalogue} onClose={close} />}
+        <Diagram view={view} depth="components" shape="flow" picked={panel !== undefined && !panel.data ? panel.id : undefined} onPick={onPick} step={step?.lights} marks={marks}>
+          {panel !== undefined && <Inspector picked={panel.id} view={view} catalogue={catalogue} onClose={close} marks={marks} verbs={verbs} />}
         </Diagram>
       )}
     </div>
   );
 }
 
-/** The lines of the bar for a step; a line with nothing to say is left out. */
-function StepLines({ step, onData }: { step: FlowStep; onData: (id: string) => void }) {
-  const [one] = step.after;
-  const after = one === undefined ? undefined : step.after.length === 1 ? `After ${one.number}, ${one.words}` : `After ${joined(step.after.map((each) => String(each.number)))}`;
+/** Today's words for a key a change writes otherwise, quiet, under its line: "Today: nothing" where the key is new. */
+function Today({ was }: { was: Was }) {
+  return <p className="flow-line-today">Today: {was.today ?? 'nothing'}</p>;
+}
+
+/**
+ * A line of the bar. A line with nothing to say is left out. Under a change, the line of a key
+ * the change writes otherwise has a yellow rule and today's words under it; where the change
+ * takes the key out, the line says so.
+ */
+function Line({ was, className, children }: { was: Was | undefined; className?: string; children: ReactNode }) {
+  if (was === undefined) return something(children) ? <p className={className}>{children}</p> : null;
   return (
     <>
-      <p className="flow-bar-acts">
-        {step.acts}
-        {step.runs !== undefined && (
-          <Link className="text-link flow-bar-open" to={`/flows/${step.runs}`}>
-            Open flow
-          </Link>
-        )}
-      </p>
-      {step.reply !== undefined && (
-        <p>
-          Reply to {step.reply.number}, {step.reply.words}
-        </p>
-      )}
-      {after !== undefined && <p>{after}</p>}
-      {step.only !== undefined && <p className="flow-bar-only">Only {step.only}</p>}
-      {step.description !== undefined && <p className="flow-bar-text">{step.description}</p>}
-      {step.data.length > 0 && (
-        <p className="flow-bar-data">
-          <span className="flow-bar-label">Data</span>
-          {step.data.map((each) => (
-            <button key={each.id} type="button" className="pill flow-data-pill" data-data={each.id} onClick={() => onData(each.id)}>
-              {each.name}
-            </button>
-          ))}
-        </p>
-      )}
+      <p className={className === undefined ? 'flow-line-changed' : `${className} flow-line-changed`}>{was.gone === true ? 'Taken out' : something(children) ? children : <span className="quiet">None</span>}</p>
+      <Today was={was} />
     </>
   );
 }
 
-/** The lines of the bar with no step picked: the flow's feature, its condition and its paragraph. */
-function FlowLines({ flow }: { flow: FlowRead }) {
+/** The lines of the bar for a step; a line with nothing to say is left out. Its links are made by the catalogue. */
+function StepLines({ step, catalogue, onData }: { step: StepShown; catalogue: Catalogue; onData: (id: string) => void }) {
+  const was = new Map((step.was ?? NONE).map((each) => [each.key, each]));
+  const [one] = step.after;
+  const after = one === undefined ? undefined : step.after.length === 1 ? `After ${one.number}, ${one.words}` : `After ${joined(step.after.map((each) => String(each.number)))}`;
   return (
     <>
-      {flow.feature !== undefined && (
-        <p>
-          <span className="flow-bar-label">Feature</span>
-          <Link className="flow-bar-link" to={`/features/${flow.feature.id}`}>
-            {flow.feature.name}
+      <Line was={was.get('does')} className="flow-bar-acts">
+        {step.acts}
+        {step.runs !== undefined && (
+          <Link className="text-link flow-bar-open" to={addressOf(catalogue, 'flows', step.runs)}>
+            Open flow
+          </Link>
+        )}
+      </Line>
+      <Line was={was.get('reply')}>{step.reply !== undefined && `Reply to ${step.reply.number}, ${step.reply.words}`}</Line>
+      <Line was={was.get('after')}>{after}</Line>
+      <Line was={was.get('only')} className="flow-bar-only">
+        {step.only !== undefined && `Only ${step.only}`}
+      </Line>
+      <Line was={was.get('description')} className="flow-bar-text">
+        {step.description}
+      </Line>
+      <Line was={was.get('data')} className="flow-bar-data">
+        {step.data.length > 0 && (
+          <>
+            <span className="flow-bar-label">Data</span>
+            {step.data.map((each) => (
+              <button key={each.id} type="button" className="pill flow-data-pill" data-data={each.id} onClick={() => onData(each.id)}>
+                {each.name}
+              </button>
+            ))}
+          </>
+        )}
+      </Line>
+    </>
+  );
+}
+
+/**
+ * The lines of the bar with no step picked: the flow's feature, its condition and its paragraph,
+ * each read as a step's lines are under a change. For a flow the change removes, a line says so
+ * first, with the way to the flow in the system.
+ */
+function FlowLines({ flow, was, catalogue, system }: { flow: FlowRead; was: ReadonlyMap<string, Was>; catalogue: Catalogue; system: string | undefined }) {
+  return (
+    <>
+      {system !== undefined && (
+        <p className="flow-bar-removed">
+          Removed by this change. This is the flow as it is today.{' '}
+          <Link className="flow-bar-link" to={system}>
+            Open it in the system
           </Link>
         </p>
       )}
-      {flow.only !== undefined && <p className="flow-bar-only">Only {flow.only}</p>}
-      {flow.description !== undefined && <p className="flow-bar-text">{flow.description}</p>}
+      <Line was={was.get('feature')}>
+        {flow.feature !== undefined && (
+          <>
+            <span className="flow-bar-label">Feature</span>
+            <Link className="flow-bar-link" to={addressOf(catalogue, 'features', flow.feature.id)}>
+              {flow.feature.name}
+            </Link>
+          </>
+        )}
+      </Line>
+      <Line was={was.get('only')} className="flow-bar-only">
+        {flow.only !== undefined && `Only ${flow.only}`}
+      </Line>
+      <Line was={was.get('description')} className="flow-bar-text">
+        {flow.description}
+      </Line>
     </>
   );
 }

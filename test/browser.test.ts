@@ -658,8 +658,8 @@ test.skipIf(!HAS_CHROME).concurrent(
         current: null,
         title: 'Changes',
         lit: 'Changes',
-        rows: ['Orders by post'],
-        links: ['/changes/orders-by-post'],
+        rows: ['Orders by post', 'Orders on paper only'],
+        links: ['/changes/orders-by-post', '/changes/orders-on-paper-only'],
       });
       await click(send, await centreOf(send, 'ul[aria-label="Changes"] a[href="/changes/orders-by-post"]'));
       const need = `{ sections: ${texts('main .section-label')}, prompt: ${texts('section[aria-label="Prompt"] .panel-text')}, given: ${texts('section[aria-label="Given"] .change-given > li')} }`;
@@ -722,14 +722,18 @@ test.skipIf(!HAS_CHROME).concurrent(
       }; })()`;
       expect(await waitFor(send, records)).toEqual({
         current: 'Records',
-        sections: ['Features', 'Software', 'Connections', 'Technologies'],
-        rows: ['Ordering Updated', 'Order API Updated', 'Types in a posted order Added', 'Go Removed'],
-        tones: ['pill', 'pill', 'pill tone-success', 'pill tone-danger'],
+        sections: ['Features', 'Flows', 'Software', 'Connections', 'Technologies', 'Data'],
+        rows: ['Ordering Updated', 'Placing an order Updated', 'Taking a posted order Added', 'Order API Updated', 'Types in a posted order Added', 'Go Removed', 'Order details Updated'],
+        // Updated is yellow on every page of a change.
+        tones: ['pill tone-caution', 'pill tone-caution', 'pill tone-success', 'pill tone-caution', 'pill tone-success', 'pill tone-danger', 'pill tone-caution'],
         links: [
           '/changes/orders-by-post/records/features/ordering',
+          '/changes/orders-by-post/records/flows/placing-an-order',
+          '/changes/orders-by-post/records/flows/taking-a-posted-order',
           '/changes/orders-by-post/records/apps/order-api',
           '/changes/orders-by-post/records/connections/clerk-orders',
           '/changes/orders-by-post/records/technologies/go',
+          '/changes/orders-by-post/records/data/order-details',
         ],
       });
     }),
@@ -826,3 +830,287 @@ test.skipIf(!HAS_CHROME).concurrent(
     }),
   20_000,
 );
+
+/** A flow under the change in the test model, once its steps stand in the sidebar and its name in the way back and the window's title. */
+const onFlowUnder = (flow: string, name: string) =>
+  `location.pathname === ${JSON.stringify(`/changes/orders-by-post/records/flows/${flow}`)} && document.querySelector('.sidebar-slot [data-row="step"]') !== null && document.querySelector('.breadcrumb-here')?.textContent === ${JSON.stringify(name)} && document.title === ${JSON.stringify(`${name} · seefore`)}`;
+/** What a flow under a change shows around its bar: the sidebar, the way back and the mark in the top bar, and each row of its steps. */
+const AROUND = `({
+  sidebar: ${SIDEBAR},
+  home: document.querySelector('.history-controls a[aria-label="Home"]') !== null,
+  crumbs: ${texts('.breadcrumb')}[0],
+  back: ${hrefs('.breadcrumb a')},
+  mark: [...document.querySelectorAll('.header-slot > .pill')].map((pill) => pill.className + ' ' + pill.textContent),
+  starts: ${texts('[data-row="starts"]')}[0],
+  rows: [...document.querySelectorAll('[data-row="step"]')].map((row) => [row.getAttribute('data-step'), row.getAttribute('data-mark'), row.querySelector('.flow-step-number').textContent, row.querySelector('.flow-step-mark')?.textContent ?? null]),
+})`;
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME ? 'a flow the change updates opens under the change with its steps in the sidebar, the way back and its mark, and the words on its rows; one it adds opens with its mark' : `skipped: there is no Chrome at ${CHROME}`,
+  () =>
+    inChrome(async (send, address) => {
+      await send('Page.navigate', { url: `${address}/changes/orders-by-post/records` });
+      await click(send, await centreOf(send, 'main a[href="/changes/orders-by-post/records/flows/placing-an-order"]'));
+      expect(await waitFor(send, `${onFlowUnder('placing-an-order', 'Placing an order')} && ${AROUND}`)).toEqual({
+        // The flow's steps take the place of the change's sidebar, as on a flow's own page.
+        sidebar: { main: null, change: null, current: null },
+        home: true,
+        crumbs: 'Orders by post / Records / Placing an order',
+        back: ['/changes/orders-by-post', '/changes/orders-by-post/records'],
+        mark: ['pill tone-caution Updated'],
+        starts: 'Starts Updated A customer places an order online Today: A customer places an order in the shop',
+        // The step that goes stands where it stood, with a minus for its number; the others are numbered as the flow would be.
+        rows: [
+          ['places', null, '1', null],
+          ['saves', 'removed', '−', 'Removed'],
+          ['types-in', 'added', '2', 'Added'],
+          ['confirms', 'updated', '3', 'Updated'],
+        ],
+      });
+      // "Records" in the way back leads to the list, and the flow the change adds opens with its mark and no colour on a step.
+      await click(send, await centreOf(send, '.breadcrumb a[href="/changes/orders-by-post/records"]'));
+      await click(send, await centreOf(send, 'main a[href="/changes/orders-by-post/records/flows/taking-a-posted-order"]'));
+      expect(await waitFor(send, `${onFlowUnder('taking-a-posted-order', 'Taking a posted order')} && ${AROUND}`)).toMatchObject({
+        crumbs: 'Orders by post / Records / Taking a posted order',
+        mark: ['pill tone-success Added'],
+        starts: 'Starts An order comes by post',
+        rows: [
+          ['types-in', null, '1', null],
+          ['saves', null, '2', null],
+        ],
+      });
+    }),
+  20_000,
+);
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME ? 'under a change a removed step is picked like any other: the bar says "Was step" and "Removed" with its words of today, the down key moves on, and an updated step has its words of today under its changed line' : `skipped: there is no Chrome at ${CHROME}`,
+  () =>
+    inChrome(async (send, address) => {
+      await send('Page.navigate', { url: `${address}/changes/orders-by-post/records/flows/placing-an-order` });
+      expect(await waitFor(send, onFlowUnder('placing-an-order', 'Placing an order'))).toBe(true);
+      await flowAt(send, '');
+      await click(send, await centreOf(send, '[data-row="step"][data-step="saves"]'));
+      const saves = await flowAt(send, '#saves');
+      // It is shown as it is today, and lights the line it walks today.
+      expect(saves).toMatchObject({ current: 'saves', stepped: ['order-api->orders'] });
+      expect(saves.bar).toContain('Was step 2 Saves the order Removed');
+      expect(saves.bar).toContain('Order API to Orders Only when the customer has paid Data Order details');
+      await press(send, 'ArrowDown', 40);
+      const typesIn = await flowAt(send, '#types-in');
+      expect(typesIn.current).toBe('types-in');
+      expect(typesIn.bar).toContain('2 of 3 Types in a posted order Added');
+      await press(send, 'ArrowDown', 40);
+      const confirms = await flowAt(send, '#confirms');
+      expect(confirms.current).toBe('confirms');
+      expect(confirms.bar).toContain('3 of 3 Confirms the order by email Updated');
+      // Each changed line, and under it what it says today: the name, and a condition that is new.
+      const changed = `[...document.querySelectorAll('section[aria-label="Current step"] .flow-line-changed')].map((line) => [line.textContent, line.nextElementSibling?.className === 'flow-line-today' ? line.nextElementSibling.textContent : null])`;
+      expect(await waitFor(send, changed)).toEqual([
+        ['Confirms the order by email', null],
+        ['Only when the customer gave an email address', 'Today: nothing'],
+      ]);
+      expect(confirms.bar).toContain('Today: Confirms the order');
+    }),
+  20_000,
+);
+
+/** What the diagram shows of a change: each box's mark, each line's mark with its colour and dash, the signs on the boxes, and the legend; or false until the lines are drawn. */
+const MARKS = `document.querySelectorAll('.react-flow__edge-path[d^="M"]').length > 0 && {
+  boxes: [...document.querySelectorAll('.react-flow__node')].map((node) => [node.getAttribute('data-id'), node.querySelector('.architecture-node')?.getAttribute('data-mark') ?? null, [...node.classList].filter((name) => name.startsWith('mark-')).join()]).sort(),
+  lines: [...document.querySelectorAll('.react-flow__edge')].map((edge) => {
+    const path = getComputedStyle(edge.querySelector('.react-flow__edge-path'));
+    return [edge.getAttribute('data-id'), [...edge.classList].filter((name) => name.startsWith('mark-')).join(), path.stroke, path.strokeDasharray];
+  }).sort(),
+  signs: [...document.querySelectorAll('.architecture-node .diagram-mark-sign')].map((sign) => sign.closest('[data-id]').getAttribute('data-id') + ' ' + sign.getAttribute('aria-label')).sort(),
+  legend: ${texts('[aria-label="Legend"] li')},
+}`;
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME ? "on a flow the change updates the diagram's boxes and lines bear their marks and a legend says them; on the flow's own page nothing does" : `skipped: there is no Chrome at ${CHROME}`,
+  () =>
+    inChrome(async (send, address) => {
+      await send('Page.navigate', { url: `${address}/changes/orders-by-post/records/flows/placing-an-order` });
+      expect(await waitFor(send, `${onFlowUnder('placing-an-order', 'Placing an order')} && ${MARKS}`)).toEqual({
+        // The flow no longer passes the store of orders, newly passes the clerk, and passes the Order API, which the change updates.
+        boxes: [
+          ['clerk', 'added', 'mark-added'],
+          ['customer', null, ''],
+          ['order-api', 'updated', 'mark-updated'],
+          ['orders', 'removed', 'mark-removed'],
+          ['shop', null, ''],
+        ],
+        // A red line is dashed; the others are not. The colours are those of the theme.
+        lines: [
+          ['clerk->order-api', 'mark-added', 'rgb(101, 213, 128)', 'none'],
+          ['customer->order-api', '', 'rgb(129, 139, 152)', 'none'],
+          ['order-api->orders', 'mark-removed', 'rgb(255, 117, 109)', '6px, 4px'],
+        ],
+        signs: ['clerk Newly passed', 'order-api Updated by the change', 'orders No longer passed'],
+        legend: ['+ Newly passed', '− No longer passed', '~ Updated by the change'],
+      });
+      await send('Page.navigate', { url: `${address}/flows/placing-an-order` });
+      expect(await waitFor(send, `location.pathname === '/flows/placing-an-order' && document.querySelector('.react-flow__node') !== null && ${MARKS}`)).toMatchObject({
+        boxes: [
+          ['customer', null, ''],
+          ['order-api', null, ''],
+          ['orders', null, ''],
+          ['shop', null, ''],
+        ],
+        signs: [],
+        legend: [],
+      });
+    }),
+  20_000,
+);
+
+/** What the panel says of what the change does: the pill beside the type, the sentence under the name, and where its button leads. */
+const PANEL_UNDER = `(() => {
+  const panel = document.querySelector('aside[aria-label="Diagram inspector"]');
+  return panel !== null && {
+    name: panel.querySelector('h2')?.textContent,
+    pills: [...panel.querySelectorAll('.diagram-inspector-kind .pill')].map((pill) => pill.className + ' ' + pill.textContent),
+    passes: panel.querySelector('.diagram-inspector-passes')?.textContent ?? null,
+    button: panel.querySelector('a.button')?.getAttribute('href'),
+  };
+})()`;
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME ? 'under a change a red box opens its panel with the sentence that the flow no longer passes it, and a yellow one with the pill Updated and its button under the change' : `skipped: there is no Chrome at ${CHROME}`,
+  () =>
+    inChrome(async (send, address) => {
+      await send('Page.navigate', { url: `${address}/changes/orders-by-post/records/flows/placing-an-order` });
+      await click(send, await centreOf(send, '.react-flow__node[data-id="orders"]'));
+      // The store of orders is not a record the change names: no pill, and its button leads to the system.
+      expect(await waitFor(send, `(() => { const read = ${PANEL_UNDER}; return read && read.name === 'Orders' && read; })()`)).toEqual({
+        name: 'Orders',
+        pills: [],
+        passes: 'With this change the flow no longer passes it.',
+        button: '/models/orders',
+      });
+      await press(send, 'Escape', 27);
+      expect(await closed(send)).toBe(true);
+      // The Order API is in both and the change updates it: its pill, no sentence, and its button under the change.
+      await click(send, await centreOf(send, '.react-flow__node[data-id="order-api"]'));
+      expect(await waitFor(send, `(() => { const read = ${PANEL_UNDER}; return read && read.name === 'Order API' && read; })()`)).toEqual({
+        name: 'Order API',
+        pills: ['pill tone-caution Updated'],
+        passes: null,
+        button: '/changes/orders-by-post/records/apps/order-api',
+      });
+    }),
+  20_000,
+);
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME ? 'a flow that a change removes opens as it is today with its line and no colour, and the fields of a data record read as one list' : `skipped: there is no Chrome at ${CHROME}`,
+  () =>
+    inChrome(async (send, address) => {
+      // The third case: a flow the change removes. Its steps, its bar and its diagram are today's, and only the flow bears a mark.
+      await send('Page.navigate', { url: `${address}/changes/orders-on-paper-only/records/flows/placing-an-order` });
+      const removed = `location.pathname === '/changes/orders-on-paper-only/records/flows/placing-an-order' && document.title === 'Placing an order · seefore' && document.querySelector('.react-flow__node') !== null && {
+        back: ${hrefs('nav[aria-label="Breadcrumb"] a')},
+        mark: ${texts('.header-slot .pill')},
+        line: ${texts('.flow-bar-removed')}[0],
+        system: document.querySelector('.flow-bar-removed a')?.getAttribute('href'),
+        rows: [...document.querySelectorAll('.desktop-sidebar [data-row="step"]')].map((row) => [row.querySelector('.flow-step-number').textContent, row.dataset.step, row.dataset.mark ?? null]),
+        marked: document.querySelectorAll('.react-flow__node [data-mark], .react-flow__edge[class*="mark-"]').length,
+        legend: document.querySelector('[aria-label="Legend"]') !== null,
+      }`;
+      expect(await waitFor(send, removed)).toEqual({
+        back: ['/changes/orders-on-paper-only', '/changes/orders-on-paper-only/records'],
+        mark: ['Removed'],
+        line: 'Removed by this change. This is the flow as it is today. Open it in the system',
+        system: '/flows/placing-an-order',
+        rows: [
+          ['1', 'places', null],
+          ['2', 'saves', null],
+          ['3', 'confirms', null],
+        ],
+        marked: 0,
+        legend: false,
+      });
+      // The fields of a data record, before and after: one list, a field that changes with today's words under it, one that comes, one that goes.
+      await send('Page.navigate', { url: `${address}/changes/orders-by-post/records/data/order-details` });
+      const fields = `location.pathname === '/changes/orders-by-post/records/data/order-details' && document.querySelector('.change-field') !== null && [...document.querySelectorAll('.change-field')].map((row) => [row.querySelector('.change-field-name').textContent, row.dataset.mark ?? null, row.querySelector('.flow-step-mark')?.textContent ?? null, row.querySelector('.change-field-text')?.textContent ?? null, row.querySelector('.change-field-today')?.textContent ?? null])`;
+      expect(await waitFor(send, fields)).toEqual([
+        ['items', 'updated', 'Updated', 'What is bought, how many of each, and at what price', 'Today: What is bought, and how many of each'],
+        // A field that goes stands where it stood, ahead of one that comes there.
+        ['address', 'removed', 'Removed', null, null],
+        ['sent by', 'added', 'Added', 'Online or by post', null],
+      ]);
+    }),
+  20_000,
+);
+
+/** What the two views of an updated flow show: the address, the switch, the mark, the rows, the step picked, the boxes and whether anything bears a colour; or false until the lines are drawn. */
+const VIEWS = `document.querySelectorAll('.react-flow__edge-path[d^="M"]').length > 0 && {
+  search: location.search,
+  hash: location.hash,
+  tabs: [...document.querySelectorAll('.top-header nav[aria-label="View"] a')].map((link) => [link.textContent, link.getAttribute('aria-current')]),
+  mark: ${texts('.header-slot > .pill')},
+  rows: [...document.querySelectorAll('[data-row="step"]')].map((row) => [row.getAttribute('data-step'), row.getAttribute('data-mark'), row.querySelector('.flow-step-number').textContent]),
+  current: document.querySelector('[data-row="step"][aria-current="step"]')?.getAttribute('data-step') ?? null,
+  boxes: [...document.querySelectorAll('.react-flow__node')].map((node) => node.getAttribute('data-id')).sort(),
+  marked: document.querySelectorAll('.react-flow__node [data-mark], .react-flow__edge[class*="mark-"]').length,
+  legend: document.querySelector('[aria-label="Legend"]') !== null,
+  today: document.querySelectorAll('.flow-line-today, .flow-end-today').length,
+}`;
+/** The view the switch says is shown, drawn, with the step the address names picked: the address changes a moment before the page does. */
+const inView = (view: string, hash: string) =>
+  `document.querySelector('.top-header nav[aria-label="View"] a[aria-current="page"]')?.textContent === ${JSON.stringify(view)} && location.hash === ${JSON.stringify(hash)} && (document.querySelector('[data-row="step"][aria-current="step"]')?.getAttribute('data-step') ?? '') === ${JSON.stringify(hash.slice(1))} && ${VIEWS}`;
+const OTHER_VIEW = '.top-header nav[aria-label="View"] a:not([aria-current])';
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME ? 'an updated flow has a switch in the top bar: Changes, and Result, the flow as it would be with no colour; the step picked stays, and a step that goes is let go' : `skipped: there is no Chrome at ${CHROME}`,
+  () =>
+    inChrome(async (send, address) => {
+      await send('Page.navigate', { url: `${address}/changes/orders-by-post/records/flows/placing-an-order#confirms` });
+      expect(await waitFor(send, `${onFlowUnder('placing-an-order', 'Placing an order')} && ${inView('Changes', '#confirms')}`)).toMatchObject({
+        search: '',
+        tabs: [
+          ['Changes', 'page'],
+          ['Result', null],
+        ],
+        current: 'confirms',
+        boxes: ['clerk', 'customer', 'order-api', 'orders', 'shop'],
+        legend: true,
+      });
+      // Result: the steps as they would be, the step picked still picked, and nothing of today: no step that goes, no box only today's flow passes, no colour, no legend.
+      await click(send, await centreOf(send, OTHER_VIEW));
+      expect(await waitFor(send, inView('Result', '#confirms'))).toEqual({
+        search: '?view=result',
+        hash: '#confirms',
+        tabs: [
+          ['Changes', null],
+          ['Result', 'page'],
+        ],
+        mark: ['Updated'],
+        rows: [
+          ['places', null, '1'],
+          ['types-in', null, '2'],
+          ['confirms', null, '3'],
+        ],
+        current: 'confirms',
+        boxes: ['clerk', 'customer', 'order-api', 'shop'],
+        marked: 0,
+        legend: false,
+        today: 0,
+      });
+      // A move to another step keeps the view.
+      await press(send, 'ArrowUp', 38);
+      expect(await waitFor(send, inView('Result', '#types-in'))).toMatchObject({ search: '?view=result', current: 'types-in' });
+      // Back to Changes on the same step; from a step that goes, Result opens on the whole flow.
+      await click(send, await centreOf(send, OTHER_VIEW));
+      expect(await waitFor(send, inView('Changes', '#types-in'))).toMatchObject({ search: '', current: 'types-in', rows: [['places', null, '1'], ['saves', 'removed', '−'], ['types-in', 'added', '2'], ['confirms', 'updated', '3']] });
+      await click(send, await centreOf(send, '[data-row="step"][data-step="saves"]'));
+      expect(await waitFor(send, inView('Changes', '#saves'))).toMatchObject({ current: 'saves' });
+      await click(send, await centreOf(send, OTHER_VIEW));
+      expect(await waitFor(send, inView('Result', ''))).toMatchObject({ search: '?view=result', current: null });
+      // A flow the change adds is one view: it has no switch.
+      await send('Page.navigate', { url: `${address}/changes/orders-by-post/records/flows/taking-a-posted-order` });
+      expect(await waitFor(send, `${onFlowUnder('taking-a-posted-order', 'Taking a posted order')} && document.querySelectorAll('.react-flow__edge-path[d^="M"]').length > 0 && { tabs: document.querySelectorAll('nav[aria-label="View"]').length }`)).toEqual({ tabs: 0 });
+    }),
+  20_000,
+);
+

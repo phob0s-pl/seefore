@@ -7,10 +7,41 @@ add:
     from: clerk
     to: order-api
     name: Types in a posted order
+  flows/taking-a-posted-order:
+    name: Taking a posted order
+    starts: An order comes by post
+    ends: The order is kept in the store of orders
+    feature: ordering
+    steps:
+      - id: types-in
+        does: clerk-orders
+        data: [order-details]
+      - id: saves
+        does: api-writes-orders
+        name: Saves the order
+        data: [order-details]
 update:
   features/ordering:
     description: Customers buy things online or by post, and the clerk sees what they bought.
   apps/order-api:
     technology: null
+  data/order-details:
+    fields:
+      - name: items
+        description: What is bought, how many of each, and at what price
+      - name: sent by
+        description: Online or by post
+  flows/placing-an-order:
+    starts: A customer places an order online
+    steps:
+      - places
+      - id: types-in
+        does: clerk-orders
+        only: when the order comes by post
+        data: [order-details]
+      - id: confirms
+        reply: places
+        name: Confirms the order by email
+        only: when the customer gave an email address
 remove:
   - technologies/go

@@ -238,3 +238,275 @@ export function flowSteps(records: readonly ModelRecord[], flowId: string): Flow
     steps: read,
   };
 }
+
+// ---- a flow under a change: what the change does to each step, box and line
+
+/** What a change does to a step of a flow, or to a box or a line of its view; `same` when it does nothing. */
+export type Mark = 'added' | 'removed' | 'updated' | 'same';
+
+/**
+ * A key that a change writes otherwise, with today's words for it. No `today` where the key is
+ * new; `gone` where the change takes the key out.
+ */
+export type Was = { key: string; today?: string; gone?: true };
+
+/**
+ * A step of a flow under a change: the step as its page reads it, what the change does to it,
+ * today's words for each of its own keys that the change writes otherwise, and whether it only
+ * moved. A step that goes is read as it is today, and its `number` is the one it has today.
+ */
+export type StepUnder = FlowStep & { mark: Mark; was: Was[]; moved?: true };
+
+/**
+ * A flow under a change, all the page asks: what the change does to the flow; the flow's head as
+ * it would be, or as it is for one that goes; today's words for its own keys that change; its
+ * steps in one list; how many steps it would have; the view of what it passes today and of what
+ * it would pass, as one; a mark for every box, arrow and connection of that view; and the records
+ * the view is drawn from, those as they would be and today's of what the change removes.
+ */
+export type FlowUnder = {
+  verb: 'add' | 'update' | 'remove';
+  flow: FlowRead;
+  was: Was[];
+  steps: StepUnder[];
+  count: number;
+  view: View;
+  marks: Map<string, Mark>;
+  records: ModelRecord[];
+  /** Of a flow the change updates: the flow as it would be alone, with no mark, as a flow the change adds is read. */
+  result?: FlowUnder;
+};
+
+/** The keys of a step that are its own: a step is updated when one of them is written otherwise. */
+const STEP_KEYS = ['does', 'reply', 'after', 'name', 'only', 'description', 'data'] as const;
+/** The keys of a flow that its head shows. */
+const FLOW_KEYS = ['name', 'feature', 'only', 'description', 'starts', 'ends'] as const;
+
+const sameValue = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
+
+/**
+ * One order of what is today and what would be: the ids as they would be, with each id that goes
+ * put back where it stood, straight after the nearest id before it today that stays, ahead of
+ * what comes there; first when none before it stays. Ids that go together keep today's order.
+ */
+export function orderOfBoth(today: readonly string[], after: readonly string[]): string[] {
+  const stays = new Set(after);
+  const order = [...after];
+  let anchor: string | undefined;
+  let last: string | undefined;
+  for (const id of today) {
+    if (stays.has(id)) {
+      anchor = id;
+      last = undefined;
+      continue;
+    }
+    // After the anchor, and after any that went just before it today.
+    const behind = last ?? anchor;
+    const at = behind === undefined ? 0 : order.indexOf(behind) + 1;
+    order.splice(at, 0, id);
+    last = id;
+  }
+  return order;
+}
+
+/** The ids that only moved: those that stay, outside the longest run that keeps today's order. */
+function movedOf(today: readonly string[], after: readonly string[]): Set<string> {
+  const there = new Set(after);
+  const was = today.filter((id) => there.has(id));
+  const here = new Set(today);
+  const now = after.filter((id) => here.has(id));
+  // The longest common run of the two orders, kept from its end so that the earlier one wins a tie.
+  const lengths: number[][] = Array.from({ length: was.length + 1 }, () => new Array<number>(now.length + 1).fill(0));
+  for (let i = was.length - 1; i >= 0; i--)
+    for (let j = now.length - 1; j >= 0; j--) (lengths[i] as number[])[j] = was[i] === now[j] ? ((lengths[i + 1] as number[])[j + 1] as number) + 1 : Math.max((lengths[i + 1] as number[])[j] as number, (lengths[i] as number[])[j + 1] as number);
+  const kept = new Set<string>();
+  for (let i = 0, j = 0; i < was.length && j < now.length; ) {
+    if (was[i] === now[j]) {
+      kept.add(was[i] as string);
+      i++;
+      j++;
+    } else if (((lengths[i + 1] as number[])[j] as number) >= ((lengths[i] as number[])[j + 1] as number)) i++;
+    else j++;
+  }
+  return new Set(now.filter((id) => !kept.has(id)));
+}
+
+/** The raw steps of a flow's record that have an id, by that id, in order. */
+function rawSteps(flow: ModelRecord): Map<string, Record<string, unknown>> {
+  const steps = Array.isArray(flow.fields.steps) ? (flow.fields.steps as unknown[]) : [];
+  const byId = new Map<string, Record<string, unknown>>();
+  for (const step of steps) {
+    if (typeof step !== 'object' || step === null || Array.isArray(step)) continue;
+    const id = (step as Record<string, unknown>).id;
+    if (typeof id === 'string' && !byId.has(id)) byId.set(id, step as Record<string, unknown>);
+  }
+  return byId;
+}
+
+/** The connections a view's arrows stand for, either way. */
+const walkedOf = (view: View): Set<string> => new Set(view.arrows.flatMap((arrow) => [...arrow.connections, ...(arrow.back ?? [])]));
+
+/**
+ * What a change does to a flow, or nothing when the change does not name the flow or a side of
+ * it is missing. `today` are the records of the model; `after` those as they would be; `touched`
+ * what the change names, with what it does to each. A flow the change adds or removes comes back
+ * in the same form, from its one side, with every mark `same`: only the flow bears a mark.
+ *
+ * Each row is read from its own side: a step that stays or comes from the flow as it would be,
+ * a step that goes from the flow as it is today, with today's connections and their ends. The
+ * view is of both, and what a row lights is found on it.
+ */
+export function flowUnder(
+  today: readonly ModelRecord[],
+  after: readonly ModelRecord[],
+  touched: readonly { path: string; verb: 'add' | 'update' | 'remove' }[],
+  flowId: string,
+): FlowUnder | undefined {
+  const verb = touched.find((each) => each.path === `flows/${flowId}`)?.verb;
+  if (verb === undefined) return undefined;
+  const plain = (records: readonly ModelRecord[]): FlowUnder | undefined => {
+    const flow = flowSteps(records, flowId);
+    if (flow === undefined) return undefined;
+    return { verb, flow, was: [], steps: flow.steps.map((step) => ({ ...step, mark: 'same', was: [] })), count: flow.steps.length, view: flowView(records, flowId), marks: new Map(), records: [...records] };
+  };
+  if (verb === 'add') return plain(after);
+  if (verb === 'remove') return plain(today);
+
+  const todayById = byIdOf(today);
+  const afterById = byIdOf(after);
+  const was = todayById.get(flowId);
+  const will = afterById.get(flowId);
+  const readToday = flowSteps(today, flowId);
+  const readAfter = flowSteps(after, flowId);
+  if (was === undefined || will === undefined || was.kind !== 'flows' || will.kind !== 'flows' || readToday === undefined || readAfter === undefined) return undefined;
+
+  // The flow's own keys that change, with today's words.
+  const head: Was[] = FLOW_KEYS.filter((key) => !sameValue(was.fields[key], will.fields[key])).map((key) => {
+    const words = key === 'feature' ? readToday.feature?.name : key === 'name' ? readToday.name : text(was.fields[key]);
+    return { key, ...(key in was.fields && words !== undefined ? { today: words } : {}), ...(!(key in will.fields) ? { gone: true as const } : {}) };
+  });
+
+  // The steps of both sides by their ids. A flow with an id twice, which the check tells, has no
+  // step told from another: it is shown as it would be, with no mark on a step, a box or a line.
+  const rawToday = rawSteps(was);
+  const rawAfter = rawSteps(will);
+  if (rawToday.size !== readToday.steps.length || rawAfter.size !== readAfter.steps.length) {
+    const shown = plain(after);
+    return shown === undefined ? undefined : { ...shown, was: head, result: shown };
+  }
+  const order = orderOfBoth([...rawToday.keys()], [...rawAfter.keys()]);
+  const moved = movedOf([...rawToday.keys()], [...rawAfter.keys()]);
+
+  // What the flow passes on each side.
+  const viewToday = flowView(today, flowId);
+  const viewAfter = flowView(after, flowId);
+  const boxesToday = new Set(viewToday.boxes.map((box) => box.id));
+  const boxesAfter = new Set(viewAfter.boxes.map((box) => box.id));
+  const walkedToday = walkedOf(viewToday);
+  const walkedAfter = walkedOf(viewAfter);
+
+  // The records the view of both is drawn from: those as they would be, and, of what only
+  // today's flow passes, the record as it is today, with today's ends. The flow in them walks
+  // what a step is on, on either side: a reply walks nothing of its own.
+  const onlyToday = new Set([...[...boxesToday].filter((id) => !boxesAfter.has(id)), ...[...walkedToday].filter((id) => !walkedAfter.has(id))]);
+  const stepsToday = stepsOfRecord(was);
+  const stepsAfter = stepsOfRecord(will);
+  const walks = [...new Set([...stepsAfter, ...stepsToday].flatMap((step) => (step.reply === undefined && step.does !== undefined ? [step.does] : [])))];
+  const both: ModelRecord = { ...will, fields: { ...will.fields, steps: walks.map((does, index) => ({ id: `walk-${index}`, does })) } };
+  const records = [...after.filter((record) => record !== will && !onlyToday.has(record.id)), ...[...onlyToday].flatMap((id) => todayById.get(id) ?? []), both];
+  const view = flowView(records, flowId);
+  const drawn = new Set(view.boxes.map((box) => box.id));
+  const arrowOf = (id: string): { arrow: string; forward: boolean } | undefined => {
+    for (const arrow of view.arrows) {
+      if (arrow.connections.includes(id)) return { arrow: arrow.id, forward: true };
+      if (arrow.back?.includes(id)) return { arrow: arrow.id, forward: false };
+    }
+    return undefined;
+  };
+  // What a step lights on the view of both: its connection, or for a reply that of the step it answers, as its own side has it; or its part.
+  const sides = { today: { steps: stepsToday, places: placesOf(stepsToday, todayById) }, after: { steps: stepsAfter, places: placesOf(stepsAfter, afterById) } };
+  const lightsOf = (side: 'today' | 'after', id: string): Lights | undefined => {
+    const { places } = sides[side];
+    const step = places.first.get(id);
+    if (step === undefined) return undefined;
+    const travels = places.connection(step);
+    const way = travels && arrowOf(travels.id);
+    if (way) return { arrow: way.arrow, back: way.forward === (step.reply !== undefined) };
+    const on = places.does(step);
+    return step.reply === undefined && on !== undefined && on.kind !== 'connections' && on.kind !== 'flows' && drawn.has(on.id) ? { box: on.id } : undefined;
+  };
+
+  // The number a step of today shows in the one list: as it would be when it stays, today's when it goes.
+  const readTodayById = new Map(readToday.steps.map((step) => [step.id, step]));
+  const readAfterById = new Map(readAfter.steps.map((step) => [step.id, step]));
+  const shown = new Map(readToday.steps.map((step) => [step.number, readAfterById.get(step.id)?.number ?? step.number]));
+  const renumbered = (ref: StepRef): StepRef => ({ ...ref, number: shown.get(ref.number) ?? ref.number });
+
+  let before: StepUnder | undefined;
+  const steps = order.flatMap((id): StepUnder[] => {
+    const then = readAfterById.get(id);
+    const now = readTodayById.get(id);
+    const read = then ?? now;
+    if (read === undefined) return [];
+    const rawWas = rawToday.get(id);
+    const rawWill = rawAfter.get(id);
+    const mark: Mark = rawWill === undefined ? 'removed' : rawWas === undefined ? 'added' : STEP_KEYS.some((key) => !sameValue(rawWas[key], rawWill[key])) ? 'updated' : 'same';
+    // Today's words where a line of the step reads otherwise: who acts on what and the title, by what they say; the rest by its key.
+    const changed: Was[] = [];
+    if (mark === 'updated' && now !== undefined && then !== undefined && rawWas !== undefined && rawWill !== undefined) {
+      if (now.acts !== then.acts) changed.push({ key: 'does', today: now.acts });
+      if (now.happens !== then.happens) changed.push({ key: 'name', today: now.happens });
+      const said: Record<string, string | undefined> = {
+        reply: now.reply?.words,
+        after: now.after.length > 0 ? joined(now.after.map((each) => each.words)) : undefined,
+        only: now.only,
+        description: now.description,
+        data: now.data.length > 0 ? joined(now.data.map((each) => each.name)) : undefined,
+      };
+      for (const key of ['reply', 'after', 'only', 'description', 'data'] as const)
+        if (!sameValue(rawWas[key], rawWill[key])) changed.push({ key, ...(said[key] !== undefined ? { today: said[key] } : {}), ...(!(key in rawWill) ? { gone: true as const } : {}) });
+    }
+    // A step that goes names the steps it followed by the numbers they bear in this list, and opens no strand of its own.
+    const goes = mark === 'removed';
+    const after = goes ? read.after.map(renumbered) : read.after;
+    const reply = goes && read.reply !== undefined ? renumbered(read.reply) : read.reply;
+    const strand = goes ? undefined : read.strand;
+    // The words of a condition stand over its first step in this list.
+    const group = read.only !== undefined && (read.only !== before?.only || strand !== undefined) ? `Only ${read.only}` : undefined;
+    const lights = lightsOf(then !== undefined ? 'after' : 'today', id);
+    const { lights: _lit, strand: _strand, group: _group, reply: _reply, ...rest } = read;
+    const step: StepUnder = {
+      ...rest,
+      ...(reply !== undefined ? { reply } : {}),
+      after,
+      ...(lights !== undefined ? { lights } : {}),
+      ...(group !== undefined ? { group } : {}),
+      ...(strand !== undefined ? { strand } : {}),
+      mark,
+      was: changed,
+      ...(mark === 'same' || mark === 'updated' ? (moved.has(id) ? { moved: true as const } : {}) : {}),
+    };
+    before = step;
+    return [step];
+  });
+
+  // The boxes and the connections: by what the flow passes, and then by what the change does to the record.
+  const updated = new Set(touched.filter((each) => each.verb === 'update').map((each) => each.path));
+  const kindOf = new Map(records.map((record) => [record.id, record.kind]));
+  const passed = (was: Set<string>, will: Set<string>, id: string): Mark =>
+    !was.has(id) ? 'added' : !will.has(id) ? 'removed' : updated.has(`${kindOf.get(id) ?? ''}/${id}`) ? 'updated' : 'same';
+  const marks = new Map<string, Mark>();
+  for (const box of view.boxes) marks.set(box.id, passed(boxesToday, boxesAfter, box.id));
+  for (const arrow of view.arrows) {
+    const each = [...arrow.connections, ...(arrow.back ?? [])].map((id) => {
+      const mark = passed(walkedToday, walkedAfter, id);
+      marks.set(id, mark);
+      return mark;
+    });
+    // A line of several connections bears their mark when they agree, and is updated when they do not: something on it differs.
+    marks.set(arrow.id, each.every((mark) => mark === each[0]) ? (each[0] ?? 'same') : 'updated');
+  }
+  // The flow as it would be alone, which the page shows in place of the difference when asked.
+  const result: FlowUnder = { verb, flow: readAfter, was: [], steps: readAfter.steps.map((step) => ({ ...step, mark: 'same', was: [] })), count: readAfter.steps.length, view: viewAfter, marks: new Map(), records: [...after] };
+  return { verb, flow: { ...readAfter, steps }, was: head, steps, count: readAfter.steps.length, view, marks, records, result };
+}

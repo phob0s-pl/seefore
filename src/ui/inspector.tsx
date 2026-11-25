@@ -2,13 +2,43 @@ import { useEffect } from 'react';
 import { X } from 'lucide-react';
 import type { ModelRecord } from '../model/answer.ts';
 import type { Catalogue } from '../model/catalogue.ts';
+import type { Verb } from '../model/changes.ts';
+import type { Mark } from '../model/flow.ts';
 import type { Arrow, View } from '../model/view.ts';
 import { typeWords } from './kinds.tsx';
 import { KindTile, NameOf } from './models.tsx';
 import { End, ids } from './record.tsx';
-import { Button, ButtonLink, GridRow, Pill, RowList } from './ui.tsx';
+import { Button, ButtonLink, GridRow, MarkPill, Pill, RowList } from './ui.tsx';
 
 const ROW = 'minmax(0, 1fr)';
+
+/**
+ * An updated flow under a change, as the panel reads it: what the change does to each box, line
+ * and connection of the flow's view, and what it does to each record it names, by its path.
+ */
+type Under = { marks: ReadonlyMap<string, Mark>; verbs: ReadonlyMap<string, Verb> };
+
+/** The sentence under the name of a box or a connection the flow newly passes, or no longer passes. */
+const PASSES: Partial<Record<Mark, string>> = {
+  added: 'With this change the flow newly passes it.',
+  removed: 'With this change the flow no longer passes it.',
+};
+
+/** The small word at the right of a row of a line of several connections, as a step's word. */
+const WORDS: Partial<Record<Mark, string>> = { added: 'Added', removed: 'Removed', updated: 'Updated' };
+
+/** Beside the type, under a change: the pill of what the change does to the record, when it names it. */
+function Done({ record, under }: { record: ModelRecord; under: Under | undefined }) {
+  const verb = under?.verbs.get(`${record.kind}/${record.id}`);
+  return verb !== undefined ? <MarkPill verb={verb} /> : null;
+}
+
+/** Under the name, under a change: whether the flow newly passes the box or the connection, or no longer does. */
+function Passes({ id, under }: { id: string; under: Under | undefined }) {
+  const mark = under?.marks.get(id);
+  const words = mark !== undefined ? PASSES[mark] : undefined;
+  return words !== undefined ? <p className="diagram-inspector-passes">{words}</p> : null;
+}
 
 /** The way from the panel to a record's page: a small outline button. */
 function Details({ catalogue, record, children }: { catalogue: Catalogue; record: ModelRecord; children: string }) {
@@ -27,18 +57,24 @@ function Description({ record }: { record: ModelRecord }) {
   return typeof description === 'string' ? <p>{description}</p> : null;
 }
 
-/** A box or a frame: its type, the mark of an outside system, its name, its description and its page. */
-function Thing({ record, catalogue }: { record: ModelRecord; catalogue: Catalogue }) {
+/**
+ * A box or a frame: its type, the mark of an outside system, its name, its description and its
+ * page. Under a change, the pill of what the change does to its record stands beside its type, and
+ * a sentence under its name says when the flow newly passes it or no longer does.
+ */
+function Thing({ record, catalogue, under }: { record: ModelRecord; catalogue: Catalogue; under: Under | undefined }) {
   const { kind, fields } = record;
   return (
     <>
       <div className="diagram-inspector-kind">
         <span className="eyebrow">{typeWords(kind, fields.kind)}</span>
         {fields.external === true && <Pill size="xs">External</Pill>}
+        <Done record={record} under={under} />
       </div>
       <h2>
         <NameOf record={record} />
       </h2>
+      <Passes id={record.id} under={under} />
       <Description record={record} />
       <Details catalogue={catalogue} record={record}>
         {kind === 'people' ? 'Open actor details' : 'Open model details'}
@@ -79,17 +115,19 @@ function Data({ record, catalogue }: { record: ModelRecord; catalogue: Catalogue
   );
 }
 
-/** A line of one connection: its name, its description, its page, and its path from its real ends. */
-function Connection({ record, catalogue }: { record: ModelRecord; catalogue: Catalogue }) {
+/** A line of one connection: its name, its description, its page, and its path from its real ends. Under a change, as a box. */
+function Connection({ record, catalogue, under }: { record: ModelRecord; catalogue: Catalogue; under: Under | undefined }) {
   const { fields } = record;
   return (
     <>
       <div className="diagram-inspector-kind">
         <span className="eyebrow">Connection</span>
+        <Done record={record} under={under} />
       </div>
       <h2>
         <NameOf record={record} />
       </h2>
+      <Passes id={record.id} under={under} />
       <Description record={record} />
       <Details catalogue={catalogue} record={record}>
         Open connection details
@@ -106,8 +144,11 @@ function Connection({ record, catalogue }: { record: ModelRecord; catalogue: Cat
   );
 }
 
-/** A line of several connections: the two boxes it joins, and a row for each connection with its own path. */
-function Connections({ arrow, records, catalogue }: { arrow: Arrow; records: ModelRecord[]; catalogue: Catalogue }) {
+/**
+ * A line of several connections: the two boxes it joins, and a row for each connection with its
+ * own path. Under a change, a row bears the word of what the change does to its connection.
+ */
+function Connections({ arrow, records, catalogue, under }: { arrow: Arrow; records: ModelRecord[]; catalogue: Catalogue; under: Under | undefined }) {
   return (
     <>
       <h2>
@@ -116,6 +157,8 @@ function Connections({ arrow, records, catalogue }: { arrow: Arrow; records: Mod
       <RowList label="Connections">
         {records.map((record) => {
           const path = [record.fields.from, ...ids(record.fields.via), record.fields.to].map((id) => (typeof id === 'string' ? catalogue.nameOf(id) : ''));
+          const mark = under?.marks.get(record.id);
+          const word = mark !== undefined ? WORDS[mark] : undefined;
           return (
             <GridRow
               key={record.id}
@@ -130,6 +173,7 @@ function Connections({ arrow, records, catalogue }: { arrow: Arrow; records: Mod
                   <small>{path.join(' → ')}</small>
                 </>
               }
+              {...(word !== undefined ? { marks: <span className={`flow-step-mark mark-${mark}`}>{word}</span> } : {})}
             />
           );
         })}
@@ -140,9 +184,25 @@ function Connections({ arrow, records, catalogue }: { arrow: Arrow; records: Mod
 
 /**
  * The panel on the field: what the picked box, frame or line is, or a data record a step passes,
- * and the way to its page. Its button, and Escape, close it.
+ * and the way to its page. Its button, and Escape, close it. On an updated flow under a change,
+ * `marks` and `verbs` say what the change does; on any other page, and on a flow the change adds
+ * or removes, the marks are none and the panel is as it is anywhere.
  */
-export function Inspector({ picked, view, catalogue, onClose }: { picked: string; view: View; catalogue: Catalogue; onClose: () => void }) {
+export function Inspector({
+  picked,
+  view,
+  catalogue,
+  onClose,
+  marks,
+  verbs,
+}: {
+  picked: string;
+  view: View;
+  catalogue: Catalogue;
+  onClose: () => void;
+  marks?: ReadonlyMap<string, Mark> | undefined;
+  verbs?: ReadonlyMap<string, Verb> | undefined;
+}) {
   useEffect(() => {
     const close = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose();
@@ -158,17 +218,18 @@ export function Inspector({ picked, view, catalogue, onClose }: { picked: string
   const records = shown.flatMap((id) => catalogue.record(id) ?? []);
   const [record] = records;
   if (record === undefined) return null;
+  const under = marks !== undefined && marks.size > 0 ? { marks, verbs: verbs ?? new Map<string, Verb>() } : undefined;
   const body =
     arrow === undefined ? (
       record.kind === 'data' ? (
         <Data record={record} catalogue={catalogue} />
       ) : (
-        <Thing record={record} catalogue={catalogue} />
+        <Thing record={record} catalogue={catalogue} under={under} />
       )
     ) : shown.length === 1 ? (
-      <Connection record={record} catalogue={catalogue} />
+      <Connection record={record} catalogue={catalogue} under={under} />
     ) : (
-      <Connections arrow={arrow} records={records} catalogue={catalogue} />
+      <Connections arrow={arrow} records={records} catalogue={catalogue} under={under} />
     );
   return (
     <aside className="diagram-inspector" aria-label="Diagram inspector">

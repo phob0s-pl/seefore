@@ -3,10 +3,10 @@ import type { ReactNode } from 'react';
 import { Link, NavLink, useOutletContext, useParams } from 'react-router-dom';
 import { addressUnder } from '../model/catalogue.ts';
 import type { Change, ChangeRow, Changes } from '../model/changes.ts';
-import { MarkPill, TouchedName, TouchedTile, Unlaid } from './change-record.tsx';
+import { TouchedName, TouchedTile, Unlaid } from './change-record.tsx';
 import { Missing } from './models.tsx';
 import type { ModelState } from './shell.tsx';
-import { EmptyState, GridRow, IconTile, LargeTitle, Panel, RowList, Section, SectionStack, TextPanel, useTitle } from './ui.tsx';
+import { EmptyState, GridRow, IconTile, LargeTitle, MarkPill, Panel, RowList, Section, SectionStack, TextPanel, useTitle } from './ui.tsx';
 
 /** The name alone. */
 const COLS = 'minmax(0, 1fr)';
