@@ -1,4 +1,5 @@
 import type { ModelRecord } from './answer.ts';
+import { ofArchitecture } from './kinds.ts';
 
 /** One row of the Software tab: a record, and how deep it stands in the tree. */
 export type TreeRow = { record: ModelRecord; depth: number };
@@ -79,9 +80,9 @@ export const byName = (a: ModelRecord, b: ModelRecord): number => {
 /** What the pages of the records ask, worked out once from the records of `/api/model`. */
 export function catalogueOf(records: readonly ModelRecord[]): Catalogue {
   // An id names the first record that has it; a second one is a problem of `seefore check`.
-  // A rule of the team's own is no record of the architecture, and the pages show none.
+  // A rule of the team's own and a line of context are no records of the architecture: they have pages of their own.
   const byId = new Map<string, ModelRecord>();
-  for (const record of records) if (record.kind !== 'rules' && !byId.has(record.id)) byId.set(record.id, record);
+  for (const record of records) if (ofArchitecture(record.kind) && !byId.has(record.id)) byId.set(record.id, record);
   const kept = [...byId.values()];
   const of = (kind: string) => kept.filter((record) => record.kind === kind).sort(byName);
   const things = kept.filter((record) => THINGS.includes(record.kind));

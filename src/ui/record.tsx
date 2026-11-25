@@ -274,7 +274,7 @@ function Thing({ record, catalogue, travel, lines }: { record: ModelRecord; cata
         ]
       : []),
     ...onlyFact(catalogue, record),
-    ...(lines !== undefined ? [{ label: 'Context', value: <Link to="/context">{countWords(lines)}</Link> }] : []),
+    ...(lines !== undefined ? [{ label: 'Context', value: <Link to="/context">{countWords(lines.lines)}</Link> }] : []),
   ];
   return (
     <>

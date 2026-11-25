@@ -33,55 +33,6 @@
       "maxLength": 80,
       "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
       "description": "The id of the owner, a record in owners/, who answers for the part. Left out, it is that of what the part is in."
-    },
-    "context": {
-      "minItems": 1,
-      "maxItems": 12,
-      "type": "array",
-      "items": {
-        "type": "object",
-        "properties": {
-          "must": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 300,
-            "pattern": "^\\S(?:[^\\n\\r\\u0085\\u2028\\u2029]*\\S)?$",
-            "description": "A line that binds: a design that goes against it is wrong. A sentence or two on one line, 1 to 300 characters. Never with `prefer`."
-          },
-          "prefer": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 300,
-            "pattern": "^\\S(?:[^\\n\\r\\u0085\\u2028\\u2029]*\\S)?$",
-            "description": "A line that decides between designs that are allowed. It may yield, and its `why` says when. A sentence or two on one line, 1 to 300 characters. Never with `must`."
-          },
-          "why": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 300,
-            "pattern": "^\\S(?:[^\\n\\r\\u0085\\u2028\\u2029]*\\S)?$",
-            "description": "Its reason, and where it comes from: a contract, a decision, a person who can vouch. One line of 1 to 300 characters."
-          }
-        },
-        "required": [
-          "why"
-        ],
-        "additionalProperties": false,
-        "description": "One line of context: `must` or `prefer`, and `why`.",
-        "oneOf": [
-          {
-            "required": [
-              "must"
-            ]
-          },
-          {
-            "required": [
-              "prefer"
-            ]
-          }
-        ]
-      },
-      "description": "What is true of this system and its team and that no other record holds: 1 to 12 lines, each `must` or `prefer` with its `why`. A limit with its reason, never a description. Left out when there is nothing to say."
     }
   },
   "required": [

@@ -4,6 +4,7 @@ import { NOUNS } from './kinds.ts';
 import { buildModel, listOf, stepsOf, textOf } from './model.ts';
 import type { Entry, Model } from './model.ts';
 import { START, capital, list, quote } from './problem.ts';
+import { CONTEXT_MAX } from './records.ts';
 import { dotted, label } from './shape.ts';
 
 /**
@@ -58,7 +59,7 @@ const ENDS = ['people', 'systems', 'apps', 'stores', 'components', 'infrastructu
 const PARTS = ['systems', 'apps', 'stores', 'components', 'infrastructure'];
 const NEEDS_OWNER_OR_TECH = ['apps', 'stores', 'components', 'infrastructure'];
 /** The kinds that are not parts or connections: what `touches`, `from` and `to` never name. */
-const NOT_THINGS = ['owners', 'technologies', 'features', 'flows', 'data', 'rules'];
+const NOT_THINGS = ['owners', 'technologies', 'features', 'flows', 'data', 'rules', 'context'];
 
 const FIELDS: Field[] = [
   { folder: 'apps', field: 'in', kinds: ['systems'] },
@@ -74,6 +75,7 @@ const FIELDS: Field[] = [
   { folder: 'flows', field: 'feature', kinds: ['features'] },
   { folder: 'flows', field: 'does', kinds: ['connections', ...ENDS, 'flows'], step: true },
   { folder: 'flows', field: 'data', kinds: ['data'], many: true, step: true },
+  { folder: 'context', field: 'system', kinds: ['systems'] },
 ];
 
 /** What a field may name, in words: "a person, a system or an app". */
@@ -115,7 +117,7 @@ const WRONG: Wrong[] = [
   },
   {
     field: 'via',
-    found: ['owners', 'technologies', 'connections', 'people', 'stores', 'features', 'flows', 'data', 'rules'],
+    found: ['owners', 'technologies', 'connections', 'people', 'stores', 'features', 'flows', 'data', 'rules', 'context'],
     says: '`via` names what the exchange passes through: a piece of infrastructure, an app, a component or a system.',
     fix: 'Take it out of `via`, or name a piece of infrastructure, an app, a component or a system that the exchange passes through. Say anything more in the description.',
   },
@@ -133,13 +135,13 @@ const WRONG: Wrong[] = [
   },
   {
     field: 'owner',
-    found: ['people', 'systems', 'apps', 'stores', 'components', 'connections', 'infrastructure', 'technologies', 'features', 'flows', 'data', 'rules'],
+    found: ['people', 'systems', 'apps', 'stores', 'components', 'connections', 'infrastructure', 'technologies', 'features', 'flows', 'data', 'rules', 'context'],
     says: '`owner` names an owner, a record in `owners/`.',
     fix: 'Write `owners/<id>.yaml` with a `name` for the team, and name that id in `owner`. If a record of another kind has the id you want, keep both and name the owner for what it is for.',
   },
   {
     field: 'technology',
-    found: ['people', 'systems', 'apps', 'stores', 'components', 'connections', 'infrastructure', 'owners', 'features', 'flows', 'data', 'rules'],
+    found: ['people', 'systems', 'apps', 'stores', 'components', 'connections', 'infrastructure', 'owners', 'features', 'flows', 'data', 'rules', 'context'],
     says: '`technology` names technologies, records in `technologies/`.',
     fix: 'Write `technologies/<id>.yaml` with a `name`, and name that id in `technology`. If a record of another kind has the id you want, keep both and keep the product\'s name for the technology.',
   },
@@ -349,7 +351,7 @@ const idTwice: Rule = {
 const referenceUnknown: Rule = {
   id: 'reference-unknown',
   gives: 'error',
-  says: "Each id in `in`, `from`, `to`, `owner`, `technology`, `via`, `touches` and `feature`, in a step's `does` and `data`, and in a rule of a team's own, names a record.",
+  says: "Each id in `in`, `from`, `to`, `owner`, `technology`, `via`, `touches` and `feature`, in a step's `does` and `data`, in a rule of a team's own, and in `system` of a line of context, names a record.",
   check(model) {
     const findings: Finding[] = [];
     for (const { entry, spec, id, path, words } of references(model)) {
@@ -392,6 +394,33 @@ const referenceWrongKind: Rule = {
         field: path,
         message: `${capital(words)} names ${quote(id)}, which is ${NOUNS[target.kind]}. ${rule}`,
         fix: case_?.fix ?? `Name ${allowed(spec.kinds)} in \`${spec.field}\`, or write the record that is missing.`,
+      });
+    }
+    return findings;
+  },
+};
+
+const contextMany: Rule = {
+  id: 'context-many',
+  gives: 'warning',
+  says: 'At most twelve lines of context are global, and at most twelve are about one system.',
+  check(model) {
+    // Each group in the order of its ids: the lines that name no system, and those that name each one.
+    const groups = new Map<string, Entry[]>();
+    for (const entry of model.entries) {
+      if (!entry.ok || entry.kind !== 'context') continue;
+      const about = textOf(entry, 'system') ?? '';
+      groups.set(about, [...(groups.get(about) ?? []), entry]);
+    }
+    const findings: Finding[] = [];
+    for (const [about, lines] of groups) {
+      const thirteenth = [...lines].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))[CONTEXT_MAX];
+      if (thirteenth === undefined) continue;
+      const which = about === '' ? 'are global' : `are about ${quote(about)}`;
+      findings.push({
+        entry: thirteenth,
+        message: `${lines.length} lines of context ${which}. Keep to ${CONTEXT_MAX}: a dozen sentences are read, a handbook is not.`,
+        fix: 'Keep the lines that a design could break, and take out those that only describe. Join two that say one thing.',
       });
     }
     return findings;
@@ -745,6 +774,7 @@ export const RULES: readonly Rule[] = [
   stepEarlier,
   flowInItself,
   ruleShape,
+  contextMany,
   recordUnused,
   featureAlone,
   stepUnplaced,

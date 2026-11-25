@@ -140,7 +140,7 @@ export function Shell() {
   // The page of a rule puts its breadcrumb in the top bar too, and keeps the navigation.
   const onRule = useMatch('/rules/:id') !== null;
   // So does the page of a line of context.
-  const onLine = useMatch('/context/:system/:place') !== null;
+  const onLine = useMatch('/context/:id') !== null;
   const crumbed = reading || onRule || onLine;
   const [steps, setSteps] = useState<HTMLElement | null>(null);
   const [crumbs, setCrumbs] = useState<HTMLElement | null>(null);

@@ -4,31 +4,72 @@ import { contextOf, countWords } from '../src/model/context.ts';
 import { readModel } from '../src/model/read.ts';
 import type { SourceFile } from '../src/model/read.ts';
 
-const MARKER: SourceFile = { path: 'seefore.yaml', text: 'format: 1\nname: Shop\n' };
-const system = (id: string, text: string): SourceFile => ({ path: `systems/${id}.yaml`, text });
-/** The context of a model of the systems given. */
+const MARKER: SourceFile = {
+  path: 'seefore.yaml',
+  text: 'format: 1\nname: Shop\n',
+};
+const system = (id: string, text: string): SourceFile => ({
+  path: `systems/${id}.yaml`,
+  text,
+});
+const line = (id: string, text: string): SourceFile => ({
+  path: `context/${id}.yaml`,
+  text,
+});
+/** The context of a model of the files given. */
 const context = (...files: SourceFile[]) => contextOf(readModel([MARKER, ...files]).records);
-/** A system's record as the answer gives it, with fields the check would not let through. */
-const record = (id: string, fields: Record<string, unknown>): ModelRecord => ({ kind: 'systems', id, file: `systems/${id}.yaml`, fields });
+/** A record as the answer gives it, with fields the check would not let through. */
+const record = (kind: string, id: string, fields: Record<string, unknown>): ModelRecord => ({ kind, id, file: `${kind}/${id}.yaml`, fields });
 
-const SHOP = system('shop', 'name: Shop\ncontext:\n  - must: An order is never lost.\n    why: The shop promises it.\n  - prefer: A new feature goes into the API.\n    why: One team runs it.\n');
+const SHOP = system('shop', 'name: Shop\n');
+const BANK = system('bank', 'name: Bank\nexternal: true\n');
 
-test('a system with no context is not in the list, and a model with none gives nothing', () => {
-  const read = context(SHOP, system('warehouse', 'name: Warehouse\n'));
-  expect(read.systems.map((each) => each.id)).toEqual(['shop']);
-  expect(read.system('warehouse')).toBeUndefined();
-  expect(read.system('nobody')).toBeUndefined();
-  expect(context(system('warehouse', 'name: Warehouse\n')).systems).toEqual([]);
-  expect(context().systems).toEqual([]);
+test('a line that names no system is global, and one that names a system stands with that system', () => {
+  const read = context(
+    SHOP,
+    BANK,
+    line('orders-are-kept', 'must: An order is never lost.\nwhy: The shop promises it.\n'),
+    line('bank-sets-the-format', 'must: The bank sets the format of a payment file.\nwhy: Its contract.\nsystem: bank\n'),
+  );
+  expect(read.global).toEqual([
+    {
+      id: 'orders-are-kept',
+      kind: 'must',
+      sentence: 'An order is never lost.',
+      reason: 'The shop promises it.',
+    },
+  ]);
+  expect(read.systems).toEqual([
+    {
+      id: 'bank',
+      name: 'Bank',
+      external: true,
+      known: true,
+      lines: [
+        {
+          id: 'bank-sets-the-format',
+          kind: 'must',
+          sentence: 'The bank sets the format of a payment file.',
+          reason: 'Its contract.',
+          system: 'bank',
+        },
+      ],
+    },
+  ]);
+  // A system that no line names has no group, and a model with no line gives nothing.
+  expect(read.system('shop')).toBeUndefined();
+  expect(context(SHOP)).toMatchObject({ global: [], systems: [] });
 });
 
 test('the team’s own systems stand first, by name, then the outside ones, by name', () => {
-  const lines = 'context:\n  - must: A sentence.\n    why: A reason.\n';
+  const about = (id: string) => line(`of-${id}`, `must: A sentence of ${id}.\nwhy: A reason.\nsystem: ${id}\n`);
   const read = context(
-    system('post', `name: Post office\nexternal: true\n${lines}`),
-    system('shop', `name: shop\n${lines}`),
-    system('bank', `name: Bank\nexternal: true\n${lines}`),
-    system('archive', `name: Archive\n${lines}`),
+    system('post', 'name: Post office\nexternal: true\n'),
+    system('shop', 'name: shop\n'),
+    BANK,
+    system('archive', 'name: Archive\n'),
+    system('quiet', 'name: Quiet\n'),
+    ...['post', 'shop', 'bank', 'archive'].map(about),
   );
   expect(read.systems.map((each) => [each.id, each.name, each.external])).toEqual([
     ['archive', 'Archive', false],
@@ -38,78 +79,88 @@ test('the team’s own systems stand first, by name, then the outside ones, by n
   ]);
 });
 
-test('the lines that bind stand first, each kind in the order of the file, and each keeps its place in the file', () => {
+test('in a group the lines that bind stand first, each kind by its sentence', () => {
   const read = context(
-    system(
-      'shop',
-      [
-        'name: Shop',
-        'context:',
-        '  - prefer: Speed first, then cost.',
-        '    why: The owner said so.',
-        '  - must: Data stays in the EU.',
-        '    why: The contracts require it.',
-        '  - prefer: Work goes through a topic.',
-        '    why: Nothing waits.',
-        '  - must: Nothing is deployed before an on-sale.',
-        '    why: An on-sale is the busiest hour.',
-        '',
-      ].join('\n'),
-    ),
+    SHOP,
+    line('a', 'prefer: Speed first, then cost.\nwhy: The owner said so.\n'),
+    line('b', 'must: Nothing is deployed before an on-sale.\nwhy: An on-sale is the busiest hour.\n'),
+    line('c', 'prefer: A new store is a PostgreSQL database.\nwhy: One kind to run.\n'),
+    line('d', 'must: Data stays in the EU.\nwhy: The contracts require it.\n'),
+    line('e', 'prefer: Work goes through a topic.\nwhy: Nothing waits.\nsystem: shop\n'),
+    line('f', 'must: An order is never lost.\nwhy: The promise.\nsystem: shop\n'),
   );
-  expect(read.system('shop')).toEqual({
-    id: 'shop',
-    name: 'Shop',
-    external: false,
-    lines: [
-      { place: 2, kind: 'must', sentence: 'Data stays in the EU.', reason: 'The contracts require it.' },
-      { place: 4, kind: 'must', sentence: 'Nothing is deployed before an on-sale.', reason: 'An on-sale is the busiest hour.' },
-      { place: 1, kind: 'prefer', sentence: 'Speed first, then cost.', reason: 'The owner said so.' },
-      { place: 3, kind: 'prefer', sentence: 'Work goes through a topic.', reason: 'Nothing waits.' },
-    ],
+  expect(read.global.map((each) => [each.kind, each.sentence])).toEqual([
+    ['must', 'Data stays in the EU.'],
+    ['must', 'Nothing is deployed before an on-sale.'],
+    ['prefer', 'A new store is a PostgreSQL database.'],
+    ['prefer', 'Speed first, then cost.'],
+  ]);
+  expect(read.system('shop')?.lines.map((each) => each.id)).toEqual(['f', 'e']);
+});
+
+test('a line is found by its id, with the other lines of its group beside it', () => {
+  const read = context(
+    SHOP,
+    line('kept', 'must: An order is never lost.\nwhy: The promise.\n'),
+    line('eu', 'must: Data stays in the EU.\nwhy: The contracts.\n'),
+    line('topic', 'prefer: Work goes through a topic.\nwhy: Nothing waits.\nsystem: shop\n'),
+  );
+  const kept = read.line('kept');
+  const topic = read.line('topic');
+  expect(kept).toEqual({
+    id: 'kept',
+    kind: 'must',
+    sentence: 'An order is never lost.',
+    reason: 'The promise.',
   });
+  expect(kept && read.beside(kept).map((each) => each.id)).toEqual(['eu']);
+  expect(topic && read.beside(topic)).toEqual([]);
+  expect(read.line('shop')).toBeUndefined();
+  expect(read.line('nobody')).toBeUndefined();
 });
 
-test('a line is found by its system and its place, and nothing is found where there is none', () => {
-  const read = context(SHOP, system('bank', 'name: Bank\nexternal: true\ncontext:\n  - prefer: Another sentence.\n    why: Another reason.\n'));
-  expect(read.line('shop', 1)).toEqual({ place: 1, kind: 'must', sentence: 'An order is never lost.', reason: 'The shop promises it.' });
-  expect(read.line('shop', 2)).toMatchObject({ kind: 'prefer', sentence: 'A new feature goes into the API.' });
-  expect(read.line('bank', 1)).toMatchObject({ kind: 'prefer', sentence: 'Another sentence.' });
-  expect(read.line('shop', 3)).toBeUndefined();
-  expect(read.line('shop', 0)).toBeUndefined();
-  expect(read.line('nobody', 1)).toBeUndefined();
-});
-
-test('a line with neither key is left out and the others keep their places; one with no why has no reason', () => {
-  // The check keeps such a file from the answer; the page reads what the answer gives all the same.
+test('a line whose system names no system stands under the id as written; one with neither key is left out', () => {
+  // The check tells these faults; the page reads what the answer gives all the same.
   const read = contextOf([
-    record('shop', {
-      name: 'Shop',
-      context: [{ why: 'A reason with no sentence.' }, { must: '', why: 'An empty sentence.' }, { must: 'A sentence.' }, 'Keep it simple.', { prefer: 'Another.', why: 'Its reason.' }],
+    record('systems', 'shop', { name: 'Shop' }),
+    record('apps', 'api', { name: 'API', in: 'shop' }),
+    record('context', 'gone', {
+      must: 'A sentence.',
+      why: 'A reason.',
+      system: 'warehouse',
     }),
-    record('bank', { name: 'Bank', context: [{ why: 'Nothing else.' }] }),
-    record('post', { name: 'Post', context: 'Keep it simple.' }),
+    record('context', 'of-an-app', { prefer: 'Another.', system: 'api' }),
+    record('context', 'empty', { why: 'A reason with no sentence.' }),
+    record('context', 'blank', { must: '', why: 'An empty sentence.' }),
   ]);
-  expect(read.system('shop')?.lines).toEqual([
-    { place: 3, kind: 'must', sentence: 'A sentence.' },
-    { place: 5, kind: 'prefer', sentence: 'Another.', reason: 'Its reason.' },
+  expect(read.global).toEqual([]);
+  expect(read.systems.map((each) => [each.id, each.name, each.known, each.lines.map((line) => line.id)])).toEqual([
+    ['api', 'api', false, ['of-an-app']],
+    ['warehouse', 'warehouse', false, ['gone']],
   ]);
-  expect(read.systems.map((each) => each.id)).toEqual(['shop']);
+  expect(read.line('of-an-app')).toEqual({
+    id: 'of-an-app',
+    kind: 'prefer',
+    sentence: 'Another.',
+    system: 'api',
+  });
+  expect(read.line('empty')).toBeUndefined();
 });
 
-test('the words of the count: each kind with its number, the one with none left out', () => {
-  const lines = (must: number, prefer: number) => ({
-    id: 'shop',
-    name: 'Shop',
-    external: false,
-    lines: [
-      ...Array.from({ length: must }, (_, at) => ({ place: at + 1, kind: 'must' as const, sentence: 'A.' })),
-      ...Array.from({ length: prefer }, (_, at) => ({ place: must + at + 1, kind: 'prefer' as const, sentence: 'B.' })),
-    ],
-  });
+test('the words of a count: each kind with its number, the one with none left out', () => {
+  const lines = (must: number, prefer: number) => [
+    ...Array.from({ length: must }, (_, at) => ({
+      id: `m${at}`,
+      kind: 'must' as const,
+      sentence: 'A.',
+    })),
+    ...Array.from({ length: prefer }, (_, at) => ({
+      id: `p${at}`,
+      kind: 'prefer' as const,
+      sentence: 'B.',
+    })),
+  ];
   expect(countWords(lines(5, 2))).toBe('5 must · 2 prefer');
   expect(countWords(lines(1, 0))).toBe('1 must');
   expect(countWords(lines(0, 2))).toBe('2 prefer');
-  const shop = context(SHOP).system('shop');
-  expect(shop && countWords(shop)).toBe('1 must · 1 prefer');
 });

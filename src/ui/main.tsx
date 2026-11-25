@@ -36,7 +36,7 @@ if (root !== null) {
           <Route element={<Shell />}>
             <Route index element={<Architecture />} />
             <Route path="context" element={<ContextList />} />
-            <Route path="context/:system/:place" element={<ContextLinePage />} />
+            <Route path="context/:id" element={<ContextLinePage />} />
             <Route path="features" element={<FeaturesList />} />
             <Route path="features/:id" element={<FeaturePage />} />
             <Route path="flows" element={<Navigate to="/features" replace />} />

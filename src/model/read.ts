@@ -35,8 +35,9 @@ export function readModel(files: readonly SourceFile[]): ModelRead {
   problems.push(...read.problems);
   const result = (): ModelRead => {
     // The rules run only on a model that has been read as format 1. A count, and the judging of
-    // the rules in `rules/`, need every file outside `rules/` read: a faulty rule leaves the rest judged.
-    const outside = (file: string) => !file.startsWith('rules/');
+    // the rules in `rules/`, need every file of the architecture read: a faulty rule, or a faulty
+    // line of context, leaves the rest judged.
+    const outside = (file: string) => !file.startsWith('rules/') && !file.startsWith('context/');
     const whole = !problems.some((problem) => problem.severity === 'error' && outside(problem.file)) && entries.every((entry) => entry.ok || !outside(entry.file));
     const ruled = runRules(entries, whole, read.readable);
     return {
