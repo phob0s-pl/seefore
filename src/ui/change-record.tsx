@@ -1,18 +1,21 @@
+import { useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { ListChecks, Lock, Scale } from 'lucide-react';
 import { Link, useOutletContext, useParams } from 'react-router-dom';
 import type { ModelRecord } from '../model/answer.ts';
 import { catalogueOf } from '../model/catalogue.ts';
 import type { Catalogue } from '../model/catalogue.ts';
-import type { Change, ChangeRow, Changes, Difference, Touched, Verb } from '../model/changes.ts';
+import { fieldRows } from '../model/changes.ts';
+import type { Change, ChangeRow, Changes, Difference, FieldRow, Touched, Verb } from '../model/changes.ts';
+import type { FlowUnder } from '../model/flow.ts';
 import { travelOf } from '../model/travel.ts';
 import type { Travel } from '../model/travel.ts';
 import { FeatureBody } from './features.tsx';
-import { KindTile, Missing, RecordLink } from './models.tsx';
+import { FlowBody, MARK_WORDS } from './flow.tsx';
+import { addressOf, KindTile, Missing, RecordLink } from './models.tsx';
 import { RecordBody, TypeMarks } from './record.tsx';
-import type { ModelState } from './shell.tsx';
-import { EmptyState, IconTile, Panel, Pill, Section, SectionStack, useTitle } from './ui.tsx';
-import type { Tone } from './ui.tsx';
+import type { ModelState, Slots } from './shell.tsx';
+import { EmptyState, IconTile, MarkPill, Panel, Section, SectionStack, useTitle } from './ui.tsx';
 
 /**
  * A record under a change, `/changes/<change>/records/<folder>/<id>`: its title row with the mark
@@ -21,13 +24,6 @@ import type { Tone } from './ui.tsx';
  * for one that goes. Its links lead under the change for a record the change touches and to the
  * system for any other: the catalogue decides, never the page.
  */
-
-/** What a change does to a record, as its pill says it. */
-const MARK: Record<Verb, { word: string; tone?: Tone }> = {
-  add: { word: 'Added', tone: 'success' },
-  update: { word: 'Updated' },
-  remove: { word: 'Removed', tone: 'danger' },
-};
 
 /**
  * The line under the title row of a record that a change removes: it is shown as it is today,
@@ -45,11 +41,6 @@ const OPEN: Partial<Record<Verb, string>> = { remove: 'Open it in the system' };
 const BODIES: readonly string[] = ['people', 'systems', 'apps', 'stores', 'components', 'infrastructure', 'connections', 'technologies', 'owners', 'data', 'features'];
 
 const LIST = { to: '/changes', title: 'Changes' };
-
-/** The pill of what a change does to a record: Added in green, Updated neutral, Removed in red. */
-export function MarkPill({ verb }: { verb: Verb }) {
-  return <Pill tone={MARK[verb].tone}>{MARK[verb].word}</Pill>;
-}
 
 /** The tile of a record a change names: that of its kind; for a rule the icon of the entry Rules; for a line of context the lock of a must or the scales of a prefer. */
 export function TouchedTile({ folder, record, size }: { folder: string; record: ModelRecord | undefined; size: 'sm' | 'lg' }) {
@@ -126,6 +117,9 @@ export function ChangeRecordPage() {
   );
   if (found === undefined || label === undefined) return <EmptyState title="This change does not touch that record.">{back}</EmptyState>;
   const { touched, today, after } = found;
+  // A flow opens as its own page, under the change, once the check has laid the change.
+  const under = touched.folder === 'flows' ? changes.flow(id, touched.id) : undefined;
+  if (under !== undefined) return <FlowUnderPage key={path} change={change} changes={changes} under={under} label={label} system={addressOf(catalogue, 'flows', touched.id)} slots={slots} />;
   const shown = touched.verb === 'remove' ? today : after;
   const read = change.laid ? readUnder(changes, answer.records, id, touched.verb === 'remove' ? 'today' : 'after') : undefined;
   if (shown === undefined || read === undefined) return <EmptyState title={<Unlaid />}>{back}</EmptyState>;
@@ -158,10 +152,40 @@ export function ChangeRecordPage() {
         </p>
       )}
       <SectionStack>
-        {before !== undefined && <BeforeAndAfter differences={changes.differences(id, path)} today={before.catalogue} after={read.catalogue} />}
+        {before !== undefined && <BeforeAndAfter differences={changes.differences(id, path).filter((each) => touched.folder !== 'flows' || each.key !== 'steps')} today={before.catalogue} after={read.catalogue} />}
         <Under touched={touched} record={shown} read={read} />
       </SectionStack>
     </>
+  );
+}
+
+/**
+ * A flow under a change: the flow's own page, drawn from what the change does to it, with the way
+ * back to the change and the flow's mark in the top bar. Its links and its panel are made by a
+ * catalogue of the records the view is drawn from that knows what the change touches. For a flow
+ * the change removes, `system` is its address in the system.
+ */
+function FlowUnderPage({ change, changes, under, label, system, slots }: { change: Change; changes: Changes; under: FlowUnder; label: string; system: string; slots: Slots | undefined }) {
+  const catalogue = useMemo(() => catalogueOf(under.records, changes.touch(change.id)), [under, changes, change.id]);
+  const verb = under.verb;
+  return (
+    <FlowBody
+      flow={under.flow}
+      steps={under.steps}
+      count={under.count}
+      view={under.view}
+      was={under.was}
+      marks={under.marks}
+      catalogue={catalogue}
+      slots={slots}
+      crumbs={
+        <>
+          <Crumbs change={change} label={label} />
+          <MarkPill verb={verb} />
+        </>
+      }
+      system={verb === 'remove' ? system : undefined}
+    />
   );
 }
 
@@ -232,6 +256,15 @@ function BeforeAndAfter({ differences, today, after }: { differences: readonly D
             <span>With this change</span>
           </div>
           {differences.map((difference) => {
+            // The fields of a data record read as one list, across both sides.
+            const fields = difference.key === 'fields' ? fieldRows(difference.before, difference.after) : undefined;
+            if (fields !== undefined)
+              return (
+                <div key={difference.key} className="change-diff-row" style={{ gridTemplateColumns: DIFF_COLS }}>
+                  <span className="change-key mono">{difference.key}</span>
+                  <FieldList rows={fields} />
+                </div>
+              );
             const form = formOf(difference);
             return (
               <div key={difference.key} className="change-diff-row" style={{ gridTemplateColumns: DIFF_COLS }}>
@@ -248,6 +281,32 @@ function BeforeAndAfter({ differences, today, after }: { differences: readonly D
         </div>
       </Panel>
     </Section>
+  );
+}
+
+/**
+ * The fields of a data record before and after, as one list across both sides: a row a field, its
+ * name and its description as it would be, or as it is for one that goes; the word of what the
+ * change does to it at the right; and under an updated one today's description.
+ */
+function FieldList({ rows }: { rows: readonly FieldRow[] }) {
+  return (
+    <ul className="change-fields">
+      {rows.map((row) => {
+        const word = MARK_WORDS[row.mark];
+        const description = row.mark === 'removed' ? row.today : row.after;
+        return (
+          <li key={row.name} className={word !== undefined ? `change-field change-field-${row.mark}` : 'change-field'} data-mark={word !== undefined ? row.mark : undefined}>
+            <span className="change-field-head">
+              <strong className="change-field-name">{row.name}</strong>
+              {word !== undefined && <span className="flow-step-mark">{word}</span>}
+            </span>
+            {description !== undefined && <span className="change-field-text">{description}</span>}
+            {row.mark === 'updated' && <span className="change-field-today">Today: {row.today ?? 'nothing'}</span>}
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 

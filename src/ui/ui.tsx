@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import type { ComponentProps, ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import type { LucideIcon } from 'lucide-react';
+import type { Verb } from '../model/changes.ts';
 
 /** Class names joined by spaces, those that are not there left out. */
 function join(...names: (string | false | undefined)[]): string {
@@ -52,8 +53,8 @@ export function SectionStack({ children }: { children: ReactNode }) {
   return <div className="section-stack">{children}</div>;
 }
 
-/** The tone of a state, beside the colour of a kind: danger, warning or success. */
-export type Tone = 'danger' | 'warning' | 'success';
+/** The tone of a state, beside the colour of a kind: danger, warning, caution or success. */
+export type Tone = 'danger' | 'warning' | 'caution' | 'success';
 
 /** The small tinted square that leads a row, in the colour of a kind of thing or the tone of a state, or neutral. */
 export function IconTile({ icon: Icon, kind, tone, size }: { icon: LucideIcon; kind?: string; tone?: Tone; size?: 'sm' | 'lg' }) {
@@ -67,6 +68,18 @@ export function IconTile({ icon: Icon, kind, tone, size }: { icon: LucideIcon; k
 /** A pill: a mark such as a type or "External", in the colour of a kind of thing or the tone of a state, or neutral. */
 export function Pill({ kind, tone, size, children }: { kind?: string; tone?: Tone; size?: 'xs'; children: ReactNode }) {
   return <span className={join('pill', size && `pill-${size}`, kind && `kind-${kind}`, tone && `tone-${tone}`)}>{children}</span>;
+}
+
+/** What a change does to a record, as its pill says it. */
+const MARK: Record<Verb, { word: string; tone: Tone }> = {
+  add: { word: 'Added', tone: 'success' },
+  update: { word: 'Updated', tone: 'caution' },
+  remove: { word: 'Removed', tone: 'danger' },
+};
+
+/** The pill of what a change does to a record or to a step: Added in green, Updated in yellow, Removed in red. */
+export function MarkPill({ verb }: { verb: Verb }) {
+  return <Pill tone={MARK[verb].tone}>{MARK[verb].word}</Pill>;
 }
 
 /** Label and value rows in a panel: a record's facts. */

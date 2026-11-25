@@ -722,11 +722,14 @@ test.skipIf(!HAS_CHROME).concurrent(
       }; })()`;
       expect(await waitFor(send, records)).toEqual({
         current: 'Records',
-        sections: ['Features', 'Software', 'Connections', 'Technologies'],
-        rows: ['Ordering Updated', 'Order API Updated', 'Types in a posted order Added', 'Go Removed'],
-        tones: ['pill', 'pill', 'pill tone-success', 'pill tone-danger'],
+        sections: ['Features', 'Flows', 'Software', 'Connections', 'Technologies'],
+        rows: ['Ordering Updated', 'Placing an order Updated', 'Taking a posted order Added', 'Order API Updated', 'Types in a posted order Added', 'Go Removed'],
+        // Updated is yellow on every page of a change.
+        tones: ['pill tone-caution', 'pill tone-caution', 'pill tone-success', 'pill tone-caution', 'pill tone-success', 'pill tone-danger'],
         links: [
           '/changes/orders-by-post/records/features/ordering',
+          '/changes/orders-by-post/records/flows/placing-an-order',
+          '/changes/orders-by-post/records/flows/taking-a-posted-order',
           '/changes/orders-by-post/records/apps/order-api',
           '/changes/orders-by-post/records/connections/clerk-orders',
           '/changes/orders-by-post/records/technologies/go',
@@ -823,6 +826,90 @@ test.skipIf(!HAS_CHROME).concurrent(
       expect(await waitFor(send, `document.querySelector('.sidebar-slot [data-row="step"]') !== null && ${GROUP}`)).toEqual(['Home', 'Go back', 'Go forward']);
       await click(send, await centreOf(send, '.history-controls a[aria-label="Home"]'));
       expect(await waitFor(send, `location.pathname === '/' && document.querySelector('nav[aria-label="Main navigation"]') !== null && ${HOME} === null`)).toBe(true);
+    }),
+  20_000,
+);
+
+/** A flow under the change in the test model, once its steps stand in the sidebar and its name in the way back and the window's title. */
+const onFlowUnder = (flow: string, name: string) =>
+  `location.pathname === ${JSON.stringify(`/changes/orders-by-post/records/flows/${flow}`)} && document.querySelector('.sidebar-slot [data-row="step"]') !== null && document.querySelector('.breadcrumb-here')?.textContent === ${JSON.stringify(name)} && document.title === ${JSON.stringify(`${name} · seefore`)}`;
+/** What a flow under a change shows around its bar: the sidebar, the way back and the mark in the top bar, and each row of its steps. */
+const AROUND = `({
+  sidebar: ${SIDEBAR},
+  home: document.querySelector('.history-controls a[aria-label="Home"]') !== null,
+  crumbs: ${texts('.breadcrumb')}[0],
+  back: ${hrefs('.breadcrumb a')},
+  mark: [...document.querySelectorAll('.header-slot > .pill')].map((pill) => pill.className + ' ' + pill.textContent),
+  starts: ${texts('[data-row="starts"]')}[0],
+  rows: [...document.querySelectorAll('[data-row="step"]')].map((row) => [row.getAttribute('data-step'), row.getAttribute('data-mark'), row.querySelector('.flow-step-number').textContent, row.querySelector('.flow-step-mark')?.textContent ?? null]),
+})`;
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME ? 'a flow the change updates opens under the change with its steps in the sidebar, the way back and its mark, and the words on its rows; one it adds opens with its mark' : `skipped: there is no Chrome at ${CHROME}`,
+  () =>
+    inChrome(async (send, address) => {
+      await send('Page.navigate', { url: `${address}/changes/orders-by-post/records` });
+      await click(send, await centreOf(send, 'main a[href="/changes/orders-by-post/records/flows/placing-an-order"]'));
+      expect(await waitFor(send, `${onFlowUnder('placing-an-order', 'Placing an order')} && ${AROUND}`)).toEqual({
+        // The flow's steps take the place of the change's sidebar, as on a flow's own page.
+        sidebar: { main: null, change: null, current: null },
+        home: true,
+        crumbs: 'Orders by post / Records / Placing an order',
+        back: ['/changes/orders-by-post', '/changes/orders-by-post/records'],
+        mark: ['pill tone-caution Updated'],
+        starts: 'Starts Updated A customer places an order online Today: A customer places an order in the shop',
+        // The step that goes stands where it stood, with a minus for its number; the others are numbered as the flow would be.
+        rows: [
+          ['places', null, '1', null],
+          ['saves', 'removed', '−', 'Removed'],
+          ['types-in', 'added', '2', 'Added'],
+          ['confirms', 'updated', '3', 'Updated'],
+        ],
+      });
+      // "Records" in the way back leads to the list, and the flow the change adds opens with its mark and no colour on a step.
+      await click(send, await centreOf(send, '.breadcrumb a[href="/changes/orders-by-post/records"]'));
+      await click(send, await centreOf(send, 'main a[href="/changes/orders-by-post/records/flows/taking-a-posted-order"]'));
+      expect(await waitFor(send, `${onFlowUnder('taking-a-posted-order', 'Taking a posted order')} && ${AROUND}`)).toMatchObject({
+        crumbs: 'Orders by post / Records / Taking a posted order',
+        mark: ['pill tone-success Added'],
+        starts: 'Starts An order comes by post',
+        rows: [
+          ['types-in', null, '1', null],
+          ['saves', null, '2', null],
+        ],
+      });
+    }),
+  20_000,
+);
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME ? 'under a change a removed step is picked like any other: the bar says "Was step" and "Removed" with its words of today, the down key moves on, and an updated step has its words of today under its changed line' : `skipped: there is no Chrome at ${CHROME}`,
+  () =>
+    inChrome(async (send, address) => {
+      await send('Page.navigate', { url: `${address}/changes/orders-by-post/records/flows/placing-an-order` });
+      expect(await waitFor(send, onFlowUnder('placing-an-order', 'Placing an order'))).toBe(true);
+      await flowAt(send, '');
+      await click(send, await centreOf(send, '[data-row="step"][data-step="saves"]'));
+      const saves = await flowAt(send, '#saves');
+      // It is shown as it is today, and lights the line it walks today.
+      expect(saves).toMatchObject({ current: 'saves', stepped: ['order-api->orders'] });
+      expect(saves.bar).toContain('Was step 2 Saves the order Removed');
+      expect(saves.bar).toContain('Order API to Orders Only when the customer has paid Data Order details');
+      await press(send, 'ArrowDown', 40);
+      const typesIn = await flowAt(send, '#types-in');
+      expect(typesIn.current).toBe('types-in');
+      expect(typesIn.bar).toContain('2 of 3 Types in a posted order Added');
+      await press(send, 'ArrowDown', 40);
+      const confirms = await flowAt(send, '#confirms');
+      expect(confirms.current).toBe('confirms');
+      expect(confirms.bar).toContain('3 of 3 Confirms the order by email Updated');
+      // Each changed line, and under it what it says today: the name, and a condition that is new.
+      const changed = `[...document.querySelectorAll('section[aria-label="Current step"] .flow-line-changed')].map((line) => [line.textContent, line.nextElementSibling?.className === 'flow-line-today' ? line.nextElementSibling.textContent : null])`;
+      expect(await waitFor(send, changed)).toEqual([
+        ['Confirms the order by email', null],
+        ['Only when the customer gave an email address', 'Today: nothing'],
+      ]);
+      expect(confirms.bar).toContain('Today: Confirms the order');
     }),
   20_000,
 );
