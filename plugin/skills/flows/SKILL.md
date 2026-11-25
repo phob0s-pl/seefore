@@ -19,9 +19,11 @@ one to write, and stop.
 
 1. **A step is what a file showed you in this session**: a file you opened, or a line a
    search showed you, where the code does it: a route or a handler that takes the thing, a
-   consumer that reads it, a client or a producer that sends it on, a query, a write. Follow
-   the code from hop to hop, from where the journey starts. What you remember of this
-   project, and what its documents say, may tell you where to look; neither is a step.
+   consumer that reads it, a client or a producer that sends it on, a query, a write. A
+   comment or a name says what the code is meant to do: a step, and each word of its `name`,
+   rests on the lines that do it and on the condition they stand under. Follow the code from
+   hop to hop, from where the journey starts. What you remember of this project, and what
+   its documents say, may tell you where to look; neither is a step.
    - Code that several apps run is a step of the app that a file shows running it on this
      journey: the route, the consumer, the place where the task is registered.
    - Of a part with no code here, write only what its config here shows, or the code that
@@ -56,12 +58,17 @@ one to write, and stop.
 ## The steps
 
 1. Run `seefore list`. If it says "is not a model" or "No records yet.", tell the person to run
-   `/seefore:model` first, and stop. Where the shell cuts it off, name the folders after it
-   instead, all but `connections`, and take a part's connections from
-   `seefore list --near=<id>`. The records lie in `architecture/`, or here when this folder
-   holds `seefore.yaml`. Note the parts near the journey with their `source`, and the
-   features, flows and data that are there. A flow of this journey that is there is mended
-   in place: keep its id, and the ids of the steps that are still true.
+   `/seefore:model` first, and stop. The records lie in `architecture/`, or here when this
+   folder holds `seefore.yaml`.
+   - Where the shell cuts the list off and saves it to a file, read that file; or name the
+     folders after `list`, all but `connections`, and take a part's connections from
+     `seefore list --near=<id>`.
+   - Note the parts near the journey with their `source`, and the features, flows and data
+     that are there. A line shows no `access` and no `description`: open the record of each
+     connection you put a step on, and its `source` where the part behind it has no code
+     here.
+   - A flow of this journey that is there is mended in place: keep its id, and the ids of
+     the steps that are still true.
 2. **Find where the journey starts**: who or what starts it, a person, a clock or a message,
    and at which part. That part's `source` says where its code lies.
 3. **Follow it hop by hop.** Read with the file tools: Glob lists, Grep searches, Read opens.
@@ -90,9 +97,11 @@ one to write, and stop.
 7. End with a short message:
    - what you wrote: the feature, the flow and how many steps, the data, and each
      connection you added to the model;
-   - **what the model lacks**, numbered: each part a step needs and the model does not
-     hold, with what it is, the step that waits for it and the file that shows it. Then:
-     "Shall I add them?";
+   - **what the model lacks**, numbered: each part the journey passes and the model does
+     not hold, also one whose act you wrote inside an app or left out: a person, a system,
+     a store, a file that an app keeps on its own disk and a later step reads. With each:
+     what it is, the step that waits for it or stands in its place, and the file that shows
+     it. Then: "Shall I add them?";
    - what you did not find: a hop no file showed, and where the trail ended;
    - what in the model the code shows otherwise, at most five lines;
    - "Look at it with `seefore --server`. Next: another journey, or `/seefore:context`."

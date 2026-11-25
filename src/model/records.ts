@@ -354,7 +354,7 @@ const StepSchema = z
       .meta({ description: 'The id of a connection (one part acts on another), of a part (it happens there) or of a flow (it runs here, whole). Never with `reply`.' })
       .optional(),
     reply: id('reply', 'holds the id of an earlier step of this flow.')
-      .meta({ description: 'The id of an earlier step of this flow that names a connection, and not one that ends at a store: its answer travels back. Never with `does`.' })
+      .meta({ description: 'The id of an earlier step of this flow that names a connection, and not one that ends at a store: its answer travels back. An answer that comes back over several connections is a reply to each of their steps, the last first. Never with `does`.' })
       .optional(),
     after: ids('`after` holds the ids of earlier steps of this flow.')
       .meta({ description: 'The ids of earlier steps this one comes after, where that is not the step above. It comes after each of them that happens.' })

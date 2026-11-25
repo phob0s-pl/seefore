@@ -65,7 +65,7 @@
             "type": "string",
             "maxLength": 80,
             "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
-            "description": "The id of an earlier step of this flow that names a connection, and not one that ends at a store: its answer travels back. Never with `does`."
+            "description": "The id of an earlier step of this flow that names a connection, and not one that ends at a store: its answer travels back. An answer that comes back over several connections is a reply to each of their steps, the last first. Never with `does`."
           },
           "after": {
             "minItems": 1,

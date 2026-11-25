@@ -27,12 +27,16 @@ function byPlace(a: ModelRecord, b: ModelRecord): number {
   return folders !== 0 ? folders : a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 }
 
-/** One record in a line: its path, its name, and what it has of what it is in, its two ends, its feature and steps, its kind and its source. */
+/** One record in a line: its path, its name, and what it has of what it is in, its two ends and what lies between them, its feature and steps, its kind and its source. */
 function recordLine(record: ModelRecord): string {
   const fields = record.fields;
   const parts = [`${record.kind}/${record.id}`, text(fields.name) ?? text(fields.must) ?? text(fields.prefer) ?? (record.kind === 'connections' ? 'No name' : record.id)];
   if (text(fields.in) !== undefined) parts.push(`in ${fields.in as string}`);
-  if (record.kind === 'connections') parts.push(`${String(fields.from)} -> ${String(fields.to)}`);
+  if (record.kind === 'connections') {
+    // What it passes through stands in the line: without it a reader takes a connection through a proxy for a direct one.
+    const via = Array.isArray(fields.via) ? fields.via.filter((id): id is string => typeof id === 'string') : [];
+    parts.push(`${String(fields.from)} -> ${String(fields.to)}${via.length > 0 ? ` via ${via.join(', ')}` : ''}`);
+  }
   if (record.kind === 'flows') {
     if (text(fields.feature) !== undefined) parts.push(fields.feature as string);
     const steps = Array.isArray(fields.steps) ? fields.steps.length : 0;

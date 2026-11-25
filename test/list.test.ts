@@ -161,3 +161,16 @@ test('a line a change, with who is next from its blocks; a note waits for nobody
   expect(error({ changes: true, near: 'app-api' })).toBe('The changes are listed alone, with no record near and no change laid over the model.');
   expect(listLines(readModel(MODEL.filter((each) => !each.path.startsWith('changes/'))), { changes: true })).toEqual({ lines: [] });
 });
+
+test('a connection says what it passes through, after its two ends', () => {
+  const read = readModel([
+    { path: 'seefore.yaml', text: 'format: 1\nname: Shop\n' },
+    file('people/person-customer', 'name: Customer\n'),
+    file('systems/system-shop', 'name: Shop\n'),
+    file('apps/app-api', 'name: API\nin: system-shop\n'),
+    file('infrastructure/infra-gateway', 'name: Gateway\nin: system-shop\n'),
+    file('connections/connection-customer-orders', 'from: person-customer\nto: app-api\nvia: [infra-gateway]\nname: Places an order\n'),
+  ]);
+  const listed = listLines(read, { folders: ['connections'] });
+  expect('lines' in listed && listed.lines).toEqual(['connections/connection-customer-orders  Places an order  person-customer -> app-api via infra-gateway']);
+});
