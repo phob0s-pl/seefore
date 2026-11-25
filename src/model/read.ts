@@ -1,5 +1,5 @@
 import type { z } from 'zod';
-import type { ModelRead, ModelRecord, Problem } from './answer.ts';
+import type { Laid, ModelRead, ModelRecord, Problem } from './answer.ts';
 import { idProblem } from './id.ts';
 import { KINDS, RECORD_NOUNS } from './kinds.ts';
 import type { Entry } from './model.ts';
@@ -7,7 +7,7 @@ import { runRules } from './rules.ts';
 import { MARKER_FILE, readMarker } from './marker.ts';
 import { START, compareProblems, error, list, quote, warning } from './problem.ts';
 import { SHAPES } from './records.ts';
-import { changeProblems } from './change.ts';
+import { holdChange } from './change.ts';
 import type { ReadChange } from './change.ts';
 import { checkShape } from './shape.ts';
 import { readYaml } from './yaml.ts';
@@ -32,7 +32,7 @@ export function readModel(files: readonly SourceFile[]): ModelRead {
   const marker = sorted.find((file) => file.path === MARKER_FILE);
   if (!marker) {
     problems.push(error(MARKER_FILE, START, 'marker-missing', `There is no ${quote(MARKER_FILE)} here, so this is not a seefore model.`));
-    return { records, problems, counts: runRules([], false, false).counts, rulings: [] };
+    return { records, problems, counts: runRules([], false, false).counts, rulings: [], laid: [] };
   }
   const read = readMarker(marker.text);
   problems.push(...read.problems);
@@ -45,14 +45,21 @@ export function readModel(files: readonly SourceFile[]): ModelRead {
     const ruled = runRules(entries, whole, read.readable);
     // Each change that reads is held alone: against the model as it is today, and with the model as it would be.
     const today = [...problems, ...ruled.problems];
-    const held = { files: sorted, entries, problems: today, read: (laid: readonly SourceFile[]) => readModel(laid).problems };
-    const changed = changes.flatMap((change) => changeProblems(change, held).map((problem) => ({ ...problem, record: change.id })));
+    const held = { files: sorted, entries, problems: today, read: (files: readonly SourceFile[]) => readModel(files) };
+    const changed: Problem[] = [];
+    const laid: Laid[] = [];
+    for (const change of changes) {
+      const came = holdChange(change, held);
+      changed.push(...came.problems.map((problem) => ({ ...problem, record: change.id })));
+      if (came.laid !== undefined) laid.push({ change: change.id, records: came.laid });
+    }
     return {
       ...(read.name !== undefined ? { name: read.name } : {}),
       records,
       problems: [...today, ...changed].sort(compareProblems),
       counts: ruled.counts,
       rulings: ruled.rulings,
+      laid,
     };
   };
   if (!read.readable) return result();

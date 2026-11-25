@@ -78,7 +78,15 @@ export type ModelRead = {
   counts: Count[];
   /** What each rule in `rules/` came to, in order of the rule's id. */
   rulings: Ruling[];
+  /** The model as it would be, for each change that could be laid over the model. */
+  laid: Laid[];
 };
+
+/**
+ * What the check read when it laid one change over the model: the records the change adds and
+ * updates, whole, as they would be. A change with an error of its own is not laid, and has none.
+ */
+export type Laid = { change: string; records: ModelRecord[] };
 
 /** The answer of `/api/model`. */
 export type ModelAnswer = ModelRead & {

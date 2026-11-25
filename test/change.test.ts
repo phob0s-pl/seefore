@@ -158,6 +158,40 @@ test('a rule of the team that a change breaks is told at the record that breaks 
   expect(said('remove:\n  - connections/worker-writes-orders\nupdate:\n  rules/orders-by-the-api: {debt: null}\n', debt)).toEqual([]);
 });
 
+test('the answer keeps what the check read from the model as it would be: the records a change adds and updates, whole', () => {
+  const body = [
+    'add:',
+    '  apps/worker: {name: Worker, in: shop}',
+    'update:',
+    '  systems/shop: {description: null}',
+    '  apps/api: {description: Takes the orders.}',
+    '  flows/placing:',
+    '    steps: [places, {id: checks, does: api, name: Checks the stock}, confirms]',
+    'remove:',
+    '  - rules/orders-by-the-api',
+    '',
+  ].join('\n');
+  const model = read(body);
+  expect(model.problems).toEqual([]);
+  expect(model.laid.map((each) => each.change)).toEqual(['a-change']);
+  const laid = new Map(model.laid[0]?.records.map((record) => [`${record.kind}/${record.id}`, record.fields]));
+  // What the change removes is not among them, and nothing the change does not write.
+  expect([...laid.keys()]).toEqual(['apps/api', 'apps/worker', 'flows/placing', 'systems/shop']);
+  expect(laid.get('apps/worker')).toEqual({ name: 'Worker', in: 'shop' });
+  expect(laid.get('apps/api')).toEqual({ name: 'API', in: 'shop', description: 'Takes the orders.' });
+  expect(laid.get('systems/shop')).toEqual({ name: 'Shop' });
+  // A bare step id is today's whole step, and a step left out is gone.
+  expect(laid.get('flows/placing')?.steps).toEqual([
+    { id: 'places', does: 'customer-orders' },
+    { id: 'checks', does: 'api', name: 'Checks the stock' },
+    { id: 'confirms', reply: 'places', name: 'Confirms the order' },
+  ]);
+  // An input alone is laid and writes no record; a change with an error of its own is not laid; a model with no change lays none.
+  expect(read('').laid).toEqual([{ change: 'a-change', records: [] }]);
+  expect(read('add:\n  apps/api: {name: API, in: shop}\n').laid).toEqual([]);
+  expect(readModel(SHOP).laid).toEqual([]);
+});
+
 test('a faulty change stops nothing else, and the id of a change is its own', () => {
   const model = read('add:\n  worker: {name: Worker}\n');
   expect(model.problems.map((problem) => [problem.rule, problem.file, problem.record])).toEqual([['change-path', 'changes/a-change.yaml', 'a-change']]);

@@ -31,6 +31,9 @@ export function NameOf({ record }: { record: ModelRecord }) {
   return record.kind === 'connections' ? <span className="quiet">No name</span> : <>{record.id}</>;
 }
 
+/** The address of a record known by its kind and its id alone, as the catalogue decides it: under a change for one it touches. */
+export const addressOf = (catalogue: Catalogue, kind: string, id: string): string => catalogue.address({ kind, id, file: '', fields: {} }) ?? '/';
+
 /** A link to a record's page, under its name; an id that names no record is plain text. */
 export function RecordLink({ catalogue, id }: { catalogue: Catalogue; id: unknown }) {
   if (typeof id !== 'string') return null;

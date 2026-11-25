@@ -1,5 +1,7 @@
-/* Changes: the list, and the sidebar of a change in place of the main one. The rows, the panel
-   and the tile are ui.css's; an entry of the sidebar is a .nav-link of shell.css. */
+/* Changes: the list, the sidebar of a change in place of the main one, its Records page and the
+   page of a record under it. The rows, the panel, the tile and the pills are ui.css's; an entry
+   of the sidebar is a .nav-link of shell.css; the title row is records.css's and the way back
+   flow.css's. */
 
 /* A change's name is read whole in its row, on as many lines as it takes. */
 .changes-list .row-name-ellipsis {
@@ -63,4 +65,137 @@
   width: 15px;
   height: 15px;
   stroke-width: 1.8;
+}
+
+/* What the person answered when asked: a row a line, each whole, with a hairline between two.
+   A row is no link: nothing names a line. */
+.change-given {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.change-given > li {
+  margin-left: 20px;
+  padding: 12px 20px 12px 0;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+.change-given > li + li {
+  border-top: var(--divider);
+}
+
+/* The Records page: a section for each list the change touches. A line of context is read whole
+   in its row. A row of a change the check could not lay leads nowhere: it keeps the look of a
+   row, with no hover, and its hairline. */
+.change-records .row-name-ellipsis {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.change-row-still:hover {
+  background: transparent;
+}
+.change-row-still + .change-row-still > .row-grid {
+  border-top: var(--divider);
+}
+/* The one line above the sections, and the line under a record's title row: quiet, at a width to read. */
+.change-note,
+.change-record-line {
+  max-width: 72ch;
+  padding: 0 4px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  text-wrap: pretty;
+}
+.change-record-line {
+  margin: -8px 0 20px;
+}
+.change-record-line a {
+  color: var(--link);
+  font-weight: 500;
+}
+.change-record-line a:hover {
+  color: var(--link-hover);
+}
+
+/* The change's name in the way back gives way first to a long record's name. */
+.change-crumbs > a:first-child {
+  flex-shrink: 1;
+  min-width: 0;
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Before and after, and the keys as written: a row a key, the key in the mono type, with a
+   hairline between two rows as the facts have. Above Before and after, its two words. */
+.change-diff-row {
+  display: grid;
+  column-gap: 16px;
+  align-items: baseline;
+  margin-left: 20px;
+  padding: 11px 20px 11px 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--text-primary);
+}
+.change-diff-row > * {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.change-diff-row + .change-diff-row {
+  border-top: var(--divider);
+}
+.change-diff-heading {
+  padding-top: 9px;
+  padding-bottom: 9px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--text-tertiary);
+}
+.change-key {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+.change-prose {
+  white-space: pre-line;
+}
+.change-prose + .change-prose {
+  margin-top: 8px;
+}
+.change-ids {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.change-ids > li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+}
+.change-ids > li + li {
+  margin-top: 4px;
+}
+.change-diff a {
+  color: var(--link);
+}
+.change-diff a:hover {
+  color: var(--link-hover);
+}
+.change-id-mark {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+}
+.change-yaml {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--text-primary);
 }

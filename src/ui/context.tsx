@@ -5,7 +5,7 @@ import type { ReactNode } from 'react';
 import { useOutletContext, useParams } from 'react-router-dom';
 import type { Catalogue } from '../model/catalogue.ts';
 import type { Context, ContextKind, ContextLine } from '../model/context.ts';
-import { KindTile, Missing, RecordLink } from './models.tsx';
+import { addressOf, KindTile, Missing, RecordLink } from './models.tsx';
 import type { ModelState } from './shell.tsx';
 import { EmptyState, Facts, GridRow, IconTile, LargeTitle, Panel, Pill, RowList, Section, SectionStack, TextPanel, useTitle } from './ui.tsx';
 
@@ -37,18 +37,18 @@ function useModel(): { context?: Context; catalogue?: Catalogue; line?: ReactNod
 }
 
 /** A line as a row of a list: its sentence, and its kind at the right. It leads to the line's page. */
-function LineRow({ line, depth }: { line: ContextLine; depth?: number }) {
+function LineRow({ line, catalogue, depth }: { line: ContextLine; catalogue: Catalogue; depth?: number }) {
   const kind = KINDS[line.kind];
-  return <GridRow to={`/context/${line.id}`} cols={COLS} tile={<IconTile icon={kind.icon} size="sm" />} name={line.sentence} cells={[<Pill>{kind.word}</Pill>]} depth={depth} />;
+  return <GridRow to={addressOf(catalogue, 'context', line.id)} cols={COLS} tile={<IconTile icon={kind.icon} size="sm" />} name={line.sentence} cells={[<Pill>{kind.word}</Pill>]} depth={depth} />;
 }
 
 /** Lines as rows in one panel. */
-function Lines({ label, lines }: { label: string; lines: readonly ContextLine[] }) {
+function Lines({ label, lines, catalogue }: { label: string; lines: readonly ContextLine[]; catalogue: Catalogue }) {
   return (
     <Panel lift className="context-list">
       <RowList label={label}>
         {lines.map((line) => (
-          <LineRow key={line.id} line={line} />
+          <LineRow key={line.id} line={line} catalogue={catalogue} />
         ))}
       </RowList>
     </Panel>
@@ -76,7 +76,7 @@ export function ContextList() {
         <SectionStack>
           {global.length > 0 && (
             <Section title="Global">
-              <Lines label="Global" lines={global} />
+              <Lines label="Global" lines={global} catalogue={catalogue} />
             </Section>
           )}
           {systems.length > 0 && (
@@ -86,7 +86,7 @@ export function ContextList() {
                   {systems.map((system) => (
                     <Fragment key={system.id}>
                       <GridRow
-                        to={`/models/${system.id}`}
+                        to={addressOf(catalogue, 'systems', system.id)}
                         cols={COLS}
                         tile={<KindTile kind="systems" size="sm" />}
                         name={system.known ? system.name : <span className="dangling">{system.id}</span>}
@@ -94,7 +94,7 @@ export function ContextList() {
                         strong
                       />
                       {system.lines.map((each) => (
-                        <LineRow key={each.id} line={each} depth={1} />
+                        <LineRow key={each.id} line={each} catalogue={catalogue} depth={1} />
                       ))}
                     </Fragment>
                   ))}
@@ -157,7 +157,7 @@ export function ContextLinePage() {
         />
         {others.length > 0 && (
           <Section title={beside}>
-            <Lines label={beside} lines={others} />
+            <Lines label={beside} lines={others} catalogue={catalogue} />
           </Section>
         )}
       </SectionStack>

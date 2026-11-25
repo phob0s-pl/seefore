@@ -640,7 +640,7 @@ const onChange = (path: string) => `location.pathname === ${JSON.stringify(path)
 const ON_CHANGES = `location.pathname === '/changes' && document.querySelector('ul[aria-label="Changes"] > li') !== null && ${SIDEBAR}`;
 
 test.skipIf(!HAS_CHROME).concurrent(
-  HAS_CHROME ? 'the entry Changes opens the list, and a row opens the change with its own sidebar, Need current' : `skipped: there is no Chrome at ${CHROME}`,
+  HAS_CHROME ? 'the entry Changes opens the list, and a row opens the change with its own sidebar, on Need: the prompt and what was answered' : `skipped: there is no Chrome at ${CHROME}`,
   () =>
     inChrome(async (send, address) => {
       await send('Page.navigate', { url: `${address}/` });
@@ -662,11 +662,14 @@ test.skipIf(!HAS_CHROME).concurrent(
         links: ['/changes/orders-by-post'],
       });
       await click(send, await centreOf(send, 'ul[aria-label="Changes"] a[href="/changes/orders-by-post"]'));
-      expect(await waitFor(send, `(() => { const read = ${onChange('/changes/orders-by-post')}; return read && read.change !== null && { ...read, page: document.querySelector('main').innerText.trim() }; })()`)).toEqual({
+      const need = `{ sections: ${texts('main .section-label')}, prompt: ${texts('section[aria-label="Prompt"] .panel-text')}, given: ${texts('section[aria-label="Given"] .change-given > li')} }`;
+      expect(await waitFor(send, `(() => { const read = ${onChange('/changes/orders-by-post')}; return read && read.change !== null && document.querySelector('main .section-label') !== null && { ...read, ...${need} }; })()`)).toEqual({
         main: null,
         change: '1 Need 2 Records All changes',
         current: 'Need',
-        page: 'Orders by post',
+        sections: ['Prompt', 'Given'],
+        prompt: ['The clerk takes orders that come by post, and types them into the shop.'],
+        given: ['A posted order is placed as an order made online is.'],
       });
     }),
   20_000,
@@ -679,7 +682,8 @@ test.skipIf(!HAS_CHROME).concurrent(
       await send('Page.navigate', { url: `${address}/changes/orders-by-post` });
       expect(await waitFor(send, `(() => { const read = ${onChange('/changes/orders-by-post')}; return read && read.current; })()`)).toBe('Need');
       await click(send, await centreOf(send, 'nav[aria-label="Change sections"] a[href="/changes/orders-by-post/records"]'));
-      expect(await waitFor(send, `(() => { const read = ${onChange('/changes/orders-by-post/records')}; return read && read.current === 'Records' && read; })()`)).toMatchObject({ main: null, current: 'Records' });
+      // What Records lists is the next test's.
+      expect(await waitFor(send, `(() => { const read = ${onChange('/changes/orders-by-post/records')}; return read && read.current === 'Records' && document.querySelector('main .row') !== null && read; })()`)).toMatchObject({ main: null, current: 'Records' });
       await click(send, await centreOf(send, 'nav[aria-label="Change sections"] a[href="/changes"]'));
       expect(await waitFor(send, `(() => { const read = ${ON_CHANGES}; return read && read.main !== null && read; })()`)).toEqual({
         main: 'Architecture Context Features Models Rules Changes',
@@ -691,6 +695,112 @@ test.skipIf(!HAS_CHROME).concurrent(
       expect(await waitFor(send, `document.querySelector('.empty-state') !== null && { says: ${texts('.empty-state')}[0], sidebar: ${SIDEBAR} }`)).toEqual({
         says: 'No such record. Back to Changes',
         sidebar: { main: 'Architecture Context Features Models Rules Changes', change: null, current: null },
+      });
+    }),
+  20_000,
+);
+
+/** The page of a record under the change in the test model, once it is drawn: the address, its name on the page and in the window's title. */
+const onRecord = (path: string, name: string) =>
+  `location.pathname === ${JSON.stringify(`/changes/orders-by-post/records/${path}`)} && document.querySelector('main h1')?.textContent === ${JSON.stringify(name)} && document.title === ${JSON.stringify(`${name} · seefore`)} && ${SIDEBAR}`;
+/** Each row of Before and after, as the texts of its key and its two sides. */
+const DIFF = `[...document.querySelectorAll('section[aria-label="Before and after"] .change-diff-row:not(.change-diff-heading)')].map((row) => [...row.children].map((cell) => cell.innerText.replace(/\\s+/g, ' ').trim()))`;
+/** The addresses the links of what a selector finds lead to. */
+const hrefs = (selector: string) => `[...document.querySelectorAll(${JSON.stringify(selector)})].map((link) => link.getAttribute('href'))`;
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME ? 'Records has a section for each list the change touches, each row with its mark, leading under the change' : `skipped: there is no Chrome at ${CHROME}`,
+  () =>
+    inChrome(async (send, address) => {
+      await send('Page.navigate', { url: `${address}/changes/orders-by-post/records` });
+      const records = `(() => { const read = ${onChange('/changes/orders-by-post/records')}; return read && document.querySelector('main .row') !== null && {
+        current: read.current,
+        sections: ${texts('main .section-label')},
+        rows: ${texts('main .row')},
+        tones: [...document.querySelectorAll('main .row .pill')].map((pill) => pill.className),
+        links: ${hrefs('main .row a')},
+      }; })()`;
+      expect(await waitFor(send, records)).toEqual({
+        current: 'Records',
+        sections: ['Features', 'Software', 'Connections', 'Technologies'],
+        rows: ['Ordering Updated', 'Order API Updated', 'Types in a posted order Added', 'Go Removed'],
+        tones: ['pill', 'pill', 'pill tone-success', 'pill tone-danger'],
+        links: [
+          '/changes/orders-by-post/records/features/ordering',
+          '/changes/orders-by-post/records/apps/order-api',
+          '/changes/orders-by-post/records/connections/clerk-orders',
+          '/changes/orders-by-post/records/technologies/go',
+        ],
+      });
+    }),
+  20_000,
+);
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME ? "a row of Records opens the record under the change, with the change's sidebar, the way back, the line, and before and after" : `skipped: there is no Chrome at ${CHROME}`,
+  () =>
+    inChrome(async (send, address) => {
+      await send('Page.navigate', { url: `${address}/changes/orders-by-post/records` });
+      await click(send, await centreOf(send, 'main a[href="/changes/orders-by-post/records/features/ordering"]'));
+      const page = `(() => { const read = ${onRecord('features/ordering', 'Ordering')}; return read && document.querySelector('.breadcrumb') !== null && {
+        ...read,
+        crumbs: ${texts('.breadcrumb')}[0],
+        back: ${hrefs('.breadcrumb a')},
+        marks: ${texts('.record-title .pill')},
+        line: document.querySelector('.change-record-line') !== null,
+        sections: ${texts('main .section-label')},
+        diff: ${DIFF},
+        descriptions: document.querySelectorAll('main .panel-text').length,
+      }; })()`;
+      expect(await waitFor(send, page)).toEqual({
+        main: null,
+        change: '1 Need 2 Records All changes',
+        current: 'Records',
+        crumbs: 'Orders by post / Records / Ordering',
+        back: ['/changes/orders-by-post', '/changes/orders-by-post/records'],
+        marks: ['Updated'],
+        // An updated record has no line under its title: its mark and Before and after say it.
+        line: false,
+        // The feature's own page under it, without its description: the description is a key that changes.
+        sections: ['Before and after', 'Flows', 'From its flows', 'Data'],
+        diff: [['description', 'Customers buy things online, and the clerk sees what they bought.', 'Customers buy things online or by post, and the clerk sees what they bought.']],
+        descriptions: 0,
+      });
+      // "Records" in the way back leads to the list.
+      await click(send, await centreOf(send, '.breadcrumb a[href="/changes/orders-by-post/records"]'));
+      expect(await waitFor(send, `(() => { const read = ${onChange('/changes/orders-by-post/records')}; return read && document.querySelector('main .row') !== null && read.current; })()`)).toBe('Records');
+    }),
+  20_000,
+);
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME ? 'under a change a link to a record it touches stays under the change, and a link to any other opens the system' : `skipped: there is no Chrome at ${CHROME}`,
+  () =>
+    inChrome(async (send, address) => {
+      await send('Page.navigate', { url: `${address}/changes/orders-by-post/records/connections/clerk-orders` });
+      // The added connection: the clerk is not touched, the Order API is.
+      expect(await waitFor(send, `(() => { const read = ${onRecord('connections/clerk-orders', 'Types in a posted order')}; return read && document.querySelector('.connection-path a') !== null && { line: document.querySelector('.change-record-line') !== null, ends: ${hrefs('.connection-path a')} }; })()`)).toEqual({
+        // An added record has no line under its title: its mark says it.
+        line: false,
+        ends: ['/actors/clerk', '/changes/orders-by-post/records/apps/order-api'],
+      });
+      await click(send, await centreOf(send, '.connection-path a[href="/changes/orders-by-post/records/apps/order-api"]'));
+      // The Order API as it would be: its technology taken out, the one it had removed by the change too.
+      expect(await waitFor(send, `(() => { const read = ${onRecord('apps/order-api', 'Order API')}; return read && document.querySelector('.facts a') !== null && { current: read.current, diff: ${DIFF}, removed: ${hrefs('section[aria-label="Before and after"] a')}, in: ${hrefs('.facts a')} }; })()`)).toEqual({
+        current: 'Records',
+        // The key goes whole: the other side says so once, and the id bears no mark of its own.
+        diff: [['technology', 'Go', 'Taken out']],
+        removed: ['/changes/orders-by-post/records/technologies/go'],
+        in: ['/models/shop'],
+      });
+      await click(send, await centreOf(send, '.facts a[href="/models/shop"]'));
+      expect(await waitFor(send, `location.pathname === '/models/shop' && document.title === 'Shop · seefore' && ${SIDEBAR}`)).toEqual({ main: 'Architecture Context Features Models Rules Changes', change: null, current: null });
+      // A removed record is shown as it is today, with its way to the system; what names it and is touched stays under the change.
+      await send('Page.navigate', { url: `${address}/changes/orders-by-post/records/technologies/go` });
+      expect(await waitFor(send, `(() => { const read = ${onRecord('technologies/go', 'Go')}; return read && document.querySelector('section[aria-label="Used by"] a') !== null && { line: ${texts('.change-record-line')}[0], open: ${hrefs('.change-record-line a')}, usedBy: ${hrefs('section[aria-label="Used by"] a')} }; })()`)).toEqual({
+        line: 'Removed by this change. This is the record as it is today. Open it in the system',
+        open: ['/technologies/go'],
+        usedBy: ['/changes/orders-by-post/records/apps/order-api'],
       });
     }),
   20_000,

@@ -6,7 +6,7 @@ import type { Catalogue } from '../model/catalogue.ts';
 import type { Rulebook } from '../model/rulebook.ts';
 import type { Travel } from '../model/travel.ts';
 import { typeWords } from './kinds.tsx';
-import { KindTile, Missing, NameOf, RecordLink } from './models.tsx';
+import { addressOf, KindTile, Missing, NameOf, RecordLink } from './models.tsx';
 import { Named, OwnerOf, Related, RulesOf } from './record.tsx';
 import type { Fact, Row } from './record.tsx';
 import type { ModelState } from './shell.tsx';
@@ -49,13 +49,13 @@ export function FeaturesList() {
           <RowList label="Features">
             {catalogue.features.map((feature) => (
               <Fragment key={feature.id}>
-                <GridRow to={`/features/${feature.id}`} cols={COLS} tile={<KindTile kind="features" size="sm" />} name={<NameOf record={feature} />} cells={[onlyOf(feature)]} strong />
+                <GridRow to={catalogue.address(feature) ?? '/'} cols={COLS} tile={<KindTile kind="features" size="sm" />} name={<NameOf record={feature} />} cells={[onlyOf(feature)]} strong />
                 {travel.feature(feature.id).flows.map((flow) => {
                   const record = catalogue.record(flow.id);
                   return (
                     <GridRow
                       key={flow.id}
-                      to={`/flows/${flow.id}`}
+                      to={addressOf(catalogue, 'flows', flow.id)}
                       cols={COLS}
                       tile={<KindTile kind="flows" size="sm" />}
                       name={record ? <NameOf record={record} /> : flow.id}
@@ -86,8 +86,26 @@ export function FeaturePage() {
   return <FeatureBody record={record} catalogue={catalogue} travel={travel} rulebook={rulebook} />;
 }
 
-/** A feature: its facts, its flows, its parts from its flows and those stated on it, and the data of its flows. */
-function FeatureBody({ record, catalogue, travel, rulebook }: { record: ModelRecord; catalogue: Catalogue; travel: Travel; rulebook: Rulebook | undefined }) {
+/**
+ * A feature: its facts, its flows, its parts from its flows and those stated on it, and the data
+ * of its flows. Under a change the page draws the title row itself, and leaves the description
+ * out where it is a key that changes: `titled` and `described` say so.
+ */
+export function FeatureBody({
+  record,
+  catalogue,
+  travel,
+  rulebook,
+  titled = true,
+  described = true,
+}: {
+  record: ModelRecord;
+  catalogue: Catalogue;
+  travel: Travel;
+  rulebook: Rulebook | undefined;
+  titled?: boolean;
+  described?: boolean;
+}) {
   const { fields } = record;
   const read = travel.feature(record.id);
   const facts: Fact[] = [
@@ -131,14 +149,16 @@ function FeatureBody({ record, catalogue, travel, rulebook }: { record: ModelRec
   const nothing = read.flows.length === 0 && read.stated.length === 0;
   return (
     <>
-      <header className="record-title">
-        <KindTile kind="features" size="lg" />
-        <h1 className="large-title">
-          <NameOf record={record} />
-        </h1>
-      </header>
+      {titled && (
+        <header className="record-title">
+          <KindTile kind="features" size="lg" />
+          <h1 className="large-title">
+            <NameOf record={record} />
+          </h1>
+        </header>
+      )}
       <SectionStack>
-        {typeof fields.description === 'string' && <TextPanel>{fields.description}</TextPanel>}
+        {described && typeof fields.description === 'string' && <TextPanel>{fields.description}</TextPanel>}
         {facts.length > 0 && <Facts rows={facts} />}
         {nothing ? (
           <TextPanel>Nothing ties this feature to the model yet.</TextPanel>
@@ -150,7 +170,7 @@ function FeatureBody({ record, catalogue, travel, rulebook }: { record: ModelRec
             <Related title="Data" rows={data} />
           </>
         )}
-        <RulesOf rulebook={rulebook} id={record.id} />
+        <RulesOf rulebook={rulebook} catalogue={catalogue} id={record.id} />
       </SectionStack>
     </>
   );
