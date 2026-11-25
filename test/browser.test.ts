@@ -747,8 +747,7 @@ test.skipIf(!HAS_CHROME).concurrent(
         crumbs: ${texts('.breadcrumb')}[0],
         back: ${hrefs('.breadcrumb a')},
         marks: ${texts('.record-title .pill')},
-        line: ${texts('.change-record-line')}[0],
-        open: document.querySelector('.change-record-line a')?.getAttribute('href'),
+        line: document.querySelector('.change-record-line') !== null,
         sections: ${texts('main .section-label')},
         diff: ${DIFF},
         descriptions: document.querySelectorAll('main .panel-text').length,
@@ -760,8 +759,8 @@ test.skipIf(!HAS_CHROME).concurrent(
         crumbs: 'Orders by post / Records / Ordering',
         back: ['/changes/orders-by-post', '/changes/orders-by-post/records'],
         marks: ['Updated'],
-        line: 'Updated by this change. This is the record as it would be. Open it as it is today',
-        open: '/features/ordering',
+        // An updated record has no line under its title: its mark and Before and after say it.
+        line: false,
         // The feature's own page under it, without its description: the description is a key that changes.
         sections: ['Before and after', 'Flows', 'From its flows', 'Data'],
         diff: [['description', 'Customers buy things online, and the clerk sees what they bought.', 'Customers buy things online or by post, and the clerk sees what they bought.']],

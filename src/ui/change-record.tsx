@@ -30,16 +30,16 @@ const MARK: Record<Verb, { word: string; tone?: Tone }> = {
 };
 
 /**
- * The line under the title row of a record that is in the system too: which of the two is on the
- * screen. An added record has none: its mark says all there is to say.
+ * The line under the title row of a record that a change removes: it is shown as it is today,
+ * which its mark alone does not say. An added and an updated record have none: the mark says
+ * what the change does, and Before and after shows both sides of an update.
  */
 const LINE: Partial<Record<Verb, string>> = {
-  update: 'Updated by this change. This is the record as it would be.',
   remove: 'Removed by this change. This is the record as it is today.',
 };
 
 /** The words of the link to the record in the system, after the line. */
-const OPEN: Partial<Record<Verb, string>> = { update: 'Open it as it is today', remove: 'Open it in the system' };
+const OPEN: Partial<Record<Verb, string>> = { remove: 'Open it in the system' };
 
 /** The folders whose records have a page of their own under a change: the records of Models, and a feature. */
 const BODIES: readonly string[] = ['people', 'systems', 'apps', 'stores', 'components', 'infrastructure', 'connections', 'technologies', 'owners', 'data', 'features'];
