@@ -33,6 +33,7 @@ test('/api/model answers with the name, the records and the problems, read anew 
   expect(first).toMatchObject({ folder: basename(folder), name: 'Shop', problems: [] });
   expect(first.records.map((record) => record.id)).toEqual([
     'order-api',
+    'orders-by-post',
     'api-writes-orders',
     'customer-orders',
     'a-new-store-is-postgresql',

@@ -287,6 +287,14 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* Where the sidebar is replaced, the home button stands first, a hairline after it. */
+.history-divider {
+  flex-shrink: 0;
+  width: 1px;
+  height: 16px;
+  margin: 0 3px;
+  background: var(--border-hairline);
+}
 .history-controls > .button:last-child {
   color: rgba(255, 255, 255, 0.4);
 }

@@ -1,0 +1,9 @@
+name: Orders by post
+prompt: The clerk takes orders that come by post, and types them into the shop.
+given:
+  - A posted order is placed as an order made online is.
+add:
+  connections/clerk-orders:
+    from: clerk
+    to: order-api
+    name: Types in a posted order

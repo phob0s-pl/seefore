@@ -98,12 +98,20 @@ A change starts from a prompt. The owner split the milestone into four parts on 
 Each is defined on one page before anything of it is built. The earlier study of the whole
 process is in `research/stage-15-22/`, out of Git.
 
+On 2026-11-25, with the input and the body built, the owner put the page of a change next,
+before decisions and the review, and split it into four parts: D5 to D8. They are built in
+that order, each on what the one before it left; D3 and D4 follow.
+
 | # | Stage | Result | Who |
 | --- | --- | --- | --- |
 | D1 | The input of a change | One page and a schema: a `prompt`, what the person answered when asked (`given`), and a `name` written last | Fable defines, the main session builds |
 | D2 | The body of a change | A change in `changes/` says which records it adds, updates and removes. The check holds it against the model, and holds the model as it would be | The main session, with Astra's proposal |
 | D3 | Decisions | One page: what a decision is, and when one is asked, assumed or just made | Fable |
 | D4 | The review of a change | One page: who reads a change, what they say, and how the reading ends | Fable |
+| D5 | Changes on the page | An entry "Changes" in the sidebar: a list of the changes, and a page for each with its name and what the check says of it | The main session defines, Opus builds |
+| D6 | The need of a change on its page | On a change's page, what was asked for: the prompt, and what the person answered when asked | The main session defines, Opus builds |
+| D7 | The records of a change on its page | On a change's page, the records it adds, updates and removes. An updated record is shown as before and after, key by key, and a flow step by step | The main session defines, Opus builds |
+| D8 | The diagram of a change | The architecture diagram as it would be with the change, with what is added, removed and changed marked on it | The main session defines, Opus builds |
 
 ### 5 Additional architecture context
 
