@@ -63,6 +63,8 @@ const PAGES: Record<string, string> = {
   features: 'features',
   flows: 'flows',
   data: 'data',
+  rules: 'rules',
+  context: 'context',
 };
 
 const collator = new Intl.Collator('en', { sensitivity: 'accent', numeric: true });
@@ -77,8 +79,21 @@ export const byName = (a: ModelRecord, b: ModelRecord): number => {
   return Number(first === undefined) - Number(second === undefined) || idOrder(a, b);
 };
 
-/** What the pages of the records ask, worked out once from the records of `/api/model`. */
-export function catalogueOf(records: readonly ModelRecord[]): Catalogue {
+/**
+ * What a change touches, for a catalogue made for that change: the change's id, and the paths,
+ * `folder/id`, of the records it adds, updates and removes.
+ */
+export type Touch = { change: string; paths: ReadonlySet<string> };
+
+/** The address of a record under a change: the change's, `records`, and the record's path. */
+export const addressUnder = (change: string, path: string): string => `/changes/${change}/records/${path}`;
+
+/**
+ * What the pages of the records ask, worked out once from the records of `/api/model`. With
+ * what a change touches, the address of a touched record is the one under that change, and any
+ * other the system's: the one place that decides where a record's link leads.
+ */
+export function catalogueOf(records: readonly ModelRecord[], touch?: Touch): Catalogue {
   // An id names the first record that has it; a second one is a problem of `seefore check`.
   // A rule of the team's own and a line of context are no records of the architecture: they have pages of their own.
   const byId = new Map<string, ModelRecord>();
@@ -150,7 +165,11 @@ export function catalogueOf(records: readonly ModelRecord[]): Catalogue {
 
   return {
     record: (id) => byId.get(id),
-    address: (record) => (PAGES[record.kind] !== undefined ? `/${PAGES[record.kind]}/${record.id}` : undefined),
+    address: (record) => {
+      const path = `${record.kind}/${record.id}`;
+      if (touch?.paths.has(path)) return addressUnder(touch.change, path);
+      return PAGES[record.kind] !== undefined ? `/${PAGES[record.kind]}/${record.id}` : undefined;
+    },
     nameOf: (id) => text(byId.get(id)?.fields.name) ?? id,
     software,
     people: of('people'),

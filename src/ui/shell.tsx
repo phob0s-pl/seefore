@@ -127,7 +127,7 @@ export function Shell() {
   const state = useMemo((): ModelState => {
     if (model.answer === undefined) return model;
     const catalogue = catalogueOf(model.answer.records);
-    return { ...model, catalogue, travel: travelOf(model.answer.records, catalogue), rulebook: rulebookOf(model.answer), context: contextOf(model.answer.records), changes: changesOf(model.answer.records) };
+    return { ...model, catalogue, travel: travelOf(model.answer.records, catalogue), rulebook: rulebookOf(model.answer), context: contextOf(model.answer.records), changes: changesOf(model.answer.records, model.answer.laid) };
   }, [model]);
   // The focus the address names, and the choices of the depth: none at Systems.
   const records = model.answer?.records;

@@ -1,6 +1,6 @@
 import { Document, isMap, isScalar, isSeq, stringify } from 'yaml';
 import type { z } from 'zod';
-import type { Problem } from './answer.ts';
+import type { ModelRecord, Problem } from './answer.ts';
 import { idProblem } from './id.ts';
 import { CHANGED_FOLDERS, RECORD_NOUNS } from './kinds.ts';
 import type { Entry } from './model.ts';
@@ -27,8 +27,14 @@ export type Held = {
   files: readonly SourceFile[];
   entries: readonly Entry[];
   problems: readonly Problem[];
-  read: (files: readonly SourceFile[]) => readonly Problem[];
+  read: (files: readonly SourceFile[]) => { problems: readonly Problem[]; records: readonly ModelRecord[] };
 };
+
+/**
+ * What holding a change comes to: its problems, and, when it could be laid over the model, the
+ * records it adds and updates as the check read them from the model as it would be.
+ */
+export type HeldChange = { problems: Problem[]; laid?: ModelRecord[] };
 
 type Verb = 'add' | 'update' | 'remove';
 
@@ -56,11 +62,11 @@ function stepsAfter(live: unknown, written: readonly unknown[]): unknown[] {
   return written.map((step) => (typeof step === 'string' ? (old.find((each) => each.id === step) ?? step) : step));
 }
 
-/** The problems of one change: of its form, against the model, and of the model as it would be. */
-export function changeProblems(change: ReadChange, held: Held): Problem[] {
+/** One change held: its problems of form, against the model and of the model as it would be, and the records as they would be. */
+export function holdChange(change: ReadChange, held: Held): HeldChange {
   const { file, yaml } = change;
   const doc = yaml.doc;
-  if (!doc) return [];
+  if (!doc) return { problems: [] };
   const problems: Problem[] = [];
   const named: Named[] = [];
   const body = doc.toJS() as { add?: Record<string, unknown>; update?: Record<string, Record<string, unknown>>; remove?: string[] };
@@ -124,7 +130,7 @@ export function changeProblems(change: ReadChange, held: Held): Problem[] {
       problems.push({ ...error(file, yaml.at(each.key), 'change-twice', `${quote(each.id)} is in this change ${where}. A record is in a change once.`), field: each.verb });
     }
   }
-  if (problems.length > 0) return problems;
+  if (problems.length > 0) return { problems };
 
   // ---- against the model: what it adds is not there, what it updates and removes is
   const records = new Map<string, Entry>();
@@ -181,7 +187,7 @@ export function changeProblems(change: ReadChange, held: Held): Problem[] {
     }
     after.set(each.path, merged);
   }
-  if (problems.some((problem) => problem.severity === 'error')) return problems;
+  if (problems.some((problem) => problem.severity === 'error')) return { problems };
 
   // ---- the model as it would be: the model with the change laid over it, read by the whole check
   const gone = new Set(named.filter((each) => each.verb !== 'add').map((each) => `${each.path}.yaml`));
@@ -192,7 +198,8 @@ export function changeProblems(change: ReadChange, held: Held): Problem[] {
   }
   const today = new Set(held.problems.map((problem) => `${problem.rule}\n${problem.file}\n${problem.message}`));
   const written = new Map(named.filter((each) => each.verb !== 'remove').map((each) => [`${each.path}.yaml`, each]));
-  for (const found of held.read(laid)) {
+  const read = held.read(laid);
+  for (const found of read.problems) {
     if (today.has(`${found.rule}\n${found.file}\n${found.message}`)) continue;
     const path = found.file.endsWith('.yaml') ? found.file.slice(0, -'.yaml'.length) : found.file;
     const record = written.get(found.file);
@@ -202,5 +209,6 @@ export function changeProblems(change: ReadChange, held: Held): Problem[] {
     const make = found.severity === 'warning' ? warning : error;
     problems.push({ ...make(file, at, found.rule, `With this change, ${quote(path)}: ${found.message}`, found.fix), field: record?.verb ?? 'remove' });
   }
-  return problems;
+  // The records the change writes, as that reading has them: what the page shows is what was judged.
+  return { problems, laid: read.records.filter((record) => written.has(record.file)) };
 }
