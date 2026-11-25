@@ -93,6 +93,10 @@ features.
 - **7 Optimisations and UI tweaks**: the list the earlier stages filled.
 - **8 Claude skills and process**.
 
+On 2026-11-25 the owner ended plan 2 here. Milestones 6 and 8, and of milestone 4 the
+decisions (D3) and the rest of the review's check (D4b), are in `plan3.md`. The diagram of a
+change (D8) and milestone 7 wait.
+
 ### 4 Changes
 
 A change starts from a prompt. The owner split the milestone into four parts on 2026-11-24.
