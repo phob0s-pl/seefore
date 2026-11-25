@@ -780,8 +780,9 @@ test.skipIf(!HAS_CHROME).concurrent(
     inChrome(async (send, address) => {
       await send('Page.navigate', { url: `${address}/changes/orders-by-post/records/connections/clerk-orders` });
       // The added connection: the clerk is not touched, the Order API is.
-      expect(await waitFor(send, `(() => { const read = ${onRecord('connections/clerk-orders', 'Types in a posted order')}; return read && document.querySelector('.connection-path a') !== null && { line: ${texts('.change-record-line')}[0], ends: ${hrefs('.connection-path a')} }; })()`)).toEqual({
-        line: 'Added by this change. It is not in the system yet.',
+      expect(await waitFor(send, `(() => { const read = ${onRecord('connections/clerk-orders', 'Types in a posted order')}; return read && document.querySelector('.connection-path a') !== null && { line: document.querySelector('.change-record-line') !== null, ends: ${hrefs('.connection-path a')} }; })()`)).toEqual({
+        // An added record has no line under its title: its mark says it.
+        line: false,
         ends: ['/actors/clerk', '/changes/orders-by-post/records/apps/order-api'],
       });
       await click(send, await centreOf(send, '.connection-path a[href="/changes/orders-by-post/records/apps/order-api"]'));

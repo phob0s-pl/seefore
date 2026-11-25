@@ -29,9 +29,11 @@ const MARK: Record<Verb, { word: string; tone?: Tone }> = {
   remove: { word: 'Removed', tone: 'danger' },
 };
 
-/** The line under the title row, for each thing a change does. */
-const LINE: Record<Verb, string> = {
-  add: 'Added by this change. It is not in the system yet.',
+/**
+ * The line under the title row of a record that is in the system too: which of the two is on the
+ * screen. An added record has none: its mark says all there is to say.
+ */
+const LINE: Partial<Record<Verb, string>> = {
   update: 'Updated by this change. This is the record as it would be.',
   remove: 'Removed by this change. This is the record as it is today.',
 };
@@ -144,15 +146,17 @@ export function ChangeRecordPage() {
           <MarkPill verb={touched.verb} />
         </TypeMarks>
       </header>
-      <p className="change-record-line">
-        {LINE[touched.verb]}
-        {open !== undefined && system !== undefined && (
-          <>
-            {' '}
-            <Link to={system}>{open}</Link>
-          </>
-        )}
-      </p>
+      {LINE[touched.verb] !== undefined && (
+        <p className="change-record-line">
+          {LINE[touched.verb]}
+          {open !== undefined && system !== undefined && (
+            <>
+              {' '}
+              <Link to={system}>{open}</Link>
+            </>
+          )}
+        </p>
+      )}
       <SectionStack>
         {before !== undefined && <BeforeAndAfter differences={changes.differences(id, path)} today={before.catalogue} after={read.catalogue} />}
         <Under touched={touched} record={shown} read={read} />
