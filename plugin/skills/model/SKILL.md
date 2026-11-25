@@ -2,12 +2,13 @@
 name: model
 description: Writes the parts, stores and connections of a system into its seefore model, each running part with its source in the code; call it when a repository has no model, or its code has moved.
 disable-model-invocation: true
-allowed-tools: Bash(seefore check *) Bash(seefore list *) Bash(seefore guide *) Bash(seefore rename *)
+allowed-tools: Bash(seefore check *) Bash(seefore list *) Bash(seefore guide *) Bash(seefore rename *) Bash(seefore remove *)
 ---
 
 You write the seefore model of the system in this repository **from its code**: what runs, what
 holds data, and what acts on what. You write at once and ask nothing first. The person reads
-the result as a diagram, not as files.
+the result as a diagram, not as files. A feature, a flow, data, context, a rule or a change
+is another skill's work.
 
 What the person typed after the skill's name: "$ARGUMENTS". When it names a folder, model only
 what lies in it, and leave every other record as it is. When it holds `--parallel-agents=<n>`,
@@ -31,9 +32,10 @@ work as "With several agents" says below.
    each topic or queue that one app writes and another reads, not the broker.
 3. **A connection needs evidence from this session**: a file you opened, or a line a search
    showed you, where this app's code or config names the far end: a client, an address, a
-   queue or topic name, a route, a query. Write that file's path in the connection's
-   `source`. With none, leave the connection out and name it in your last message. A name
-   that sounds related is no evidence, and neither is what such projects usually do.
+   queue or topic name, a route, a query. Its path goes in the connection's `source`. Code
+   that several apps run counts only with a file that says this app runs it; for an app with
+   no code here, its config here or the route that takes its call. With none, leave the
+   connection out and name it in your last message. A name that sounds related is no evidence.
 4. **Write what the files show.** Not what you remember of this project, and not what its
    documents say it will be. A document may tell you where to look; a file you opened is what
    you write from.
@@ -45,7 +47,8 @@ work as "With several agents" says below.
 1. Run `seefore list`. If it says "is not a model", tell the person to run
    `seefore init --name=<the system's name>` and stop. "No records yet." is a new model. If
    records are there, this is a mend: keep every record that is still true, with its id, and
-   change only what the code shows otherwise. An id changes only by `seefore rename`.
+   change only what the code shows otherwise. An id changes by `seefore rename <old> <new>`,
+   and a record that is no longer true goes by `seefore remove <id>`, never by another way.
 2. **Find what runs.** Read with the file tools: Glob lists, Grep searches, Read opens. The
    shell is for `seefore` alone, one command a call: anything else may be refused. List the
    tree first, with Glob; search freely, a search opens no file. Open at most 120, in this order:
@@ -62,11 +65,8 @@ work as "With several agents" says below.
    command that writes them is refused. Write in this order, so that each names only what is
    already there: systems, technologies, owners, people, apps, stores, components,
    infrastructure, connections.
-   - The system is what its users see as one. A system outside it that the code calls is a
-     system of its own with `external: true`.
-   - An id is the word of its folder and the name in lower case with hyphens. A connection's
-     id is `connection-`, who acts, what it does, on what.
-   - `description`: one or two sentences of what the thing is responsible for.
+   - The system is what its users see as one; a system outside it bears `external: true`.
+   - A connection's id is `connection-`, who acts, what it does, on what.
    - A person is a kind of user that an entry point shows: who opens the pages, runs the
      command or calls the API. Write the few there are. An owner is written only when a
      file names a team; otherwise leave `owner` out.
@@ -79,42 +79,42 @@ work as "With several agents" says below.
    - what you wrote, as counts by folder;
    - what you took where the code left a choice, at most five lines;
    - what you did not find, such as who owns a part or who uses the system;
-   - **which folders you did not open**;
+   - **which folders you did not open**; where they are many and the tree holds thousands
+     of files, that `--parallel-agents=4` reads more of it, for about twice the cost;
    - "Look at the diagram with `seefore --server`. Next: `/seefore:flows <a journey>`."
 
 ## With several agents
 
 Only when the person typed `--parallel-agents=<n>`. An agent you start sees neither this text
 nor the conversation: it knows only what you tell it.
-1. **The frame.** Do steps 1, 2 and 4, and write every record but connections.
+1. **The frame.** Do steps 1, 2 and 4, and write every record but connections. Then run
+   `seefore check` and mend it: a record that does not parse is in no agent's list.
 2. **The parts.** Cut the apps whose `source` is code in this tree into at most <n> groups,
    neighbours together; cut a very large app by the folders under its `source`. Start one
-   agent a group, all in one message, each told this, filled in and whole:
-   > Add connections to the seefore model in `<folder>`. Your apps: `<id>` in `<source>`, …
-   > `seefore list` prints every record, `seefore guide connections` the format. Search each
-   > app's code, and the deploy and config files that name it, for what it reaches: clients,
-   > addresses, queue and topic names, stores it opens, hosts outside the system. Write one
-   > file a connection, many in one message, in `<folder>/connections/`: `from` one of your
-   > apps, `to` a record of the list, the id `connection-`, the app, what it does, on what.
-   > Each needs a file you opened, or a line a search showed you, where this app's code or
-   > config names the far end: its path goes in the connection's `source`. With none, write
-   > none: what you remember of the project is no evidence. Write no other record, change
-   > none, write no connection that starts elsewhere, and run no check.
+   agent a group, all in one message, each told this, filled in, with no target or cap added:
+   > Add connections to the seefore model in `<folder>`. The code lies in `<root>`: a path is
+   > counted from there. Your apps: `<id>` in `<source>`, … Read with Glob, Grep and Read; the
+   > shell is for `seefore` alone, one command a call: `seefore list` prints every record,
+   > `seefore guide connections` the format. Search each app's code, and the deploy and config
+   > files that name it, for what it reaches: clients, addresses, queue and topic names, stores,
+   > hosts outside the system. Write one file a connection, many in one message, in
+   > `<folder>/connections/`: `from` one of your apps, `to` a record of the list, the id
+   > `connection-`, the app, what it does, on what. Each needs a file you opened, or a line a
+   > search showed you, where this app's code or config names the far end: its path goes in
+   > `source`. With none, write none: what you remember of the project is no evidence. What your
+   > app sends down a channel the far app dialled is yours, with `opens: to`; where yours only
+   > dials, write none. Write no other record, change none, and run no check.
    > End with these lines alone: `MISSING <store or system>: <what it is>; <app id> <what it
-   > does with it>; <file>` for what your apps reach and the list lacks; `INTO <app id> from
-   > <who>: <what>; <file>`; `NO APP <id>: <why>`; `UNREAD: <folders>`.
-   Agents that share one app write no file: each ends with its connections as lines too.
-3. **The join.** Write each missing store and system once, though agents named it in two
-   ways; then the connections to them, those into apps, those the agents sent as lines, once
-   each, and those of people and of apps with no code here. Then steps 5 to 7.
-
-## What this skill never does
-
-- It does not read all the code. It reads what starts things and what joins them, and says
-  what it left unread.
-- It does not write a feature, a flow, data, context, a rule or a change. Other skills do.
-- It does not take a name, an id or a path from the examples below: they are of a tea shop.
+   > does with it>; <file>` for what your apps reach and the list lacks; `INTO <your app, or a
+   > store it reads> from <who>: <what>; <file>`; `UNREAD: <folders>`.
+   Agents that share one app write no file: say so; each ends with its connections as lines too.
+3. **The join.** Write under no id that `connections/` holds. Write each missing store and
+   system once, though named in two ways; then, once each, the connections to them, of the
+   `INTO` lines, of the lines sent, of people and of apps with no code here. Where two agents
+   wrote one thing, or one channel from both its ends, remove one. Then steps 5 to 7.
 
 ## The format
+
+Take no name, id or path from the examples below: they are of a tea shop.
 
 !`seefore guide model`

@@ -27,7 +27,7 @@
     "opens": {
       "type": "string",
       "const": "to",
-      "description": "`to`: the far side opened the channel this exchange goes down, as when an agent dials out and the server sends down that tunnel: `from` the server, `to` the agent, `opens: to`. Left out when the one that sends opened it, or nobody has said."
+      "description": "`to`: the far side opened the channel this exchange goes down, as when an agent dials out and the server sends down that tunnel: `from` the server, `to` the agent, `opens: to`. The dialling is no connection of its own. Left out when the one that sends opened it, or nobody has said."
     },
     "access": {
       "type": "string",
@@ -57,7 +57,7 @@
       "minLength": 1,
       "maxLength": 2000,
       "pattern": "\\S",
-      "description": "What it is responsible for, in 1 to 2,000 characters. Its first sentence says what the thing is: a box shows that sentence."
+      "description": "What passes and why, where the name does not say it, in 1 to 2,000 characters."
     },
     "technology": {
       "minItems": 1,
@@ -79,7 +79,7 @@
         "maxLength": 300,
         "pattern": "^(?!\\/)(?!.*(?:^|\\/)\\.\\.(?:\\/|$))[^*\\\\\\n\\r]*\\S$"
       },
-      "description": "Where the code shows it, a file in which the code or config of `from` names `to`: one to three paths of a file or a folder, counted from the folder that holds the model's folder, written with `/`. A path with `..`, with `*` or with `/` at its start is an error, and the check warns when a path is not there. From a person, the entry point they use. Left out when nobody has looked."
+      "description": "Where the code shows it, a file in which the code or config of `from` names `to`: the paths of one to three files, counted from the folder that holds the model's folder, written with `/`. A path with `..`, with `*` or with `/` at its start is an error, and the check warns when a path is not there. When `from` has no code here, the route of `to` that takes its call; from a person, the entry point they use. Left out when nobody has looked."
     }
   },
   "required": [

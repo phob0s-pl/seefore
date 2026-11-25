@@ -48,6 +48,6 @@ test.each(SKILLS)('the skill %s has its front matter, at most 120 lines and no w
   expect(matter['disable-model-invocation']).toBe(true);
   const tools = String(matter['allowed-tools']);
   for (const verb of ['check', 'list', 'guide']) expect(tools).toContain(`Bash(seefore ${verb} *)`);
-  expect(tools.includes('Bash(seefore rename *)')).toBe(skill === 'model');
+  for (const verb of ['rename', 'remove']) expect(tools.includes(`Bash(seefore ${verb} *)`)).toBe(skill === 'model');
   expect(matter.context).toBe(skill === 'review' ? 'fork' : undefined);
 });

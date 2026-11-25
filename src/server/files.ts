@@ -39,6 +39,11 @@ export async function readFolder(folder: string): Promise<ModelAnswer> {
   return { folder: basename(resolve(folder)), ...readModel(await readTexts(folder), { exists: (path) => existsSync(join(code, path)) }) };
 }
 
+/** Takes the files of removed records away. */
+export async function removeFiles(folder: string, paths: readonly string[]): Promise<void> {
+  for (const path of paths) await rm(join(folder, path));
+}
+
 /**
  * Writes what a rename changed: each file it names at its new path, then takes away each old path
  * that no file is written to. All are written first, so `a b` with `b c` loses nothing.

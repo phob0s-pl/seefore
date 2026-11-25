@@ -127,7 +127,7 @@ export const SOURCE_MAX = 3;
 const SOURCE_PATH = /^(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$))[^*\\\n\r]*\S$/;
 
 /** `source`, with the words that say what it holds on the kind of record that bears it. */
-const sourceOf = (holds: string, leftOut: string) =>
+const sourceOf = (holds: string, leftOut: string, paths = 'one to three paths of a file or a folder') =>
   z
   .array(
     z
@@ -146,12 +146,16 @@ const sourceOf = (holds: string, leftOut: string) =>
     });
   })
   .meta({
-    description: `${holds}: one to three paths of a file or a folder, counted from the folder that holds the model's folder, written with \`/\`. A path with \`..\`, with \`*\` or with \`/\` at its start is an error, and the check warns when a path is not there. ${leftOut}`,
+    description: `${holds}: ${paths}, counted from the folder that holds the model's folder, written with \`/\`. A path with \`..\`, with \`*\` or with \`/\` at its start is an error, and the check warns when a path is not there. ${leftOut}`,
   });
 
 const Source = sourceOf('Where its code lies', 'For a part built elsewhere, the file here that starts or pins it. Left out where nothing of it is at hand.');
 const StoreSource = sourceOf('What defines or names it, such as its schema, its migrations or the config that holds its address', 'Left out where nothing of it is at hand.');
-const ConnectionSource = sourceOf('Where the code shows it, a file in which the code or config of `from` names `to`', 'From a person, the entry point they use. Left out when nobody has looked.');
+const ConnectionSource = sourceOf(
+  'Where the code shows it, a file in which the code or config of `from` names `to`',
+  'When `from` has no code here, the route of `to` that takes its call; from a person, the entry point they use. Left out when nobody has looked.',
+  'the paths of one to three files',
+);
 
 const External = z.literal(true).meta({ description: '`true`: the people this model is kept for cannot change the system. Left out for a system of yours, and when nobody has said.' });
 
@@ -287,14 +291,14 @@ export const ConnectionSchema = z
     via: ids('`via` holds the ids of what the exchange passes through, nearest to `from` first. Say anything more in the description.')
       .meta({ description: 'What the exchange passes through, in order from `from`: pieces of infrastructure, apps, components, systems. Never a store, never an end.' })
       .optional(),
-    opens: z.literal('to').meta({ description: '`to`: the far side opened the channel this exchange goes down, as when an agent dials out and the server sends down that tunnel: `from` the server, `to` the agent, `opens: to`. Left out when the one that sends opened it, or nobody has said.' }).optional(),
+    opens: z.literal('to').meta({ description: '`to`: the far side opened the channel this exchange goes down, as when an agent dials out and the server sends down that tunnel: `from` the server, `to` the agent, `opens: to`. The dialling is no connection of its own. Left out when the one that sends opened it, or nobody has said.' }).optional(),
     access: z
       .enum(ACCESS)
       .meta({ description: 'What the connection does to the store it ends at: read, write or read-write. Left out for neither, and for "not said".' })
       .optional(),
     name: oneLine('name', NAME_MAX).meta({ description: 'The few words on the arrow, a verb first: one line of 1 to 100 characters. May be left out.' }).optional(),
     only: Only.optional(),
-    description: Description.optional(),
+    description: prose(DESCRIPTION_MAX).meta({ description: 'What passes and why, where the name does not say it, in 1 to 2,000 characters.' }).optional(),
     technology: ids('A phrase about how an exchange travels goes in the description.')
       .meta({ description: 'What the exchange is carried in, such as a protocol or a format: ids of records in technologies/, a set.' })
       .optional(),
@@ -317,7 +321,7 @@ export const InfrastructureSchema = z
     owner: Owner.optional(),
     source: Source.optional(),
   })
-  .meta({ description: 'A thing whose whole job is to pass exchanges on: a proxy, a gateway, a load balancer. Named in `via`.' });
+  .meta({ description: 'A thing whose whole job is to pass exchanges on: a proxy, a gateway, a load balancer, a mail relay. Named in `via`.' });
 
 export const OwnerSchema = z
   .strictObject({ name: Name, description: Description.optional() })

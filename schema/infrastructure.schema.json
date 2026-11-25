@@ -62,5 +62,5 @@
     "name"
   ],
   "additionalProperties": false,
-  "description": "A thing whose whole job is to pass exchanges on: a proxy, a gateway, a load balancer. Named in `via`."
+  "description": "A thing whose whole job is to pass exchanges on: a proxy, a gateway, a load balancer, a mail relay. Named in `via`."
 }
