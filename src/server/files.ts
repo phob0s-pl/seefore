@@ -1,7 +1,8 @@
-import { readFile, readdir } from 'node:fs/promises';
-import { basename, join, resolve } from 'node:path';
+import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { basename, dirname, join, resolve } from 'node:path';
 import type { ModelAnswer } from '../model/answer.ts';
 import { readModel } from '../model/read.ts';
+import type { SourceFile } from '../model/read.ts';
 
 /**
  * The `.yaml` and `.yml` files under a folder, at any depth, relative to it with `/`, in
@@ -25,8 +26,26 @@ export async function listFiles(folder: string): Promise<string[]> {
   return found.sort();
 }
 
+/** The path and text of each YAML file under a folder, as `listFiles` finds them. */
+export async function readTexts(folder: string): Promise<SourceFile[]> {
+  return Promise.all((await listFiles(folder)).map(async (path) => ({ path, text: await readFile(join(folder, path), 'utf8') })));
+}
+
 /** Reads the folder anew: the text of each YAML file goes into the reader of `src/model/`. */
 export async function readFolder(folder: string): Promise<ModelAnswer> {
-  const files = await Promise.all((await listFiles(folder)).map(async (path) => ({ path, text: await readFile(join(folder, path), 'utf8') })));
-  return { folder: basename(resolve(folder)), ...readModel(files) };
+  return { folder: basename(resolve(folder)), ...readModel(await readTexts(folder)) };
+}
+
+/**
+ * Writes what a rename changed: each file it names at its new path, then takes away each old path
+ * that no file is written to. All are written first, so `a b` with `b c` loses nothing.
+ */
+export async function writeRenamed(folder: string, files: readonly SourceFile[], changed: readonly { from: string; to: string }[]): Promise<void> {
+  const texts = new Map(files.map((file) => [file.path, file.text]));
+  const written = new Set(changed.map((file) => file.to));
+  for (const file of changed) {
+    await mkdir(dirname(join(folder, file.to)), { recursive: true });
+    await writeFile(join(folder, file.to), texts.get(file.to) as string, 'utf8');
+  }
+  for (const file of changed) if (file.from !== file.to && !written.has(file.from)) await rm(join(folder, file.from));
 }

@@ -53,7 +53,7 @@ const named = (entries: readonly Entry[]) => list(entries.map((entry) => entry.f
 // ---- references: what each field may name, and what to say when it names the wrong thing
 
 /** A field that names records: on a record of `folder`, or on each step of a flow when `step`. `ways`: in a rule of ways. */
-type Field = { folder: string; field: string; kinds: readonly string[]; many?: true; step?: true; ways?: boolean };
+export type Field = { folder: string; field: string; kinds: readonly string[]; many?: true; step?: true; ways?: boolean };
 
 const ENDS = ['people', 'systems', 'apps', 'stores', 'components', 'infrastructure'];
 const PARTS = ['systems', 'apps', 'stores', 'components', 'infrastructure'];
@@ -61,7 +61,8 @@ const NEEDS_OWNER_OR_TECH = ['apps', 'stores', 'components', 'infrastructure'];
 /** The kinds that are not parts or connections: what `touches`, `from` and `to` never name. */
 const NOT_THINGS = ['owners', 'technologies', 'features', 'flows', 'data', 'rules', 'context', 'changes', 'reviews'];
 
-const FIELDS: Field[] = [
+/** Every field of a record that names records, with the kinds it may name. A rule's own are found by `ruleReferences`. */
+export const FIELDS: readonly Field[] = [
   { folder: 'apps', field: 'in', kinds: ['systems'] },
   { folder: 'stores', field: 'in', kinds: ['systems', 'apps'] },
   { folder: 'components', field: 'in', kinds: ['apps'] },
