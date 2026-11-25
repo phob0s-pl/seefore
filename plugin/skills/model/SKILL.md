@@ -71,14 +71,14 @@ work as "With several agents" says below.
      command or calls the API. Write the few there are. An owner is written only when a
      file names a team; otherwise leave `owner` out.
 5. Run `seefore check`. Mend what it says by its `Mend:` line, and check again; three rounds at
-   most. Where it says that no connection names a part, search that part once more, and
-   write only what a file shows. Then say what is left.
+   most. Where it says that no connection names a part, search it once more, and write only
+   what a file shows; a component you wrote that still has none goes. Then say what is left.
 6. **Hold every app against rule 1 once more.** Name the file that starts each. An app with
    none becomes a component of the app that runs it, or goes.
 7. End with a short message:
    - what you wrote, as counts by folder;
    - what you took where the code left a choice, at most five lines;
-   - what you did not find, such as who owns a part or who uses the system;
+   - what you did not find, such as who owns a part, and each line of an agent you left out;
    - **which folders you did not open**; where they are many and the tree holds thousands
      of files, that `--parallel-agents=4` reads more of it, for about twice the cost;
    - "Look at the diagram with `seefore --server`. Next: `/seefore:flows <a journey>`."
@@ -108,10 +108,10 @@ nor the conversation: it knows only what you tell it.
    > does with it>; <file>` for what your apps reach and the list lacks; `INTO <your app, or a
    > store it reads> from <who>: <what>; <file>`; `UNREAD: <folders>`.
    Agents that share one app write no file: say so; each ends with its connections as lines too.
-3. **The join.** Write under no id that `connections/` holds. Write each missing store and
-   system once, though named in two ways; then, once each, the connections to them, of the
-   `INTO` lines, of the lines sent, of people and of apps with no code here. Where two agents
-   wrote one thing, or one channel from both its ends, remove one. Then steps 5 to 7.
+3. **The join**, when all have ended. Write under no id that `connections/` holds. Write each
+   missing store and system once, though named in two ways; then, once each, the connections to
+   them, of the `INTO` lines, of the lines sent, of people and of apps with no code here. Where
+   two agents wrote one thing, or one channel from both its ends, remove one. Then steps 5 to 7.
 
 ## The format
 

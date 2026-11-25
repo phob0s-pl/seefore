@@ -30,6 +30,15 @@ export function removeRecords(files: readonly SourceFile[], asked: readonly stri
   const errors = (read: readonly SourceFile[]) => readModel(read).problems.filter((problem) => problem.severity === 'error');
   const before = new Set(errors(files).map((problem) => `${problem.file}\n${problem.rule}\n${problem.message}`));
   const fresh = errors(files.filter((file) => !gone.has(file.path))).filter((problem) => !before.has(`${problem.file}\n${problem.rule}\n${problem.message}`));
-  if (fresh.length > 0) return { refusals: [...fresh.map((problem) => `${problem.file}:${problem.line}:${problem.column}: ${problem.message}`), 'remove what names it in the same call, or change it first'] };
+  if (fresh.length > 0) {
+    // Said of the record that was to go, which is still there: who names it, and where.
+    const ids = [...gone].map((path) => bare(path).slice(bare(path).lastIndexOf('/') + 1));
+    const stays = (problem: (typeof fresh)[number]): string => {
+      const named = ids.filter((id) => problem.message.includes(quote(id)));
+      const where = `${problem.file}:${problem.line}:${problem.column}`;
+      return named.length > 0 ? `${named.map(quote).join(', ')} ${named.length === 1 ? 'stays' : 'stay'}: ${where} names it` : `${where}: ${problem.message}`;
+    };
+    return { refusals: [...fresh.map(stays), 'remove what names it in the same call, or change it first'] };
+  }
   return { files: [...gone].sort() };
 }

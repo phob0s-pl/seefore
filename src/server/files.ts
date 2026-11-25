@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, statSync } from 'node:fs';
 import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
 import type { ModelAnswer } from '../model/answer.ts';
@@ -36,7 +36,7 @@ export async function readTexts(folder: string): Promise<SourceFile[]> {
 export async function readFolder(folder: string): Promise<ModelAnswer> {
   // A path of `source` is counted from the folder that holds the model's folder: the repository, or the folder of its clones.
   const code = dirname(resolve(folder));
-  return { folder: basename(resolve(folder)), ...readModel(await readTexts(folder), { exists: (path) => existsSync(join(code, path)) }) };
+  return { folder: basename(resolve(folder)), ...readModel(await readTexts(folder), { exists: (path) => existsSync(join(code, path)), folder: (path) => statSync(join(code, path), { throwIfNoEntry: false })?.isDirectory() === true }) };
 }
 
 /** Takes the files of removed records away. */

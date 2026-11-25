@@ -353,7 +353,7 @@ test('remove takes records away, and refuses while a record that stays names one
   // A store that a connection names does not go alone.
   const refused = await runLines(['remove', 'store-orders', `--workdir=${folder}`]);
   expect(refused.code).toBe(1);
-  expect(refused.err[0]).toMatch(/^seefore: connections\/connection-api-saves-orders\.yaml:2:5: /);
+  expect(refused.err[0]).toBe('seefore: `store-orders` stays: connections/connection-api-saves-orders.yaml:2:5 names it');
   expect(refused.err.slice(1)).toEqual(['seefore: remove what names it in the same call, or change it first', 'seefore: nothing is removed']);
   expect(existsSync(join(folder, 'stores/store-orders.yaml'))).toBe(true);
   // A dry run says what would go; with its connection the store goes, and a file that does not parse goes by its folder and id.

@@ -96,6 +96,12 @@ test('a connection says where the code shows it, and its path is held as the oth
   expect(gone.problems.map((problem) => [problem.rule, problem.severity, problem.file, problem.message])).toEqual([
     ['source-gone', 'warning', 'connections/connection-api-saves-orders.yaml', '`source` names `api/orders.go`, which is not there.'],
   ]);
+  // A connection is shown by a file: a folder that is there is a warning of its own, and on a part a folder is right.
+  const wide = file('connections/connection-api-reads-orders', 'from: app-api\nto: store-orders\naccess: read\nsource: [api/]\n');
+  const folders = readModel([...SHOP, wide], { exists: () => true, folder: (path) => path.endsWith('/') });
+  expect(folders.problems.map((problem) => [problem.rule, problem.severity, problem.file, problem.message, problem.fix])).toEqual([
+    ['source-folder', 'warning', 'connections/connection-api-reads-orders.yaml', '`source` of a connection names the folder `api/`: a folder shows no connection.', 'Name the file in it where the code or config of `from` names `to`, or take the path out of `source`.'],
+  ]);
   // The list shows it at the end of the connection's line, and a key of one value says how to mend it.
   const listed = listLines(readModel([...SHOP, saves]), { folders: ['connections'] });
   expect('lines' in listed && listed.lines).toEqual(['connections/connection-api-saves-orders  Saves orders  app-api -> store-orders  api/orders.go']);
