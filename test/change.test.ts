@@ -50,7 +50,7 @@ test('a change with a body reads, so does an input alone, and a change is a reco
 test('a record is named by its path, a folder and an id, and a change names no change', () => {
   const body = 'add:\n  worker: {name: Worker}\n  boxes/worker: {name: Worker}\n  apps/Worker: {name: Worker}\n  changes/other: {name: Other}\nremove:\n  - apps/api.yaml\n';
   expect(said(body)).toEqual([
-    ['change-path', 'error', 4, '`worker` is not the path of a record. A path is a folder and an id, as `apps/ledger`.'],
+    ['change-path', 'error', 4, '`worker` is not the path of a record. A path is a folder and an id, as `apps/app-ledger`.'],
     [
       'change-path',
       'error',
@@ -204,3 +204,13 @@ test('a faulty change stops nothing else, and the id of a change is its own', ()
   const both = readModel([...SHOP, file('changes/one', 'name: One\nprompt: Add a worker.\nadd:\n  apps/app-worker: {name: Worker, in: system-shop}\n'), file('changes/two', 'name: Two\nprompt: Add a worker.\nadd:\n  apps/app-worker: {name: Worker, in: system-shop}\n')]);
   expect(both.problems).toEqual([]);
 });
+
+test('a record that a change adds is held by id-kind too, told at the change with the command that mends it', () => {
+  // `apps/worker` has no word; `apps/store-jobs` bears another folder's; `apps/app-queue` is right.
+  const problems = read('add:\n  apps/worker: {name: Worker, in: system-shop}\n  apps/store-jobs: {name: Store jobs, in: system-shop}\n  apps/app-queue: {name: Queue, in: system-shop}\n').problems;
+  expect(problems.map((problem) => [problem.rule, problem.file, problem.line, problem.message.split('. ')[0], problem.fix.split('. ')[0]])).toEqual([
+    ['id-kind', 'changes/a-change.yaml', 4, 'With this change, `apps/worker`: The id `worker` does not begin with `app-`', 'Run `seefore rename worker app-worker`'],
+    ['id-kind', 'changes/a-change.yaml', 5, 'With this change, `apps/store-jobs`: The id `store-jobs` begins with `store-`, the word of `stores/`, and this file is in `apps/`', 'If it is an app, run `seefore rename store-jobs app-store-jobs`'],
+  ]);
+});
+

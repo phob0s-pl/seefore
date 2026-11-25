@@ -27,11 +27,48 @@ test('a model with no fault has no problem, and a connection may start at a stor
   expect(model.problems).toEqual([]);
 });
 
-test('id-twice is one problem that names every file, at the first', () => {
-  const model = read(file('people/clerk.yaml', 'name: Clerk\n'), file('owners/clerk.yaml', 'name: Clerks\n'));
-  expect(model.problems).toHaveLength(1);
-  expect(model.problems[0]).toMatchObject({ rule: 'id-twice', file: 'owners/clerk.yaml', severity: 'error', second: { file: 'people/clerk.yaml' } });
-  expect(model.problems[0]?.message).toContain('`people/clerk.yaml`');
+const kindOf = (...files: SourceFile[]) => read(...files).problems.map((problem) => [problem.rule, problem.severity, problem.file, problem.line, problem.message, problem.fix]);
+
+test('id-kind: an id begins with the word of its folder, and the mend is the command that renames it', () => {
+  // No word: the folder says the kind, and the command gives the id its word.
+  expect(kindOf(file('apps/monitoring.yaml', 'name: Prometheus\nin: system-shop\n'))).toEqual([
+    [
+      'id-kind',
+      'error',
+      'apps/monitoring.yaml',
+      1,
+      'The id `monitoring` does not begin with `app-`. An id says its kind as its first word, and this file is in `apps/`.',
+      'Run `seefore rename monitoring app-monitoring`. If it is not an app, give it the word of what it is, as `tech-monitoring`: that moves the file.',
+    ],
+  ]);
+  // Another folder's word: it may be a name that begins with that word, or a file in the wrong folder.
+  expect(kindOf(file('apps/store-front.yaml', 'name: Store front\nin: system-shop\n'))).toEqual([
+    [
+      'id-kind',
+      'error',
+      'apps/store-front.yaml',
+      1,
+      'The id `store-front` begins with `store-`, the word of `stores/`, and this file is in `apps/`. An id says its kind as its first word, and the folder says the kind.',
+      'If it is an app, run `seefore rename store-front app-store-front`. If it is a store, move the file to `stores/`.',
+    ],
+  ]);
+  // The word alone names nothing.
+  expect(kindOf(file('technologies/tech.yaml', 'name: Tech\n')).map((each) => [each[0], each[4], each[5]])).toEqual([
+    ['id-kind', 'The id `tech` is the word of its folder alone. An id says its kind as its first word, and then what the record is.', 'Give it a name after the word: run `seefore rename tech tech-<name>`.'],
+  ]);
+  // A name that begins with the word needs it once, and every folder of the model has its word.
+  expect(
+    kindOf(
+      file('apps/app-store.yaml', 'name: App store\nin: system-shop\n'),
+      file('features/feature-flags.yaml', 'name: Feature flags\n'),
+      file('infrastructure/infra-load-balancer.yaml', 'name: Load balancer\nin: system-shop\nowner: owner-platform\n'),
+      file('owners/owner-platform.yaml', 'name: Platform\n'),
+      file('technologies/tech-go.yaml', 'name: Go\n'),
+      file('data/data-export.yaml', 'name: Data export\n'),
+      file('rules/rule-no-jobs.yaml', 'name: No app is a job\nnever: {kind: job}\n'),
+      file('context/context-one-team.yaml', 'prefer: One team runs it.\nwhy: It is small.\n'),
+    ),
+  ).toEqual([]);
 });
 
 test('reference-unknown names the nearest id, with the place of the value', () => {
@@ -41,8 +78,15 @@ test('reference-unknown names the nearest id, with the place of the value', () =
   expect(problem?.fix).toContain('`store-orders`');
 });
 
-test('a reference to an id that two files claim gives no follow-on error', () => {
-  expect(rulesOf(file('people/clerk.yaml', 'name: Clerk\n'), file('owners/clerk.yaml', 'name: Clerks\n'), file('connections/a.yaml', 'from: app-api\nto: clerk\n'))).toEqual(['id-twice']);
+test('a record whose id lacks its word is still read: what names it is not told as unknown, and two with one id are each told with their path', () => {
+  // The connection names `clerk`, which two files hold: each is told once, by its path, and the reference is not.
+  const problems = read(file('people/clerk.yaml', 'name: Clerk\n'), file('owners/clerk.yaml', 'name: Clerks\n'), file('connections/connection-a.yaml', 'from: app-api\nto: clerk\n')).problems;
+  expect(problems.map((problem) => [problem.rule, problem.file, problem.fix.split('.')[0]])).toEqual([
+    ['id-kind', 'owners/clerk.yaml', 'Run `seefore rename owners/clerk owner-clerk`'],
+    ['id-kind', 'people/clerk.yaml', 'Run `seefore rename people/clerk person-clerk`'],
+  ]);
+  // One file holds it: the reference is good, and the one problem is the id.
+  expect(rulesOf(file('people/customer.yaml', 'name: Customer\n'), file('connections/connection-b.yaml', 'from: customer\nto: app-api\n'))).toEqual(['id-kind']);
 });
 
 test('a store in a store is a reference-wrong-kind with its own fix', () => {

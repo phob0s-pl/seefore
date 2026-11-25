@@ -1,3 +1,0 @@
-from: order-api
-to: orders
-access: write

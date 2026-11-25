@@ -78,8 +78,8 @@ test('system names a system of the model, ours or an outside one, and nothing el
   expect(said(api, line('context-of-an-app', 'must: A sentence.\nwhy: A reason.\nsystem: app-api\n'))).toEqual([
     ['reference-wrong-kind', 'context/context-of-an-app.yaml', 3, '`system` names `app-api`, which is an app. `system` names a system.'],
   ]);
-  // An id names one record in the whole model: a line cannot take a system's.
-  expect(said(line('system-shop', 'must: A sentence.\nwhy: A reason.\n')).map((each) => each[0])).toEqual(['id-twice']);
+  // An id says its kind: a line cannot take a system's.
+  expect(said(line('system-shop', 'must: A sentence.\nwhy: A reason.\n')).map((each) => each[0])).toEqual(['id-kind']);
 });
 
 test('the thirteenth line of a group is a warning, told once for the group, and a faulty line leaves the rules judged', () => {

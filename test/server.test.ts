@@ -32,28 +32,28 @@ test('/api/model answers with the name, the records and the problems, read anew 
   const first = await get();
   expect(first).toMatchObject({ folder: basename(folder), name: 'Shop', problems: [] });
   expect(first.records.map((record) => record.id)).toEqual([
-    'order-api',
+    'app-order-api',
     'orders-by-post',
     'orders-on-paper-only',
-    'api-writes-orders',
-    'customer-orders',
-    'a-new-store-is-postgresql',
-    'features-go-into-the-order-api',
-    'orders-are-never-lost',
-    'order-details',
-    'ordering',
-    'placing-an-order',
-    'clerk',
-    'customer',
+    'connection-api-writes-orders',
+    'connection-customer-orders',
+    'context-a-new-store-is-postgresql',
+    'context-features-go-into-the-order-api',
+    'context-orders-are-never-lost',
+    'data-order-details',
+    'feature-ordering',
+    'flow-placing-an-order',
+    'person-clerk',
+    'person-customer',
     'orders-by-post',
     'orders-on-paper-only',
-    'orders-written-by-the-api',
-    'orders',
-    'shop',
-    'go',
+    'rule-orders-written-by-the-api',
+    'store-orders',
+    'system-shop',
+    'tech-go',
   ]);
-  expect(first.rulings).toMatchObject([{ rule: 'orders-written-by-the-api', state: 'holds', chosen: ['api-writes-orders'] }]);
-  await writeFile(join(folder, 'people', 'bob.yaml'), 'name: Bob\ncolour: red\n');
+  expect(first.rulings).toMatchObject([{ rule: 'rule-orders-written-by-the-api', state: 'holds', chosen: ['connection-api-writes-orders'] }]);
+  await writeFile(join(folder, 'people', 'person-bob.yaml'), 'name: Bob\ncolour: red\n');
   expect((await get()).problems.map((problem) => problem.rule)).toEqual(['key-unknown']);
 });
 
@@ -108,7 +108,7 @@ test('an address that names no file gets the page, and a missing file still gets
   await writeFile(join(page, 'index.html'), '<!doctype html><title>seefore</title>');
   const address = await serve(SMALL, page);
 
-  for (const path of ['/architecture', '/records/order-api', '/..%2f..%2fsecret']) {
+  for (const path of ['/architecture', '/records/app-order-api', '/..%2f..%2fsecret']) {
     const response = await fetch(`${address}${path}`);
     expect(response.headers.get('content-type')).toBe('text/html; charset=utf-8');
     expect(await response.text()).toContain('<title>seefore</title>');

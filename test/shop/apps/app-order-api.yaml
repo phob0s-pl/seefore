@@ -1,5 +1,5 @@
 name: Order API
-in: shop
+in: system-shop
 kind: service
 technology:
-  - go
+  - tech-go
