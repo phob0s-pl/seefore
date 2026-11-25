@@ -46,6 +46,7 @@ test('/api/model answers with the name, the records and the problems, read anew 
     'clerk',
     'customer',
     'orders-by-post',
+    'orders-on-paper-only',
     'orders-written-by-the-api',
     'orders',
     'shop',
