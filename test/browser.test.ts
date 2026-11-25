@@ -569,7 +569,7 @@ test.skipIf(!HAS_CHROME).concurrent(
       const page = `location.pathname === '/context/orders-are-never-lost' && document.querySelector('.context-title') !== null && {
         lit: document.querySelector('nav[aria-label="Main navigation"] a.active')?.textContent,
         window: document.title,
-        crumbs: ${texts('nav[aria-label="Breadcrumb"]')}[0],
+        crumbs: document.querySelector('nav[aria-label="Breadcrumb"]') !== null,
         title: document.querySelector('.context-title h1').textContent,
         marks: ${texts('.context-title .pill')},
         why: ${texts('section[aria-label="Why"] .panel')},
@@ -580,7 +580,7 @@ test.skipIf(!HAS_CHROME).concurrent(
       expect(await waitFor(send, page)).toEqual({
         lit: 'Context',
         window: 'An order is never lost once the customer has been told it is placed. · seefore',
-        crumbs: 'Context / An order is never lost once the customer has been told it is placed.',
+        crumbs: false,
         title: 'An order is never lost once the customer has been told it is placed.',
         marks: ['Must'],
         why: ['It is what the shop promises its customers.'],
@@ -613,12 +613,12 @@ test.skipIf(!HAS_CHROME).concurrent(
       expect(await waitFor(send, `(() => { const row = ${fact}; return row && [row.querySelector('dd').textContent, row.querySelector('a')?.getAttribute('href')]; })()`)).toEqual(['1 prefer', '/context']);
       await click(send, await centreOf(send, '.facts a[href="/context"]'));
       expect(await waitFor(send, onList)).toBe(4);
-      // A global line leads to the other global line, and the top bar leads back.
+      // A global line leads to the other global line, and the entry in the sidebar leads back.
       await click(send, await centreOf(send, '.context-list a[href="/context/a-new-store-is-postgresql"]'));
       expect(await waitFor(send, at('a-new-store-is-postgresql', 'A new store is a PostgreSQL database.'))).toBe(true);
       await click(send, await centreOf(send, '.context-list a[href="/context/orders-are-never-lost"]'));
       expect(await waitFor(send, at('orders-are-never-lost', 'An order is never lost once the customer has been told it is placed.'))).toBe(true);
-      await click(send, await centreOf(send, 'nav[aria-label="Breadcrumb"] a[href="/context"]'));
+      await click(send, await centreOf(send, 'nav[aria-label="Main navigation"] a[href="/context"]'));
       expect(await waitFor(send, onList)).toBe(4);
       // An id that names no line is missing; so is the id of a record that is no line.
       await send('Page.navigate', { url: `${address}/context/shop` });

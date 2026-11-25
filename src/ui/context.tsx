@@ -2,8 +2,7 @@ import { Lock, Scale } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { Fragment } from 'react';
 import type { ReactNode } from 'react';
-import { createPortal } from 'react-dom';
-import { Link, useOutletContext, useParams } from 'react-router-dom';
+import { useOutletContext, useParams } from 'react-router-dom';
 import type { Catalogue } from '../model/catalogue.ts';
 import type { Context, ContextKind, ContextLine } from '../model/context.ts';
 import { KindTile, Missing, RecordLink } from './models.tsx';
@@ -30,16 +29,11 @@ const KINDS: Record<ContextKind, { word: string; means: string; icon: LucideIcon
 };
 
 /** What a page of the context shows while the model is read, or why it cannot be. */
-function useModel(): {
-  context?: Context;
-  catalogue?: Catalogue;
-  crumbs?: HTMLElement | null;
-  line?: ReactNode;
-} {
-  const { context, catalogue, failed, slots } = useOutletContext<ModelState>();
+function useModel(): { context?: Context; catalogue?: Catalogue; line?: ReactNode } {
+  const { context, catalogue, failed } = useOutletContext<ModelState>();
   if (failed !== undefined) return { line: <p className="page-line failed">{failed}</p> };
   if (context === undefined || catalogue === undefined) return { line: <p className="page-line">Reading…</p> };
-  return { context, catalogue, crumbs: slots?.crumbs ?? null };
+  return { context, catalogue };
 }
 
 /** A line as a row of a list: its sentence, and its kind at the right. It leads to the line's page. */
@@ -114,28 +108,13 @@ export function ContextList() {
   );
 }
 
-/** The way back, in the top bar: "Context / <the sentence>". */
-function Crumbs({ title }: { title: string }) {
-  return (
-    <nav aria-label="Breadcrumb" className="breadcrumb">
-      <Link to="/context">Context</Link>
-      <span className="breadcrumb-gap" aria-hidden="true">
-        /
-      </span>
-      <span className="breadcrumb-here" aria-current="page">
-        {title}
-      </span>
-    </nav>
-  );
-}
-
 /**
  * The page of one line, `/context/<id>`: its sentence, its kind, why it stands, what it is
  * about, and the other lines of its group. An id that names no line is missing.
  */
 export function ContextLinePage() {
   const { id = '' } = useParams();
-  const { context, catalogue, crumbs, line: waiting } = useModel();
+  const { context, catalogue, line: waiting } = useModel();
   const line = context?.line(id);
   useTitle(line?.sentence ?? 'Context');
   if (context === undefined || catalogue === undefined) return waiting;
@@ -146,7 +125,6 @@ export function ContextLinePage() {
   const beside = system === undefined ? 'The other global lines' : `The other lines of ${system.name}`;
   return (
     <>
-      {crumbs != null && createPortal(<Crumbs title={line.sentence} />, crumbs)}
       <header className="record-title context-title">
         <IconTile icon={kind.icon} size="lg" />
         <h1 className="large-title">{line.sentence}</h1>
