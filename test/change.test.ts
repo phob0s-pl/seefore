@@ -66,11 +66,11 @@ test('a record is named by its path, a folder and an id, and a change names no c
 test('a record under add is held by the shape of its folder at its own line, and a key under update is one of its kind', () => {
   expect(said('add:\n  apps/app-worker:\n    name: Worker\n    colour: red\n  stores/store-entries:\n    in: system-shop\n')).toEqual([
     ['key-missing', 'error', 5, '`in` is missing from `apps/app-worker`.'],
-    ['key-unknown', 'error', 6, '`colour` is not a key of `apps/app-worker`. Its keys are `name`, `in`, `only`, `description`, `kind`, `technology` and `owner`.'],
+    ['key-unknown', 'error', 6, '`colour` is not a key of `apps/app-worker`. Its keys are `name`, `in`, `only`, `description`, `kind`, `technology`, `owner` and `source`.'],
     ['key-missing', 'error', 8, '`name` is missing from `stores/store-entries`.'],
   ]);
   expect(said('update:\n  apps/app-api:\n    colour: red\n  stores/store-orders: {}\n  systems/system-shop: Sells more.\n')).toEqual([
-    ['key-unknown', 'error', 5, '`colour` is not a key of an app. Its keys are `name`, `in`, `only`, `description`, `kind`, `technology` and `owner`.'],
+    ['key-unknown', 'error', 5, '`colour` is not a key of an app. Its keys are `name`, `in`, `only`, `description`, `kind`, `technology`, `owner` and `source`.'],
     ['value-too-small', 'error', 6, '`stores/store-orders` under `update` names no key.'],
     ['value-wrong-kind', 'error', 7, '`systems/system-shop` under `update` must be a mapping: the keys of the record that change.'],
   ]);

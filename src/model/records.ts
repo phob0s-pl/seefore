@@ -116,6 +116,34 @@ const partTechnology = ids('Name a technology by the id of its record in `techno
   description: 'What it is built with, or the format it keeps: ids of records in technologies/, a set. Never a protocol a part only speaks.',
 });
 
+/** The most paths of `source`. */
+export const SOURCE_MAX = 3;
+
+/** A path of the code: on one line, with `/`, no `..`, no `*`, no `\\`, and no `/` at its start. */
+const SOURCE_PATH = /^(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$))[^*\\\n\r]*\S$/;
+
+const Source = z
+  .array(
+    z
+      .string()
+      .min(1)
+      .max(NOTE_MAX)
+      .regex(SOURCE_PATH, { error: 'A path in `source` is a file or a folder of the code, written with `/`, with no `..`, no `*` and no `/` at its start.' }),
+  )
+  .min(1)
+  .max(SOURCE_MAX)
+  .superRefine((paths, context) => {
+    const seen = new Set<string>();
+    paths.forEach((path, index) => {
+      if (seen.has(path)) context.addIssue({ code: 'custom', path: [index], message: '`source` has the same path twice. Keep one.' });
+      seen.add(path);
+    });
+  })
+  .meta({
+    description:
+      "Where its code lies: one to three paths of a file or a folder, counted from the folder that holds the model's folder, written with `/`. Left out where no code of it is at hand.",
+  });
+
 const External = z.literal(true).meta({ description: '`true`: the people this model is kept for cannot change the system. Left out for a system of yours, and when nobody has said.' });
 
 const Kinds = (what: string, list: readonly string[]) => `${what}: ${list.join(', ')}.`;
@@ -191,6 +219,7 @@ export const AppSchema = z
     kind: z.enum(APP_KINDS).meta({ description: Kinds('How the app runs', APP_KINDS) }).optional(),
     technology: partTechnology.optional(),
     owner: Owner.optional(),
+    source: Source.optional(),
   })
   .meta({ description: 'Code that runs as a unit of its own: started, deployed or scaled apart from the rest. In one system. C4 calls it a container.' });
 
@@ -205,6 +234,7 @@ export const StoreSchema = z
     kind: z.enum(STORE_KINDS).meta({ description: Kinds('What the store holds. A queue and a topic hold messages on their way', STORE_KINDS) }).optional(),
     technology: partTechnology.optional(),
     owner: Owner.optional(),
+    source: Source.optional(),
   })
   .meta({ description: 'Addressable data that others read or write: a database, files, a cache, an index, a queue, a topic. C4 calls it a container.' });
 
@@ -216,6 +246,7 @@ export const ComponentSchema = z
     description: Description.optional(),
     technology: partTechnology.optional(),
     owner: Owner.optional(),
+    source: Source.optional(),
   })
   .meta({ description: 'A responsibility inside one running app. It runs only as part of that app.' });
 
@@ -250,6 +281,7 @@ export const InfrastructureSchema = z
     description: Description.optional(),
     technology: partTechnology.optional(),
     owner: Owner.optional(),
+    source: Source.optional(),
   })
   .meta({ description: 'A thing whose whole job is to pass exchanges on: a proxy, a gateway, a load balancer. Named in `via`.' });
 

@@ -4,10 +4,13 @@ import { join, resolve } from 'node:path';
 import type { ModelAnswer } from '../model/answer.ts';
 import { fileURLToPath } from 'node:url';
 import { readFolder, readTexts, writeRenamed } from './files.ts';
+import { guideText } from '../model/guide.ts';
+import { listLines } from '../model/list.ts';
 import { HOST, startServer } from './server.ts';
 import { countLine, rulingsLine } from '../model/counts.ts';
 import { readRenames, renameRecords } from '../model/rename.ts';
 import type { Rename, RenameAccount } from '../model/rename.ts';
+import { ARCHITECTURE, init } from './init.ts';
 
 /** What the command was asked to do. */
 export type Options = { server: boolean; check: boolean; json: boolean; workdir: string; port: number };
@@ -21,10 +24,103 @@ export const PORT = 4400;
 /** The built page, found from this file, so that the command works from any folder. */
 const PAGE = fileURLToPath(new URL('../../dist/ui/', import.meta.url));
 
-const USAGE =
-  'run it as "seefore --server [--workdir=<dir>] [--port=<n>]", "seefore check [--workdir=<dir>] [--json]" or "seefore rename <old> <new> [--workdir=<dir>] [--dry-run]"';
+const USAGE = 'run it as "seefore <verb> [<options>]", the verb one of init, check, list, guide, rename and --server; see seefore --help';
 
 const RENAME_USAGE = 'run it as "seefore rename <old> <new> [--workdir=<dir>] [--dry-run]" or "seefore rename --list=<file> [--workdir=<dir>] [--dry-run]"';
+
+/**
+ * The model's folder, for every verb that reads one: the folder given with `--workdir`; else the
+ * current folder when it holds seefore.yaml; else `architecture/` in it when that holds one; else
+ * the current folder, which the verb then says is not a model.
+ */
+export function findModel(cwd: string, workdir?: string): string {
+  if (workdir !== undefined) return workdir;
+  if (existsSync(join(cwd, 'seefore.yaml'))) return cwd;
+  const architecture = join(cwd, ARCHITECTURE);
+  if (existsSync(join(architecture, 'seefore.yaml'))) return architecture;
+  return cwd;
+}
+
+/** A verb as `--help` says it: how it is called, what it does, and its options with a few words each. */
+type Verb = { verb: string; call: string; what: string; options: readonly (readonly [string, string])[] };
+
+const WORKDIR = ['--workdir=<dir>', 'The model\'s folder. Else the current folder when it holds seefore.yaml, else architecture/ in it'] as const;
+
+const VERBS: readonly Verb[] = [
+  {
+    verb: 'init',
+    call: 'seefore init [<dir>] --name=<name>',
+    what: 'Starts a model: writes its seefore.yaml and five lines in CLAUDE.md',
+    options: [
+      ['<dir>', 'The model\'s folder, made when it is not there; architecture when left out'],
+      ['--name=<name>', 'The name of the model, needed: one line of 1 to 100 characters'],
+    ],
+  },
+  {
+    verb: 'check',
+    call: 'seefore check [--workdir=<dir>] [--json]',
+    what: 'Checks the model and lists each problem with its mend',
+    options: [WORKDIR, ['--json', 'One line of JSON: the problems, the counts and the rulings']],
+  },
+  {
+    verb: 'list',
+    call: 'seefore list [<folder>...] [--near=<id>] [--change=<id>] [--workdir=<dir>]',
+    what: 'One line a record: its path, its name, what it is in, its kind and its source',
+    options: [
+      ['<folder>...', 'The records of those folders alone'],
+      ['changes', 'One line a change: its path, its name and who is next'],
+      ['--near=<id>', 'The record, each record it names and each that names it'],
+      ['--change=<id>', 'The model as it would be with the change: + adds, ~ updates, - removes'],
+      WORKDIR,
+    ],
+  },
+  {
+    verb: 'guide',
+    call: 'seefore guide [<topic>]',
+    what: 'The words of the format for a folder or a skill: its keys, limits and one example',
+    options: [['<topic>', 'A folder, as apps, or a skill, as model. With none, the topics, a line each']],
+  },
+  {
+    verb: 'rename',
+    call: 'seefore rename <old> <new> [--workdir=<dir>] [--dry-run]',
+    what: 'Renames records and rewrites every place that names them',
+    options: [
+      ['<old> <new>', 'The id a record has and the id it gets'],
+      ['--list=<file>', 'A file of such pairs, a pair a line, in place of <old> <new>'],
+      WORKDIR,
+      ['--dry-run', 'Prints what it would do and writes nothing'],
+    ],
+  },
+  {
+    verb: '--server',
+    call: 'seefore --server [--workdir=<dir>] [--port=<n>]',
+    what: 'Shows the model as a page on this machine',
+    options: [WORKDIR, ['--port=<n>', `The port it listens on; ${PORT} when left out`]],
+  },
+];
+
+/** Lines of two columns, the first padded so that the second starts at one place. */
+function columns(rows: readonly (readonly [string, string])[]): string[] {
+  const width = Math.max(...rows.map(([first]) => first.length));
+  return rows.map(([first, second]) => `  ${first.padEnd(width)}  ${second}`);
+}
+
+/** What `--help` prints: with no verb, the verbs, a line each; with one, its options, a line each. A verb that is not there gives 1. */
+function help(args: readonly string[], io: Io, fail: (message: string) => number): number {
+  const asked = args.find((arg) => !arg.startsWith('--')) ?? (args.includes('--server') ? '--server' : undefined);
+  if (asked === undefined) {
+    io.out('Run it as "seefore <verb> [<options>]", the verb one of these:');
+    for (const line of columns(VERBS.map((each) => [each.verb, each.what]))) io.out(line);
+    io.out('"seefore <verb> --help" says the options of one.');
+    return 0;
+  }
+  const verb = VERBS.find((each) => each.verb === asked);
+  if (verb === undefined) return fail(`there is no verb "${asked}"; see seefore --help`);
+  io.out(verb.call);
+  io.out(`${verb.what}.`);
+  for (const line of columns(verb.options)) io.out(line);
+  return 0;
+}
 
 /** What `seefore rename` was asked to do: the old id and the new, or a list of such lines in a file. */
 export type RenameOptions = { workdir: string; dryRun: boolean; ids: string[]; list?: string };
@@ -33,12 +129,13 @@ export type RenameOptions = { workdir: string; dryRun: boolean; ids: string[]; l
 export function readRenameOptions(args: readonly string[], cwd: string): RenameOptions | { error: string } {
   const options: RenameOptions = { workdir: cwd, dryRun: false, ids: [] };
   let verb = false;
+  let workdir: string | undefined;
   for (const arg of args) {
     if (arg === 'rename' && !verb) verb = true;
     else if (arg === '--dry-run') options.dryRun = true;
     else if (arg.startsWith('--workdir=')) {
-      options.workdir = arg.slice('--workdir='.length);
-      if (options.workdir === '') return { error: 'give a folder, as in --workdir=<dir>' };
+      workdir = arg.slice('--workdir='.length);
+      if (workdir === '') return { error: 'give a folder, as in --workdir=<dir>' };
     } else if (arg.startsWith('--list=')) {
       options.list = arg.slice('--list='.length);
       if (options.list === '') return { error: 'give a file, as in --list=<file>' };
@@ -47,12 +144,14 @@ export function readRenameOptions(args: readonly string[], cwd: string): RenameO
   }
   if (options.list !== undefined && options.ids.length > 0) return { error: 'give "<old> <new>" or "--list=<file>", not both' };
   if (options.list === undefined && options.ids.length !== 2) return { error: RENAME_USAGE };
+  options.workdir = findModel(cwd, workdir);
   return options;
 }
 
 /** Reads the options, or says what is wrong with them. `cwd` is the folder without `--workdir`. */
 export function readOptions(args: readonly string[], cwd: string): Options | { error: string } {
   const options: Options = { server: false, check: false, json: false, workdir: cwd, port: PORT };
+  let workdir: string | undefined;
   for (const arg of args) {
     if (arg === '--server') {
       options.server = true;
@@ -61,8 +160,8 @@ export function readOptions(args: readonly string[], cwd: string): Options | { e
     } else if (arg === '--json') {
       options.json = true;
     } else if (arg.startsWith('--workdir=')) {
-      options.workdir = arg.slice('--workdir='.length);
-      if (options.workdir === '') return { error: 'give a folder, as in --workdir=<dir>' };
+      workdir = arg.slice('--workdir='.length);
+      if (workdir === '') return { error: 'give a folder, as in --workdir=<dir>' };
     } else if (arg.startsWith('--port=')) {
       const text = arg.slice('--port='.length);
       const port = Number(text);
@@ -74,6 +173,7 @@ export function readOptions(args: readonly string[], cwd: string): Options | { e
       return { error: `unknown option "${arg}"` };
     }
   }
+  options.workdir = findModel(cwd, workdir);
   return options;
 }
 
@@ -86,7 +186,12 @@ export async function run(args: readonly string[], cwd: string, io: Io): Promise
     io.err(`seefore: ${message}`);
     return 1;
   };
-  if (args.find((arg) => !arg.startsWith('--')) === 'rename') return rename(args, cwd, io, fail);
+  if (args.includes('--help')) return help(args, io, fail);
+  const verb = args.find((arg) => !arg.startsWith('--'));
+  if (verb === 'init') return init(args, cwd, io, fail);
+  if (verb === 'rename') return rename(args, cwd, io, fail);
+  if (verb === 'guide') return guide(args, io, fail);
+  if (verb === 'list') return list(args, cwd, io, fail);
   const options = readOptions(args, cwd);
   if ('error' in options) return fail(options.error);
   if (options.server === options.check) return fail(USAGE);
@@ -113,6 +218,51 @@ export async function run(args: readonly string[], cwd: string, io: Io): Promise
   const count = model.problems.length;
   if (count > 0) io.out(`seefore: ${count} ${count === 1 ? 'problem' : 'problems'}; run "seefore check" to list them`);
   io.out(`seefore: http://${HOST}:${options.port}`);
+  return 0;
+}
+
+/** Prints the words of the format for a folder or a skill, or the topics when none is named. It reads no model. */
+function guide(args: readonly string[], io: Io, fail: (message: string) => number): number {
+  const rest = args.filter((arg) => arg !== 'guide');
+  const option = rest.find((arg) => arg.startsWith('--'));
+  if (option !== undefined) return fail(`unknown option "${option}"`);
+  if (rest.length > 1) return fail('name one topic, as in "seefore guide apps"');
+  const said = guideText(rest[0]);
+  if ('error' in said) return fail(said.error);
+  for (const line of said.text.replace(/\n$/, '').split('\n')) io.out(line);
+  return 0;
+}
+
+/**
+ * Prints one line a record: all of them, those of the folders named, those near one record, or
+ * the model as it would be with a change; and with `changes`, one line a change with who is next.
+ */
+async function list(args: readonly string[], cwd: string, io: Io, fail: (message: string) => number): Promise<number> {
+  const asked: { folders: string[]; near?: string; change?: string } = { folders: [] };
+  let workdir: string | undefined;
+  let verb = false;
+  for (const arg of args) {
+    if (arg === 'list' && !verb) verb = true;
+    else if (arg.startsWith('--near=')) asked.near = arg.slice('--near='.length);
+    else if (arg.startsWith('--change=')) asked.change = arg.slice('--change='.length);
+    else if (arg.startsWith('--workdir=')) workdir = arg.slice('--workdir='.length);
+    else if (arg.startsWith('--')) return fail(`unknown option "${arg}"`);
+    else asked.folders.push(arg);
+  }
+  if (workdir === '') return fail('give a folder, as in --workdir=<dir>');
+  if (asked.near === '' || asked.change === '') return fail('give an id, as in --near=app-gateway');
+  const folder = findModel(cwd, workdir);
+  let model: ModelAnswer;
+  try {
+    model = await readFolder(folder);
+  } catch {
+    return fail(`cannot read the folder "${folder}"`);
+  }
+  if (!existsSync(join(folder, 'seefore.yaml'))) return fail(`"${folder}" is not a model: it has no seefore.yaml`);
+  const { folders, ...rest } = asked;
+  const said = listLines(model, { ...rest, ...(folders.length > 0 ? { folders } : {}) });
+  if ('error' in said) return fail(said.error);
+  for (const line of said.lines) io.out(line);
   return 0;
 }
 

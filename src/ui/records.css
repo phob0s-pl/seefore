@@ -161,3 +161,10 @@
   font-variant-numeric: tabular-nums;
   color: var(--text-tertiary);
 }
+
+/* A part's source: paths of the code, as written. */
+.record-source {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  overflow-wrap: anywhere;
+}
