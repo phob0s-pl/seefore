@@ -64,7 +64,7 @@ model, since a pointer is always loaded and a skill is not.
 | `review` | A change is drafted, in a session that did not draft it | The review | Edits the change; approves; makes a point of wording |
 
 **The tool lacks, for this**: the commands `init`, `list`, `guide`, `apply` and `--help`; the
-key `source` on a part and the key `decided` on a change; the rest of the review's check.
+key `source` on a part and the key `status` on a change; the rest of the review's check.
 
 ## The stages
 
@@ -134,8 +134,8 @@ example.
 
 | # | Stage | Result | Who | Runs |
 | --- | --- | --- | --- | --- |
-| E1 | Deciding and applying | The key `decided` on a change; the person's word on a declined or reopened point; `seefore apply`, which lays an accepted change onto the files. A test, no experiment: Boxwick's seven apply and check clean | The main session defines, Opus builds | 0 |
-| E2 | The skill `change` | Boxwick's seven prompts to tune on. Then three features of each organisation, the person played, in three arms: no context, the context D's skill wrote, the key's context. Counted: a clean check; hidden lines broken; questions that changed the draft; lines of `given` nobody said. **The arms' difference is the worth of context, as a number** | Fable, Opus | 25 |
+| E1 | Deciding and applying | `status` on a change: `applied`, which is in the architecture, and `rejected`; the person's word on a declined or reopened point; `seefore apply`, which lays a change onto the files and refuses only one that the check faults. A test, no experiment: Boxwick's seven apply and check clean | The main session defines, Opus builds | 0 |
+| E2 | The skill `change` | Boxwick's seven prompts to tune on. Then three features of each organisation, the person played, in three arms: no context, the context D's skill wrote, the key's context. Counted: a clean check; hidden lines broken; questions that changed the draft; lines of `given` nobody said. **The arms' difference is the worth of context, as a number.** Settled here: whether a change keeps what the skill took unasked in a key of its own | Fable, Opus | 25 |
 
 ### F Reviewers
 
