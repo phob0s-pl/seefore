@@ -262,6 +262,8 @@ async function list(args: readonly string[], cwd: string, io: Io, fail: (message
   const { folders, ...rest } = asked;
   const said = listLines(model, { ...rest, ...(folders.length > 0 ? { folders } : {}) });
   if ('error' in said) return fail(said.error);
+  // A model with nothing to list says so: a skill must tell an empty model from one that is not there.
+  if (said.lines.length === 0) io.out(folders.length === 1 && folders[0] === 'changes' ? 'No changes yet.' : 'No records yet.');
   for (const line of said.lines) io.out(line);
   return 0;
 }

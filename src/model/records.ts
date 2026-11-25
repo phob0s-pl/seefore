@@ -62,7 +62,10 @@ const Description = prose(DESCRIPTION_MAX).meta({ description: 'What it is respo
 
 const Only = oneLine('only', ONLY_MAX)
   .refine((only) => !/^only(?![\p{L}\p{M}\p{N}_])/iu.test(only), { error: (issue) => `${subject(issue.path, 'only')} holds the words that read after "only". Take the first word off.` })
-  .meta({ description: 'When the thing is there at all: the words that read after "only", one line of at most 100 characters. Left out when it is always there.' });
+  .meta({
+    description:
+      'The condition under which the thing is there at all, begun with "when", "on" or "for", so that it reads after the word "only": `only: when a customer pays by card`. One line of at most 100 characters. Left out when it is always there.',
+  });
 
 /** One id, in a field that says what it holds when the value is not an id: `holds` reads after the field's name. */
 function id(field: string, holds: string) {
@@ -113,7 +116,8 @@ const Owner = id('owner', 'holds the id of a record in `owners/`.').meta({
 });
 
 const partTechnology = ids('Name a technology by the id of its record in `technologies/`, and say anything more in the description.').meta({
-  description: 'What it is built with, or the format it keeps: ids of records in technologies/, a set. Never a protocol a part only speaks.',
+  description:
+    'What it is built with, or the format it keeps: ids of records in technologies/, a set. Never a protocol a part only speaks. When it is built with one of several, name them all and say in the description that one is chosen.',
 });
 
 /** The most paths of `source`. */
@@ -141,7 +145,7 @@ const Source = z
   })
   .meta({
     description:
-      "Where its code lies: one to three paths of a file or a folder, counted from the folder that holds the model's folder, written with `/`. Left out where no code of it is at hand.",
+      "Where its code lies: one to three paths of a file or a folder, counted from the folder that holds the model's folder, written with `/`. For a part built elsewhere, the file here that starts or pins it. The check warns when a path is not there. Left out where nothing of it is at hand.",
   });
 
 const External = z.literal(true).meta({ description: '`true`: the people this model is kept for cannot change the system. Left out for a system of yours, and when nobody has said.' });
@@ -151,7 +155,10 @@ const Kinds = (what: string, list: readonly string[]) => `${what}: ${list.join('
 /** A kind of person who uses the software, runs it or takes part in an exchange. */
 export const PersonSchema = z
   .strictObject({ name: Name, only: Only.optional(), description: Description.optional() })
-  .meta({ description: 'A kind of person who uses the software, runs it or takes part in an exchange. A role, not an individual.' });
+  .meta({
+    description:
+      'A kind of person who uses the software, runs it or takes part in an exchange. A role, not an individual. Written when an entry point shows that such a user is there: a page, a command, an interface for clients.',
+  });
 
 /** The most lines of context that are global, and the most about one system: a dozen sentences, not a handbook. Over it the check warns. */
 export const CONTEXT_MAX = 12;
@@ -207,7 +214,13 @@ export const ContextSchema = z
   });
 
 export const SystemSchema = z
-  .strictObject({ name: Name, only: Only.optional(), description: Description.optional(), external: External.optional(), owner: Owner.optional() })
+  .strictObject({
+    name: Name,
+    only: Only.optional(),
+    description: Description.optional(),
+    external: External.optional(),
+    owner: id('owner', 'holds the id of a record in `owners/`.').meta({ description: 'The id of the owner, a record in owners/, who answers for the system. Left out when nobody has said.' }).optional(),
+  })
   .meta({ description: 'Software its users see as one whole, ours or somebody else\'s. Nothing is above it. C4 calls it a software system.' });
 
 export const AppSchema = z
@@ -216,18 +229,27 @@ export const AppSchema = z
     in: id('in', 'holds the id of the system it is part of, a record in `systems/`.').meta({ description: 'The id of the system the app is part of, a record in systems/.' }),
     only: Only.optional(),
     description: Description.optional(),
-    kind: z.enum(APP_KINDS).meta({ description: Kinds('How the app runs', APP_KINDS) }).optional(),
+    kind: z
+      .enum(APP_KINDS)
+      .meta({
+        description:
+          "How the app runs. service: it runs until it is stopped. browser: in a person's browser. mobile: on a phone or a tablet. desktop: a program a person starts on their own machine. command: a person or a script starts it, and it ends. function: started by an event. job: started by a schedule.",
+      })
+      .optional(),
     technology: partTechnology.optional(),
     owner: Owner.optional(),
     source: Source.optional(),
   })
-  .meta({ description: 'Code that runs as a unit of its own: started, deployed or scaled apart from the rest. In one system. C4 calls it a container.' });
+  .meta({
+    description:
+      'Code that runs as a unit of its own: started, deployed or scaled apart from the rest. One code started under two commands or roles is two apps; copies of one are one app. A part built elsewhere and started or pinned here is an app too. In one system. C4 calls it a container.',
+  });
 
 export const StoreSchema = z
   .strictObject({
     name: Name,
     in: id('in', 'holds the id of the system it is part of, a record in `systems/`, or of the app that keeps it, a record in `apps/`.').meta({
-      description: 'The id of the system the store is part of, a record in systems/, or of the one app that keeps it, a record in apps/.',
+      description: 'The id of the system the store is part of, a record in systems/, or of the one app that keeps it, a record in apps/: the app, when no other app reads or writes the store.',
     }),
     only: Only.optional(),
     description: Description.optional(),
@@ -236,7 +258,10 @@ export const StoreSchema = z
     owner: Owner.optional(),
     source: Source.optional(),
   })
-  .meta({ description: 'Addressable data that others read or write: a database, files, a cache, an index, a queue, a topic. C4 calls it a container.' });
+  .meta({
+    description:
+      'Addressable data that others read or write: a database, files, a cache, an index, a queue, a topic. Of a broker, each queue or topic is a store, and the broker is its technology. C4 calls it a container.',
+  });
 
 export const ComponentSchema = z
   .strictObject({
@@ -269,7 +294,10 @@ export const ConnectionSchema = z
       .meta({ description: 'What the exchange is carried in, such as a protocol or a format: ids of records in technologies/, a set.' })
       .optional(),
   })
-  .meta({ description: 'One thing acts on another, for one purpose. It has an id of its own. C4 calls it a relationship.' });
+  .meta({
+    description:
+      'One thing acts on another, for one purpose. It has an id of its own. Two connections may join the same two things, one for each purpose, and `from` and `to` may be one thing, when a part talks to its own copies. C4 calls it a relationship.',
+  });
 
 export const InfrastructureSchema = z
   .strictObject({

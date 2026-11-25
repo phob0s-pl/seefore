@@ -317,3 +317,21 @@ test('guide prints the words of the format for a folder and for a skill, and the
   expect([wrong.code, wrong.out, wrong.err.length]).toEqual([1, [], 1]);
 });
 
+test('list says so when there is nothing to list, so that an empty model is told from one that is not there', async () => {
+  const folder = await mkdtemp(join(tmpdir(), 'seefore-'));
+  const lines = async (...args: string[]) => {
+    const out: string[] = [];
+    const err: string[] = [];
+    const code = await run(args, folder, { out: (line) => out.push(line), err: (line) => err.push(line) });
+    return { code, out, err };
+  };
+  // No model: one line of what is wrong, and 1.
+  const none = await lines('list');
+  expect([none.code, none.out, none.err.length]).toEqual([1, [], 1]);
+  // A model with no record yet: it is there, and it says that it is empty.
+  expect((await lines('init', '--name=Shop')).code).toBe(0);
+  expect(await lines('list')).toEqual({ code: 0, out: ['No records yet.'], err: [] });
+  expect(await lines('list', 'apps')).toEqual({ code: 0, out: ['No records yet.'], err: [] });
+  expect(await lines('list', 'changes')).toEqual({ code: 0, out: ['No changes yet.'], err: [] });
+});
+

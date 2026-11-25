@@ -40,14 +40,15 @@ test('the topics are the sixteen folders, then the five skills', () => {
 
 test('a folder: what a record is, the word of its ids, each key needed or not with what it holds, and an example', () => {
   const apps = text('apps');
-  expect(apps.split('\n').slice(0, 7)).toEqual([
+  expect(apps.split('\n').slice(0, 8)).toEqual([
     '# apps: one app a file',
     '',
-    'Code that runs as a unit of its own: started, deployed or scaled apart from the rest. In one system.',
-    'C4 calls it a container.',
+    'Code that runs as a unit of its own: started, deployed or scaled apart from the rest. One code',
+    'started under two commands or roles is two apps; copies of one are one app. A part built elsewhere',
+    'and started or pinned here is an app too. In one system. C4 calls it a container.',
     '',
     'Its id begins with `app-` and says what it is, as `app-order-api`: the name of its file,',
-    'apps/app-order-api.yaml.',
+    "apps/app-order-api.yaml, in the model's folder, which is the one that holds `seefore.yaml`.",
   ]);
   expect(apps).toContain('\nKeys:\n  name (needed)\n    What people call it: one line of 1 to 100 characters, with no space at either end.\n  in (needed)\n');
   expect(apps).toContain('\n  source (may be left out)\n    Where its code lies: one to three paths of a file or a folder,');
@@ -80,7 +81,8 @@ test('a skill: the guides of the folders it writes, one after another', () => {
   expect(heads('change')).toEqual(['changes']);
   expect(heads('review')).toEqual(['reviews']);
   expect(text('flows')).toContain(`\n\n${text('data')}`);
-  expect(text('change').split('\n')[0]).toBe('The skill change writes the folder changes. Its guide follows.');
+  // Its head says which folders the skill writes, and where they lie.
+  expect(text('change').split('\n').slice(0, 2)).toEqual(['The skill change writes the folder changes. The folders lie in the model\'s folder, the one that', 'holds `seefore.yaml`. Its guide follows.']);
 });
 
 test('no topic: the topics, a line each; a topic that is not there is an error that names them', () => {

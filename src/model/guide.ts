@@ -42,7 +42,7 @@ export const EXAMPLES: Readonly<Record<string, { path: string; text: string }>> 
   },
   connections: {
     path: 'connections/connection-customer-places-order.yaml',
-    text: ['from: person-customer', 'to: app-order-api', 'via: [infra-gateway]', 'name: Places an order'].join('\n'),
+    text: ['from: person-customer', 'to: app-order-api', 'via: [infra-gateway]', 'name: Places an order', 'only: when the shop is open'].join('\n'),
   },
   infrastructure: { path: 'infrastructure/infra-gateway.yaml', text: ['name: Gateway', 'in: system-shop', 'description: Takes every request from outside and passes it on.'].join('\n') },
   owners: { path: 'owners/owner-shop-team.yaml', text: ['name: Shop team', 'description: The developers who build and run the shop.'].join('\n') },
@@ -230,7 +230,7 @@ function idLine(folder: string): string {
   const id = example.slice(folder.length + 1, -'.yaml'.length);
   if (folder === 'changes') return `Its id is its own, with no word of a folder before it: the name of its file, as \`${id}\` in ${example}.`;
   if (folder === 'reviews') return `It is named as its change: the review of changes/${id}.yaml is ${example}. Its id is that of the change.`;
-  return `Its id begins with \`${WORDS[folder]}-\` and says what it is, as \`${id}\`: the name of its file, ${example}.`;
+  return `Its id begins with \`${WORDS[folder]}-\` and says what it is, as \`${id}\`: the name of its file, ${example}, in the model's folder, which is the one that holds \`seefore.yaml\`.`;
 }
 
 /** The guide of one folder: what a record is, its id, its keys and one example file. */
@@ -272,7 +272,8 @@ export function guideText(topic?: string): { text: string } | { error: string } 
   if (topic === undefined || topic === '') return { text: index() };
   const skill = SKILLS[topic];
   if (skill !== undefined) {
-    const head = wrap(skill.length === 1 ? `The skill ${topic} writes the folder ${skill[0]}. Its guide follows.` : `The skill ${topic} writes the folders ${joined(skill)}. The guide of each follows.`, 0);
+    const where = "The folders lie in the model's folder, the one that holds `seefore.yaml`.";
+    const head = wrap(skill.length === 1 ? `The skill ${topic} writes the folder ${skill[0]}. ${where} Its guide follows.` : `The skill ${topic} writes the folders ${joined(skill)}. ${where} The guide of each follows.`, 0);
     return { text: [...head, ...skill.map((folder) => `\n${folderGuide(folder)}`)].join('\n') };
   }
   if (FOLDERS.includes(topic)) return { text: folderGuide(topic) };

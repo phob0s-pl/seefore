@@ -94,8 +94,7 @@ export function checkShape<T>(file: string, yaml: YamlFile, schema: z.ZodType<T>
       }
       case 'too_small': {
         if (issue.origin === 'array') {
-          const key = path[path.length - 1];
-          const item = (typeof key === 'string' ? ITEMS[key] : undefined) ?? 'id';
+          const item = itemOf(path);
           const fix = `Give ${label(path)} at least one ${item}${optional(schema, path) ? ', or delete the key' : ''}.`;
           problems.push(error(file, valuePosition(yaml, doc, path), 'value-too-small', `${capital(label(path))} is an empty list.`, fix));
           break;
@@ -112,7 +111,7 @@ export function checkShape<T>(file: string, yaml: YamlFile, schema: z.ZodType<T>
       case 'too_big': {
         const value: unknown = doc.getIn(path);
         if (issue.origin === 'array') {
-          problems.push(error(file, valuePosition(yaml, doc, path), 'value-too-big', `${capital(label(path))} is too long a list: it may have at most ${issue.maximum}.`, `Take ids out of ${label(path)} until it has at most ${issue.maximum}.`));
+          problems.push(error(file, valuePosition(yaml, doc, path), 'value-too-big', `${capital(label(path))} is too long a list: it may have at most ${issue.maximum}.`, `Take ${itemOf(path)}s out of ${label(path)} until it has at most ${issue.maximum}.`));
           break;
         }
         const message =
@@ -172,7 +171,13 @@ function written(path: Path): string | undefined {
 const ORDINALS = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth', 'tenth'];
 
 /** The lists whose items are mappings, and what one item is called. */
-const ITEMS: Record<string, string> = { steps: 'step', fields: 'field' };
+/** What an item of a list is called, by the key that holds the list: an id, unless the key holds something else. */
+const itemOf = (path: Path): string => {
+  const key = path[path.length - 1];
+  return (typeof key === 'string' ? ITEMS[key] : undefined) ?? 'id';
+};
+
+const ITEMS: Record<string, string> = { steps: 'step', fields: 'field', source: 'path', comments: 'line', given: 'line', about: 'address' };
 
 /** An item of a list in words: "the third step", or "step 12" past the tenth. */
 function nth(index: number, item: string): string {
@@ -211,6 +216,8 @@ export function dotted(path: Path): string {
 
 /** That the value at a path is not one of the few it may be, and which those are. */
 export function notAllowed(path: Path, allowed: readonly string[]): string {
+  // A key that takes one value is there or not: "one of" a single word misleads.
+  if (allowed.length === 1) return `${capital(label(path))} may only be ${list(allowed)}. Otherwise take the key out.`;
   return `${capital(label(path))} must be one of ${list(allowed)}.`;
 }
 
