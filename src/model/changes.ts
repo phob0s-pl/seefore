@@ -117,6 +117,7 @@ const LISTS: readonly { title: string; folders: readonly string[] }[] = [
   { title: 'Connections', folders: ['connections'] },
   { title: 'Technologies', folders: ['technologies'] },
   { title: 'Owners', folders: ['owners'] },
+  { title: 'Repositories', folders: ['repositories'] },
   { title: 'Data', folders: ['data'] },
   { title: 'Rules', folders: ['rules'] },
 ];

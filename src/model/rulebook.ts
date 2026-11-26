@@ -1,6 +1,6 @@
 import type { ModelRead, ModelRecord, Problem, Ruling } from './answer.ts';
 import { byName } from './catalogue.ts';
-import { ofArchitecture } from './kinds.ts';
+import { chosenByRules } from './kinds.ts';
 
 /**
  * What the pages of the rules ask of `records`, `rulings` and `problems`, worked out and never
@@ -193,11 +193,11 @@ function lookedAtOf(ruling: Ruling, record: ModelRecord | undefined, total: numb
 
 /** What the pages ask of the rules, worked out once from what `/api/model` answers. */
 export function rulebookOf({ records, rulings, problems }: Pick<ModelRead, 'records' | 'rulings' | 'problems'>): Rulebook {
-  // A rule's record, and the first record of each other id: what the catalogue holds.
+  // A rule's record, and the first record of each other id that a rule chooses among: what the catalogue holds, but a repository.
   const rules = new Map<string, ModelRecord>();
   const others = new Map<string, ModelRecord>();
   for (const record of records) {
-    if (record.kind !== 'rules' && !ofArchitecture(record.kind)) continue;
+    if (record.kind !== 'rules' && !chosenByRules(record.kind)) continue;
     const into = record.kind === 'rules' ? rules : others;
     if (!into.has(record.id)) into.set(record.id, record);
   }

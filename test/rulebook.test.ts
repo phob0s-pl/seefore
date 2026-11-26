@@ -188,6 +188,10 @@ test('what a rule looked at: every record each chose, the whole model for never,
     lines: ['Every record of the model, 16. 1 is like this.', 'The flows walk 1 of the 4 connections it could look at.'],
   });
   expect(rules.rule('rule-misspelt')?.lookedAt).toBeUndefined();
+  // A rule chooses no repository, so the whole model it looks at is the 13 records without the two repositories.
+  const withRepositories = book(ALWAYS_THERE, file('repositories/repo-shop.yaml', 'name: shop\n'), file('repositories/repo-docs.yaml', 'name: docs\n'));
+  expect(readModel([...BASE, file('repositories/repo-shop.yaml', 'name: shop\n'), file('repositories/repo-docs.yaml', 'name: docs\n')]).problems).toEqual([]);
+  expect(withRepositories.rule('rule-always-there')?.lookedAt).toEqual({ records: [], lines: ['Every record of the model, 13. 1 is like this.'] });
 });
 
 test('the rules of a record: those it breaks, those it is in debt of, and for a connection those of a way that breaks, in the order of the list', () => {

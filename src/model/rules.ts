@@ -72,6 +72,7 @@ export const FIELDS: readonly Field[] = [
   { folder: 'connections', field: 'via', kinds: ['infrastructure', 'apps', 'components', 'systems'], many: true },
   ...['systems', ...NEEDS_OWNER_OR_TECH, 'features'].map((folder) => ({ folder, field: 'owner', kinds: ['owners'] })),
   ...[...NEEDS_OWNER_OR_TECH, 'connections'].map((folder) => ({ folder, field: 'technology', kinds: ['technologies'], many: true as const })),
+  ...['systems', 'apps'].map((folder) => ({ folder, field: 'repository', kinds: ['repositories'] })),
   { folder: 'features', field: 'touches', kinds: [...ENDS, 'connections'], many: true },
   { folder: 'flows', field: 'feature', kinds: ['features'] },
   { folder: 'flows', field: 'does', kinds: ['connections', ...ENDS, 'flows'], step: true },
@@ -84,6 +85,9 @@ function allowed(kinds: readonly string[]): string {
   const nouns = kinds.map((kind) => NOUNS[kind] as string);
   return nouns.length === 1 ? (nouns[0] as string) : `${nouns.slice(0, -1).join(', ')} or ${nouns[nouns.length - 1]}`;
 }
+
+/** Where a repository is named instead of a part, said in the mend of each field that names a part and is given a repository. */
+const IN_REPOSITORY = 'A repository is named in `repository` of the system or app whose code is in it.';
 
 /** A case of a field that names the wrong kind: what is said, and how to mend it. */
 type Wrong = { field: string; folder?: string; ways?: boolean; found: readonly string[]; says: string; fix: string };
@@ -123,10 +127,22 @@ const WRONG: Wrong[] = [
     fix: 'Take it out of `via`, or name a piece of infrastructure, an app, a component or a system that the exchange passes through. Say anything more in the description.',
   },
   {
+    field: 'via',
+    found: ['repositories'],
+    says: '`via` names what the exchange passes through: a piece of infrastructure, an app, a component or a system.',
+    fix: `Name in \`via\` the piece of infrastructure, app, component or system the exchange passes through. ${IN_REPOSITORY}`,
+  },
+  {
     field: 'from',
     found: ['connections', ...NOT_THINGS],
     says: 'An end of a connection is a person, a system, an app, a store, a component or a piece of infrastructure.',
     fix: 'Name the one that acts, which is a person, a system, an app, a store, a component or a piece of infrastructure. An owner or a technology is named in `owner` or `technology` of a part instead.',
+  },
+  {
+    field: 'from',
+    found: ['repositories'],
+    says: 'An end of a connection is a person, a system, an app, a store, a component or a piece of infrastructure.',
+    fix: `Name the one that acts, which is a person, a system, an app, a store, a component or a piece of infrastructure. ${IN_REPOSITORY}`,
   },
   {
     field: 'to',
@@ -135,16 +151,28 @@ const WRONG: Wrong[] = [
     fix: 'Name the one it acts on, which is a person, a system, an app, a store, a component or a piece of infrastructure. An owner or a technology is named in `owner` or `technology` of a part instead.',
   },
   {
+    field: 'to',
+    found: ['repositories'],
+    says: 'An end of a connection is a person, a system, an app, a store, a component or a piece of infrastructure.',
+    fix: `Name the one it acts on, which is a person, a system, an app, a store, a component or a piece of infrastructure. ${IN_REPOSITORY}`,
+  },
+  {
     field: 'owner',
-    found: ['people', 'systems', 'apps', 'stores', 'components', 'connections', 'infrastructure', 'technologies', 'features', 'flows', 'data', 'rules', 'context', 'changes', 'reviews'],
+    found: ['people', 'systems', 'apps', 'stores', 'components', 'connections', 'infrastructure', 'technologies', 'repositories', 'features', 'flows', 'data', 'rules', 'context', 'changes', 'reviews'],
     says: '`owner` names an owner, a record in `owners/`.',
     fix: 'Write `owners/owner-<name>.yaml` with a `name` for the team, and name that id in `owner`.',
   },
   {
     field: 'technology',
-    found: ['people', 'systems', 'apps', 'stores', 'components', 'connections', 'infrastructure', 'owners', 'features', 'flows', 'data', 'rules', 'context', 'changes', 'reviews'],
+    found: ['people', 'systems', 'apps', 'stores', 'components', 'connections', 'infrastructure', 'owners', 'repositories', 'features', 'flows', 'data', 'rules', 'context', 'changes', 'reviews'],
     says: '`technology` names technologies, records in `technologies/`.',
     fix: 'Write `technologies/tech-<name>.yaml` with a `name`, and name that id in `technology`.',
+  },
+  {
+    field: 'repository',
+    found: ['people', 'systems', 'apps', 'stores', 'components', 'connections', 'infrastructure', 'owners', 'technologies', 'features', 'flows', 'data', 'rules', 'context', 'changes', 'reviews'],
+    says: '`repository` names the repository the code is in, a record in `repositories/`.',
+    fix: "Name in `repository` the id of a record in `repositories/`, or take the key out where the code is in the repository the model's folder lies in.",
   },
   {
     field: 'touches',
@@ -169,6 +197,12 @@ const WRONG: Wrong[] = [
     found: ['technologies'],
     says: '`touches` names the parts and connections that are the feature\'s own.',
     fix: 'Take it out of `touches`. A technology is named in `technology` of the part that is built with it.',
+  },
+  {
+    field: 'touches',
+    found: ['repositories'],
+    says: '`touches` names the parts and connections that are the feature\'s own.',
+    fix: `Take it out of \`touches\`. ${IN_REPOSITORY}`,
   },
   {
     field: 'touches',
@@ -199,6 +233,12 @@ const WRONG: Wrong[] = [
     found: ['owners', 'technologies'],
     says: 'A step happens on a connection, in a part or as a whole flow.',
     fix: 'Name in `does` the connection, part or flow the step happens on. An owner or a technology is named on a part instead.',
+  },
+  {
+    field: 'does',
+    found: ['repositories'],
+    says: 'A step happens on a connection, in a part or as a whole flow.',
+    fix: `Name in \`does\` the connection, part or flow the step happens on. ${IN_REPOSITORY}`,
   },
   {
     field: 'data',
@@ -360,7 +400,7 @@ const idKind: Rule = {
 const referenceUnknown: Rule = {
   id: 'reference-unknown',
   gives: 'error',
-  says: "Each id in `in`, `from`, `to`, `owner`, `technology`, `via`, `touches` and `feature`, in a step's `does` and `data`, in a rule of a team's own, and in `system` of a line of context, names a record.",
+  says: "Each id in `in`, `from`, `to`, `owner`, `technology`, `repository`, `via`, `touches` and `feature`, in a step's `does` and `data`, in a rule of a team's own, and in `system` of a line of context, names a record.",
   check(model) {
     const findings: Finding[] = [];
     for (const { entry, spec, id, path, words } of references(model)) {

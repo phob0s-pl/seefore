@@ -45,10 +45,11 @@ work as "With several agents" says below.
    records are there, this is a mend: keep every record that is still true, with its id, and
    change only what the code shows otherwise. An id changes by `seefore rename <old> <new>`,
    and a record that is no longer true goes by `seefore remove <id>`, never by another way.
-2. **Find what runs.** Read with the file tools: Glob lists, Grep searches, Read opens. The
-   shell is for `seefore` alone, one command a call: anything else may be refused. List the tree
-   first, with Glob; search freely, a search opens no file. Keep, for each app, the file that
-   starts it and the folders of its code. Open at most 120 files, in this order:
+2. **Find what runs.** Read with the file tools: Glob lists, Grep searches, Read opens. The shell
+   is for `seefore` alone, one command a call: anything else may be refused. List the tree first,
+   with Glob; search freely, a search opens no file. Where a clone script or a manifest names
+   several repositories, read each in its folder and name it in every search. Keep, for each app,
+   the file that starts it and the folders of its code. Open at most 120 files, in this order:
    - build and package files, which name the programs: a module's commands, a workspace's
      packages, the scripts and entry points of a package;
    - deploy files, which name what is started and what it needs: image and compose files,
@@ -60,8 +61,9 @@ work as "With several agents" says below.
    show is a connection: keep its file. A service outside is a system of its own.
 4. **Write the records** with the file tool, many files in one message: a script or a shell
    command that writes them is refused. Write in this order, so that each names only what is
-   already there: systems, technologies, owners, people, apps, stores, components,
+   already there: repositories, systems, technologies, owners, people, apps, stores, components,
    infrastructure, connections. No record holds a path of the code, in any key.
+   - A repository beyond the model's own is a record, named by each system or app it holds.
    - The system is what its users see as one; only another maker's system is `external: true`.
    - A connection's id is `connection-`, who acts, what it does, on what.
    - A person is a kind of user that an entry point shows: who opens the pages, runs the
@@ -114,7 +116,5 @@ nor the conversation: it knows only what you tell it.
    two agents wrote one thing, or one channel from both its ends, remove one. Then steps 5 to 7.
 
 ## The format
-
 Take no name or id from the examples below: they are of a tea shop.
-
 !`seefore guide model`

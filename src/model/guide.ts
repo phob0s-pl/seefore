@@ -12,7 +12,7 @@ const WIDTH = 100;
 
 /** The folders each skill writes, in the order its guide gives them. */
 const SKILLS: Readonly<Record<string, readonly string[]>> = {
-  model: ['people', 'systems', 'apps', 'stores', 'components', 'connections', 'infrastructure', 'owners', 'technologies'],
+  model: ['people', 'systems', 'apps', 'stores', 'components', 'connections', 'infrastructure', 'owners', 'technologies', 'repositories'],
   flows: ['features', 'flows', 'data'],
   context: ['context', 'rules'],
   change: ['changes'],
@@ -22,7 +22,7 @@ const SKILLS: Readonly<Record<string, readonly string[]>> = {
 
 const FOLDERS: readonly string[] = KINDS.map((kind) => kind.folder);
 
-/** The topics: the sixteen folders, then the six skills. A skill shares its name with a folder twice, `flows` and `context`: its guide holds that folder's. */
+/** The topics: the seventeen folders, then the six skills. A skill shares its name with a folder twice, `flows` and `context`: its guide holds that folder's. */
 export const TOPICS: readonly string[] = [...FOLDERS, ...Object.keys(SKILLS)];
 
 /** One example file of each folder: one small shop, whose files are true to one another. The review's `read` is the mark of the example change, which a test holds. */
@@ -48,6 +48,10 @@ export const EXAMPLES: Readonly<Record<string, { path: string; text: string }>> 
   infrastructure: { path: 'infrastructure/infra-gateway.yaml', text: ['name: Gateway', 'in: system-shop', 'description: Takes every request from outside and passes it on.'].join('\n') },
   owners: { path: 'owners/owner-shop-team.yaml', text: ['name: Shop team', 'description: The developers who build and run the shop.'].join('\n') },
   technologies: { path: 'technologies/tech-postgres.yaml', text: ['name: PostgreSQL', 'description: The database server the orders are kept in.'].join('\n') },
+  repositories: {
+    path: 'repositories/repo-shop-deploy.yaml',
+    text: ['name: shop-deploy', 'description: The compose file and the scripts that start every app of the shop.', 'url: https://example.org/tea/shop-deploy', 'workspace: true'].join('\n'),
+  },
   features: { path: 'features/feature-ordering.yaml', text: ['name: Ordering', 'description: A customer buys tea, and knows that the shop has the order.', 'owner: owner-shop-team'].join('\n') },
   flows: {
     path: 'flows/flow-placing-an-order.yaml',

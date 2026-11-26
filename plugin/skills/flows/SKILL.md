@@ -76,6 +76,10 @@ one to write, and stop.
    arrives, what the part does with it that the outcome hangs on, and where it sends it on:
    search for the route, the topic, the queue, the client's name, and open the file that
    answers. Open at most 40 files. Keep, for each step, the file and line that shows it.
+   - At each hop, a part's code lies in the repository that its app or its system names
+     (`seefore list --near=<id>`): with `workspace`, in the folder of its name beside the
+     model's folder; else in a folder you can read that is it. Name that folder in each
+     search. A repository you cannot read ends the trail there: say which.
 4. **Write the records** with the file tool, all in one message, in this order: the feature,
    the data, the connections the model lacked, the flow. Use a feature or a data record that
    is there before you write one. No record holds a path of the code, in any key.

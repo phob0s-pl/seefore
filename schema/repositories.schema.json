@@ -1,0 +1,50 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100,
+      "pattern": "^\\S(?:[^\\n\\r\\u0085\\u2028\\u2029]*\\S)?$",
+      "description": "Its own name, as the folder of a plain clone bears it: one line of 1 to 100 characters, with no slash, backslash or colon.",
+      "not": {
+        "anyOf": [
+          {
+            "pattern": "[/\\\\:\\u0000-\\u001f]"
+          },
+          {
+            "enum": [
+              ".",
+              ".."
+            ]
+          }
+        ]
+      }
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000,
+      "pattern": "\\S",
+      "description": "What of the system lies in it, in 1 to 2,000 characters: the code of which parts, the deploy files, the documents."
+    },
+    "url": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "description": "Where it is cloned from: one line of 1 to 200 characters with no space, begun with `https://`, `http://`, `ssh://` or `git://`, or of the form `git@host:path`. Never a path on a disk.",
+      "pattern": "^(?:(?:https|http|ssh|git):\\/\\/[^\\s\\u0085]+|[^\\s\\u0085/\\\\:@]+@[^\\s\\u0085/\\\\:@]+:[^\\s\\u0085]+)$"
+    },
+    "workspace": {
+      "type": "boolean",
+      "const": true,
+      "description": "`true`: on every machine its checkout lies beside the model's folder, in a folder of its `name`, as a workspace's clone script puts it. Read it there, and search it by naming that folder: a search begun above it skips a folder that an ignore file names. Left out when its place differs from one machine to the next: then it is one of the folders the session can read, or it is not in reach, and a skill says so."
+    }
+  },
+  "required": [
+    "name"
+  ],
+  "additionalProperties": false,
+  "description": "A repository that holds code or deploy files of the system, other than the one the model's folder lies in: that one needs no record. A system or an app whose code is in it names it with `repository`; one that holds only deploy files or documents is named by none. It says which repository to read, and never where a checkout lies on a machine: no path, and no folder inside it. Written from a file that names the repository, as a clone script, a workspace's manifest or a package's own `repository`, or from a person's word; never from an image's name."
+}

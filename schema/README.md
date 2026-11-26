@@ -1,9 +1,11 @@
 # JSON Schemas
 
-One schema for each of the fifteen kinds of record (`apps.schema.json`, `people.schema.json`
-and so on, with `features.schema.json`, `flows.schema.json`, `data.schema.json`,
-`rules.schema.json`, the rules of a team's own, `context.schema.json`, the lines of context,
-and `changes.schema.json`, a change), and one for the marker (`seefore.schema.json`). The
+One schema for each of the seventeen kinds of record (`apps.schema.json`, `people.schema.json`
+and so on, with `repositories.schema.json`, a repository other than the model's own,
+`features.schema.json`, `flows.schema.json`, `data.schema.json`, `rules.schema.json`, the
+rules of a team's own, `context.schema.json`, the lines of context, `changes.schema.json`, a
+change, and `reviews.schema.json`, the review of a change), and one for the marker
+(`seefore.schema.json`). The
 schema of a change refers to the others by their file names, for the records under `add`;
 under `update` it holds the keys and leaves their values to `seefore check`. They are
 written from the `zod` shapes in `src/model/records.ts` by `npm run schema`; a test fails
@@ -18,4 +20,4 @@ the YAML extension, in `.vscode/settings.json` of the model:
       "<path>/schema/people.schema.json": "people/*.yaml"
     }
 
-Add a line for each of the other eleven folders in the same way.
+Add a line for each of the other fifteen folders in the same way.

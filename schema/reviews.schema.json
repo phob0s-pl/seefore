@@ -37,7 +37,7 @@
             "type": "array",
             "items": {
               "type": "string",
-              "pattern": "^(?:need|(?:people|systems|apps|stores|components|connections|infrastructure|owners|technologies|features|flows|data|rules|context)\\/[a-z][a-z0-9]*(?:-[a-z0-9]+)*|flows\\/[a-z][a-z0-9]*(?:-[a-z0-9]+)*#[a-z][a-z0-9]*(?:-[a-z0-9]+)*)$"
+              "pattern": "^(?:need|(?:people|systems|apps|stores|components|connections|infrastructure|owners|technologies|repositories|features|flows|data|rules|context)\\/[a-z][a-z0-9]*(?:-[a-z0-9]+)*|flows\\/[a-z][a-z0-9]*(?:-[a-z0-9]+)*#[a-z][a-z0-9]*(?:-[a-z0-9]+)*)$"
             },
             "description": "Where to look: one to three addresses, the nearest first, none twice. A record is `folder/id`, a step of a flow `flows/<id>#<step>`, the need the word `need`."
           },

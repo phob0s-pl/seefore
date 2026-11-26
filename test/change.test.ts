@@ -55,7 +55,7 @@ test('a record is named by its path, a folder and an id, and a change names no c
       'change-path',
       'error',
       5,
-      '`boxes/worker` is not the path of a record: there is no folder `boxes`. The folders are `people`, `systems`, `apps`, `stores`, `components`, `connections`, `infrastructure`, `owners`, `technologies`, `features`, `flows`, `data`, `rules` and `context`.',
+      '`boxes/worker` is not the path of a record: there is no folder `boxes`. The folders are `people`, `systems`, `apps`, `stores`, `components`, `connections`, `infrastructure`, `owners`, `technologies`, `repositories`, `features`, `flows`, `data`, `rules` and `context`.',
     ],
     ['change-path', 'error', 6, '`apps/Worker` is not the path of a record. `Worker` is not an id: an id is written in lowercase, like `worker`.'],
     ['change-path', 'error', 7, '`changes/other` names a change. A change adds, updates and removes records of the model, and no change.'],
@@ -66,11 +66,11 @@ test('a record is named by its path, a folder and an id, and a change names no c
 test('a record under add is held by the shape of its folder at its own line, and a key under update is one of its kind', () => {
   expect(said('add:\n  apps/app-worker:\n    name: Worker\n    colour: red\n  stores/store-entries:\n    in: system-shop\n')).toEqual([
     ['key-missing', 'error', 5, '`in` is missing from `apps/app-worker`.'],
-    ['key-unknown', 'error', 6, '`colour` is not a key of `apps/app-worker`. Its keys are `name`, `in`, `only`, `description`, `kind`, `technology` and `owner`.'],
+    ['key-unknown', 'error', 6, '`colour` is not a key of `apps/app-worker`. Its keys are `name`, `in`, `only`, `description`, `kind`, `technology`, `owner` and `repository`.'],
     ['key-missing', 'error', 8, '`name` is missing from `stores/store-entries`.'],
   ]);
   expect(said('update:\n  apps/app-api:\n    colour: red\n  stores/store-orders: {}\n  systems/system-shop: Sells more.\n')).toEqual([
-    ['key-unknown', 'error', 5, '`colour` is not a key of an app. Its keys are `name`, `in`, `only`, `description`, `kind`, `technology` and `owner`.'],
+    ['key-unknown', 'error', 5, '`colour` is not a key of an app. Its keys are `name`, `in`, `only`, `description`, `kind`, `technology`, `owner` and `repository`.'],
     ['value-too-small', 'error', 6, '`stores/store-orders` under `update` names no key.'],
     ['value-wrong-kind', 'error', 7, '`systems/system-shop` under `update` must be a mapping: the keys of the record that change.'],
   ]);
@@ -227,7 +227,7 @@ test('a decided change is held in its form alone: nothing against the model, and
   expect(said('status: applied\nadd:\n  worker: {name: Worker}\n  apps/app-worker: {name: Worker}\nupdate:\n  apps/app-api: {colour: red}\n')).toEqual([
     ['change-path', 'error', 5, '`worker` is not the path of a record. A path is a folder and an id, as `apps/app-ledger`.'],
     ['key-missing', 'error', 6, '`in` is missing from `apps/app-worker`.'],
-    ['key-unknown', 'error', 8, '`colour` is not a key of an app. Its keys are `name`, `in`, `only`, `description`, `kind`, `technology` and `owner`.'],
+    ['key-unknown', 'error', 8, '`colour` is not a key of an app. Its keys are `name`, `in`, `only`, `description`, `kind`, `technology`, `owner` and `repository`.'],
   ]);
 });
 

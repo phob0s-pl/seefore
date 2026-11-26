@@ -3,6 +3,7 @@ import { parse } from 'yaml';
 import { changeMark } from '../src/model/mark.ts';
 import { readModel } from '../src/model/read.ts';
 import type { SourceFile } from '../src/model/read.ts';
+import { removeRecords } from '../src/model/remove.ts';
 import { readRenames, renameRecords } from '../src/model/rename.ts';
 import type { Rename, Renamed } from '../src/model/rename.ts';
 
@@ -248,6 +249,29 @@ test("a change's paths and fields, and a review's addresses, are rewritten; an i
     'people/person-courier.yaml people/person-messenger.yaml 0',
     'reviews/orders-by-post.yaml reviews/orders-by-post.yaml 3',
   ]);
+});
+
+test('a repository is renamed where a system, an app and a change name it, and is not removed while one names it', () => {
+  const model = [
+    MARKER,
+    file('systems/system-shop', 'name: Shop\nrepository: repo-shop\n'),
+    file('apps/app-api', 'name: API\nin: system-shop\nrepository: "repo-shop"\n'),
+    file('repositories/repo-shop', 'name: shop\nworkspace: true\n'),
+    file('repositories/repo-deploy', 'name: deploy\n'),
+    file('changes/a-worker', 'name: A worker\nprompt: Add a worker.\nadd:\n  apps/app-worker: {name: Worker, in: system-shop, repository: repo-shop}\nupdate:\n  repositories/repo-shop: {url: https://example.org/tea/shop}\n'),
+  ];
+  expect(problems(model)).toEqual([]);
+  const done = renamed(model, 'repo-shop repo-tea-shop');
+  expect(textAt(done.files, 'repositories/repo-tea-shop.yaml')).toBe('name: shop\nworkspace: true\n');
+  expect(textAt(done.files, 'systems/system-shop.yaml')).toBe('name: Shop\nrepository: repo-tea-shop\n');
+  expect(textAt(done.files, 'apps/app-api.yaml')).toBe('name: API\nin: system-shop\nrepository: "repo-tea-shop"\n');
+  expect(textAt(done.files, 'changes/a-worker.yaml')).toBe('name: A worker\nprompt: Add a worker.\nadd:\n  apps/app-worker: {name: Worker, in: system-shop, repository: repo-tea-shop}\nupdate:\n  repositories/repo-tea-shop: {url: https://example.org/tea/shop}\n');
+  expect(problems(done.files)).toEqual([]);
+  // Removed alone while a part names it, it stays; one that nothing names goes.
+  const today = model.filter((each) => !each.path.startsWith('changes/'));
+  expect(removeRecords(today, ['repo-shop'])).toEqual({ refusals: ['`repo-shop` stays: apps/app-api.yaml:3:13 names it', '`repo-shop` stays: systems/system-shop.yaml:2:13 names it', 'remove what names it in the same call, or change it first'] });
+  expect(removeRecords(today, ['repo-shop', 'system-shop', 'app-api'])).toEqual({ files: ['apps/app-api.yaml', 'repositories/repo-shop.yaml', 'systems/system-shop.yaml'] });
+  expect(removeRecords(today, ['repo-deploy'])).toEqual({ files: ['repositories/repo-deploy.yaml'] });
 });
 
 test('a new word moves the file to its folder, its text as it was', () => {

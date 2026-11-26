@@ -34,6 +34,9 @@ const FIXES: Record<string, string> = {
   'id-invalid': 'Rename the file so that its name, without `.yaml`, is a good id: lowercase letters and digits in groups joined by single hyphens, a letter first, at most 80 characters. Change every field that names the old id.',
   'field-twice': 'Keep one of the two fields, or give each a name of its own.',
   'context-line': 'Give the line one of `must` and `prefer`, and a `why`.',
+  'repository-name': 'Write in `name` the name of the folder a plain clone of the repository makes: the last part of its `url`, without `.git`, as `shop-deploy`.',
+  'repository-url':
+    "Write in `url` where the repository is cloned from: an address begun with `https://`, `http://`, `ssh://` or `git://`, or one of the form `git@host:path`; where the host is one letter, write `ssh://host/path`. Or take `url` out. Where a checkout lies on a machine is never written: with `workspace: true` it lies beside the model's folder, in a folder of its `name`.",
   'change-path': 'Name the record by its folder and its id, as `apps/app-ledger`: the name of its file without `.yaml`.',
   'change-twice': 'Keep the record in one place of the change. A record that is replaced by another takes another id.',
   'change-no-effect': 'Take the line out.',

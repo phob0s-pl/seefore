@@ -72,6 +72,9 @@
         "^technologies/[a-z][a-z0-9]*(?:-[a-z0-9]+)*$": {
           "$ref": "technologies.schema.json"
         },
+        "^repositories/[a-z][a-z0-9]*(?:-[a-z0-9]+)*$": {
+          "$ref": "repositories.schema.json"
+        },
         "^features/[a-z][a-z0-9]*(?:-[a-z0-9]+)*$": {
           "$ref": "features.schema.json"
         },
@@ -115,7 +118,8 @@
               "only",
               "description",
               "external",
-              "owner"
+              "owner",
+              "repository"
             ]
           }
         },
@@ -130,7 +134,8 @@
               "description",
               "kind",
               "technology",
-              "owner"
+              "owner",
+              "repository"
             ]
           }
         },
@@ -214,6 +219,18 @@
             ]
           }
         },
+        "^repositories/[a-z][a-z0-9]*(?:-[a-z0-9]+)*$": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {
+            "enum": [
+              "name",
+              "description",
+              "url",
+              "workspace"
+            ]
+          }
+        },
         "^features/[a-z][a-z0-9]*(?:-[a-z0-9]+)*$": {
           "type": "object",
           "minProperties": 1,
@@ -287,7 +304,7 @@
       "type": "array",
       "items": {
         "type": "string",
-        "pattern": "^(?:people|systems|apps|stores|components|connections|infrastructure|owners|technologies|features|flows|data|rules|context)/[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+        "pattern": "^(?:people|systems|apps|stores|components|connections|infrastructure|owners|technologies|repositories|features|flows|data|rules|context)/[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
       },
       "description": "The records the change removes: the path of each, `folder/id`. What still names one of them is told by the check.",
       "uniqueItems": true

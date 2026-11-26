@@ -46,7 +46,7 @@ test('a line of context is a record of its own, global or about one system, and 
       text: 'name: Shop\ncontext:\n  - must: A.\n    why: B.\n',
     },
   ]);
-  expect(old.problems.map((problem) => [problem.rule, problem.message])).toEqual([['key-unknown', '`context` is not a key of a system. Its keys are `name`, `only`, `description`, `external` and `owner`.']]);
+  expect(old.problems.map((problem) => [problem.rule, problem.message])).toEqual([['key-unknown', '`context` is not a key of a system. Its keys are `name`, `only`, `description`, `external`, `owner` and `repository`.']]);
 });
 
 test('a line has one of must and prefer, and a why: each fault of form is one problem', () => {

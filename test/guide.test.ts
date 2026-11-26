@@ -36,7 +36,7 @@ function keysOf(folder: keyof typeof SHAPES): Set<string> {
   return keys;
 }
 
-test('the topics are the sixteen folders, then the six skills', () => {
+test('the topics are the seventeen folders, then the six skills', () => {
   expect(TOPICS).toEqual([...FOLDERS, 'model', 'flows', 'context', 'change', 'answer', 'review']);
 });
 
@@ -54,8 +54,9 @@ test('a folder: what a record is, the word of its ids, each key needed or not wi
     "apps/app-order-api.yaml, in the model's folder, which is the one that holds `seefore.yaml`.",
   ]);
   expect(apps).toContain('\nKeys:\n  name (needed)\n    What people call it: one line of 1 to 100 characters, with no space at either end.\n  in (needed)\n');
-  // A part's keys end at `owner`: none says where its code lies.
-  expect(apps).toContain('\n  owner (may be left out)\n    The id of the owner, a record in owners/, who answers for the part. Left out, it is that of what\n    the part is in.\n\nExample, apps/app-order-api.yaml:\n');
+  // An app's keys end at `repository`, which names a record and never says where its code lies on a disk.
+  expect(apps).toContain('\n  owner (may be left out)\n    The id of the owner, a record in owners/, who answers for the part. Left out, it is that of what\n    the part is in.\n  repository (may be left out)\n');
+  expect(apps).toContain('\n  repository (may be left out)\n    The id of the repository its code is in, a record in repositories/. Left out, it is that of its\n    system: leave it out where it is the same.\n\nExample, apps/app-order-api.yaml:\n');
   expect(apps).toContain(`\nExample, apps/app-order-api.yaml:\n${EXAMPLES.apps?.text.split('\n').map((line) => `  ${line}`).join('\n')}`);
   // A nested shape shows its keys under the key that holds it.
   expect(text('data')).toContain('\n  fields (may be left out)\n    What it holds: a list of at least one field, each with a `name` that stands once.\n    One thing a data record holds');
@@ -98,7 +99,7 @@ test('every key of every shape is in the guide of its folder, no guide speaks of
 
 test('a skill: the guides of the folders it writes, one after another', () => {
   const heads = (topic: string) => text(topic).split('\n').filter((line) => line.startsWith('# ')).map((line) => line.slice(2, line.indexOf(':')));
-  expect(heads('model')).toEqual(['people', 'systems', 'apps', 'stores', 'components', 'connections', 'infrastructure', 'owners', 'technologies']);
+  expect(heads('model')).toEqual(['people', 'systems', 'apps', 'stores', 'components', 'connections', 'infrastructure', 'owners', 'technologies', 'repositories']);
   expect(heads('flows')).toEqual(['features', 'flows', 'data']);
   expect(heads('context')).toEqual(['context', 'rules']);
   expect(heads('change')).toEqual(['changes']);
@@ -109,12 +110,34 @@ test('a skill: the guides of the folders it writes, one after another', () => {
   expect(model).toContain('\n  name (needed): as in people.\n');
   expect(model).toContain('\n  technology (may be left out): as in apps.\n');
   expect(model.match(/The condition under which the thing is there at all/g)).toHaveLength(1);
-  expect(model.match(/the one that holds/g)).toHaveLength(1);
+  expect(model.replace(/\s+/g, ' ').match(/the one that holds/g)).toHaveLength(1);
   expect(model).toContain(`\nExample, ${EXAMPLES.connections?.path}:\n`);
   // A folder's own guide tells every key in full.
   expect(text('stores')).not.toContain('as in');
   // Its head says which folders the skill writes, and where they lie.
   expect(text('change').split('\n').slice(0, 2)).toEqual(['The skill change writes the folder changes. The folders lie in the model\'s folder, the one that', 'holds `seefore.yaml`. Its guide follows.']);
+});
+
+test('the guide of repositories says what a record is written from and never, what `workspace` means for a search, and the guide of the skill model holds it', () => {
+  const words = (topic: string) => text(topic).replace(/\s+/g, ' ');
+  const repositories = words('repositories');
+  expect(repositories).toContain("# repositories: one repository a file A repository that holds code or deploy files of the system, other than the one the model's folder lies in: that one needs no record.");
+  expect(repositories).toContain('It says which repository to read, and never where a checkout lies on a machine: no path, and no folder inside it.');
+  expect(repositories).toContain('A system or an app whose code is in it names it with `repository`; one that holds only deploy files or documents is named by none.');
+  expect(repositories).toContain("Written from a file that names the repository, as a clone script, a workspace's manifest or a package's own `repository`, or from a person's word; never from an image's name. Its id begins with");
+  expect(repositories).toContain('Its id begins with `repo-` and says what it is, as `repo-shop-deploy`');
+  expect(repositories).toContain('Read it there, and search it by naming that folder: a search begun above it skips a folder that an ignore file names.');
+  expect(repositories).toContain(
+    'url (may be left out) Where it is cloned from: one line of 1 to 200 characters with no space, begun with `https://`, `http://`, `ssh://` or `git://`, or of the form `git@host:path`. Never a path on a disk.',
+  );
+  expect(text('repositories')).toContain(`\nExample, repositories/repo-shop-deploy.yaml:\n${EXAMPLES.repositories?.text.split('\n').map((line) => `  ${line}`).join('\n')}`);
+  // The skill model writes it after the technologies, and a system's key differs from an app's.
+  expect(text('model')).toContain(`\n# repositories: one repository a file\n`);
+  expect(text('model')).toContain(`\nKeys:\n${text('repositories').split('\nKeys:\n')[1]}`);
+  expect(words('systems')).toContain(
+    "repository (may be left out) The id of the repository its code is in, a record in repositories/: written on the system only when the code of all its apps is there, else on each app. Left out when it is the one the model's folder lies in, and when nobody has said.",
+  );
+  expect(EXAMPLES.repositories?.text).toBe(['name: shop-deploy', 'description: The compose file and the scripts that start every app of the shop.', 'url: https://example.org/tea/shop-deploy', 'workspace: true'].join('\n'));
 });
 
 test('the skill answer: the guides of changes and of reviews, each whole, since no key of a change is one of a review; the index names it', () => {
@@ -135,7 +158,7 @@ test('no topic: the topics, a line each; a topic that is not there is an error t
   expect(index).toContain('\n  review          reviews');
   expect(guideText('app')).toEqual({
     error:
-      'There is no topic `app`. The topics are the folders `people`, `systems`, `apps`, `stores`, `components`, `connections`, `infrastructure`, `owners`, `technologies`, `features`, `flows`, `data`, `rules`, `context`, `changes` and `reviews`, and the skills `model`, `flows`, `context`, `change`, `answer` and `review`.',
+      'There is no topic `app`. The topics are the folders `people`, `systems`, `apps`, `stores`, `components`, `connections`, `infrastructure`, `owners`, `technologies`, `repositories`, `features`, `flows`, `data`, `rules`, `context`, `changes` and `reviews`, and the skills `model`, `flows`, `context`, `change`, `answer` and `review`.',
   });
 });
 
@@ -143,7 +166,7 @@ test('the example review bears the mark of the example change in `read`, so that
   expect(EXAMPLES.reviews?.text.split('\n')[0]).toBe(`read: "${changeMark(parse(EXAMPLES.changes?.text ?? ''))}"`);
 });
 
-test('every example is a file of its folder, and all sixteen read together as one model with no problem at all', () => {
+test('every example is a file of its folder, and all seventeen read together as one model with no problem at all', () => {
   expect(Object.keys(EXAMPLES)).toEqual(FOLDERS);
   for (const [folder, example] of Object.entries(EXAMPLES)) expect(example.path).toMatch(new RegExp(`^${folder}/[a-z0-9-]+\\.yaml$`));
   const model = readModel([{ path: 'seefore.yaml', text: 'format: 1\nname: Shop\n' }, ...Object.values(EXAMPLES).map((example) => ({ path: example.path, text: `${example.text}\n` }))]);
