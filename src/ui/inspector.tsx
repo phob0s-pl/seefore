@@ -135,36 +135,44 @@ function Thing({ record, catalogue, under, opens, steps }: { record: ModelRecord
  * the number of the step of this flow it stands at and that step's place in the list, who acts,
  * what happens in that step, and quiet under it the act's condition and the step's description;
  * and whether an act puts it. Under a change, of an item the change marks, `under` holds the mark,
- * the quiet sentences that say what the item is today, and today's life where its acts differ.
+ * the quiet sentences that say what the item is today, and today's life where its acts differ; an
+ * act of today whose step goes with the change says so by `goes`, and its number is today's.
  */
 export type Life = {
   store: string;
-  acts: { does: string; number: number; at: number; by: string; happens: string; only?: string; description?: string }[];
+  acts: { does: string; number: number; at: number; by: string; happens: string; goes?: true; only?: string; description?: string }[];
   put: boolean;
   under?: { mark: 'added' | 'removed' | 'updated'; words: string[]; today?: { acts: Life['acts']; put: boolean } };
 };
 
-/** The rows of a life, and a last row when no act puts the item. */
+/**
+ * The rows of a life, and a last row when no act puts the item. The link of a step that goes says
+ * "was step 4", as the bar's title does; a reader of the screen hears each link name its step.
+ */
 function Acts({ label, acts, put, onStep }: { label: string; acts: Life['acts']; put: boolean; onStep: ((at: number) => void) | undefined }) {
   return (
     <ol className="item-life" aria-label={label}>
-      {acts.map((act, index) => (
-        <li key={index}>
-          <span>
-            {act.does} at{' '}
-            {onStep !== undefined && act.at >= 0 ? (
-              <button type="button" className="item-life-step" onClick={() => onStep(act.at)}>
-                {act.number}
-              </button>
-            ) : (
-              act.number
-            )}{' '}
-            by {act.by}: {act.happens}
-          </span>
-          {act.only !== undefined && <small>{act.only}</small>}
-          {act.description !== undefined && <small>{act.description}</small>}
-        </li>
-      ))}
+      {acts.map((act, index) => {
+        const number = act.goes === true ? `was step ${act.number}` : String(act.number);
+        const step = `${act.goes === true ? 'Was step' : 'Step'} ${act.number}${act.happens !== '' ? `: ${act.happens}` : ''}`;
+        return (
+          <li key={index}>
+            <span>
+              {act.does} at {act.goes === true && 'what '}
+              {onStep !== undefined && act.at >= 0 ? (
+                <button type="button" className="item-life-step" aria-label={step} onClick={() => onStep(act.at)}>
+                  {number}
+                </button>
+              ) : (
+                number
+              )}{' '}
+              by {act.by}: {act.happens}
+            </span>
+            {act.only !== undefined && <small>{act.only}</small>}
+            {act.description !== undefined && <small>{act.description}</small>}
+          </li>
+        );
+      })}
       {!put && <li className="item-life-quiet">Not put in this flow.</li>}
     </ol>
   );

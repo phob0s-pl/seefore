@@ -1,5 +1,5 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { MouseEvent, ReactNode, RefObject } from 'react';
+import { memo, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import type { FocusEvent, MouseEvent, ReactNode, RefObject } from 'react';
 import { BaseEdge, ControlButton, Controls, Handle, MarkerType, Position, ReactFlow, useReactFlow, useViewportStore } from '@xyflow/react';
 import type { Edge, EdgeProps, Node, NodeProps, ReactFlowInstance } from '@xyflow/react';
 import { Layers, Scan, Split } from 'lucide-react';
@@ -85,6 +85,9 @@ function Ends() {
 /** What the small stack on a closed box says, by the depth of the view that opens the box. */
 const INSIDE: Partial<Record<Depth, string>> = { containers: 'Has containers inside', components: 'Has components inside' };
 
+/** What an item is, in words, for a reader of the screen: what a row's look alone says. */
+const IS_WORDS: Record<Row['is'], string> = { hollow: 'not yet touched', kept: 'kept', 'only-read': 'only read', gone: 'gone' };
+
 /**
  * The rows of a store's box, one for each item of the flow, in the order of their first act: a
  * button each, with the data's name, the sign of a condition straight after it, and at the right
@@ -92,17 +95,26 @@ const INSIDE: Partial<Record<Depth, string>> = { containers: 'Has containers ins
  * row bear no word. Under a change, a row the change marks bears the mark's word in place of
  * "only read", in every state, and keeps its rule at the step's own word. diagram.css gives each
  * its look by what it is.
+ *
+ * The pointer over a row says its whole name, which the row may cut. A reader of the screen hears
+ * the row's words, then what its look says: what the item is, "kept" or "not yet touched", and
+ * under a change what the change does to it; and whether it is picked, as a button pressed.
  */
 function Rows({ rows }: { rows: readonly Row[] }) {
+  const said = useId();
   return (
     <div className="diagram-rows">
-      {rows.map((row) => {
+      {rows.map((row, at) => {
         const word = row.word ?? (row.mark !== undefined ? SIGNS[row.mark].word : row.is === 'only-read' ? 'only read' : undefined);
+        const looks = [IS_WORDS[row.is], ...(row.mark !== undefined ? [`${SIGNS[row.mark].word.toLowerCase()} by this change`] : [])].join(', ');
         return (
           <button
             key={row.data}
             type="button"
             className={row.mark !== undefined ? `diagram-row mark-${row.mark}` : 'diagram-row'}
+            title={row.name}
+            aria-describedby={`${said}-${at}`}
+            aria-pressed={row.picked === true}
             data-item={row.data}
             data-is={row.is}
             data-lit={row.word !== undefined ? '' : undefined}
@@ -116,6 +128,9 @@ function Rows({ rows }: { rows: readonly Row[] }) {
               </span>
             )}
             {word !== undefined && <span className="diagram-row-word">{word}</span>}
+            <span id={`${said}-${at}`} hidden>
+              {looks}
+            </span>
           </button>
         );
       })}
@@ -128,13 +143,16 @@ function Rows({ rows }: { rows: readonly Row[] }) {
  * at its top right; diagram.css gives it the band and the wash. A closed box that a deeper view
  * opens has a small stack at its lower right. On the page of a flow a store's box holds a row for
  * each item, beside the box's own card, so that the box can fade by its parts. It is drawn again
- * only when its box or its rows change, not when its class does.
+ * only when its box or its rows change, not when its class does: `data-drawn` counts the times it
+ * is drawn, so that a test holds it, since what it costs is seen in Safari, where none runs.
  */
 const BoxCard = memo(function BoxCard({ data: { box, mark, rows } }: NodeProps<BoxNode>) {
   const inside = box.opens !== undefined ? INSIDE[box.opens] : undefined;
+  const drawn = useRef(0);
+  drawn.current += 1;
   return (
     <>
-      <div className={`architecture-node architecture-node-${box.kind}`} data-id={box.id} data-mark={mark}>
+      <div className={`architecture-node architecture-node-${box.kind}`} data-id={box.id} data-mark={mark} data-drawn={drawn.current}>
         <Ends />
         {mark !== undefined && <MarkSign mark={mark} />}
         {inside !== undefined && (
@@ -371,7 +389,8 @@ function Legend() {
  * look otherwise. A box with rows fades by its parts: its card to a quarter, a row that the flow
  * has touched to 0.72, a hollow row not at all. A click on a row picks its item, by `onItem`, and
  * not its box: the mouse means a row before the box it is in, its hover is its box's, the field
- * slides to keep its box clear of the panel, and a double click brings its box.
+ * slides to keep its box clear of the panel, and a double click brings its box. A row that the
+ * keys focus, the field slides into sight.
  *
  * Under a change, `marks` says what the change does to each box, frame and line: a box bears the
  * colour inside its border, a frame on its outline, a line on its stroke and its heads, and a
@@ -646,6 +665,27 @@ export function Diagram({
   };
 
   /**
+   * A row that the keys focus is brought into sight: the field slides, at its zoom, just enough
+   * that the row stands whole inside it, clear of the panel while one is open. A row the mouse
+   * presses is not moved: it is in sight. The browser has scrolled the field to the row, which
+   * React Flow takes back at once: the row is found where it stands with no scroll.
+   */
+  const sight = (event: FocusEvent) => {
+    const row = event.target;
+    if (flow === undefined || root.current === null || !(row instanceof HTMLElement) || !row.classList.contains('diagram-row') || !row.matches(':focus-visible')) return;
+    root.current.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    const field = root.current.getBoundingClientRect();
+    const at = row.getBoundingClientRect();
+    const right = field.right - (open ? Math.min(PANEL.width, field.width - 2 * PANEL.margin) + PANEL.margin + PANEL.gap : 0);
+    const into = (from: number, to: number, low: number, high: number) => (from < low + FIT.padding ? low + FIT.padding - from : to > high - FIT.padding ? high - FIT.padding - to : 0);
+    const dx = into(at.left, at.right, field.left, right);
+    const dy = into(at.top, at.bottom, field.top, field.bottom);
+    if (dx === 0 && dy === 0) return;
+    const { x, y, zoom } = flow.getViewport();
+    void flow.setViewport({ x: x + dx, y: y + dy, zoom }, glide());
+  };
+
+  /**
    * A click on the field: one picks what it means, a box, a line or a frame, or a row's item, or
    * clears the pick. The second of a double click brings what the first one meant, whatever lies
    * under the mouse by then: the pick's panel, or the slide clear of it, may have changed that. A
@@ -726,6 +766,7 @@ export function Diagram({
             settle();
           }}
           onMouseMove={follow}
+          onFocus={sight}
           onMouseLeave={() => {
             mouse.current = undefined;
             hoverOn(undefined);

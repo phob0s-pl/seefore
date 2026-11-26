@@ -924,6 +924,59 @@ test.skipIf(!HAS_CHROME).concurrent(
   20_000,
 );
 
+/**
+ * Each box: its id, what its rows look like, how many times it was drawn, as `data-drawn` counts
+ * it, and whether its card is the one held when the walk began: a box made anew counts from one.
+ */
+const DRAWS = `[...document.querySelectorAll('.react-flow__node-box')].map((node) => {
+  const card = node.querySelector('.architecture-node');
+  const rows = [...node.querySelectorAll('.diagram-row')].map((row) => [row.dataset.item, row.dataset.is, row.dataset.mark ?? null, row.hasAttribute('data-lit'), row.hasAttribute('data-picked'), row.querySelector('.diagram-row-word')?.textContent ?? null]);
+  return [node.dataset.id, JSON.stringify(rows), Number(card.dataset.drawn), window.held?.get(node.dataset.id) === card];
+})`;
+type Draws = [string, string, number, boolean][];
+/** The boxes once two readings a fifth of a second apart agree: React Flow draws a node a moment after the page hands it. */
+async function drawsOf(send: Send): Promise<Draws> {
+  let last = '';
+  for (let tries = 0; tries < 30; tries++) {
+    const now = JSON.stringify((await send('Runtime.evaluate', { expression: DRAWS, returnByValue: true })).result?.result?.value ?? null);
+    if (now === last) return JSON.parse(now) as Draws;
+    last = now;
+    await pause(200);
+  }
+  throw new Error('The boxes did not come to rest.');
+}
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME ? 'a change of step draws again only the boxes whose rows look otherwise: not a box whose rows look as they did, nor one whose class alone changes' : `skipped: there is no Chrome at ${CHROME}`,
+  () =>
+    inKeptShop(async (send) => {
+      await send('Runtime.evaluate', { expression: `window.held = new Map([...document.querySelectorAll('.react-flow__node-box')].map((node) => [node.dataset.id, node.querySelector('.architecture-node')]))` });
+      let before = await drawsOf(send);
+      expect(before.map(([id]) => id).sort()).toEqual(['app-order-api', 'person-customer', 'store-orders', 'store-outbox']);
+      let again = 0;
+      // From before the first step, each step down to Ends: the step lights and fades the boxes it does, and changes the look of some rows.
+      for (const place of ['#asks', '#writes', '#places', '#looks-up', '#takes', '#answers', 'ends']) {
+        await press(send, 'ArrowDown', 40);
+        if (place === 'ends') await waitFor(send, `document.querySelector('[data-row="ends"].current') !== null`);
+        else await flowAt(send, place);
+        const after = await drawsOf(send);
+        for (const [id, rows, drawn, kept] of after) {
+          const [, was, times] = before.find((each) => each[0] === id) ?? [id, '', 0];
+          expect(kept, `the box ${id} at ${place} is the one it was`).toBe(true);
+          if (rows === was) expect(drawn, `the box ${id}, whose rows look as they did, at ${place}`).toBe(times);
+          else {
+            expect(drawn, `the box ${id}, whose rows look otherwise, at ${place}`).toBeGreaterThan(times);
+            again += 1;
+          }
+        }
+        before = after;
+      }
+      // The walk changed the look of rows where a step lit them or let them go: the outbox's at steps 2, 3, 5 and 6, the orders' at 3, 4 and 5.
+      expect(again).toBe(7);
+    }),
+  20_000,
+);
+
 /** The panel of an item: its small line, its name, its heading, its life row by row, its description, and the rows picked. */
 const LIFE = `(() => {
   const panel = document.querySelector('aside[aria-label="Diagram inspector"]');
@@ -1591,10 +1644,10 @@ test.skipIf(!HAS_CHROME).concurrent(
       await flowAt(send, '');
       await click(send, await centreOf(send, '[data-row="step"][data-step="saves"]'));
       const saves = await flowAt(send, '#saves');
-      // It is shown as it is today, and lights the line it walks today.
+      // It is shown as it is today, and lights the line it walks today; what it puts, by the item that goes.
       expect(saves).toMatchObject({ current: 'saves', stepped: ['app-order-api->store-orders'] });
       expect(saves.bar).toContain('Was step 2 Saves the order Removed');
-      expect(saves.bar).toContain('Order API to Orders Only when the customer has paid Data Order details');
+      expect(saves.bar).toContain('Order API to Orders Only when the customer has paid Puts into Orders Order details');
       await press(send, 'ArrowDown', 40);
       const typesIn = await flowAt(send, '#types-in');
       expect(typesIn.current).toBe('types-in');
@@ -1857,10 +1910,32 @@ async function markedAt(send: Send, hash: string, count = 4): Promise<MarkedRow[
 }
 const GREEN = 'rgb(101, 213, 128)';
 const RED = 'rgb(255, 117, 109)';
+const YELLOW = 'rgb(255, 214, 10)';
+
+/** The panel of an item under a change: its name, its life, what the change does to it, the sentences of what it is today, and today's life. */
+const UNDER = `(() => {
+  const panel = document.querySelector('aside[aria-label="Diagram inspector"]');
+  const rows = (label) => [...(panel?.querySelectorAll('ol[aria-label="' + label + '"] > li') ?? [])].map((row) => row.innerText.replace(/\\s+/g, ' ').trim());
+  return panel !== null && panel.querySelector('ol[aria-label="Life"]') !== null && {
+    name: panel.querySelector('h2')?.textContent,
+    life: rows('Life'),
+    under: panel.querySelector('.item-under h3')?.textContent ?? null,
+    words: [...panel.querySelectorAll('.item-under-words')].map((words) => words.textContent),
+    today: rows('Today'),
+  };
+})()`;
+/** What the panel of the item of a row says under a change, once it names the data, and the panel closed again so that it covers no row. */
+async function underOf(send: Send, row: string, name: string): Promise<unknown> {
+  await click(send, await centreOf(send, row));
+  const read = await waitFor(send, `(() => { const read = ${UNDER}; return read && read.name === ${JSON.stringify(name)} && read; })()`);
+  await press(send, 'Escape', 27);
+  expect(await closed(send)).toBe(true);
+  return read;
+}
 
 test.skipIf(!HAS_CHROME).concurrent(
   HAS_CHROME
-    ? 'under a change a row bears its mark: a hollow row says "Added", and "Put" at its step with its rule; a removed row is red with its word, and "Read" at the step that goes; the Result view has no mark'
+    ? 'under a change a row bears its mark: a hollow row says "Added", and "Put" at its step with its rule; a removed row is red with its word, and "Read" at the step that goes, whose bar says so as today has it; the Result view has no mark'
     : `skipped: there is no Chrome at ${CHROME}`,
   () =>
     inFilingShop(async (send) => {
@@ -1882,9 +1957,10 @@ test.skipIf(!HAS_CHROME).concurrent(
       expect(files.find((row) => row[1] === 'Request')).toEqual(['store-orders', 'Request', 'kept', 'added', 'Put', GREEN, 'rgba(255, 255, 255, 0.95)']);
       // The customer, only read today, stays red with its word.
       expect(files.find((row) => row[1] === 'Customer')).toEqual(['store-orders', 'Customer', 'only-read', 'removed', 'Removed', RED, RED]);
-      // At the step that goes, the removed row is read as today has it: the step reads it.
+      // At the step that goes, the removed row is read as today has it: the step reads it, and its bar says so, as on the flow's own page.
       await stepTo(send, 'looks-up');
       expect((await markedAt(send, '#looks-up')).find((row) => row[1] === 'Customer')?.slice(0, 5)).toEqual(['store-orders', 'Customer', 'only-read', 'removed', 'Read']);
+      expect(await barAt(send, '#looks-up', 'Reads from Orders Customer')).toEqual(['Order API to Orders', 'Reads from Orders Customer']);
       // The Result view: the rows of the flow as it would be, none marked.
       await stepTo(send, 'files');
       await flowAt(send, '#files');
@@ -1918,24 +1994,7 @@ test.skipIf(!HAS_CHROME).concurrent(
       expect((await flowAt(send, '#takes')).bar).toContain('4 of 6 Takes the receipt out Updated');
 
       // The panel of each marked item, after its life.
-      const UNDER = `(() => {
-        const panel = document.querySelector('aside[aria-label="Diagram inspector"]');
-        const rows = (label) => [...(panel?.querySelectorAll('ol[aria-label="' + label + '"] > li') ?? [])].map((row) => row.innerText.replace(/\\s+/g, ' ').trim());
-        return panel !== null && panel.querySelector('ol[aria-label="Life"]') !== null && {
-          name: panel.querySelector('h2')?.textContent,
-          life: rows('Life'),
-          under: panel.querySelector('.item-under h3')?.textContent ?? null,
-          words: [...panel.querySelectorAll('.item-under-words')].map((words) => words.textContent),
-          today: rows('Today'),
-        };
-      })()`;
-      const panelOf = async (data: string, name: string) => {
-        await click(send, await centreOf(send, `.diagram-row[data-item="${data}"]`));
-        const read = await waitFor(send, `(() => { const read = ${UNDER}; return read && read.name === ${JSON.stringify(name)} && read; })()`);
-        await press(send, 'Escape', 27);
-        expect(await closed(send)).toBe(true);
-        return read;
-      };
+      const panelOf = (data: string, name: string) => underOf(send, `.diagram-row[data-item="${data}"]`, name);
       expect(await panelOf('data-request', 'Request')).toEqual({
         name: 'Request',
         life: ['Put at 5 by Order API: Files the request'],
@@ -1943,10 +2002,10 @@ test.skipIf(!HAS_CHROME).concurrent(
         words: ['Today: not in this store, by what the flow says.'],
         today: [],
       });
-      // A removed item: its life is today's, by the number the step that goes bore.
+      // A removed item: its life is today's, by the number the step that goes bore, which it says.
       expect(await panelOf('data-customer', 'Customer')).toEqual({
         name: 'Customer',
-        life: ['Read at 4 by Order API: Looks up the customer', 'Not put in this flow.'],
+        life: ['Read at what was step 4 by Order API: Looks up the customer', 'Not put in this flow.'],
         under: 'Under this change: Removed',
         words: ['With this change: not in this store, by what the flow says.'],
         today: [],
@@ -1959,6 +2018,215 @@ test.skipIf(!HAS_CHROME).concurrent(
         words: ['Today:'],
         today: ['Put at 2 by Order API: Puts the receipt in the outbox', 'Read at 4 by Order API: Takes the receipt out', 'Taken out at 4 by Order API: Takes the receipt out The receipt leaves the outbox as it is sent.'],
       });
+    }),
+  20_000,
+);
+
+/**
+ * A flow that notes a request, in a copy of the kept shop, under a change that says the way. Today
+ * two steps name the request in the outbox and say no way, the second the customer too; with the
+ * change they write them there. The step that keeps the receipt is renamed, with a description of
+ * its own, and only reads it; the customer is looked up no more; a step in the Order API names the
+ * request now; the flow ends otherwise; and the order's details say who sent it.
+ */
+const SAYING = '/changes/saying-the-way/records/flows/flow-noting-a-request';
+
+/** The flow that notes a request under the change that says the way, once Chrome shows its Changes view. */
+async function inSayingShop(run: (send: Send, address: string) => Promise<void>) {
+  const folder = await keptShop();
+  const files: Record<string, string> = {
+    'flows/flow-noting-a-request.yaml': [
+      'name: Noting a request',
+      'starts: A customer asks for something',
+      'ends: The request is noted',
+      'feature: feature-ordering',
+      'steps:',
+      '  - {id: notes, does: connection-api-uses-outbox, name: Notes the request, data: [data-request]}',
+      '  - {id: notes-again, does: connection-api-uses-outbox, name: Notes it again, data: [data-request, data-customer]}',
+      '  - {id: keeps, does: connection-api-uses-outbox, name: Keeps the receipt, data: [data-receipt], access: write, description: The receipt waits in the outbox.}',
+      '  - {id: looks-up, does: connection-api-reads-orders, name: Looks up the customer, data: [data-customer]}',
+      '  - {id: waits, does: app-order-api, name: Waits for the post}',
+      '  - {id: reads-order, does: connection-api-reads-orders, name: Reads the order, data: [data-order-details]}',
+      '',
+    ].join('\n'),
+    'changes/saying-the-way.yaml': [
+      'name: Saying the way',
+      "prompt: The request is written to the outbox, the receipt only read there, and the order's details say who sent it.",
+      'update:',
+      '  data/data-order-details:',
+      '    description: What the customer orders, and who sent it.',
+      '  flows/flow-noting-a-request:',
+      '    ends: The request is noted in the outbox',
+      '    steps:',
+      '      - {id: notes, does: connection-api-uses-outbox, name: Notes the request, data: [data-request], access: write}',
+      '      - {id: notes-again, does: connection-api-uses-outbox, name: Notes it again, data: [data-request, data-customer], access: write}',
+      '      - {id: keeps, does: connection-api-uses-outbox, name: Reads the receipt, data: [data-receipt], access: read, description: The receipt is read where it waits.}',
+      '      - {id: looks-up, does: connection-api-reads-orders, name: Looks up the customer}',
+      '      - {id: waits, does: app-order-api, name: Waits for the post, data: [data-request]}',
+      '      - reads-order',
+      '',
+    ].join('\n'),
+  };
+  for (const [path, text] of Object.entries(files)) await writeFile(join(folder, path), text);
+  try {
+    await inChrome(async (send, address) => {
+      await send('Page.navigate', { url: `${address}${SAYING}` });
+      await flowAt(send, '');
+      await run(send, address);
+    }, folder);
+  } finally {
+    await rm(folder, { recursive: true, force: true });
+  }
+}
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME
+    ? "under a change an added item that today's steps name with no way says which, one whose data record the change updates says so and is yellow, and today's life reads a renamed step as today has it"
+    : `skipped: there is no Chrome at ${CHROME}`,
+  () =>
+    inSayingShop(async (send) => {
+      // Before the first step: each row with its mark, its word, and the colour of its rule and of its word.
+      expect((await markedAt(send, '', 5)).map((row) => [row[0], row[1], row[3], row[4], row[5], row[6]])).toEqual([
+        ['store-orders', 'Customer', 'removed', 'Removed', RED, RED],
+        ['store-orders', 'Order details', 'updated', 'Updated', YELLOW, YELLOW],
+        ['store-outbox', 'Request', 'added', 'Added', GREEN, GREEN],
+        ['store-outbox', 'Customer', 'added', 'Added', GREEN, GREEN],
+        ['store-outbox', 'Receipt', 'updated', 'Updated', YELLOW, YELLOW],
+      ]);
+      // Added where two steps of today, or one, name it here and say no way.
+      expect(await underOf(send, '.react-flow__node[data-id="store-outbox"] .diagram-row[data-item="data-request"]', 'Request')).toEqual({
+        name: 'Request',
+        life: ['Put at 1 by Order API: Notes the request', 'Put at 2 by Order API: Notes it again'],
+        under: 'Under this change: Added',
+        words: ['Today: not drawn. Steps 1 and 2 name it and say no way.'],
+        today: [],
+      });
+      expect(await underOf(send, '.react-flow__node[data-id="store-outbox"] .diagram-row[data-item="data-customer"]', 'Customer')).toMatchObject({
+        life: ['Put at 2 by Order API: Notes it again'],
+        words: ['Today: not drawn. Step 2 names it and says no way.'],
+      });
+      // Updated by its data record alone: its acts are as they were.
+      expect(await underOf(send, '.diagram-row[data-item="data-order-details"]', 'Order details')).toEqual({
+        name: 'Order details',
+        life: ['Read at 6 by Order API: Reads the order', 'Not put in this flow.'],
+        under: 'Under this change: Updated',
+        words: ['The change updates the data record.'],
+        today: [],
+      });
+      // Updated by its acts, at a step the change renames and describes anew: its life says the step as it would be, today's life as it is.
+      expect(await underOf(send, '.diagram-row[data-item="data-receipt"]', 'Receipt')).toEqual({
+        name: 'Receipt',
+        life: ['Read at 3 by Order API: Reads the receipt The receipt is read where it waits.', 'Not put in this flow.'],
+        under: 'Under this change: Updated',
+        words: ['Today:'],
+        today: ['Put at 3 by Order API: Keeps the receipt The receipt waits in the outbox.'],
+      });
+    }),
+  20_000,
+);
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME
+    ? 'under a change the bar says "Taken out" over today\'s words where a step names nothing now, and "Today: nothing" where today\'s named nothing; the button on goes from the last step to Ends, whose sentence the change rewrites with today\'s under it, and the button back returns'
+    : `skipped: there is no Chrome at ${CHROME}`,
+  () =>
+    inSayingShop(async (send) => {
+      const lines = `[...document.querySelectorAll('section[aria-label="Current step"] .flow-bar-lines > p')].map((line) => [line.innerText.replace(/\\s+/g, ' ').trim(), line.classList.contains('flow-line-changed')])`;
+      // The customer is looked up no more: the step names nothing now.
+      await stepTo(send, 'looks-up');
+      await barAt(send, '#looks-up', 'Taken out');
+      expect(await waitFor(send, lines)).toEqual([
+        ['Order API to Orders', false],
+        ['Taken out', true],
+        ['Today: Customer, read', false],
+      ]);
+      // The step in the Order API names the request, and named nothing today.
+      await stepTo(send, 'waits');
+      await barAt(send, '#waits', 'Data Request');
+      expect(await waitFor(send, lines)).toEqual([
+        ['In Order API', false],
+        ['Data Request', true],
+        ['Today: nothing', false],
+      ]);
+      // From the last step the button on goes to Ends, whose sentence has the rule and today's under it, and goes no farther.
+      await stepTo(send, 'reads-order');
+      await flowAt(send, '#reads-order');
+      await click(send, await centreOf(send, 'button[aria-label="Next step"]'));
+      expect(await waitFor(send, `location.hash === '' && document.querySelector('[data-row="ends"].current') !== null && document.querySelector('button[aria-label="Next step"]').disabled && ${lines}`)).toEqual([
+        ['The request is noted in the outbox', true],
+        ['Today: The request is noted', false],
+        ['Kept Outbox Request Customer', false],
+        ['Only read Outbox Receipt Orders Order details', false],
+      ]);
+      await click(send, await centreOf(send, 'button[aria-label="Previous step"]'));
+      expect((await flowAt(send, '#reads-order')).current).toBe('reads-order');
+    }),
+  20_000,
+);
+
+/** A node of the tree that Chrome gives a reader of the screen, as far as the test reads it. */
+type Heard = { name?: { value: string }; description?: { value: string }; properties?: { name: string; value: { value: unknown } }[] };
+/** What a reader of the screen is told of each element a selector finds: its name, its description, and whether it is pressed. */
+async function heard(send: Send, selector: string): Promise<[string, string | null, unknown][]> {
+  await send('Accessibility.enable');
+  const count = (await waitFor(send, `document.querySelectorAll(${JSON.stringify(selector)}).length`)) as number;
+  const told: [string, string | null, unknown][] = [];
+  for (let at = 0; at < count; at++) {
+    const found = (await send('Runtime.evaluate', { expression: `document.querySelectorAll(${JSON.stringify(selector)})[${at}]` })) as unknown as { result?: { result?: { objectId?: string } } };
+    const tree = (await send('Accessibility.getPartialAXTree', { objectId: found.result?.result?.objectId, fetchRelatives: false })) as unknown as { result?: { nodes?: Heard[] } };
+    const node = tree.result?.nodes?.[0];
+    told.push([node?.name?.value ?? '', node?.description?.value ?? null, node?.properties?.find((each) => each.name === 'pressed')?.value.value ?? null]);
+  }
+  return told;
+}
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME
+    ? "a row tells a reader of the screen what it is, what its look says and whether it is picked, and the pointer its whole name; a link of an item's life names its step; a row the keys reach comes into sight"
+    : `skipped: there is no Chrome at ${CHROME}`,
+  () =>
+    inSayingShop(async (send, address) => {
+      // Under the change, before the first step: each row is not yet touched, and says what the change does to it.
+      expect(await heard(send, '.diagram-row')).toEqual([
+        ['Customer Removed', 'not yet touched, removed by this change', 'false'],
+        ['Order details Updated', 'not yet touched, updated by this change', 'false'],
+        ['Request Added', 'not yet touched, added by this change', 'false'],
+        ['Customer Added', 'not yet touched, added by this change', 'false'],
+        ['Receipt Updated', 'not yet touched, updated by this change', 'false'],
+      ]);
+      // At its own step a row bears the step's word, and its mark is said all the same.
+      await stepTo(send, 'notes');
+      await markedAt(send, '#notes', 5);
+      expect((await heard(send, '.diagram-row'))[2]).toEqual(['Request Put', 'kept, added by this change', 'false']);
+
+      // On a flow's own page: kept, only read and gone, each with the sign's words or the row's word; the whole name is the title.
+      await send('Page.navigate', { url: `${address}/flows/flow-sending-a-receipt#takes` });
+      await rowsAt(send, '#takes');
+      expect(await heard(send, '.diagram-row')).toEqual([
+        ['Order details Only when the customer has paid', 'kept', 'false'],
+        ['Customer only read', 'only read', 'false'],
+        ['Receipt Gone', 'gone', 'false'],
+      ]);
+      expect(await waitFor(send, `[...document.querySelectorAll('.diagram-row')].map((row) => row.title)`)).toEqual(['Order details', 'Customer', 'Receipt']);
+      // A picked row is pressed, and each link of its life names its step.
+      await click(send, await centreOf(send, '.diagram-row[data-item="data-receipt"]'));
+      await lifeOf(send, 'Receipt');
+      expect((await heard(send, '.diagram-row'))[2]).toEqual(['Receipt Gone', 'gone', 'true']);
+      expect((await heard(send, '.item-life-step')).map(([name]) => name)).toEqual(['Step 2: Puts the receipt in the outbox', 'Step 5: Takes the receipt out', 'Step 5: Takes the receipt out']);
+
+      // Close in on the field's top left, where no row is, and Tab to the first row: the field slides it into sight, at its zoom.
+      await send('Page.navigate', { url: `${address}/flows/flow-sending-a-receipt` });
+      await rowsAt(send, '');
+      const corner = await settled(send, EMPTY);
+      for (let turns = 0; turns < 12; turns++) await send('Input.dispatchMouseEvent', { type: 'mouseWheel', x: corner.x, y: corner.y, deltaX: 0, deltaY: -150 });
+      const { zoom } = await rested(send);
+      const sight = (row: string) =>
+        `(() => { const field = document.querySelector('.react-flow').getBoundingClientRect(); const box = ${row}?.getBoundingClientRect(); return box ? box.left >= field.left && box.right <= field.right && box.top >= field.top && box.bottom <= field.bottom : null; })()`;
+      expect((await send('Runtime.evaluate', { expression: sight(`document.querySelector('.diagram-row')`), returnByValue: true })).result?.result?.value).toBe(false);
+      const ROW_FOCUSED = `document.activeElement?.classList.contains('diagram-row') ?? false`;
+      for (let presses = 0; presses < 80 && (await send('Runtime.evaluate', { expression: ROW_FOCUSED, returnByValue: true })).result?.result?.value !== true; presses++) await press(send, 'Tab', 9);
+      expect(await waitFor(send, `document.activeElement === document.querySelector('.diagram-row') && ${sight('document.activeElement')}`)).toBe(true);
+      expect((await rested(send)).zoom).toBe(zoom);
     }),
   20_000,
 );
