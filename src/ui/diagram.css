@@ -274,6 +274,25 @@
   border-color: var(--accent);
   box-shadow: 0 0 0 1px var(--accent);
 }
+/* Under a change, a row the change marks: a rule of 3 pixels at its left, and the mark's word at
+   its right, both in the mark's colour (`.mark-added` and the others, below), in every state, also
+   while the row is hollow. At its own step the row bears the step's word, lit, and keeps the rule. */
+.diagram-row[data-mark] {
+  position: relative;
+}
+.diagram-row[data-mark]::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: 1px;
+  width: 3px;
+  border-radius: 1.5px;
+  background: var(--mark);
+}
+.diagram-row[data-mark]:not([data-lit]) .diagram-row-word {
+  color: var(--mark);
+}
 /* A frame keeps a quiet dashed outline: its colour would compete with the boxes inside it. */
 .architecture-boundary {
   border: 1.5px dashed var(--text-faint);

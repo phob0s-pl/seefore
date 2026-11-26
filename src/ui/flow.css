@@ -546,6 +546,21 @@
 .item-life-step:hover {
   color: var(--link-hover);
 }
+/* Under a change, after the life, what the change does to the item, its word in the mark's colour,
+   and quiet what the item is today: a sentence, or today's life, a row an act. */
+.diagram-inspector .item-under {
+  margin-bottom: 16px;
+}
+.item-under-mark {
+  color: var(--mark);
+}
+.diagram-inspector .item-under-words {
+  margin: 0 0 8px;
+  color: var(--text-tertiary);
+}
+.item-under > .item-life {
+  margin-bottom: 0;
+}
 
 /* The step's line on the diagram: lit as a picked line is; its box: outlined as a picked box. */
 .canvas-frame .react-flow__edge.stepped .react-flow__edge-path {

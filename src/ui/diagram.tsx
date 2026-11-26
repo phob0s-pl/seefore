@@ -17,9 +17,10 @@ import { CanvasFrame } from './ui.tsx';
 /**
  * A row in a store's box on the page of a flow: an item of the flow, by its data's id and name;
  * what it is at the place the page stands at, and the step's word where the current step touches
- * it (C5b); the words of its condition, where it stands under one; and whether it is picked.
+ * it (C5b); the words of its condition, where it stands under one; under a change, what the change
+ * does to it, where it does something; and whether it is picked.
  */
-export type Row = { data: string; name: string; condition?: string; picked?: true } & ItemAt;
+export type Row = { data: string; name: string; condition?: string; mark?: Exclude<Mark, 'same'>; picked?: true } & ItemAt;
 
 type BoxNode = Node<{ box: Box; mark?: Shown; rows?: readonly Row[] }, 'box' | 'frame'>;
 type BandNode = Node<{ band: Band }, 'band'>;
@@ -34,11 +35,11 @@ const MAX_ZOOM = 2;
 /** A mark that is shown: what a change does to a box or a line that it does not leave as it is. */
 type Shown = Exclude<Mark, 'same'>;
 
-/** The sign of each mark and what it says: on a box, by a frame's name, and in the legend. */
-const SIGNS: Record<Shown, { sign: string; words: string }> = {
-  added: { sign: '+', words: 'Newly passed' },
-  removed: { sign: '−', words: 'No longer passed' },
-  updated: { sign: '~', words: 'Updated by the change' },
+/** The sign of each mark and what it says: on a box, by a frame's name, and in the legend; and the word a row bears for it. */
+const SIGNS: Record<Shown, { sign: string; words: string; word: string }> = {
+  added: { sign: '+', words: 'Newly passed', word: 'Added' },
+  removed: { sign: '−', words: 'No longer passed', word: 'Removed' },
+  updated: { sign: '~', words: 'Updated by the change', word: 'Updated' },
 };
 
 /** The mark of a box or a line that is shown, or none: on a flow's own page, and where the change leaves it as it is. */
@@ -88,15 +89,26 @@ const INSIDE: Partial<Record<Depth, string>> = { containers: 'Has containers ins
  * The rows of a store's box, one for each item of the flow, in the order of their first act: a
  * button each, with the data's name, the sign of a condition straight after it, and at the right
  * the step's word where the current step touches it, or "only read". A hollow, a kept and a gone
- * row bear no word. diagram.css gives each its look by what it is.
+ * row bear no word. Under a change, a row the change marks bears the mark's word in place of
+ * "only read", in every state, and keeps its rule at the step's own word. diagram.css gives each
+ * its look by what it is.
  */
 function Rows({ rows }: { rows: readonly Row[] }) {
   return (
     <div className="diagram-rows">
       {rows.map((row) => {
-        const word = row.word ?? (row.is === 'only-read' ? 'only read' : undefined);
+        const word = row.word ?? (row.mark !== undefined ? SIGNS[row.mark].word : row.is === 'only-read' ? 'only read' : undefined);
         return (
-          <button key={row.data} type="button" className="diagram-row" data-item={row.data} data-is={row.is} data-lit={row.word !== undefined ? '' : undefined} data-picked={row.picked === true ? '' : undefined}>
+          <button
+            key={row.data}
+            type="button"
+            className={row.mark !== undefined ? `diagram-row mark-${row.mark}` : 'diagram-row'}
+            data-item={row.data}
+            data-is={row.is}
+            data-lit={row.word !== undefined ? '' : undefined}
+            data-mark={row.mark}
+            data-picked={row.picked === true ? '' : undefined}
+          >
             <span className="diagram-row-name">{row.name}</span>
             {row.condition !== undefined && (
               <span className="diagram-row-sign" role="img" aria-label={row.condition} title={row.condition}>
@@ -364,7 +376,8 @@ function Legend() {
  * Under a change, `marks` says what the change does to each box, frame and line: a box bears the
  * colour inside its border, a frame on its outline, a line on its stroke and its heads, and a
  * legend says what the colours mean. The border keeps the colour of the box's kind, and the
- * outline and the brightness still say what is picked and what the step lights.
+ * outline and the brightness still say what is picked and what the step lights. A row bears the
+ * mark of its item as the page hands it, a rule at its left and its word; it calls no legend.
  */
 export function Diagram({
   view,

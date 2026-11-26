@@ -6,7 +6,7 @@ import { Link, useLocation, useNavigate, useOutletContext, useParams } from 'rea
 import type { Catalogue } from '../model/catalogue.ts';
 import type { Verb } from '../model/changes.ts';
 import { flowItems, flowSteps, flowView, itemAt } from '../model/flow.ts';
-import type { ActDoes, FlowRead, FlowStep, Item, ItemAt, ItemPlace, Mark, Was } from '../model/flow.ts';
+import type { Act, ActDoes, FlowRead, FlowStep, Item, ItemAt, ItemPlace, ItemUnder, Mark, Was } from '../model/flow.ts';
 import type { View } from '../model/view.ts';
 import { Diagram } from './diagram.tsx';
 import type { Row } from './diagram.tsx';
@@ -104,8 +104,19 @@ const MARK_VERBS: Partial<Record<Mark, Verb>> = { added: 'add', removed: 'remove
 /** No words of today: the flow's own page, and a flow a change adds or removes. */
 const NONE: readonly Was[] = [];
 
+/**
+ * An item as its row, its pills and its panel show it. Under a change it bears what the change
+ * does to it, today's acts of one updated by its acts, whether the change updates its data record,
+ * and the steps of today that name it with no way said (`ItemUnder`); on the flow's own page it
+ * bears none of these.
+ */
+export type ItemShown = Item & Partial<Omit<ItemUnder, keyof Item>>;
+
 /** No items: a flow that keeps nothing in a store it draws. */
-const NO_ITEMS: readonly Item[] = [];
+const NO_ITEMS: readonly ItemShown[] = [];
+
+/** The mark of an item that the change does not leave as it is, or none. */
+const markOf = (item: ItemShown): Exclude<Mark, 'same'> | undefined => (item.mark === undefined || item.mark === 'same' ? undefined : item.mark);
 
 /** A thing worth a line: not nothing, and not the `false` of a condition that does not hold. */
 const something = (node: ReactNode): boolean => node !== undefined && node !== null && node !== false && node !== '';
@@ -135,35 +146,36 @@ function runsOf(steps: readonly StepShown[]): (StepShown | Run)[] {
 }
 
 /**
- * Where the items stand at a place of the list, as `itemAt` reads it: a step by the number it has
- * in the flow the items are of, and whether the step's word is said. Under a change a step that
- * goes is none of that flow: there the items are as after the step before it that stays, and none
- * bears a word.
+ * Where the items stand at a place of the list, as `itemAt` reads it: a step by its place in the
+ * list, from 1, which is its number on a flow's own page; under a change each act stands at the
+ * row of its step in the one list, a step that goes too, and "so far" counts down that list.
  */
-function itemPlaceOf(steps: readonly StepShown[], place: Place): { at: ItemPlace; said: boolean } {
-  if (typeof place !== 'number') return { at: place, said: false };
-  for (let at = place; at >= 0; at--) {
-    const step = steps[at];
-    if (step !== undefined && step.mark !== 'removed') return { at: step.number, said: at === place };
-  }
-  return { at: 'starts', said: false };
-}
+const itemPlaceOf = (place: Place): ItemPlace => (typeof place === 'number' ? place + 1 : place);
+
+/** The place in the list, from 1, of the step an act stands at: its row under a change, else its number. */
+const rowOf = (act: Act): number => act.row ?? act.number;
 
 /** An item picked in its store's box: the store's id and the data's. */
 type Picked = { store: string; data: string };
 
-/** The rows of each store's box at a place, by the store's id, in the order of the items; the row of the picked item says so. */
-function rowsAt(items: readonly Item[], steps: readonly StepShown[], place: Place, picked: Picked | undefined): Map<string, Row[]> {
-  const { at, said } = itemPlaceOf(steps, place);
+/**
+ * The rows of each store's box at a place, by the store's id, in the order of the items; the row
+ * of the picked item says so. Under a change a row bears its item's mark, also at a step that goes:
+ * each row is read from its own side.
+ */
+function rowsAt(items: readonly ItemShown[], place: Place, picked: Picked | undefined): Map<string, Row[]> {
+  const at = itemPlaceOf(place);
   const rows = new Map<string, Row[]>();
   for (const item of items) {
     const { is, word } = itemAt(item, at);
+    const mark = markOf(item);
     const row: Row = {
       data: item.data.id,
       name: item.data.name,
       is,
-      ...(said && word !== undefined ? { word } : {}),
+      ...(word !== undefined ? { word } : {}),
       ...(item.condition !== undefined ? { condition: item.condition } : {}),
+      ...(mark !== undefined ? { mark } : {}),
       ...(picked?.store === item.store.id && picked.data === item.data.id ? { picked: true as const } : {}),
     };
     rows.set(item.store.id, [...(rows.get(item.store.id) ?? []), row]);
@@ -175,27 +187,55 @@ function rowsAt(items: readonly Item[], steps: readonly StepShown[], place: Plac
 const DONE: Record<ActDoes, string> = { put: 'Put', read: 'Read', take: 'Taken out' };
 
 /**
- * An item's life as its panel reads it: an act a row, by the step of this flow it stands at, and
- * where that step stands in the list. A step's description stands once, under its last act.
+ * A life as its panel reads it: an act a row, by the step of this flow it stands at, and where that
+ * step stands in the list. A step's description stands once, under its last act.
  */
-function lifeOf(item: Item, steps: readonly StepShown[]): Life {
+function actsOf(acts: readonly Act[], steps: readonly StepShown[]): Life['acts'] {
+  return acts.map((act, index) => {
+    const at = rowOf(act) - 1;
+    const step = steps[at];
+    const next = acts[index + 1];
+    const last = next === undefined || rowOf(next) !== rowOf(act);
+    return {
+      does: DONE[act.does],
+      number: act.number,
+      at,
+      by: act.byRun ? 'the flow it runs' : act.part.name,
+      happens: step?.happens ?? '',
+      ...(act.only !== undefined ? { only: `Only ${act.only}` } : {}),
+      ...(last && step?.description !== undefined ? { description: step.description } : {}),
+    };
+  });
+}
+
+/** Numbers as a sentence names steps: "Step 11 names it", "Steps 11 and 14 name it". */
+const namesIt = (numbers: readonly number[]): string =>
+  numbers.length === 1 ? `Step ${numbers[0]} names it and says no way.` : `Steps ${joined(numbers.map(String))} name it and say no way.`;
+
+/**
+ * An item's life as its panel reads it: its acts, and whether one puts it. Under a change, of an
+ * item the change marks, what it is today: of one added, not drawn where a step of today names it
+ * with no way said, else not in this store; of one removed, whose life is today's, not in this
+ * store with the change; of one updated, today's life where its acts differ, and that the change
+ * updates its data record where it does.
+ */
+function lifeOf(item: ItemShown, steps: readonly StepShown[]): Life {
+  const mark = markOf(item);
+  const words =
+    mark === 'added'
+      ? [item.unsaid !== undefined && item.unsaid.length > 0 ? `Today: not drawn. ${namesIt(item.unsaid)}` : 'Today: not in this store, by what the flow says.']
+      : mark === 'removed'
+        ? ['With this change: not in this store, by what the flow says.']
+        : item.record === true
+          ? ['The change updates the data record.']
+          : [];
   return {
     store: item.store.name,
-    acts: item.acts.map((act, index) => {
-      const at = steps.findIndex((step) => step.mark !== 'removed' && step.number === act.number);
-      const step = steps[at];
-      const last = item.acts[index + 1]?.number !== act.number;
-      return {
-        does: DONE[act.does],
-        number: act.number,
-        at,
-        by: act.byRun ? 'the flow it runs' : act.part.name,
-        happens: step?.happens ?? '',
-        ...(act.only !== undefined ? { only: `Only ${act.only}` } : {}),
-        ...(last && step?.description !== undefined ? { description: step.description } : {}),
-      };
-    }),
+    acts: actsOf(item.acts, steps),
     put: item.acts.some((act) => act.does === 'put'),
+    ...(mark !== undefined
+      ? { under: { mark, words, ...(item.today !== undefined ? { today: { acts: actsOf(item.today, steps), put: item.today.some((act) => act.does === 'put') } } : {}) } }
+      : {}),
   };
 }
 
@@ -203,7 +243,7 @@ function lifeOf(item: Item, steps: readonly StepShown[]): Life {
 type Panel = { kind: 'picked' | 'data'; id: string } | ({ kind: 'item' } & Picked);
 
 /** A line of the bar: what the step does at one store, the items it does it to, and whether a flow that the step runs does it. */
-type ActLine = { does: ActDoes; store: { id: string; name: string }; items: Item[]; byRun: boolean };
+type ActLine = { does: ActDoes; store: { id: string; name: string }; items: ItemShown[]; byRun: boolean };
 
 /** What a step does at its stores, as its bar says it: its lines, and the ids of the data its own `data` makes an act of. */
 type Done = { lines: ActLine[]; acted: Set<string> };
@@ -212,12 +252,14 @@ type Done = { lines: ActLine[]; acted: Set<string> };
  * What the step at a place does at its stores: a line for each of put, read and take out, in that
  * order, and for each store, the stores by their first act in the step; the items of a line each
  * once, by their act. And the data that the step's own `data` makes an act of, which "Data" leaves
- * out. Nothing where the step's word is not said: before the first step, at Ends, and at a step
- * that goes under a change.
+ * out. Nothing before the first step, at Ends, and at a step that goes under a change, which keeps
+ * its "Data" as today. Under a change the step is read as it would be: an item that goes, whose acts
+ * are today's, does nothing here.
  */
-function doneAt(items: readonly Item[], steps: readonly StepShown[], place: Place): Done {
-  const { at, said } = itemPlaceOf(steps, place);
-  const acts = said ? items.flatMap((item) => item.acts.filter((act) => act.number === at).map((act) => ({ item, act }))).sort((a, b) => a.act.order - b.act.order) : [];
+function doneAt(items: readonly ItemShown[], steps: readonly StepShown[], place: Place): Done {
+  const at = itemPlaceOf(place);
+  const said = typeof place === 'number' && steps[place]?.mark !== 'removed';
+  const acts = said ? items.flatMap((item) => (item.mark === 'removed' ? [] : item.acts.filter((act) => rowOf(act) === at).map((act) => ({ item, act })))).sort((a, b) => a.act.order - b.act.order) : [];
   const stores = [...new Set(acts.map(({ item }) => item.store.id))];
   const lines = (['put', 'read', 'take'] as const).flatMap((does) =>
     stores.flatMap((store): ActLine[] => {
@@ -232,16 +274,17 @@ function doneAt(items: readonly Item[], steps: readonly StepShown[], place: Plac
 }
 
 /** The items a store holds at Ends that are kept, gone or only read: a store each, in the order of their first row. */
-type Held = { store: { id: string; name: string }; items: Item[] };
+type Held = { store: { id: string; name: string }; items: ItemShown[] };
 
 /**
  * What a flow leaves behind, as the bar at Ends says it: the items each store keeps, those gone
  * and those only read, the stores in the order of their first row; the data records that the
  * flow's own steps name in `data` and that are no item here, in the order they are first named;
- * and the flows its own steps run, each once, in order. Under a change a step that goes is none
- * of the flow.
+ * and the flows its own steps run, each once, in order. Under a change the lists are those of the
+ * flow as it would be: a step that goes is none of it, and an item that goes none of its items.
  */
-function leftAtEnds(items: readonly Item[], steps: readonly StepShown[], isData: (id: string) => boolean) {
+function leftAtEnds(all: readonly ItemShown[], steps: readonly StepShown[], isData: (id: string) => boolean) {
+  const items = all.filter((item) => item.mark !== 'removed');
   const stores = [...new Map(items.map((item) => [item.store.id, item.store])).values()];
   const held = (is: ItemAt['is']): Held[] =>
     stores.flatMap((store) => {
@@ -277,7 +320,8 @@ const DOES: Record<ActDoes, string> = { put: 'Puts into', read: 'Reads from', ta
  * on a row opens its item's panel, with its life first; the step stays. The bar says it in words:
  * at a step what the step does at its stores, at Ends what the flow leaves behind; a pill there
  * opens the item's panel as its row does. The button on and the down key go on from the last step
- * to Ends.
+ * to Ends. Under a change the items are those of both sides, each with its mark: its row bears it,
+ * and its panel says what it is today.
  */
 export function FlowBody({
   flow,
@@ -297,7 +341,7 @@ export function FlowBody({
   steps: readonly StepShown[];
   count: number;
   view: View;
-  items?: readonly Item[];
+  items?: readonly ItemShown[];
   was?: readonly Was[];
   marks?: ReadonlyMap<string, Mark>;
   verbs?: ReadonlyMap<string, Verb>;
@@ -380,7 +424,7 @@ export function FlowBody({
   // The rows of the stores' boxes at this place, and the life of the item picked.
   const item = panel?.kind === 'item' ? items.find((each) => each.store.id === panel.store && each.data.id === panel.data) : undefined;
   const pickedItem = item && panel?.kind === 'item' ? panel : undefined;
-  const kept = useMemo(() => rowsAt(items, steps, place, pickedItem), [items, steps, place, pickedItem]);
+  const kept = useMemo(() => rowsAt(items, place, pickedItem), [items, place, pickedItem]);
   const life = useMemo(() => (item !== undefined ? lifeOf(item, steps) : undefined), [item, steps]);
   // What the current step does at its stores, in the bar.
   const done = useMemo(() => doneAt(items, steps, place), [items, steps, place]);
@@ -546,7 +590,9 @@ function ItemPill({ item, look, onItem }: { item: Item; look: Look; onItem: (sto
  * the catalogue. After the step's sentence, what the step does at each store: "Puts into orders
  * database", "Reads from", "Takes out of", each with its items' pills, and "by the flow it runs"
  * where that flow does it; then "Data" for what the step names and makes no act of. Under a
- * change these lines are read as the flow would be, with no rule of their own.
+ * change these lines are read as the flow would be. Where what the step does at its store reads
+ * otherwise than today, each of them and "Data" has the yellow rule, and under the last of them
+ * stand today's words; where it names nothing now, one line says "Taken out" over them.
  */
 function StepLines({
   step,
@@ -563,6 +609,9 @@ function StepLines({
 }) {
   const was = new Map((step.was ?? NONE).map((each) => [each.key, each]));
   const data = step.data.filter((each) => !done.acted.has(each.id));
+  // What the step does at its store, when it reads otherwise than today: the rule on each of its lines.
+  const doing = was.get('data');
+  const ruled = (className: string) => (doing !== undefined ? `${className} flow-line-changed` : className);
   const [one] = step.after;
   const after = one === undefined ? undefined : step.after.length === 1 ? `After ${one.number}, ${one.words}` : `After ${joined(step.after.map((each) => String(each.number)))}`;
   return (
@@ -584,7 +633,7 @@ function StepLines({
         {step.description}
       </Line>
       {done.lines.map((line) => (
-        <p key={`${line.does} ${line.store.id}`} className="flow-bar-data" data-does={line.does}>
+        <p key={`${line.does} ${line.store.id}`} className={ruled('flow-bar-data')} data-does={line.does}>
           <span className="flow-bar-label">
             {DOES[line.does]} {line.store.name}
           </span>
@@ -594,18 +643,17 @@ function StepLines({
           {line.byRun && <span className="flow-bar-quiet">by the flow it runs</span>}
         </p>
       ))}
-      <Line was={was.get('data')} className="flow-bar-data">
-        {data.length > 0 && (
-          <>
-            <span className="flow-bar-label">Data</span>
-            {data.map((each) => (
-              <button key={each.id} type="button" className="pill flow-data-pill" data-data={each.id} onClick={() => onData(each.id)}>
-                {each.name}
-              </button>
-            ))}
-          </>
-        )}
-      </Line>
+      {data.length > 0 && (
+        <p className={ruled('flow-bar-data')}>
+          <span className="flow-bar-label">Data</span>
+          {data.map((each) => (
+            <button key={each.id} type="button" className="pill flow-data-pill" data-data={each.id} onClick={() => onData(each.id)}>
+              {each.name}
+            </button>
+          ))}
+        </p>
+      )}
+      {doing !== undefined && (done.lines.length > 0 || data.length > 0 ? <Today was={doing} /> : <Line was={doing}>{null}</Line>)}
     </>
   );
 }
@@ -681,7 +729,7 @@ function EndsLines({
 }: {
   flow: FlowRead;
   steps: readonly StepShown[];
-  items: readonly Item[];
+  items: readonly ItemShown[];
   catalogue: Catalogue;
   system: string | undefined;
   onData: (id: string) => void;

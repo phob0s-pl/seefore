@@ -259,9 +259,10 @@ export type ActDoes = 'put' | 'read' | 'take';
  * that acts, the `from` of the connection of the step that acts; whether a flow that the step
  * runs does it; its condition's words, the outermost first: "when the fan pays by card and when
  * Scan answers"; and its place among all the acts of the flow, from 0, which says which of two
- * acts of one step on two items comes first.
+ * acts of one step on two items comes first. Under a change, `row` is the place of its step in the
+ * one list of steps, from 1, which the step's number does not say where a step goes.
  */
-export type Act = { number: number; step: string; does: ActDoes; part: { id: string; name: string }; byRun: boolean; only?: string; order: number };
+export type Act = { number: number; step: string; does: ActDoes; part: { id: string; name: string }; byRun: boolean; only?: string; order: number; row?: number };
 
 /**
  * An item: one data record in one store, in one flow, worked out from the steps. Its condition's
@@ -270,7 +271,10 @@ export type Act = { number: number; step: string; does: ActDoes; part: { id: str
  */
 export type Item = { store: { id: string; name: string }; data: { id: string; name: string }; condition?: string; acts: Act[] };
 
-/** A place of a flow's page: before the first step, a step by its number from 1, or Ends. */
+/**
+ * A place of a flow's page: before the first step, a step by its number from 1, or Ends. Under a
+ * change a step is by its place in the one list, from 1, as the `row` of an act is.
+ */
 export type ItemPlace = 'starts' | number | 'ends';
 
 /**
@@ -356,13 +360,15 @@ function withRows(view: View, items: readonly Item[]): View {
  * else, where one of them is a put; only read, else. So a put after a take is kept again.
  *
  * Where the step at the place touches the item, its word: "Gone" when the item is gone after
- * the step; else "Put" when one of the step's acts puts it; else "Read". Ends has none.
+ * the step; else "Put" when one of the step's acts puts it; else "Read". Ends has none. Under a
+ * change an act stands at its `row`, and "so far" counts down the one list.
  */
 export function itemAt(item: Item, place: ItemPlace): ItemAt {
-  const so = place === 'starts' ? [] : place === 'ends' ? item.acts : item.acts.filter((act) => act.number <= place);
+  const at = (act: Act): number => act.row ?? act.number;
+  const so = place === 'starts' ? [] : place === 'ends' ? item.acts : item.acts.filter((act) => at(act) <= place);
   const last = so.at(-1);
   const is: ItemAt['is'] = last === undefined ? 'hollow' : last.does === 'take' ? 'gone' : so.some((act) => act.does === 'put') ? 'kept' : 'only-read';
-  const here = typeof place === 'number' ? item.acts.filter((act) => act.number === place) : [];
+  const here = typeof place === 'number' ? item.acts.filter((act) => at(act) === place) : [];
   if (here.length === 0) return { is };
   return { is, word: is === 'gone' ? 'Gone' : here.some((act) => act.does === 'put') ? 'Put' : 'Read' };
 }
@@ -386,6 +392,18 @@ export type Was = { key: string; today?: string; gone?: true };
 export type StepUnder = FlowStep & { mark: Mark; was: Was[]; moved?: true };
 
 /**
+ * An item of a flow under a change, and what the change does to it: added where only the flow as
+ * it would be has it; removed where only today's has it; updated where both have it and its acts
+ * differ, or where the change updates its data record; else the same. Each is read from its own
+ * side: one that goes from today's steps, every other from the steps as they would be. Of an item
+ * updated by its acts, `today` holds today's acts; `record` says that the change updates its data
+ * record; and of an added item that today's steps name in this store with no way said, `unsaid`
+ * holds the numbers of those steps. In the Changes view an act stands at the `row` of its step in
+ * the one list, with the number that step bears there.
+ */
+export type ItemUnder = Item & { mark: Mark; today?: Act[]; record?: true; unsaid?: number[] };
+
+/**
  * A flow under a change, all the page asks: what the change does to the flow; the flow's head as
  * it would be, or as it is for one that goes; today's words for its own keys that change; its
  * steps in one list; how many steps it would have; the view of what it passes today and of what
@@ -400,8 +418,13 @@ export type FlowUnder = {
   steps: StepUnder[];
   count: number;
   view: View;
-  /** The items of the flow as it would be, or as it is for one that goes, with no mark: their acts are numbered as its steps are. */
-  items: Item[];
+  /**
+   * The items its stores hold. Of a flow the change updates, those of today's flow and of the flow
+   * as it would be, each with its mark, in the order of the rows: as they would be, with each that
+   * goes put back where it stood today in its box. Of a flow the change adds or removes, and of the
+   * result, the flow's own, with no mark.
+   */
+  items: ItemUnder[];
   marks: Map<string, Mark>;
   records: ModelRecord[];
   /** Of a flow the change updates: the flow as it would be alone, with no mark, as a flow the change adds is read. */
@@ -477,6 +500,25 @@ function rawSteps(flow: ModelRecord): Map<string, Record<string, unknown>> {
 /** The connections a view's arrows stand for, either way. */
 const walkedOf = (view: View): Set<string> => new Set(view.arrows.flatMap((arrow) => [...arrow.connections, ...(arrow.back ?? [])]));
 
+/** An item mark-free: the form of a flow the change adds or removes, and of the result. */
+const unmarked = (items: readonly Item[]): ItemUnder[] => items.map((item) => ({ ...item, mark: 'same' }));
+
+/**
+ * What a step does at its store, in words, as "Today: " says it under a change: each data record
+ * it names, with what it does to it, joined with "; ": "Basket, put"; "Payment, read"; "Paid
+ * order, no way said"; "Basket, taken out". On a step at no store, the names alone: "Basket and
+ * Payment". Nothing where it names none.
+ */
+function doingOf(step: Step | undefined, byId: Map<string, ModelRecord>): string | undefined {
+  if (step === undefined) return undefined;
+  const nameOf = (id: string): string => text(byId.get(id)?.fields.name) ?? id;
+  const at = step.reply === undefined ? wayOf(step, (id) => byId.get(id)) : undefined;
+  if (at === undefined) return step.data.length > 0 ? joined(step.data.map(nameOf)) : undefined;
+  const does = at.way === 'write' ? 'put' : at.way === 'read' ? 'read' : 'no way said';
+  const words = [...step.data.map((id) => `${nameOf(id)}, ${does}`), ...step.removes.map((id) => `${nameOf(id)}, taken out`)];
+  return words.length > 0 ? words.join('; ') : undefined;
+}
+
 /**
  * What a change does to a flow, or nothing when the change does not name the flow or a side of
  * it is missing. `today` are the records of the model; `after` those as they would be; `touched`
@@ -485,7 +527,10 @@ const walkedOf = (view: View): Set<string> => new Set(view.arrows.flatMap((arrow
  *
  * Each row is read from its own side: a step that stays or comes from the flow as it would be,
  * a step that goes from the flow as it is today, with today's connections and their ends. The
- * view is of both, and what a row lights is found on it.
+ * view is of both, and what a row lights is found on it. An item the same way: one that only
+ * today's flow keeps from today's steps, every other from the steps as they would be; a store
+ * that only today's flow reaches is drawn, with its frames, also where the change moves the end
+ * of a connection that stays.
  */
 export function flowUnder(
   today: readonly ModelRecord[],
@@ -498,7 +543,7 @@ export function flowUnder(
   const plain = (records: readonly ModelRecord[]): FlowUnder | undefined => {
     const flow = flowSteps(records, flowId);
     if (flow === undefined) return undefined;
-    return { verb, flow, was: [], steps: flow.steps.map((step) => ({ ...step, mark: 'same', was: [] })), count: flow.steps.length, view: flowView(records, flowId), items: flowItems(records, flowId), marks: new Map(), records: [...records] };
+    return { verb, flow, was: [], steps: flow.steps.map((step) => ({ ...step, mark: 'same', was: [] })), count: flow.steps.length, view: flowView(records, flowId), items: unmarked(flowItems(records, flowId)), marks: new Map(), records: [...records] };
   };
   if (verb === 'add') return plain(after);
   if (verb === 'remove') return plain(today);
@@ -528,9 +573,10 @@ export function flowUnder(
   const order = orderOfBoth([...rawToday.keys()], [...rawAfter.keys()]);
   const moved = movedOf([...rawToday.keys()], [...rawAfter.keys()]);
 
-  // What the flow passes on each side, and what it would keep in its stores.
+  // What the flow passes on each side, and what it keeps in its stores on each.
   const viewToday = partsView(today, flowId);
   const partsAfter = partsView(after, flowId);
+  const itemsToday = itemsIn(today, flowId, viewToday);
   const itemsAfter = itemsIn(after, flowId, partsAfter);
   const viewAfter = withRows(partsAfter, itemsAfter);
   const boxesToday = new Set(viewToday.boxes.map((box) => box.id));
@@ -540,19 +586,24 @@ export function flowUnder(
 
   // The records the view of both is drawn from: those as they would be, and, of what only
   // today's flow passes, the record as it is today, with today's ends. The flow in them walks
-  // what a step is on, on either side: a reply walks nothing of its own.
+  // what a step is on, on either side: a reply walks nothing of its own. It is in every store
+  // that today's flow draws, so that a store only today's reaches holds its rows, also where the
+  // change moves the end of a connection that stays and its line is drawn with its new ends. A
+  // data record that the change removes is there as it is today, for an item that goes.
   const onlyToday = new Set([...[...boxesToday].filter((id) => !boxesAfter.has(id)), ...[...walkedToday].filter((id) => !walkedAfter.has(id))]);
   const stepsToday = stepsOfRecord(was);
   const stepsAfter = stepsOfRecord(will);
-  const walks = [...new Set([...stepsAfter, ...stepsToday].flatMap((step) => (step.reply === undefined && step.does !== undefined ? [step.does] : [])))];
+  const storesToday = viewToday.boxes.filter((box) => box.kind === 'stores').map((box) => box.id);
+  const walks = [...new Set([...[...stepsAfter, ...stepsToday].flatMap((step) => (step.reply === undefined && step.does !== undefined ? [step.does] : [])), ...storesToday])];
   const both: ModelRecord = { ...will, fields: { ...will.fields, steps: walks.map((does, index) => ({ id: `walk-${index}`, does })) } };
-  const records = [...after.filter((record) => record !== will && !onlyToday.has(record.id)), ...[...onlyToday].flatMap((id) => todayById.get(id) ?? []), both];
-  // The flow in them only walks and names no data, so its own items would be those of the flows
-  // it runs alone: a store's box holds the rows of the flow as it would be.
-  const view = withRows(partsView(records, flowId), itemsAfter);
-  const drawn = new Set(view.boxes.map((box) => box.id));
+  const dataToday = [...new Set(itemsToday.map((item) => item.data.id))].filter((id) => afterById.get(id)?.kind !== 'data');
+  const records = [...after.filter((record) => record !== will && !onlyToday.has(record.id)), ...[...onlyToday, ...dataToday].flatMap((id) => todayById.get(id) ?? []), both];
+  // The flow in them only walks and names no data: the rows of its stores' boxes are the items of
+  // both sides, worked out below.
+  const parts = partsView(records, flowId);
+  const drawn = new Set(parts.boxes.map((box) => box.id));
   const arrowOf = (id: string): { arrow: string; forward: boolean } | undefined => {
-    for (const arrow of view.arrows) {
+    for (const arrow of parts.arrows) {
       if (arrow.connections.includes(id)) return { arrow: arrow.id, forward: true };
       if (arrow.back?.includes(id)) return { arrow: arrow.id, forward: false };
     }
@@ -596,10 +647,14 @@ export function flowUnder(
         after: now.after.length > 0 ? joined(now.after.map((each) => each.words)) : undefined,
         only: now.only,
         description: now.description,
-        data: now.data.length > 0 ? joined(now.data.map((each) => each.name)) : undefined,
       };
-      for (const key of ['reply', 'after', 'only', 'description', 'data'] as const)
+      for (const key of ['reply', 'after', 'only', 'description'] as const)
         if (!sameValue(rawWas[key], rawWill[key])) changed.push({ key, ...(said[key] !== undefined ? { today: said[key] } : {}), ...(!(key in rawWill) ? { gone: true as const } : {}) });
+      // What it does at its store, under `data`, by its words, whichever of `does`, `data`,
+      // `access` and `removes` made them differ: "Taken out" where it names nothing now.
+      const doing = doingOf(sides.today.places.first.get(id), todayById);
+      const doingAfter = doingOf(sides.after.places.first.get(id), afterById);
+      if (doing !== doingAfter) changed.push({ key: 'data', ...(doing !== undefined ? { today: doing } : {}), ...(doingAfter === undefined ? { gone: true as const } : {}) });
     }
     // A step that goes names the steps it followed by the numbers they bear in this list, and opens no strand of its own.
     const goes = mark === 'removed';
@@ -625,8 +680,62 @@ export function flowUnder(
     return [step];
   });
 
-  // The boxes and the connections: by what the flow passes, and then by what the change does to the record.
+  // What the change updates, by path: a box, a line or an item is yellow by it.
   const updated = new Set(touched.filter((each) => each.verb === 'update').map((each) => each.path));
+
+  // The items of both sides, each read from its own side. An act stands at the row of its step in
+  // the one list, with the number that step bears there.
+  const rowOf = new Map(steps.map((step, index) => [step.id, index + 1]));
+  const placed = (act: Act): Act => {
+    const row = rowOf.get(act.step);
+    return row === undefined ? act : { ...act, number: steps[row - 1]?.number ?? act.number, row };
+  };
+  const keyOf = (item: Item): string => JSON.stringify([item.store.id, item.data.id]);
+  const wasItems = new Map(itemsToday.map((item) => [keyOf(item), item]));
+  const willItems = new Map(itemsAfter.map((item) => [keyOf(item), item]));
+  // The steps of today that name data at a store and say no way, which make no item today: by the
+  // item they would make, the numbers they bear in the list.
+  const unsaid = new Map<string, number[]>();
+  for (const step of stepsToday) {
+    const at = step.reply === undefined ? wayOf(step, (id) => todayById.get(id)) : undefined;
+    const number = steps[(rowOf.get(step.id) ?? 0) - 1]?.number;
+    if (at === undefined || at.way !== undefined || number === undefined) continue;
+    for (const data of step.data) {
+      if (todayById.get(data)?.kind !== 'data') continue;
+      const key = JSON.stringify([at.store, data]);
+      const named = unsaid.get(key) ?? [];
+      if (!named.includes(number)) unsaid.set(key, [...named, number]);
+    }
+  }
+  // Two sides' acts differ when the lists are not alike: an act by its step's id, what it does,
+  // whether a flow that the step runs does it, and its condition. A number that shifts differs nothing.
+  const actsOf = (item: Item) => item.acts.map((act) => [act.step, act.does, act.byRun, act.only ?? null]);
+  const markedOf = (key: string): ItemUnder | undefined => {
+    const was = wasItems.get(key);
+    const will = willItems.get(key);
+    if (will === undefined) return was && { ...was, acts: was.acts.map(placed), mark: 'removed' };
+    const acts = will.acts.map(placed);
+    if (was === undefined) {
+      const named = unsaid.get(key);
+      return { ...will, acts, mark: 'added', ...(named !== undefined ? { unsaid: named } : {}) };
+    }
+    const differ = !sameValue(actsOf(was), actsOf(will));
+    const record = updated.has(`data/${will.data.id}`);
+    return { ...will, acts, mark: differ || record ? 'updated' : 'same', ...(differ ? { today: was.acts.map(placed) } : {}), ...(record ? { record: true as const } : {}) };
+  };
+  // The rows of a box stand as they would be, with each that goes put back where it stood today in
+  // its box; the boxes take their turns as the items of both sides do.
+  const storeOf = (key: string): string => (wasItems.get(key) ?? willItems.get(key))?.store.id ?? '';
+  const inBox = (store: string, keys: Iterable<string>): string[] => [...keys].filter((key) => storeOf(key) === store);
+  const turns = orderOfBoth([...wasItems.keys()], [...willItems.keys()]);
+  const byBox = new Map([...new Set(turns.map(storeOf))].map((store) => [store, orderOfBoth(inBox(store, wasItems.keys()), inBox(store, willItems.keys()))]));
+  const items = turns.flatMap((key) => {
+    const next = byBox.get(storeOf(key))?.shift();
+    return (next !== undefined ? markedOf(next) : undefined) ?? [];
+  });
+  const view = withRows(parts, items);
+
+  // The boxes and the connections: by what the flow passes, and then by what the change does to the record.
   const kindOf = new Map(records.map((record) => [record.id, record.kind]));
   const passed = (was: Set<string>, will: Set<string>, id: string): Mark =>
     !was.has(id) ? 'added' : !will.has(id) ? 'removed' : updated.has(`${kindOf.get(id) ?? ''}/${id}`) ? 'updated' : 'same';
@@ -642,6 +751,6 @@ export function flowUnder(
     marks.set(arrow.id, each.every((mark) => mark === each[0]) ? (each[0] ?? 'same') : 'updated');
   }
   // The flow as it would be alone, which the page shows in place of the difference when asked.
-  const result: FlowUnder = { verb, flow: readAfter, was: [], steps: readAfter.steps.map((step) => ({ ...step, mark: 'same', was: [] })), count: readAfter.steps.length, view: viewAfter, items: itemsAfter, marks: new Map(), records: [...after] };
-  return { verb, flow: { ...readAfter, steps }, was: head, steps, count: readAfter.steps.length, view, items: itemsAfter, marks, records, result };
+  const result: FlowUnder = { verb, flow: readAfter, was: [], steps: readAfter.steps.map((step) => ({ ...step, mark: 'same', was: [] })), count: readAfter.steps.length, view: viewAfter, items: unmarked(itemsAfter), marks: new Map(), records: [...after] };
+  return { verb, flow: { ...readAfter, steps }, was: head, steps, count: readAfter.steps.length, view, items, marks, records, result };
 }

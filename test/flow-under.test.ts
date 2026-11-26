@@ -1,6 +1,7 @@
 import { expect, test } from 'vitest';
 import { changesOf, fieldRows } from '../src/model/changes.ts';
 import { orderOfBoth } from '../src/model/flow.ts';
+import type { FlowUnder } from '../src/model/flow.ts';
 import { readModel } from '../src/model/read.ts';
 import type { SourceFile } from '../src/model/read.ts';
 
@@ -356,3 +357,137 @@ test('an updated flow has its result too: the flow as it would be alone, with no
   expect(under('remove:\n  - flows/flow-placing\n').flow?.result).toBeUndefined();
 });
 
+
+// ---- the items of a flow under a change
+
+/** The shop with data to keep, an audit trail the API reads and writes, and a flow that keeps an order. */
+const KEEPING: SourceFile[] = [
+  ...MODEL,
+  file('connections/connection-api-keeps-audit', 'from: app-api\nto: store-audit\naccess: read-write\nname: Keeps the audit\n'),
+  file('data/data-order', 'name: Order\n'),
+  file('data/data-entry', 'name: Entry\n'),
+  file('data/data-note', 'name: Note\n'),
+  file('data/data-paid-order', 'name: Paid order\n'),
+];
+/** Puts the order and reads it, hands it on between two parts, puts an entry in the audit trail, and names the paid order there with no way said. */
+const KEEPS = [
+  '{id: saves, does: connection-api-writes-orders, data: [data-order]}',
+  '{id: reads, does: connection-api-reads-orders, data: [data-order]}',
+  '{id: hands-on, does: connection-api-calls-worker, data: [data-order]}',
+  '{id: notes, does: connection-worker-writes-audit, data: [data-entry]}',
+  '{id: marks, does: connection-api-keeps-audit, data: [data-paid-order]}',
+];
+/** The lines of a change that writes the steps of `flow-keeping`. */
+const rewrite = (steps: readonly string[]) => `  flows/flow-keeping:\n    steps:\n${steps.map((step) => `      - ${step}\n`).join('')}`;
+/** A change that leaves the steps and only rewrites the flow's description, so that the flow has a page under it. */
+const DESCRIBED = '  flows/flow-keeping: {description: Kept otherwise.}\n';
+/** The flow `flow-keeping`, with today's steps given, under one change of the body given. */
+const keeping = (body: string, steps: readonly string[] = KEEPS) => {
+  const flow = file('flows/flow-keeping', ['name: Keeping an order', 'starts: An order comes', 'ends: The order is kept', 'feature: feature-ordering', 'steps:', ...steps.map((step) => `  - ${step}`), ''].join('\n'));
+  const read = readModel([...KEEPING, flow, file('changes/more', `name: More\nprompt: Make it so.\n${body}`)]);
+  expect(read.problems).toEqual([]);
+  return changesOf(read.records, read.laid).flow('more', 'flow-keeping');
+};
+/** Each item as `Data in Store, mark: does number@row`, and today's acts after a bar where it has them. */
+const itemsOf = (flow: FlowUnder | undefined): string[] | undefined => {
+  const acts = (list: FlowUnder['items'][number]['acts']) => list.map((act) => `${act.does} ${act.number}@${act.row ?? '-'}`).join(', ');
+  return flow?.items.map((item) => `${item.data.name} in ${item.store.name}, ${item.mark}: ${acts(item.acts)}${item.today !== undefined ? ` | today ${acts(item.today)}` : ''}`);
+};
+
+test('an item that only the flow as it would be has is added, its acts at the rows of its steps', () => {
+  const flow = keeping(`update:\n${rewrite([...KEEPS.slice(0, 4), '{id: keeps, does: connection-api-keeps-audit, access: write, data: [data-note]}', ...KEEPS.slice(4)])}`);
+  expect(itemsOf(flow)).toEqual(['Order in Orders, same: put 1@1, read 2@2', 'Entry in Audit, same: put 4@4', 'Note in Audit, added: put 5@5']);
+  // No step of today names the note: nothing is said of it.
+  expect(flow?.items[2]?.unsaid).toBeUndefined();
+  // A store's box holds a row for each item.
+  expect(flow?.view.boxes.filter((box) => box.rows !== undefined).map((box) => [box.id, box.rows])).toEqual([
+    ['store-audit', 2],
+    ['store-orders', 1],
+  ]);
+});
+
+test('an item that only today has is removed, with today acts, at the row of the step that goes', () => {
+  const flow = keeping(`update:\n${rewrite(['saves', 'reads', 'hands-on', 'marks'])}`);
+  expect(flow?.steps.map((step) => [step.id, step.number, step.mark])).toEqual([
+    ['saves', 1, 'same'],
+    ['reads', 2, 'same'],
+    ['hands-on', 3, 'same'],
+    ['notes', 4, 'removed'],
+    ['marks', 4, 'same'],
+  ]);
+  // The entry is put at the step that goes, today's step 4, which is the fourth row of the list.
+  expect(itemsOf(flow)).toEqual(['Order in Orders, same: put 1@1, read 2@2', 'Entry in Audit, removed: put 4@4']);
+  expect(flow?.items[1]).toMatchObject({ acts: [{ step: 'notes', part: { id: 'app-worker', name: 'Worker' } }] });
+  expect(flow?.items[1]?.today).toBeUndefined();
+  // The flow as it would be alone keeps no entry, and bears no mark.
+  expect(itemsOf(flow?.result)).toEqual(['Order in Orders, same: put 1@-, read 2@-']);
+});
+
+test('acts that differ update an item, with today acts; a number that shifts differs nothing', () => {
+  // A step comes first, and the read gains a condition.
+  const flow = keeping(`update:\n${rewrite(['{id: checks, does: app-api, name: Checks the order}', 'saves', '{id: reads, does: connection-api-reads-orders, data: [data-order], only: when the order is asked for}', 'hands-on', 'notes', 'marks'])}`);
+  expect(itemsOf(flow)).toEqual(['Order in Orders, updated: put 2@2, read 3@3 | today put 2@2, read 3@3', 'Entry in Audit, same: put 5@5']);
+  expect(flow?.items[0]?.acts[1]?.only).toBe('when the order is asked for');
+  expect(flow?.items[0]?.today?.[1]?.only).toBeUndefined();
+  expect(flow?.items[0]?.record).toBeUndefined();
+});
+
+test('an update of its data record updates an item, though its acts are alike', () => {
+  const flow = keeping(`update:\n${DESCRIBED}  data/data-entry: {description: What is noted.}\n`);
+  expect(itemsOf(flow)).toEqual(['Order in Orders, same: put 1@1, read 2@2', 'Entry in Audit, updated: put 4@4']);
+  expect(flow?.items[1]).toMatchObject({ mark: 'updated', record: true });
+  expect(flow?.items[1]?.today).toBeUndefined();
+});
+
+test('a connection whose access turns from write to read updates the item, though no step differs', () => {
+  const flow = keeping(`update:\n${DESCRIBED}  connections/connection-worker-writes-audit: {access: read}\n`);
+  expect(itemsOf(flow)).toEqual(['Order in Orders, same: put 1@1, read 2@2', 'Entry in Audit, updated: read 4@4 | today put 4@4']);
+  // The step bears no mark and no words of today: its item says it.
+  expect(flow?.steps.find((step) => step.id === 'notes')).toMatchObject({ mark: 'same', was: [] });
+});
+
+test('a connection whose end moves removes the item in one store and adds it in the other; the store only today reaches is drawn', () => {
+  // Today the audit trail is reached by the entry alone, and the change moves the end of its connection to the orders.
+  const flow = keeping(`update:\n${DESCRIBED}  connections/connection-worker-writes-audit: {to: store-orders}\n`, ['saves', 'notes'].map((id) => KEEPS.find((step) => step.includes(`id: ${id},`)) ?? ''));
+  expect(itemsOf(flow)).toEqual(['Order in Orders, same: put 1@1', 'Entry in Audit, removed: put 2@2', 'Entry in Orders, added: put 2@2']);
+  // The line is drawn with its new ends; the audit trail stands still, with its row, as no longer passed.
+  const line = flow?.view.arrows.find((arrow) => arrow.connections.includes('connection-worker-writes-audit'));
+  expect([line?.from, line?.to]).toEqual(['app-worker', 'store-orders']);
+  expect(flow?.view.boxes.find((box) => box.id === 'store-audit')).toMatchObject({ in: 'system-shop', rows: 1 });
+  expect(flow?.marks.get('store-audit')).toBe('removed');
+  expect(flow?.view.boxes.find((box) => box.id === 'store-orders')?.rows).toBe(2);
+});
+
+test("the rows of a box are those of both sides: as they would be, with a removed one where it stood today", () => {
+  const puts = (id: string, data: string) => `{id: ${id}, does: connection-api-writes-orders, data: [${data}]}`;
+  const flow = keeping(`update:\n${rewrite([puts('marks', 'data-paid-order'), 'saves', 'notes'])}`, [puts('saves', 'data-order'), puts('keeps', 'data-note'), puts('notes', 'data-entry')]);
+  expect(flow?.steps.map((step) => [step.id, step.number, step.mark])).toEqual([
+    ['marks', 1, 'added'],
+    ['saves', 2, 'same'],
+    ['keeps', 2, 'removed'],
+    ['notes', 3, 'same'],
+  ]);
+  expect(itemsOf(flow)).toEqual(['Paid order in Orders, added: put 1@1', 'Order in Orders, same: put 2@2', 'Note in Orders, removed: put 2@3', 'Entry in Orders, same: put 3@4']);
+  expect(flow?.view.boxes.find((box) => box.id === 'store-orders')?.rows).toBe(4);
+});
+
+test('a step that gains its way has today words "no way said", and its item is added with the step that named it', () => {
+  const flow = keeping(`update:\n${rewrite([...KEEPS.slice(0, 4), '{id: marks, does: connection-api-keeps-audit, access: write, data: [data-paid-order]}'])}`);
+  expect(flow?.steps.find((step) => step.id === 'marks')).toMatchObject({ mark: 'updated', was: [{ key: 'data', today: 'Paid order, no way said' }] });
+  expect(flow?.items.find((item) => item.data.id === 'data-paid-order')).toMatchObject({ mark: 'added', unsaid: [5], acts: [{ does: 'put', number: 5, row: 5 }] });
+  // A step that names nothing now: its words of today are taken out; one at no store says the names alone.
+  const bare = keeping(`update:\n${rewrite(['{id: saves, does: connection-api-writes-orders}', 'reads', '{id: hands-on, does: connection-api-calls-worker, data: [data-order, data-note]}', 'notes', 'marks'])}`);
+  expect(bare?.steps.find((step) => step.id === 'saves')?.was).toEqual([{ key: 'data', today: 'Order, put', gone: true }]);
+  expect(bare?.steps.find((step) => step.id === 'hands-on')?.was).toEqual([{ key: 'data', today: 'Order' }]);
+});
+
+test('a flow the change adds bears no mark on an item, nor does the result of one it updates', () => {
+  const read = readModel([
+    ...KEEPING,
+    file('changes/more', `name: More\nprompt: Make it so.\nadd:\n  flows/flow-other:\n    name: Another flow\n    starts: It starts\n    ends: It ends\n    feature: feature-ordering\n    steps:\n      - ${KEEPS[0]}\n      - ${KEEPS[3]}\n`),
+  ]);
+  expect(read.problems).toEqual([]);
+  const added = changesOf(read.records, read.laid).flow('more', 'flow-other');
+  expect(itemsOf(added)).toEqual(['Order in Orders, same: put 1@-', 'Entry in Audit, same: put 2@-']);
+  expect(itemsOf(keeping(`update:\n${rewrite(KEEPS.slice(0, 3))}`)?.result)).toEqual(['Order in Orders, same: put 1@-, read 2@-']);
+});

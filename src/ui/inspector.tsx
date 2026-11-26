@@ -134,43 +134,73 @@ function Thing({ record, catalogue, under, opens, steps }: { record: ModelRecord
  * a row for each act, in the order of the flow, with what it does ("Put", "Read", "Taken out"),
  * the number of the step of this flow it stands at and that step's place in the list, who acts,
  * what happens in that step, and quiet under it the act's condition and the step's description;
- * and whether an act puts it.
+ * and whether an act puts it. Under a change, of an item the change marks, `under` holds the mark,
+ * the quiet sentences that say what the item is today, and today's life where its acts differ.
  */
 export type Life = {
   store: string;
   acts: { does: string; number: number; at: number; by: string; happens: string; only?: string; description?: string }[];
   put: boolean;
+  under?: { mark: 'added' | 'removed' | 'updated'; words: string[]; today?: { acts: Life['acts']; put: boolean } };
 };
+
+/** The rows of a life, and a last row when no act puts the item. */
+function Acts({ label, acts, put, onStep }: { label: string; acts: Life['acts']; put: boolean; onStep: ((at: number) => void) | undefined }) {
+  return (
+    <ol className="item-life" aria-label={label}>
+      {acts.map((act, index) => (
+        <li key={index}>
+          <span>
+            {act.does} at{' '}
+            {onStep !== undefined && act.at >= 0 ? (
+              <button type="button" className="item-life-step" onClick={() => onStep(act.at)}>
+                {act.number}
+              </button>
+            ) : (
+              act.number
+            )}{' '}
+            by {act.by}: {act.happens}
+          </span>
+          {act.only !== undefined && <small>{act.only}</small>}
+          {act.description !== undefined && <small>{act.description}</small>}
+        </li>
+      ))}
+      {!put && <li className="item-life-quiet">Not put in this flow.</li>}
+    </ol>
+  );
+}
 
 /**
  * An item's life: "Put at 11 by Orders: Keeps the basket", a row an act, its number a link that
  * moves the page to that step and keeps the panel; quiet under an act its condition and its step's
- * description; and a last row when no act puts it. The steps of an item stand nowhere else.
+ * description; and a last row when no act puts it. The steps of an item stand nowhere else. Under
+ * a change, after it, what the change does to the item, "Under this change: Added", and quiet what
+ * it is today; of one updated by its acts, "Today:" and today's life, a row an act, as above.
  */
 function LifeOf({ life, onStep }: { life: Life; onStep: ((at: number) => void) | undefined }) {
+  const { under } = life;
   return (
     <>
       <h3>In {life.store}, in this flow</h3>
-      <ol className="item-life" aria-label="Life">
-        {life.acts.map((act, index) => (
-          <li key={index}>
-            <span>
-              {act.does} at{' '}
-              {onStep !== undefined && act.at >= 0 ? (
-                <button type="button" className="item-life-step" onClick={() => onStep(act.at)}>
-                  {act.number}
-                </button>
-              ) : (
-                act.number
-              )}{' '}
-              by {act.by}: {act.happens}
-            </span>
-            {act.only !== undefined && <small>{act.only}</small>}
-            {act.description !== undefined && <small>{act.description}</small>}
-          </li>
-        ))}
-        {!life.put && <li className="item-life-quiet">Not put in this flow.</li>}
-      </ol>
+      <Acts label="Life" acts={life.acts} put={life.put} onStep={onStep} />
+      {under !== undefined && (
+        <div className="item-under" data-mark={under.mark}>
+          <h3>
+            Under this change: <span className={`item-under-mark mark-${under.mark}`}>{WORDS[under.mark]}</span>
+          </h3>
+          {under.words.map((words) => (
+            <p key={words} className="item-under-words">
+              {words}
+            </p>
+          ))}
+          {under.today !== undefined && (
+            <>
+              <p className="item-under-words">Today:</p>
+              <Acts label="Today" acts={under.today.acts} put={under.today.put} onStep={onStep} />
+            </>
+          )}
+        </div>
+      )}
     </>
   );
 }

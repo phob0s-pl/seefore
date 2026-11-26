@@ -1813,6 +1813,156 @@ test.skipIf(!HAS_CHROME).concurrent(
   20_000,
 );
 
+/** The flow that keeps things, under a change that files the request in the store of orders, looks the customer up no more, and leaves the receipt in the outbox. */
+const FILING = '/changes/filing-the-request/records/flows/flow-sending-a-receipt';
+
+/** The flow of the kept shop under the change that files the request, once Chrome shows its Changes view. */
+async function inFilingShop(run: (send: Send, address: string) => Promise<void>) {
+  const folder = await keptShop();
+  await writeFile(
+    join(folder, 'changes', 'filing-the-request.yaml'),
+    [
+      'name: Filing the request',
+      'prompt: The request is filed with the orders, and the receipt stays in the outbox.',
+      'update:',
+      '  flows/flow-sending-a-receipt:',
+      '    steps:',
+      '      - asks',
+      '      - writes',
+      '      - places',
+      '      - {id: takes, does: connection-api-uses-outbox, name: Takes the receipt out, data: [data-receipt], access: read, description: The receipt leaves the outbox as it is sent.}',
+      '      - {id: files, does: connection-api-writes-orders, name: Files the request, data: [data-request]}',
+      '      - answers',
+      '',
+    ].join('\n'),
+  );
+  try {
+    await inChrome(async (send, address) => {
+      await send('Page.navigate', { url: `${address}${FILING}` });
+      await flowAt(send, '');
+      await run(send, address);
+    }, folder);
+  } finally {
+    await rm(folder, { recursive: true, force: true });
+  }
+}
+
+/** Each row in a store's box under a change: the box, the data's name, what the item is, its mark, its word, and the colours of its rule and its word. */
+const MARKED_ROWS = `[...document.querySelectorAll('.diagram-row')].map((row) => [row.closest('.react-flow__node').getAttribute('data-id'), row.querySelector('.diagram-row-name').textContent, row.getAttribute('data-is'), row.getAttribute('data-mark'), row.querySelector('.diagram-row-word')?.textContent ?? null, row.hasAttribute('data-mark') ? getComputedStyle(row, '::before').backgroundColor : null, row.querySelector('.diagram-row-word') ? getComputedStyle(row.querySelector('.diagram-row-word')).color : null])`;
+type MarkedRow = [string, string, string, string | null, string | null, string | null, string | null];
+/** The rows under a change once the page stands at a place, the step of the hash or none, and the rows given are drawn. */
+async function markedAt(send: Send, hash: string, count = 4): Promise<MarkedRow[]> {
+  await flowAt(send, hash);
+  return (await waitFor(send, `document.querySelectorAll('.diagram-row').length === ${count} && ${MARKED_ROWS}`)) as MarkedRow[];
+}
+const GREEN = 'rgb(101, 213, 128)';
+const RED = 'rgb(255, 117, 109)';
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME
+    ? 'under a change a row bears its mark: a hollow row says "Added", and "Put" at its step with its rule; a removed row is red with its word, and "Read" at the step that goes; the Result view has no mark'
+    : `skipped: there is no Chrome at ${CHROME}`,
+  () =>
+    inFilingShop(async (send) => {
+      const before = await markedAt(send, '');
+      // Before the first step every row is hollow: one the change marks has its rule and its word in the mark's colour, one it leaves has none.
+      expect(before.map((row) => row.slice(0, 5))).toEqual([
+        ['store-orders', 'Order details', 'hollow', null, null],
+        ['store-orders', 'Customer', 'hollow', 'removed', 'Removed'],
+        ['store-orders', 'Request', 'hollow', 'added', 'Added'],
+        ['store-outbox', 'Receipt', 'hollow', 'updated', 'Updated'],
+      ]);
+      expect(before.slice(1, 3).map((row) => row.slice(5))).toEqual([
+        [RED, RED],
+        [GREEN, GREEN],
+      ]);
+      // At its step the added row is put, with the step's word, and keeps its rule.
+      await stepTo(send, 'files');
+      const files = await markedAt(send, '#files');
+      expect(files.find((row) => row[1] === 'Request')).toEqual(['store-orders', 'Request', 'kept', 'added', 'Put', GREEN, 'rgba(255, 255, 255, 0.95)']);
+      // The customer, only read today, stays red with its word.
+      expect(files.find((row) => row[1] === 'Customer')).toEqual(['store-orders', 'Customer', 'only-read', 'removed', 'Removed', RED, RED]);
+      // At the step that goes, the removed row is read as today has it: the step reads it.
+      await stepTo(send, 'looks-up');
+      expect((await markedAt(send, '#looks-up')).find((row) => row[1] === 'Customer')?.slice(0, 5)).toEqual(['store-orders', 'Customer', 'only-read', 'removed', 'Read']);
+      // The Result view: the rows of the flow as it would be, none marked.
+      await stepTo(send, 'files');
+      await flowAt(send, '#files');
+      await click(send, await centreOf(send, OTHER_VIEW));
+      const result = (await waitFor(send, `location.search === '?view=result' && document.querySelectorAll('.diagram-row').length === 3 && ${MARKED_ROWS}`)) as MarkedRow[];
+      expect(result.map((row) => row.slice(0, 5))).toEqual([
+        ['store-orders', 'Order details', 'kept', null, null],
+        ['store-orders', 'Request', 'kept', null, 'Put'],
+        ['store-outbox', 'Receipt', 'kept', null, null],
+      ]);
+    }),
+  20_000,
+);
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME
+    ? 'under a change the bar of an updated step has the rule on what it does at its store and today\'s words under it; the panel of a marked item says "Under this change" and what it is today'
+    : `skipped: there is no Chrome at ${CHROME}`,
+  () =>
+    inFilingShop(async (send) => {
+      // The step keeps the receipt now: its line of the store has the rule, and under it what it did today.
+      await stepTo(send, 'takes');
+      await barAt(send, '#takes', 'Reads from Outbox Receipt');
+      const lines = `[...document.querySelectorAll('section[aria-label="Current step"] .flow-bar-lines > p')].map((line) => [line.innerText.replace(/\\s+/g, ' ').trim(), line.classList.contains('flow-line-changed'), line.classList.contains('flow-line-today')])`;
+      expect(await waitFor(send, lines)).toEqual([
+        ['Order API to Outbox', false, false],
+        ['The receipt leaves the outbox as it is sent.', false, false],
+        ['Reads from Outbox Receipt', true, false],
+        ['Today: Receipt, read; Receipt, taken out', false, true],
+      ]);
+      expect((await flowAt(send, '#takes')).bar).toContain('4 of 6 Takes the receipt out Updated');
+
+      // The panel of each marked item, after its life.
+      const UNDER = `(() => {
+        const panel = document.querySelector('aside[aria-label="Diagram inspector"]');
+        const rows = (label) => [...(panel?.querySelectorAll('ol[aria-label="' + label + '"] > li') ?? [])].map((row) => row.innerText.replace(/\\s+/g, ' ').trim());
+        return panel !== null && panel.querySelector('ol[aria-label="Life"]') !== null && {
+          name: panel.querySelector('h2')?.textContent,
+          life: rows('Life'),
+          under: panel.querySelector('.item-under h3')?.textContent ?? null,
+          words: [...panel.querySelectorAll('.item-under-words')].map((words) => words.textContent),
+          today: rows('Today'),
+        };
+      })()`;
+      const panelOf = async (data: string, name: string) => {
+        await click(send, await centreOf(send, `.diagram-row[data-item="${data}"]`));
+        const read = await waitFor(send, `(() => { const read = ${UNDER}; return read && read.name === ${JSON.stringify(name)} && read; })()`);
+        await press(send, 'Escape', 27);
+        expect(await closed(send)).toBe(true);
+        return read;
+      };
+      expect(await panelOf('data-request', 'Request')).toEqual({
+        name: 'Request',
+        life: ['Put at 5 by Order API: Files the request'],
+        under: 'Under this change: Added',
+        words: ['Today: not in this store, by what the flow says.'],
+        today: [],
+      });
+      // A removed item: its life is today's, by the number the step that goes bore.
+      expect(await panelOf('data-customer', 'Customer')).toEqual({
+        name: 'Customer',
+        life: ['Read at 4 by Order API: Looks up the customer', 'Not put in this flow.'],
+        under: 'Under this change: Removed',
+        words: ['With this change: not in this store, by what the flow says.'],
+        today: [],
+      });
+      // An item updated by its acts: today's life under its own.
+      expect(await panelOf('data-receipt', 'Receipt')).toEqual({
+        name: 'Receipt',
+        life: ['Put at 2 by Order API: Puts the receipt in the outbox', 'Read at 4 by Order API: Takes the receipt out The receipt leaves the outbox as it is sent.'],
+        under: 'Under this change: Updated',
+        words: ['Today:'],
+        today: ['Put at 2 by Order API: Puts the receipt in the outbox', 'Read at 4 by Order API: Takes the receipt out', 'Taken out at 4 by Order API: Takes the receipt out The receipt leaves the outbox as it is sent.'],
+      });
+    }),
+  20_000,
+);
+
 /** The icon of each tile a selector finds: a block's, a note's, or none of them. */
 const severities = (selector: string) =>
   `[...document.querySelectorAll(${JSON.stringify(`${selector} .tile svg`)})].map((icon) => (icon.classList.contains('lucide-octagon-alert') ? 'block' : icon.classList.contains('lucide-sticky-note') ? 'note' : null))`;
