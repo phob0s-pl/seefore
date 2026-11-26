@@ -51,3 +51,31 @@ test.each(SKILLS)('the skill %s has its front matter, at most 120 lines and no w
   for (const verb of ['rename', 'remove']) expect(tools.includes(`Bash(seefore ${verb} *)`)).toBe(skill === 'model');
   expect(matter.context).toBe(skill === 'review' ? 'fork' : undefined);
 });
+
+/** The readers that the skill `review` starts, each an agent of the plugin with a fresh context. */
+const READERS = ['plain', 'assumed', 'failure', 'trust'];
+
+test('the plugin ships the readers of a review and no other agent, and the skill review names each', async () => {
+  const files = (await readdir(root('plugin/agents'))).filter((name) => name.endsWith('.md')).map((name) => name.slice(0, -'.md'.length));
+  expect(files.sort()).toEqual([...READERS].sort());
+  const review = await readFile(root('plugin/skills/review/SKILL.md'), 'utf8');
+  for (const reader of READERS) expect(review).toContain(`\`seefore:${reader}\``);
+});
+
+test.each(READERS)('the reader %s reads and writes nothing: its front matter, at most 80 lines and no word of Git', async (reader) => {
+  const text = await readFile(root(`plugin/agents/${reader}.md`), 'utf8');
+  const lines = text.split('\n');
+  if (lines.at(-1) === '') lines.pop();
+  expect(lines.length).toBeLessThanOrEqual(80);
+  expect(text.match(GIT)?.[0]).toBeUndefined();
+
+  const front = /^---\n([\s\S]*?)\n---\n/.exec(text);
+  expect(front, 'front matter between two lines of ---').not.toBeNull();
+  const matter = parse(front?.[1] ?? '') as Record<string, unknown>;
+  expect(matter.name).toBe(reader);
+  expect(typeof matter.description).toBe('string');
+  // A reader has no shell and no way to write: what it finds comes back as its answer alone.
+  expect(matter.tools).toBe('Read, Glob, Grep');
+  expect(matter.model).toBe('opus');
+  expect(matter.effort).toBe('medium');
+});
