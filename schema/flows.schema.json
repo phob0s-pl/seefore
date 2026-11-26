@@ -106,7 +106,25 @@
               "maxLength": 80,
               "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
             },
-            "description": "The ids of the data this step passes, records in data/: on a step on a connection, or on a reply. A list with no id twice."
+            "description": "The ids of the data this step passes, records in data/: on a step on a connection, or on a reply. A list with no id twice. On a step that writes a store it names what the step puts there; on one that reads a store, what the store holds: what the reader makes of it is named on the step that puts it somewhere."
+          },
+          "access": {
+            "type": "string",
+            "enum": [
+              "read",
+              "write"
+            ],
+            "description": "Whether this step reads or writes the store its connection ends at: `read` or `write`. Only on a step whose connection says `access: read-write`; left out there, the store shows nothing of the step's `data`. A step that reads one thing and writes another is two steps."
+          },
+          "removes": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 80,
+              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+            },
+            "description": "The ids of the data that is no longer in the store after this step, records in data/, none twice: on a step on a connection that ends at a store. A read that takes a job off a queue names the job in `data` and in `removes`."
           }
         },
         "required": [

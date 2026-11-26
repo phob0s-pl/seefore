@@ -274,6 +274,27 @@ test('a repository is renamed where a system, an app and a change name it, and i
   expect(removeRecords(today, ['repo-deploy'])).toEqual({ files: ['repositories/repo-deploy.yaml'] });
 });
 
+test("an id in a step's `removes` is renamed, and a data record that a step names there alone is not removed", () => {
+  const taking = (step: string) => file('flows/flow-taking', lines('name: Taking a job', 'starts: A job waits', 'ends: It is done', 'feature: feature-jobs', 'steps:', step));
+  const model = [
+    MARKER,
+    file('systems/system-shop', 'name: Shop\n'),
+    file('apps/app-api', 'name: API\nin: system-shop\n'),
+    file('stores/store-jobs', 'name: Jobs\nin: system-shop\nkind: queue\n'),
+    file('connections/connection-api-takes-jobs', 'from: app-api\nto: store-jobs\naccess: read\nname: Takes a job\n'),
+    file('features/feature-jobs', 'name: Jobs\n'),
+    file('data/data-job', 'name: Job\n'),
+    taking('  - {id: takes, does: connection-api-takes-jobs, data: [data-job], removes: [data-job]}'),
+  ];
+  expect(problems(model)).toEqual([]);
+  const done = renamed(model, 'data-job data-task');
+  expect(textAt(done.files, 'flows/flow-taking.yaml')).toContain('\n  - {id: takes, does: connection-api-takes-jobs, data: [data-task], removes: [data-task]}\n');
+  expect(problems(done.files)).toEqual([]);
+  const alone = [...model.slice(0, -1), taking('  - {id: takes, does: connection-api-takes-jobs, removes: [data-job]}')];
+  expect(problems(alone)).toEqual([]);
+  expect(removeRecords(alone, ['data-job'])).toEqual({ refusals: ['`data-job` stays: flows/flow-taking.yaml:6:60 names it', 'remove what names it in the same call, or change it first'] });
+});
+
 test('a new word moves the file to its folder, its text as it was', () => {
   const model = [
     MARKER,

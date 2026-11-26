@@ -2,7 +2,7 @@ import type { ModelRecord } from './answer.ts';
 import { byName, catalogueOf } from './catalogue.ts';
 import type { Catalogue } from './catalogue.ts';
 import { flowSteps } from './flow.ts';
-import { stepsOf } from './model.ts';
+import { stepsOf, wayOf } from './model.ts';
 import type { Step } from './model.ts';
 
 /**
@@ -64,8 +64,11 @@ export type Travel = {
   dataOn: (id: string) => DataWay[];
 };
 
-/** One step of a flow, where it is: the connection it travels and the way, or the part it is in. */
-type Walk = StepAt & { feature?: string; data: string[]; connection?: ModelRecord; way?: Way; part?: string };
+/**
+ * One step of a flow, where it is: the connection it travels and the way, or the part it is in.
+ * `data` travels; what the step only `removes` does not, and is among the data of its feature.
+ */
+type Walk = StepAt & { feature?: string; data: string[]; removes: string[]; connection?: ModelRecord; way?: Way; part?: string };
 
 const text = (value: unknown): string | undefined => (typeof value === 'string' ? value : undefined);
 const list = (value: unknown): string[] => (Array.isArray(value) ? value.filter((each): each is string => typeof each === 'string') : []);
@@ -104,12 +107,16 @@ export function travelOf(records: readonly ModelRecord[], catalogue: Catalogue =
       const feature = text(flow.fields.feature);
       return read.steps.map((step, index): Walk => {
         const own = raw[index];
-        const on = step.kind === 'connection' ? own?.does : step.kind === 'reply' && own?.reply !== undefined ? first.get(own.reply)?.does : undefined;
+        // The step whose connection this one travels: itself, or for a reply the step it answers.
+        const walker = step.kind === 'connection' ? own : step.kind === 'reply' && own?.reply !== undefined ? first.get(own.reply) : undefined;
+        const on = walker?.does;
         const found = on !== undefined ? catalogue.record(on) : undefined;
         const connection = found?.kind === 'connections' ? found : undefined;
-        // A read of a store brings what the reader takes; a reply goes back the way it came.
+        // A read of a store brings what the reader takes, by the step's way; where that is not said, by the connection's `access`. A reply goes back the way it came.
         const [start, end] = [text(connection?.fields.from) ?? '', text(connection?.fields.to) ?? ''];
-        const forward = connection?.fields.access === 'read' ? { from: end, to: start } : { from: start, to: end };
+        const way = walker !== undefined ? wayOf(walker, catalogue.record)?.way : undefined;
+        const reads = way !== undefined ? way === 'read' : connection?.fields.access === 'read';
+        const forward = reads ? { from: end, to: start } : { from: start, to: end };
         const part = step.kind === 'part' && own?.does !== undefined && things.has(catalogue.record(own.does)?.kind ?? '') ? own.does : undefined;
         return {
           flow: flow.id,
@@ -120,6 +127,10 @@ export function travelOf(records: readonly ModelRecord[], catalogue: Catalogue =
           ...(feature !== undefined ? { feature } : {}),
           data: once(
             step.data.map((each) => each.id).filter((id) => catalogue.record(id)?.kind === 'data'),
+            (id) => id,
+          ),
+          removes: once(
+            (own?.removes ?? []).filter((id) => catalogue.record(id)?.kind === 'data'),
             (id) => id,
           ),
           ...(connection !== undefined ? { connection, way: step.kind === 'reply' ? { from: forward.to, to: forward.from, back: true } : { ...forward, back: false } } : {}),
@@ -153,7 +164,7 @@ export function travelOf(records: readonly ModelRecord[], catalogue: Catalogue =
         [...fromFlows, ...stated.flatMap((each) => catalogue.record(each) ?? [])].filter((record) => record.kind === 'people'),
         (record) => record.id,
       ).sort(byName);
-      const data = once(walked.flatMap((walk) => walk.data), (each) => each)
+      const data = once(walked.flatMap((walk) => [...walk.data, ...walk.removes]), (each) => each)
         .flatMap((each) => catalogue.record(each) ?? [])
         .sort(byName);
       return { flows: own.map((flow) => ({ id: flow.id, steps: stepsOfRecord(flow).length })), fromFlows, stated, people, data };

@@ -21,7 +21,13 @@ const LOOKS_FOR: Record<string, string> = {
   'part-alone': 'apps, stores and components that no connection names',
   'feature-alone': 'features that no flow names and that touch nothing',
   'step-unplaced': 'steps with neither `does` nor `reply`',
+  'way-unsaid': 'steps with data at a store and no way said',
+  'put-unnamed': 'steps that write a store and name no data',
+  'take-unsaid': 'reads of a queue that take nothing out',
 };
+
+/** The steps a count found, each by its address, `flow#step`, which the rule's own message begins with. */
+const addresses = (count: Count): string => list(count.found.map((item) => /^`([^`]+)`/.exec(item.message)?.[1] ?? item.record ?? ''));
 
 /** The ids a count found, by the folders in `nouns`, in their order, and the noun for them. */
 function byFolder(count: Count, nouns: Record<string, [string, string]>): { nouns: string; ids: string } {
@@ -70,8 +76,19 @@ export function countLine(count: Count): string | undefined {
     case 'step-unplaced':
       if (count.checked === null) return `Not counted until the errors are mended: ${LOOKS_FOR[count.rule]}.`;
       if (n === 0) return undefined;
-      // Each step by its address, `flow#step`, which the rule's own message begins with.
-      return `${n} ${many ? 'steps' : 'step'} with neither \`does\` nor \`reply\`: ${list(count.found.map((item) => /^`([^`]+)`/.exec(item.message)?.[1] ?? item.record ?? ''))}.`;
+      return `${n} ${many ? 'steps' : 'step'} with neither \`does\` nor \`reply\`: ${addresses(count)}.`;
+    case 'way-unsaid':
+      if (count.checked === null) return `Not counted until the errors are mended: ${LOOKS_FOR[count.rule]}.`;
+      if (n === 0) return undefined;
+      return `${n} ${many ? 'steps name data at a store and say' : 'step names data at a store and says'} no way, so the store shows none: ${addresses(count)}.`;
+    case 'put-unnamed':
+      if (count.checked === null) return `Not counted until the errors are mended: ${LOOKS_FOR[count.rule]}.`;
+      if (n === 0) return undefined;
+      return `${n} ${many ? 'steps write a store and name' : 'step writes a store and names'} no data: ${addresses(count)}.`;
+    case 'take-unsaid':
+      if (count.checked === null) return `Not counted until the errors are mended: ${LOOKS_FOR[count.rule]}.`;
+      if (n === 0) return undefined;
+      return `${n} ${many ? 'reads of a queue take' : 'read of a queue takes'} nothing out: ${addresses(count)}.`;
   }
   if (count.checked === null) return `Not counted until the errors are mended: ${count.says}`;
   return n > 0 ? `${n} found: ${count.says}` : undefined;

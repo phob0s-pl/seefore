@@ -280,7 +280,7 @@ export type FlowUnder = {
 };
 
 /** The keys of a step that are its own: a step is updated when one of them is written otherwise. */
-const STEP_KEYS = ['does', 'reply', 'after', 'name', 'only', 'description', 'data'] as const;
+const STEP_KEYS = ['does', 'reply', 'after', 'name', 'only', 'description', 'data', 'access', 'removes'] as const;
 /** The keys of a flow that its head shows. */
 const FLOW_KEYS = ['name', 'feature', 'only', 'description', 'starts', 'ends'] as const;
 

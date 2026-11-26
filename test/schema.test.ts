@@ -32,6 +32,16 @@ test('the schemas of a feature, a flow and data pass a good record and refuse a 
   expect(check('data', { name: 'Account details', fields: [{ description: 'What is owed' }] })).toBe(false);
 });
 
+test("the schema of a flow passes a step with `access` and `removes`, and refuses `access: read-write` and `removes` that is no list of ids", () => {
+  const flow = (step: Record<string, unknown>) => ({ name: 'Taking a job', starts: 'A job waits', ends: 'It is done', feature: 'feature-jobs', steps: [{ id: 'takes', does: 'connection-api-takes-jobs', ...step }] });
+  expect(check('flows', flow({ access: 'read', data: ['data-job'], removes: ['data-job'] }))).toBe(true);
+  expect(check('flows', flow({ access: 'write', removes: ['data-job', 'data-entry'] }))).toBe(true);
+  expect(check('flows', flow({ access: 'read-write' }))).toBe(false);
+  expect(check('flows', flow({ removes: [] }))).toBe(false);
+  expect(check('flows', flow({ removes: 'data-job' }))).toBe(false);
+  expect(check('flows', flow({ removes: ['Data job'] }))).toBe(false);
+});
+
 test('the schema of a change’s input passes a prompt with a name, with or without what was given, and refuses the rest', () => {
   const input = { name: 'Listening copies on time after a donation', prompt: 'Run two jobs at once.\nNo new hardware.' };
   expect(check('changes', input)).toBe(true);

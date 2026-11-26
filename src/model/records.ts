@@ -21,6 +21,8 @@ export const NOTE_MAX = 300;
 export const APP_KINDS = ['service', 'browser', 'mobile', 'desktop', 'command', 'function', 'job'] as const;
 export const STORE_KINDS = ['database', 'files', 'cache', 'index', 'queue', 'topic'] as const;
 export const ACCESS = ['read', 'write', 'read-write'] as const;
+/** What a step does to the store its connection ends at, where the connection says `read-write`. */
+export const STEP_ACCESS = ['read', 'write'] as const;
 
 const LINE_BREAK = /[\n\r\u0085\u2028\u2029]/;
 
@@ -407,7 +409,23 @@ const StepSchema = z
     only: Only.optional(),
     description: prose(NOTE_MAX).meta({ description: 'A sentence or two of 1 to 300 characters: a wait, a retry, a refusal.' }).optional(),
     data: ids('`data` holds the ids of records in `data/`.')
-      .meta({ description: 'The ids of the data this step passes, records in data/: on a step on a connection, or on a reply. A list with no id twice.' })
+      .meta({
+        description:
+          'The ids of the data this step passes, records in data/: on a step on a connection, or on a reply. A list with no id twice. On a step that writes a store it names what the step puts there; on one that reads a store, what the store holds: what the reader makes of it is named on the step that puts it somewhere.',
+      })
+      .optional(),
+    access: z
+      .enum(STEP_ACCESS)
+      .meta({
+        description:
+          "Whether this step reads or writes the store its connection ends at: `read` or `write`. Only on a step whose connection says `access: read-write`; left out there, the store shows nothing of the step's `data`. A step that reads one thing and writes another is two steps.",
+      })
+      .optional(),
+    removes: ids('`removes` holds the ids of records in `data/`.')
+      .meta({
+        description:
+          'The ids of the data that is no longer in the store after this step, records in data/, none twice: on a step on a connection that ends at a store. A read that takes a job off a queue names the job in `data` and in `removes`.',
+      })
       .optional(),
   })
   .meta({ description: 'One step of a flow: what happens on a connection, in a part or as a whole flow, or the answer to an earlier step.' });

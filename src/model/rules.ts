@@ -1,8 +1,8 @@
 import type { Count, Found, Place, Problem, Ruling } from './answer.ts';
 import { judgeRules, ruleReferences, ruleShape } from './judge.ts';
 import { NOUNS, WORDS, folderOfId } from './kinds.ts';
-import { buildModel, listOf, stepsOf, textOf } from './model.ts';
-import type { Entry, Model } from './model.ts';
+import { buildModel, listOf, stepsOf, textOf, wayOf } from './model.ts';
+import type { AtStore, Entry, Model, Step } from './model.ts';
 import { START, capital, list, quote } from './problem.ts';
 import { CONTEXT_MAX } from './records.ts';
 import { dotted, label } from './shape.ts';
@@ -77,6 +77,7 @@ export const FIELDS: readonly Field[] = [
   { folder: 'flows', field: 'feature', kinds: ['features'] },
   { folder: 'flows', field: 'does', kinds: ['connections', ...ENDS, 'flows'], step: true },
   { folder: 'flows', field: 'data', kinds: ['data'], many: true, step: true },
+  { folder: 'flows', field: 'removes', kinds: ['data'], many: true, step: true },
   { folder: 'context', field: 'system', kinds: ['systems'] },
 ];
 
@@ -247,6 +248,12 @@ const WRONG: Wrong[] = [
     fix: 'Write `data/<id>.yaml` with a `name` for what passes, and name that id in `data`. The connection or the part goes in `does`.',
   },
   {
+    field: 'removes',
+    found: [...ENDS, 'connections', ...NOT_THINGS.filter((kind) => kind !== 'data'), 'repositories'],
+    says: '`removes` names what is no longer in the store after the step, records in `data/`.',
+    fix: 'Name in `removes` the data record that leaves the store. The connection goes in `does`.',
+  },
+  {
     field: 'data',
     folder: 'rules',
     found: [...ENDS, 'connections', ...NOT_THINGS.filter((kind) => kind !== 'data')],
@@ -400,7 +407,7 @@ const idKind: Rule = {
 const referenceUnknown: Rule = {
   id: 'reference-unknown',
   gives: 'error',
-  says: "Each id in `in`, `from`, `to`, `owner`, `technology`, `repository`, `via`, `touches` and `feature`, in a step's `does` and `data`, in a rule of a team's own, and in `system` of a line of context, names a record.",
+  says: "Each id in `in`, `from`, `to`, `owner`, `technology`, `repository`, `via`, `touches` and `feature`, in a step's `does`, `data` and `removes`, in a rule of a team's own, and in `system` of a line of context, names a record.",
   check(model) {
     const findings: Finding[] = [];
     for (const { entry, spec, id, path, words } of references(model)) {
@@ -578,9 +585,10 @@ const stepTwice: Rule = {
 const stepShape: Rule = {
   id: 'step-shape',
   gives: 'error',
-  says: 'A step has not both `does` and `reply`; it has a `name` unless `does` names a flow or a connection with a name; and `data` stands only on a step on a connection, or on a reply.',
+  says: 'A step has not both `does` and `reply`; it has a `name` unless `does` names a flow or a connection with a name; `data` stands only on a step on a connection, or on a reply; and `access` and `removes` only on a step at a store.',
   check(model) {
     const findings: Finding[] = [];
+    const record = (id: string) => model.record(id);
     for (const entry of flowsOf(model)) {
       for (const step of stepsOf(entry)) {
         const which = stepWords(step.index);
@@ -613,7 +621,88 @@ const stepShape: Rule = {
           else if (found?.on === 'part') misplaced(`it happens at ${target}. ${travels}`, 'Take `data` off this step, and name the data on the step whose connection carries it.');
           else if (found?.on === 'flow') misplaced(`it runs the flow ${quote(found.entry.id)}. ${travels}`, `Take \`data\` off this step, and name the data on the steps of ${quote(found.entry.id)} that pass it.`);
         }
+        // `access` and `removes` say what a step does to a store: each stands only on a step at one.
+        const keys = (['access', 'removes'] as const).filter((key) => step.fields[key] !== undefined);
+        if (keys.length === 0 || (step.reply === undefined && wayOf(step, record) !== undefined)) continue;
+        const where = notAtStore(model, step, found);
+        if (where === undefined) continue;
+        for (const key of keys)
+          findings.push({
+            entry,
+            field: `${at}.${key}`,
+            message: `${capital(which)} has \`${key}\`, but ${where}. \`access\` and \`removes\` say what a step does to a store.`,
+            fix:
+              key === 'access'
+                ? 'Take `access` off this step. What a connection does to a store is said in its own `access`.'
+                : 'Take `removes` off this step, and name the data on the step whose connection ends at the store it leaves.',
+          });
       }
+    }
+    return findings;
+  },
+};
+
+/**
+ * Why a step is at no store, in words that follow "but": "it is a reply", "it runs the flow
+ * `flow-x`", "its connection `connection-x` ends at `app-y`, which is an app". Nothing where
+ * what `does` names is not sure: that is a problem of its own.
+ */
+function notAtStore(model: Model, step: Step, found: ReturnType<typeof onWhat>): string | undefined {
+  if (step.reply !== undefined) return 'it is a reply';
+  if (step.does === undefined) return 'neither `does` nor `reply`: nothing says where it happens';
+  if (found === undefined) return undefined;
+  if (found.on === 'part') return `it happens at ${quote(found.entry.id)}, which is ${NOUNS[found.entry.kind]}`;
+  if (found.on === 'flow') return `it runs the flow ${quote(found.entry.id)}`;
+  const to = found.entry.ok ? textOf(found.entry, 'to') : undefined;
+  const kind = to === undefined ? undefined : model.kindOf(to);
+  return to === undefined || kind === undefined ? undefined : `its connection ${quote(found.entry.id)} ends at ${quote(to)}, which is ${NOUNS[kind]}`;
+}
+
+/** What a store holds, in words that follow "which is", by its `kind`. */
+const STORE_NOUNS: Record<string, string> = { database: 'a database', files: 'a store of files', cache: 'a cache', index: 'an index', queue: 'a queue', topic: 'a topic' };
+
+const stepAccess: Rule = {
+  id: 'step-access',
+  gives: 'error',
+  says: '`access` stands on a step only where its connection says `read-write`; `removes` on a read only at a queue; one id in both `data` and `removes` only on a read of a queue.',
+  check(model) {
+    const findings: Finding[] = [];
+    for (const { entry, step, store } of atStores(model)) {
+      const which = stepWords(step.index);
+      const at = `steps[${step.index}]`;
+      const access = textOf(model.record(store.connection) as Entry, 'access');
+      if (step.access !== undefined && access !== 'read-write')
+        findings.push({
+          entry,
+          field: `${at}.access`,
+          message: `${capital(which)} says \`access: ${step.access}\`, and its connection ${quote(store.connection)} ${access === undefined ? 'has no `access`' : `says \`${access}\``}. A step says its own way only where its connection says \`read-write\`.`,
+          fix:
+            access === undefined
+              ? `Say in \`access\` of ${quote(store.connection)} what it does to the store. Keep \`access\` on the step only where that is \`read-write\`.`
+              : 'Take `access` off the step: its connection says the way. If this step goes the other way, name in `does` a connection that does.',
+        });
+      // The kind of a store whose file did not read is not known: nothing is said of it.
+      const held = model.record(store.store);
+      const kind = held?.ok ? textOf(held, 'kind') : undefined;
+      if (step.removes.length > 0 && store.way === 'read' && held?.ok && kind !== 'queue')
+        findings.push({
+          entry,
+          field: `${at}.removes`,
+          message: `${capital(which)} has \`removes\`, and it reads ${quote(store.store)}, ${kind === undefined ? 'which has no `kind`' : `which is ${STORE_NOUNS[kind] ?? quote(kind)}`}. A read takes a thing out only of a queue.`,
+          fix: 'If the step deletes, it writes: say `access: write` on it where its connection says `read-write`, or name in `does` a connection that writes. If the store is a queue, say `kind: queue` on it.',
+        });
+      // One id in both lists is a take, which only a read makes. On a read of a store that is no queue it is told above, once, at `removes`;
+      // an id that names no data record is told by the references alone.
+      if (store.way === 'read') continue;
+      step.removes.forEach((id, index) => {
+        if (!step.data.includes(id) || model.record(id)?.kind !== 'data') return;
+        findings.push({
+          entry,
+          field: `${at}.removes[${index}]`,
+          message: `${quote(id)} is in both \`data\` and \`removes\` of ${which}, ${store.way === 'write' ? `which writes ${quote(store.store)}` : 'which does not say its way'}. One id in both is a take: a read that takes the thing out of a queue.`,
+          fix: 'Name it in `removes` alone if the step takes it out, or in `data` alone if the step puts it.',
+        });
+      });
     }
     return findings;
   },
@@ -766,7 +855,8 @@ const recordUnused: Rule = {
     for (const entry of model.entries) {
       if (entry.fields['owner'] !== undefined) named.add(textOf(entry, 'owner') as string);
       for (const id of listOf(entry, 'technology')) named.add(id);
-      for (const step of stepsOf(entry)) for (const id of step.data) named.add(id);
+      // Data that a step only takes out of a store is in use too.
+      for (const step of stepsOf(entry)) for (const id of [...step.data, ...step.removes]) named.add(id);
     }
     return model.entries
       .filter((entry) => (entry.kind === 'owners' || entry.kind === 'technologies' || entry.kind === 'data') && !named.has(entry.id))
@@ -836,6 +926,79 @@ const stepUnplaced: Rule = {
   },
 };
 
+/**
+ * Each step at a store, with its way there and its address, `flow#step`, for the counts of what a
+ * step leaves unsaid of its store. A reply is at no store, nor a step that has both `does` and
+ * `reply`, which is a problem of `step-shape`.
+ */
+function atStores(model: Model): { entry: Entry; step: Step; store: AtStore; address: string }[] {
+  const record = (id: string) => model.record(id);
+  return flowsOf(model).flatMap((entry) =>
+    stepsOf(entry).flatMap((step) => {
+      const store = step.reply === undefined ? wayOf(step, record) : undefined;
+      return store === undefined ? [] : [{ entry, step, store, address: quote(`${entry.id}#${step.id}`) }];
+    }),
+  );
+}
+
+const wayUnsaid: Rule = {
+  id: 'way-unsaid',
+  gives: 'count',
+  says: 'Each step with `data` at a store says whether it reads or writes.',
+  looksAt: ['flows'],
+  check(model) {
+    return atStores(model)
+      .filter(({ step, store }) => step.data.length > 0 && store.way === undefined)
+      .map(({ entry, step, store, address }) => ({
+        entry,
+        field: `steps[${step.index}]`,
+        message: `${address} names data at ${quote(store.store)} and does not say whether it reads or writes, so the store shows none of it.`,
+        fix:
+          model.record(store.connection)?.fields['access'] === undefined
+            ? `Say in \`access\` of ${quote(store.connection)} what it does to the store.`
+            : 'Say `access: read` or `access: write` on the step.',
+      }));
+  },
+};
+
+const putUnnamed: Rule = {
+  id: 'put-unnamed',
+  gives: 'count',
+  says: 'Each step that writes a store names what it puts or takes out.',
+  looksAt: ['flows'],
+  check(model) {
+    return atStores(model)
+      .filter(({ step, store }) => store.way === 'write' && step.data.length === 0 && step.removes.length === 0)
+      .map(({ entry, step, store, address }) => ({
+        entry,
+        field: `steps[${step.index}]`,
+        message: `${address} writes ${quote(store.store)} and names no data, so the store shows nothing of it.`,
+        fix: 'Name in `data` what the step puts, or in `removes` what it takes out. Where no data record says it, write one.',
+      }));
+  },
+};
+
+const takeUnsaid: Rule = {
+  id: 'take-unsaid',
+  gives: 'count',
+  says: 'Each read of a queue with `data` says what it takes out.',
+  looksAt: ['flows'],
+  check(model) {
+    const queue = (id: string): boolean => {
+      const store = model.record(id);
+      return store?.ok === true && textOf(store, 'kind') === 'queue';
+    };
+    return atStores(model)
+      .filter(({ step, store }) => store.way === 'read' && queue(store.store) && step.data.length > 0 && step.removes.length === 0)
+      .map(({ entry, step, store, address }) => ({
+        entry,
+        field: `steps[${step.index}]`,
+        message: `${address} reads ${list(step.data)} from the queue ${quote(store.store)} and takes nothing out, so the queue keeps ${step.data.length === 1 ? 'it' : 'them'}.`,
+        fix: 'If the step takes it off the queue, name it in `removes` too. If the queue keeps its rows, leave it.',
+      }));
+  },
+};
+
 /** All the rules, in the order they are listed. */
 export const RULES: readonly Rule[] = [
   idKind,
@@ -846,6 +1009,7 @@ export const RULES: readonly Rule[] = [
   connectionTwice,
   stepTwice,
   stepShape,
+  stepAccess,
   stepEarlier,
   flowInItself,
   ruleShape,
@@ -854,6 +1018,9 @@ export const RULES: readonly Rule[] = [
   partAlone,
   featureAlone,
   stepUnplaced,
+  wayUnsaid,
+  putUnnamed,
+  takeUnsaid,
 ];
 
 /**

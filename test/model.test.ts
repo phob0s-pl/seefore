@@ -96,6 +96,9 @@ test('a small good model with a feature, a flow and a data record reads with no 
     ['part-alone', 0],
     ['feature-alone', 0],
     ['step-unplaced', 0],
+    ['way-unsaid', 0],
+    ['put-unnamed', 0],
+    ['take-unsaid', 0],
   ]);
 });
 
@@ -112,7 +115,7 @@ test('a fault inside a step or a field has its own place and names it in words',
     ['value-invalid', 8, 21],
     ['value-too-big', 9, 23],
   ]);
-  expect(steps[0]?.message).toBe('`colour` is not a key of the first step. Its keys are `id`, `does`, `reply`, `after`, `name`, `only`, `description` and `data`.');
+  expect(steps[0]?.message).toBe('`colour` is not a key of the first step. Its keys are `id`, `does`, `reply`, `after`, `name`, `only`, `description`, `data`, `access` and `removes`.');
   expect(steps[1]?.message).toMatch(/^`does` of the second step holds the id of a connection, a part or a flow\./);
   expect(steps[2]?.message).toBe('`name` of the third step has 120 characters. It may have at most 100.');
 
@@ -123,6 +126,14 @@ test('a fault inside a step or a field has its own place and names it in words',
   expect(fields.map(({ file, rule, line, message }) => [file, rule, line, message])).toEqual([
     ['data/data-order.yaml', 'key-missing', 4, '`name` is missing from the second field.'],
     ['data/data-parcel.yaml', 'field-twice', 5, "The third field has the name `items`, as the first field has. A field's name stands once in its record."],
+  ]);
+});
+
+test("a step's `access` is `read` or `write`, and `read-write` is refused as any value its key does not take; an id stands once in `removes`", () => {
+  const steps = problemsOf(flow('  - {id: a, name: A, access: read-write}\n  - {id: b, name: B, removes: [data-job, data-job]}\n'));
+  expect(steps.map(({ rule, line, column, message }) => [rule, line, column, message])).toEqual([
+    ['value-not-allowed', 6, 30, '`access` of the first step must be one of `read` and `write`.'],
+    ['value-invalid', 7, 42, '`data-job` is in `removes` of the second step twice. Keep one.'],
   ]);
 });
 
@@ -148,7 +159,7 @@ test('`source` is no key: a part, a connection and a step that bear it are each 
     ],
   ]);
   expect(said({ path: 'features/feature-selling.yaml', text: 'name: Selling\n' }, flow('  - {id: sells, does: app-api, name: Sells the tea, source: [api/sell.go]}\n'))).toEqual([
-    ['key-unknown', 'flows/flow-a-sale.yaml', 6, 'steps', '`source` is not a key of the first step. Its keys are `id`, `does`, `reply`, `after`, `name`, `only`, `description` and `data`.'],
+    ['key-unknown', 'flows/flow-a-sale.yaml', 6, 'steps', '`source` is not a key of the first step. Its keys are `id`, `does`, `reply`, `after`, `name`, `only`, `description`, `data`, `access` and `removes`.'],
   ]);
   // So it is for every other part, and for a record that a change adds.
   expect(

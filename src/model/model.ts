@@ -45,7 +45,19 @@ export function listOf(entry: Entry, field: string): string[] {
 }
 
 /** A step of a flow that read: its place in the list, its keys, and the whole of it. */
-export type Step = { index: number; id: string; does?: string; reply?: string; name?: string; after: string[]; data: string[]; fields: Record<string, unknown> };
+export type Step = {
+  index: number;
+  id: string;
+  does?: string;
+  reply?: string;
+  name?: string;
+  after: string[];
+  data: string[];
+  /** What it does to the store its connection ends at, as written: `read` or `write`. */
+  access?: string;
+  removes: string[];
+  fields: Record<string, unknown>;
+};
 
 /** The steps of a flow, in order. None when the entry is no flow, or its file did not read. */
 export function stepsOf(entry: Entry): Step[] {
@@ -58,8 +70,44 @@ export function stepsOf(entry: Entry): Step[] {
     const does = text('does');
     const reply = text('reply');
     const name = text('name');
-    return { index, id: text('id') ?? '', ...(does !== undefined ? { does } : {}), ...(reply !== undefined ? { reply } : {}), ...(name !== undefined ? { name } : {}), after: many('after'), data: many('data'), fields };
+    const access = text('access');
+    return {
+      index,
+      id: text('id') ?? '',
+      ...(does !== undefined ? { does } : {}),
+      ...(reply !== undefined ? { reply } : {}),
+      ...(name !== undefined ? { name } : {}),
+      after: many('after'),
+      data: many('data'),
+      ...(access !== undefined ? { access } : {}),
+      removes: many('removes'),
+      fields,
+    };
   });
+}
+
+/** A record as `wayOf` asks about it: its kind, which is its folder, and what it holds. An entry of the check and a record of `/api/model` are both one. */
+type Held = { kind: string; fields: Record<string, unknown> };
+
+/** A step at a store: the connection its `does` names, the store that connection ends at, and the step's way there. No `way` where it is not said. */
+export type AtStore = { connection: string; store: string; way?: 'read' | 'write' };
+
+/**
+ * Where a step is at a store, and which way it goes there; nothing for a step at no store. A
+ * step is at a store when `does` names a connection whose `to` is a store. Its way is the
+ * connection's `access` where that is `read` or `write`; the step's own `access` where the
+ * connection says `read-write`; and not said where neither says it. The checks, the pages and
+ * the items of a flow all ask this one function. `record` finds a record by its id.
+ */
+export function wayOf(step: Step, record: (id: string) => Held | undefined): AtStore | undefined {
+  const connection = step.does === undefined ? undefined : record(step.does);
+  if (step.does === undefined || connection?.kind !== 'connections') return undefined;
+  const to = connection.fields['to'];
+  if (typeof to !== 'string' || record(to)?.kind !== 'stores') return undefined;
+  const access = connection.fields['access'];
+  const own = step.access === 'read' || step.access === 'write' ? step.access : undefined;
+  const way = access === 'read' || access === 'write' ? access : access === 'read-write' ? own : undefined;
+  return { connection: step.does, store: to, ...(way !== undefined ? { way } : {}) };
 }
 
 /** Builds the model once from the entries. */

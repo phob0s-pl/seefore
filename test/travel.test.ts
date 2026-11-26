@@ -121,6 +121,38 @@ test('the steps in a part are those that name it, not those on a connection that
   expect([steps.stepsIn('app-web'), steps.stepsIn('system-shop'), steps.stepsIn('store-nowhere')]).toEqual([[], [], []]);
 });
 
+test("`access: read` on a step turns its data round on a connection's page and a data record's; with no way said both show it as today; what a step only removes does not travel, and is among its feature's data", () => {
+  const on = travel(
+    file('connections/connection-api-uses-orders.yaml', 'from: app-api\nto: store-orders\naccess: read-write\nname: Uses the orders\n'),
+    file('data/data-refund.yaml', 'name: Refund\n'),
+    file(
+      'flows/flow-refunds.yaml',
+      [
+        'name: Refunding an order',
+        'starts: A fan asks for the money back',
+        'ends: The order is refunded',
+        'feature: feature-refunds',
+        'steps:',
+        '  - {id: finds, does: connection-api-uses-orders, access: read, data: [data-order]}',
+        '  - {id: notes, does: connection-api-uses-orders, data: [data-payment]}',
+        '  - {id: clears, does: connection-api-uses-orders, access: write, removes: [data-refund]}',
+        '',
+      ].join('\n'),
+    ),
+  );
+  expect(on.dataOn('connection-api-uses-orders')).toEqual([
+    { data: 'data-order', from: 'store-orders', to: 'app-api', back: false },
+    { data: 'data-payment', from: 'app-api', to: 'store-orders', back: false },
+  ]);
+  expect(on.waysOf('data-order')).toContainEqual({ connection: 'connection-api-uses-orders', from: 'store-orders', to: 'app-api', back: false });
+  expect(on.waysOf('data-payment')).toContainEqual({ connection: 'connection-api-uses-orders', from: 'app-api', to: 'store-orders', back: false });
+  // A read the connection says goes as it did.
+  expect(on.dataOn('connection-web-reads-orders')).toEqual([{ data: 'data-order', from: 'store-orders', to: 'app-web', back: false }]);
+  expect([on.stepsWith('data-refund'), on.waysOf('data-refund')]).toEqual([[], []]);
+  expect(on.stepsOn('connection-api-uses-orders').map((step) => step.step)).toEqual(['finds', 'notes', 'clears']);
+  expect(ids(on.feature('feature-refunds').data)).toEqual(['data-order', 'data-payment', 'data-refund']);
+});
+
 test('a data record is named by its steps, the flows by name and the steps in order, and is seen on each connection once a way', () => {
   const data = travel();
   expect(data.stepsWith('data-payment')).toEqual([

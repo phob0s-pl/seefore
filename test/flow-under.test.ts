@@ -104,6 +104,29 @@ test('a step is updated when one of its own keys is written otherwise, and not w
   expect(step('checks')).toMatchObject({ mark: 'added', was: [], acts: 'In API' });
 });
 
+test('a step whose own `access` or `removes` is written otherwise is updated, though nothing else of it differs', () => {
+  const keeping = (...steps: string[]) => ['name: Keeping the audit', 'starts: An order is checked', 'ends: The audit is kept', 'feature: feature-ordering', 'steps:', ...steps, ''].join('\n');
+  const reads = '{id: reads, does: connection-api-keeps-audit, access: read, data: [data-entry]}';
+  const clears = '{id: clears, does: connection-api-keeps-audit, access: write, removes: [data-entry]}';
+  const notes = '{id: notes, does: connection-api-keeps-audit, access: write, data: [data-entry]}';
+  const today = [
+    ...MODEL,
+    file('connections/connection-api-keeps-audit', 'from: app-api\nto: store-audit\naccess: read-write\nname: Keeps the audit\n'),
+    file('data/data-entry', 'name: Entry\n'),
+    file('data/data-note', 'name: Note\n'),
+    file('flows/flow-keeping', keeping(`  - ${reads}`, `  - ${clears}`, `  - ${notes}`)),
+  ];
+  const change = ['update:', '  flows/flow-keeping:', '    steps:', `      - ${reads.replace('access: read', 'access: write')}`, `      - ${clears.replace('[data-entry]', '[data-note]')}`, `      - ${notes}`, ''].join('\n');
+  const read = readModel([...today, file('changes/more', `name: More\nprompt: Make it so.\n${change}`)]);
+  expect(read.problems).toEqual([]);
+  const flow = changesOf(read.records, read.laid).flow('more', 'flow-keeping');
+  expect(flow?.steps.map((step) => [step.id, step.mark])).toEqual([
+    ['reads', 'updated'],
+    ['clears', 'updated'],
+    ['notes', 'same'],
+  ]);
+});
+
 test('a step that only moves is in the list once, moved and with no mark, and the steps it passes have not moved', () => {
   const { read, flow } = under('update:\n  flows/flow-placing:\n    steps: [saves, places, reads, hands-on, notes, confirms]\n');
   expect(read.problems).toEqual([]);
