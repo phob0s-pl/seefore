@@ -52,9 +52,12 @@ test('a change is found by its id, also one that another record has, and another
   expect(without.change('nobody')).toBeUndefined();
 });
 
-test('a change has its input: the prompt, and what the person answered when asked, line by line', () => {
+test('a change has its input: the prompt, what the person answered when asked, and what the assistant chose without the person, line by line', () => {
   const read = changes(
-    change('post', 'name: Orders by post\nprompt: |-\n  Some customers cannot pay online.\n\n  Let a clerk type in an order that came by post.\ngiven:\n  - A clerk types in a few orders a day.\n  - A posted order is paid on delivery.\n'),
+    change(
+      'post',
+      'name: Orders by post\nprompt: |-\n  Some customers cannot pay online.\n\n  Let a clerk type in an order that came by post.\ngiven:\n  - A clerk types in a few orders a day.\n  - A posted order is paid on delivery.\nassumed:\n  - The clerk types an order in on the page customers use. A page of the clerk\'s own would change it.\n',
+    ),
     change('archive', 'name: Archive the old orders\nprompt: Keep orders for seven years.\n'),
   );
   expect(read.change('post')).toMatchObject({
@@ -62,13 +65,17 @@ test('a change has its input: the prompt, and what the person answered when aske
     name: 'Orders by post',
     prompt: 'Some customers cannot pay online.\n\nLet a clerk type in an order that came by post.',
     given: ['A clerk types in a few orders a day.', 'A posted order is paid on delivery.'],
+    assumed: ["The clerk types an order in on the page customers use. A page of the clerk's own would change it."],
   });
-  // A change that was asked nothing has no line, and no empty heading follows from it.
-  expect(read.change('archive')).toMatchObject({ id: 'archive', name: 'Archive the old orders', prompt: 'Keep orders for seven years.', given: [] });
+  // A change that was asked nothing, and chose nothing unasked, has no line, and no empty heading follows from it.
+  expect(read.change('archive')).toMatchObject({ id: 'archive', name: 'Archive the old orders', prompt: 'Keep orders for seven years.', given: [], assumed: [] });
   // The check tells a prompt or a line that is no text; the page leaves it out.
-  const faulty = changesOf([record('changes', 'odd', { name: 'Odd', prompt: 7, given: ['A line.', 3, '  ', 'Another.'] }), record('changes', 'worse', { name: 'Worse', given: 'One line.' })]);
-  expect(faulty.change('odd')).toMatchObject({ id: 'odd', name: 'Odd', given: ['A line.', 'Another.'] });
-  expect(faulty.change('worse')).toMatchObject({ id: 'worse', name: 'Worse', given: [] });
+  const faulty = changesOf([
+    record('changes', 'odd', { name: 'Odd', prompt: 7, given: ['A line.', 3, '  ', 'Another.'], assumed: [null, 'A choice.', ''] }),
+    record('changes', 'worse', { name: 'Worse', given: 'One line.', assumed: { one: 'A choice.' } }),
+  ]);
+  expect(faulty.change('odd')).toMatchObject({ id: 'odd', name: 'Odd', given: ['A line.', 'Another.'], assumed: ['A choice.'] });
+  expect(faulty.change('worse')).toMatchObject({ id: 'worse', name: 'Worse', given: [], assumed: [] });
 });
 
 test('a decided change has its status, and a rejected one the reason for the no; neither is laid', () => {

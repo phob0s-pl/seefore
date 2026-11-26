@@ -28,11 +28,12 @@ export type Decision = (typeof DECISIONS)[number];
 
 /**
  * One change as its pages show it: its id; its name, or its id when it has no name of text; what
- * was asked for, when it is text; what the person answered when asked, line by line; the records
- * it names, in the file's order; whether the check could lay it over the model, which it never
- * does for a decided one; and, once it is decided, how, with the person's reason for a no.
+ * was asked for, when it is text; what the person answered when asked, line by line; what the
+ * assistant chose without the person, line by line; the records it names, in the file's order;
+ * whether the check could lay it over the model, which it never does for a decided one; and, once
+ * it is decided, how, with the person's reason for a no.
  */
-export type Change = { id: string; name: string; prompt?: string; given: string[]; touched: Touched[]; laid: boolean; status?: Decision; why?: string };
+export type Change = { id: string; name: string; prompt?: string; given: string[]; assumed: string[]; touched: Touched[]; laid: boolean; status?: Decision; why?: string };
 
 /** The model as it would be with a change: its records, and what the change touches, for a catalogue made of them. */
 export type World = { records: ModelRecord[]; touch: Touch };
@@ -125,6 +126,8 @@ const collator = new Intl.Collator('en', { sensitivity: 'accent', numeric: true 
 /** A text with something in it, or nothing. */
 const text = (value: unknown): string | undefined => (typeof value === 'string' && value.trim() !== '' ? value : undefined);
 const isMapping = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
+/** The lines of a list of a change's input, as `given` and `assumed` hold them; none for what is no list. A line that is no text is a fault the check tells; the page leaves it out. */
+const linesOf = (value: unknown): string[] => (Array.isArray(value) ? value.flatMap((line) => text(line) ?? []) : []);
 
 /** A path as a change writes it, `folder/id`, in its two parts; nothing for what is no path. */
 function parts(path: unknown): { folder: string; id: string } | undefined {
@@ -160,8 +163,6 @@ export function changesOf(records: readonly ModelRecord[], laid: readonly Laid[]
   const read = new Map(laid.map((each) => [each.change, each.records]));
   const all = [...first.values()].sort(byName).map((record): Change => {
     const prompt = text(record.fields.prompt);
-    // A line that is no text is a fault the check tells; the page leaves it out.
-    const given = Array.isArray(record.fields.given) ? record.fields.given.flatMap((line) => text(line) ?? []) : [];
     // The check lays no decided change, so its `laid` is false by itself.
     const status = DECISIONS.find((decision) => decision === record.fields.status);
     const why = text(record.fields.why);
@@ -169,7 +170,8 @@ export function changesOf(records: readonly ModelRecord[], laid: readonly Laid[]
       id: record.id,
       name: text(record.fields.name) ?? record.id,
       ...(prompt !== undefined ? { prompt } : {}),
-      given,
+      given: linesOf(record.fields.given),
+      assumed: linesOf(record.fields.assumed),
       touched: touchedOf(record.fields),
       laid: read.has(record.id),
       ...(status !== undefined ? { status } : {}),
