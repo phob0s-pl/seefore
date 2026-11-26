@@ -495,6 +495,10 @@ function check(model: ModelAnswer, json: boolean, io: Io): number {
   for (const problem of model.problems) for (const line of problemLines(problem)) io.out(line);
   if (model.problems.length > 0) io.out('');
   io.out(summaryLine(model));
+  // Each open change is laid over the model and read with it. A clean check that says nothing of it leaves its writer unsure that the change was held.
+  const open = model.records.filter((record) => record.kind === 'changes' && record.fields.status === undefined).length;
+  const laid = model.laid.length;
+  if (open > 0) io.out(laid === open ? `Open changes: ${open}, each laid over the model alone and held with it.` : `Open changes: ${open}. ${laid} laid over the model, each alone, and held with it; ${open - laid} not laid, for the errors above.`);
   // A count is no problem, and the line says so: a line with no word before it was taken for a warning.
   for (const line of countLines(model.counts)) io.out(line.startsWith('Not counted') ? line : `Counted: ${line}`);
   const rulings = rulingsLine(model.rulings);

@@ -28,6 +28,18 @@
       },
       "description": "What the person answered when asked, each answer put into one line of 1 to 300 characters by the assistant: 1 to 10 lines, none twice. Nothing the prompt says already, and nothing the person did not say. Left out when nothing was asked."
     },
+    "assumed": {
+      "minItems": 1,
+      "maxItems": 15,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 300,
+        "pattern": "^\\S(?:[^\\n\\r\\u0085\\u2028\\u2029]*\\S)?$"
+      },
+      "description": "What the assistant chose without the person, each choice in one line of 1 to 300 characters with what would change it: 1 to 15 lines, none twice. A choice the person made is a line of `given`, never one of these. Left out when nothing was chosen unasked."
+    },
     "add": {
       "description": "The records the change adds: each under its path, `folder/id`, whole, as its own file would hold it. The id is one that no record has.",
       "type": "object",
@@ -301,7 +313,7 @@
     "prompt"
   ],
   "additionalProperties": false,
-  "description": "A change: its input (the prompt a person gave, what they answered when asked, and a name written last), and its body, the records it adds, updates and removes. With no body it is an input alone. Once it is decided it bears `status`.",
+  "description": "A change: its input (the prompt a person gave, what they answered when asked, what the assistant chose without them, and a name written last), and its body, the records it adds, updates and removes. With no body it is an input alone. Once it is decided it bears `status`.",
   "if": {
     "properties": {
       "status": {

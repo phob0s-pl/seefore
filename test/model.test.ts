@@ -188,6 +188,33 @@ test('the check names what a list holds, and says that a key of one value may on
   ).toEqual([]);
 });
 
+test('the lines of `assumed` are held as those of `given` are, and each fault of them names `assumed`', () => {
+  const said = (key: string, lines: string[]) =>
+    problemsOf(...PARTS, { path: 'changes/a-change.yaml', text: `name: A change\nprompt: Make it so.\n${key}:${lines.length === 0 ? ' []' : lines.map((line) => `\n  - ${line}`).join('')}\n` }).map((problem) => [problem.rule, problem.line, problem.field, problem.message, problem.fix]);
+  const faulty = ['""', '" A space first."', '"One line\\nand a second"', 'x'.repeat(301), 'The copies are files.', 'The copies are files.'];
+  const change = 'Change the value as the message says, or delete the key if it is optional.';
+  expect(said('assumed', faulty)).toEqual([
+    ['value-invalid', 4, 'assumed', 'A line of `assumed` is empty.', change],
+    ['value-too-small', 4, 'assumed', 'The first line is empty.', 'Give the key a longer value, as the message says, or delete the key if it is optional.'],
+    ['value-invalid', 5, 'assumed', 'A line of `assumed` starts or ends with a space. Take the space off.', change],
+    ['value-invalid', 6, 'assumed', 'A line of `assumed` must be on one line.', change],
+    ['value-too-big', 7, 'assumed', 'The fourth line has 301 characters. It may have at most 300.', 'Shorten the value to the limit the message gives.'],
+    ['value-invalid', 9, 'assumed', '`assumed` has the same line twice. Keep one.', change],
+  ]);
+  // A large change turns on more choices than a person is asked questions: fifteen lines, where `given` has ten.
+  const many = Array.from({ length: 16 }, (_, index) => `Choice ${index + 1}.`);
+  expect(said('assumed', many.slice(0, 15))).toEqual([]);
+  expect(said('assumed', many).map((each) => [each[3], each[4]])).toEqual([['`assumed` is too long a list: it may have at most 15.', 'Take lines out of `assumed` until it has at most 15.']]);
+  expect(said('given', many.slice(0, 11)).map((each) => each[3])).toEqual(['`given` is too long a list: it may have at most 10.']);
+  expect(said('assumed', []).map((each) => [each[3], each[4]])).toEqual([['`assumed` is an empty list.', 'Give `assumed` at least one line, or delete the key.']]);
+  // The two keys share one shape: `given` is told the very same, under its own name.
+  const under = (key: string) => (each: unknown[]) => each.map((part) => (typeof part === 'string' ? part.replaceAll('`assumed`', `\`${key}\``).replace(/^assumed$/, key) : part));
+  for (const lines of [faulty, []]) expect(said('given', lines)).toEqual(said('assumed', lines).map(under('given')));
+  // A change may have both, and either alone.
+  expect(said('assumed', ['The copies are files. A database would serve better if the accountants want to search them.'])).toEqual([]);
+  expect(problemsOf(...PARTS, { path: 'changes/a-change.yaml', text: 'name: A change\nprompt: Make it so.\ngiven:\n  - A day late is fine.\nassumed:\n  - The copies are files.\n' })).toEqual([]);
+});
+
 test('a sentence cut by a comma inside a short mapping is told as that, and a key that is simply not known is not', () => {
   const [cut] = problemsOf({ path: 'data/data-order.yaml', text: 'name: Order\nfields:\n  - {name: items, description: What is bought, and how many}\n' });
   expect(cut).toMatchObject({ rule: 'key-unknown', line: 3 });

@@ -537,24 +537,45 @@ export const RuleSchema = z
 
 /** The most characters of the prompt a change starts from: room for a full brief. */
 export const PROMPT_MAX = 4000;
-/** The most lines of `given`: the answers a person gave, not the conversation. */
+/** The most lines of `given`, and of `assumed`: the answers a person gave and the choices made without them, not the conversation. */
 export const GIVEN_MAX = 10;
+/** The most lines of `assumed`: a large change turns on more choices than a person is asked questions. */
+export const ASSUMED_MAX = 15;
 /** How a change is decided: its records are in the model's files, or the person said no. A change with neither is open. */
 export const DECISIONS = ['applied', 'rejected'] as const;
 
-/** One line of `given`: an answer of the person, in one sentence or two on one line. */
-const GivenLine = z
-  .string()
-  .min(1, { error: 'A line of `given` is empty.' })
-  .max(NOTE_MAX)
-  .regex(ONE_LINE, {
-    error: (issue) => {
-      const text = String(issue.input);
-      if (!/\S/.test(text)) return 'A line of `given` is empty.';
-      if (LINE_BREAK.test(text)) return 'A line of `given` must be on one line.';
-      return 'A line of `given` starts or ends with a space. Take the space off.';
-    },
-  });
+/**
+ * The lines of a change's input under the key `key`, as `given` and `assumed` hold them: each a
+ * sentence or two on one line of 1 to 300 characters, 1 to `max` lines, none twice. `key` is
+ * named in the messages.
+ */
+function inputLines(key: string, max: number) {
+  const line = `A line of ${quote(key)}`;
+  return z
+    .array(
+      z
+        .string()
+        .min(1, { error: `${line} is empty.` })
+        .max(NOTE_MAX)
+        .regex(ONE_LINE, {
+          error: (issue) => {
+            const text = String(issue.input);
+            if (!/\S/.test(text)) return `${line} is empty.`;
+            if (LINE_BREAK.test(text)) return `${line} must be on one line.`;
+            return `${line} starts or ends with a space. Take the space off.`;
+          },
+        }),
+    )
+    .min(1)
+    .max(max)
+    .superRefine((lines, context) => {
+      const seen = new Set<string>();
+      lines.forEach((each, index) => {
+        if (seen.has(each)) context.addIssue({ code: 'custom', path: [index], message: `${quote(key)} has the same line twice. Keep one.` });
+        seen.add(each);
+      });
+    });
+}
 
 /**
  * A change, a file of `changes/`: its input, what a person brings before anything is drafted;
@@ -572,20 +593,16 @@ export const ChangeSchema = z
         description:
           'What the person asked for, in 1 to 4,000 characters: as typed, or put into better words by the assistant with nothing added. It may be a line, a need or a full brief.',
       }),
-    given: z
-      .array(GivenLine)
-      .min(1)
-      .max(GIVEN_MAX)
-      .superRefine((lines, context) => {
-        const seen = new Set<string>();
-        lines.forEach((line, index) => {
-          if (seen.has(line)) context.addIssue({ code: 'custom', path: [index], message: '`given` has the same line twice. Keep one.' });
-          seen.add(line);
-        });
-      })
+    given: inputLines('given', GIVEN_MAX)
       .meta({
         description:
           "What the person answered when asked, each answer put into one line of 1 to 300 characters by the assistant: 1 to 10 lines, none twice. Nothing the prompt says already, and nothing the person did not say. Left out when nothing was asked.",
+      })
+      .optional(),
+    assumed: inputLines('assumed', ASSUMED_MAX)
+      .meta({
+        description:
+          'What the assistant chose without the person, each choice in one line of 1 to 300 characters with what would change it: 1 to 15 lines, none twice. A choice the person made is a line of `given`, never one of these. Left out when nothing was chosen unasked.',
       })
       .optional(),
     // The body. Each record in it is held by `change.ts`, at its place in the file: the shape of its folder, the model, and the model as it would be.
@@ -617,7 +634,7 @@ export const ChangeSchema = z
   })
   .meta({
     description:
-      'A change: its input (the prompt a person gave, what they answered when asked, and a name written last), and its body, the records it adds, updates and removes. With no body it is an input alone. Once it is decided it bears `status`.',
+      'A change: its input (the prompt a person gave, what they answered when asked, what the assistant chose without them, and a name written last), and its body, the records it adds, updates and removes. With no body it is an input alone. Once it is decided it bears `status`.',
     // `why` with `status: rejected` alone, and never a rejection without it, as the check holds it.
     if: { properties: { status: { const: 'rejected' } }, required: ['status'] },
     then: { required: ['why'] },

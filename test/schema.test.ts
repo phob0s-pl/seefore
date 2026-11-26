@@ -45,6 +45,19 @@ test('the schema of a change’s input passes a prompt with a name, with or with
   expect(check('changes', { ...input, given: Array.from({ length: 11 }, (_, at) => `Answer ${at}`) })).toBe(false);
 });
 
+test('the schema of a change’s input passes what was assumed, with what was given or without it, and refuses what it refuses of what was given', () => {
+  const input = { name: 'Listening copies on time after a donation', prompt: 'Run two jobs at once.\nNo new hardware.' };
+  const assumed = ['The two jobs share the one machine there is. A second machine would change it.'];
+  expect(check('changes', { ...input, assumed })).toBe(true);
+  expect(check('changes', { ...input, given: ['Any way will do.'], assumed })).toBe(true);
+  expect(check('changes', { ...input, assumed: [] })).toBe(false);
+  expect(check('changes', { ...input, assumed: ['One line\nand a second'] })).toBe(false);
+  expect(check('changes', { ...input, assumed: [' A space first.'] })).toBe(false);
+  expect(check('changes', { ...input, assumed: ['x'.repeat(301)] })).toBe(false);
+  expect(check('changes', { ...input, assumed: Array.from({ length: 16 }, (_, at) => `Choice ${at}`) })).toBe(false);
+  expect(check('changes', { ...input, assumed: 'One choice.' })).toBe(false);
+});
+
 test('the schema of a line of context passes one of must and prefer with a why, and refuses the rest; a system has no such key', () => {
   expect(check('context', { must: 'No order is lost.', why: 'The promise.' })).toBe(true);
   expect(check('context', { prefer: 'One service.', why: 'One team.', system: 'system-shop' })).toBe(true);

@@ -393,6 +393,8 @@ test('apply lays the change of the guide onto the files and marks it applied, af
   const lines = ['+ stores/store-order-copies', '+ connections/connection-api-writes-copies', '~ apps/app-order-api: description', 'Review: 1 block waits for the person.'];
   const clean = '18 records read. No problem: the keys are in form, and every id that is named is there.';
   const before = await listFiles(folder);
+  // While the change is open the check says that it laid it: a clean check else does not show that a change was held.
+  expect((await runLines(['check', `--workdir=${folder}`])).out.slice(0, 2)).toEqual(['16 records read. No problem: the keys are in form, and every id that is named is there.', 'Open changes: 1, each laid over the model alone and held with it.']);
   expect(await runLines(['apply', 'copies-for-accounts', '--dry-run', `--workdir=${folder}`])).toEqual({ code: 0, out: [...lines, 'Would apply: 2 added, 1 updated, 0 removed.', clean, 'A dry run: nothing is written.'], err: [] });
   expect(await listFiles(folder)).toEqual(before);
   expect(await readFile(join(folder, 'changes/copies-for-accounts.yaml'), 'utf8')).toBe(change);

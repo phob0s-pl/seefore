@@ -90,10 +90,26 @@ export function ChangesList() {
   );
 }
 
+/** Lines of a change's input under a title, a row a line; nothing when there are none. */
+function InputLines({ title, lines }: { title: string; lines: string[] }) {
+  if (lines.length === 0) return null;
+  return (
+    <Section title={title}>
+      <Panel>
+        <ul className="change-given">
+          {lines.map((line, index) => (
+            <li key={index}>{line}</li>
+          ))}
+        </ul>
+      </Panel>
+    </Section>
+  );
+}
+
 /**
- * What was asked for: the prompt as prose, and under it what the person answered when asked,
- * a row a line. A change with no answers has no section for them. Under them, for a rejected
- * change, why the person said no.
+ * What was asked for: the prompt as prose; under it what the person answered when asked, and
+ * what the assistant chose without the person, a row a line. A change with no such lines has no
+ * section for them. Under them, for a rejected change, why the person said no.
  */
 function Need({ change }: { change: Change }) {
   return (
@@ -103,17 +119,8 @@ function Need({ change }: { change: Change }) {
           <TextPanel>{change.prompt}</TextPanel>
         </Section>
       )}
-      {change.given.length > 0 && (
-        <Section title="Given">
-          <Panel>
-            <ul className="change-given">
-              {change.given.map((line, index) => (
-                <li key={index}>{line}</li>
-              ))}
-            </ul>
-          </Panel>
-        </Section>
-      )}
+      <InputLines title="Given" lines={change.given} />
+      <InputLines title="Assumed" lines={change.assumed} />
       {change.status === 'rejected' && change.why !== undefined && (
         <Section title="Why not">
           <TextPanel>{change.why}</TextPanel>
