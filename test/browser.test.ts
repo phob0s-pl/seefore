@@ -384,6 +384,296 @@ test.skipIf(!HAS_CHROME).concurrent(
   20_000,
 );
 
+/** Where the field stands: how far it is moved and how close it is. */
+const FIELD = `(() => {
+  const found = /translate\\(([-0-9.]+)px, ([-0-9.]+)px\\) scale\\(([0-9.]+)\\)/.exec(document.querySelector('.react-flow__viewport')?.style.transform ?? '');
+  return found !== null && { x: Number(found[1]), y: Number(found[2]), zoom: Number(found[3]) };
+})()`;
+type Field = { x: number; y: number; zoom: number };
+const fieldOf = async (send: Send) => (await waitFor(send, FIELD)) as Field;
+/** The field once it has come to rest. */
+async function rested(send: Send): Promise<Field> {
+  let last = '';
+  for (let tries = 0; tries < 50; tries++) {
+    const now = JSON.stringify(await fieldOf(send));
+    if (now === last) return JSON.parse(now) as Field;
+    last = now;
+    await pause(120);
+  }
+  throw new Error('The field did not come to rest.');
+}
+/** The id of the first line drawn. */
+const A_LINE = `document.querySelector('.react-flow__edge-path[d^="M"]')?.closest('.react-flow__edge')?.getAttribute('data-id')`;
+
+/** A double click as a hand makes it. */
+async function doubleClick(send: Send, { x, y }: Point, modifiers = 0) {
+  await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
+  for (const clickCount of [1, 2]) {
+    await send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', buttons: 1, clickCount, modifiers });
+    await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', buttons: 0, clickCount, modifiers });
+  }
+}
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME ? 'a drag that starts on a line moves the field and picks nothing; the line takes no mouse itself, and a click on it still picks it' : `skipped: there is no Chrome at ${CHROME}`,
+  () =>
+    inChrome(async (send, address) => {
+      await send('Page.navigate', { url: `${address}/` });
+      const from = await middleOf(send, 'person-customer->system-shop');
+      const before = await rested(send);
+      await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: from.x, y: from.y });
+      // While the mouse is on the line the hand shows, and the line itself is no target of the mouse.
+      expect(await waitFor(send, `document.querySelector('.react-flow').hasAttribute('data-on-line')`)).toBe(true);
+      expect(await waitFor(send, `[...document.querySelectorAll('.react-flow__edge')].every((edge) => getComputedStyle(edge).pointerEvents === 'none') && document.querySelector('.react-flow__edge-interaction') === null`)).toBe(true);
+      await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: from.x, y: from.y, button: 'left', buttons: 1, clickCount: 1 });
+      for (let step = 1; step <= 6; step++) await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: from.x + step * 10, y: from.y + step * 5, button: 'left', buttons: 1 });
+      await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: from.x + 60, y: from.y + 30, button: 'left', buttons: 0, clickCount: 1 });
+      const after = await rested(send);
+      expect([Math.round(after.x - before.x), Math.round(after.y - before.y), after.zoom]).toEqual([60, 30, before.zoom]);
+      await pause(300);
+      expect((await send('Runtime.evaluate', { expression: PANEL, returnByValue: true })).result?.result?.value).toBe(false);
+      // A hand that slips two pixels between press and release has clicked the line still, and the field stays.
+      const on = await middleOf(send, 'person-customer->system-shop');
+      await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: on.x, y: on.y });
+      await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: on.x, y: on.y, button: 'left', buttons: 1, clickCount: 1 });
+      await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: on.x + 2, y: on.y + 1, button: 'left', buttons: 1 });
+      await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: on.x + 2, y: on.y + 1, button: 'left', buttons: 0, clickCount: 1 });
+      expect(await waitFor(send, PANEL)).toMatchObject({ kind: 'Connection' });
+      // The field may slide left to keep the line clear of its panel; it goes neither up nor down, as a drag by the slip would take it.
+      const slipped = await rested(send);
+      expect([slipped.y, slipped.zoom]).toEqual([after.y, after.zoom]);
+    }),
+  20_000,
+);
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME ? 'after a drag the hover is on what lies under the mouse where it was let go, not where it was pressed' : `skipped: there is no Chrome at ${CHROME}`,
+  () =>
+    inChrome(async (send, address) => {
+      await send('Page.navigate', { url: `${address}/` });
+      await centreOf(send, SHOP_BOX);
+      // A way to drag the field so that the shop comes to where the mouse was pressed, with the mouse on the empty field at both ends.
+      const way = (await waitFor(
+        send,
+        `(() => {
+          const field = document.querySelector('.react-flow__pane').getBoundingClientRect();
+          const shop = document.querySelector(${JSON.stringify(SHOP_BOX)}).getBoundingClientRect();
+          const middle = { x: shop.x + shop.width / 2, y: shop.y + shop.height / 2 };
+          const empty = ({ x, y }) => x > field.x + 8 && x < field.right - 8 && y > field.y + 8 && y < field.bottom - 8 && document.elementFromPoint(x, y)?.classList.contains('react-flow__pane');
+          for (const [dx, dy] of [[0, 150], [0, -150], [0, 110], [0, -110], [0, 200], [0, -200]]) {
+            const from = { x: middle.x + dx, y: middle.y + dy }, to = { x: middle.x + 2 * dx, y: middle.y + 2 * dy };
+            if (empty(from) && empty(to)) return { from, to };
+          }
+          return null;
+        })()`,
+      )) as { from: Point; to: Point };
+      await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: way.from.x, y: way.from.y });
+      await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: way.from.x, y: way.from.y, button: 'left', buttons: 1, clickCount: 1 });
+      for (let step = 1; step <= 5; step++) await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: way.from.x + ((way.to.x - way.from.x) * step) / 5, y: way.from.y + ((way.to.y - way.from.y) * step) / 5, button: 'left', buttons: 1 });
+      await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: way.to.x, y: way.to.y, button: 'left', buttons: 0, clickCount: 1 });
+      // The shop now lies where the mouse was pressed, and the mouse is on the empty field.
+      const shop = await centreOf(send, SHOP_BOX);
+      expect([Math.round(shop.x - way.from.x), Math.round(shop.y - way.from.y)]).toEqual([0, 0]);
+      await pause(500);
+      expect((await send('Runtime.evaluate', { expression: `document.querySelector('.faded') === null && document.querySelector('.diagram-hover-label') === null`, returnByValue: true })).result?.result?.value).toBe(true);
+    }),
+  20_000,
+);
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME ? 'what is not in focus fades at once, with no fade over a moment' : `skipped: there is no Chrome at ${CHROME}`,
+  () =>
+    inChrome(async (send, address) => {
+      await send('Page.navigate', { url: `${address}/` });
+      await move(send, await centreOf(send, SHOP_BOX));
+      expect(await waitFor(send, FADED)).toEqual(['person-clerk']);
+      // The opacity of a box, a frame and a line is not among what moves over time.
+      const moving = `[...document.querySelectorAll('.react-flow__node, .react-flow__edge')].filter((each) => { const style = getComputedStyle(each); return style.transitionDuration.split(',').some((time, index) => parseFloat(time) > 0 && ['all', 'opacity'].includes((style.transitionProperty.split(',')[index] ?? 'all').trim())); }).length`;
+      expect((await send('Runtime.evaluate', { expression: moving, returnByValue: true })).result?.result?.value).toBe(0);
+      expect((await send('Runtime.evaluate', { expression: `getComputedStyle(document.querySelector('.react-flow__node.faded')).opacity`, returnByValue: true })).result?.result?.value).toBe('0.25');
+    }),
+  20_000,
+);
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME ? 'a double click brings a box to the zoom of reading beside its panel, fits a frame, comes twice as close on the empty field, and moves nothing on a line' : `skipped: there is no Chrome at ${CHROME}`,
+  () =>
+    inChrome(async (send, address) => {
+      await send('Page.navigate', { url: `${address}/?depth=containers` });
+      expect(await waitFor(send, `document.querySelectorAll('.architecture-node[data-id]').length === 5`)).toBe(true);
+      const rectOf = async (selector: string) =>
+        (await waitFor(send, `(() => { const box = document.querySelector(${JSON.stringify(selector)})?.getBoundingClientRect(); return box && box.width > 0 && { x: box.x, y: box.y, width: box.width, height: box.height }; })()`)) as { x: number; y: number; width: number; height: number };
+      const frame = await rectOf('.react-flow');
+      // The room beside the panel, as diagram.css places it.
+      const room = frame.width - 360 - 16 - 16;
+      // Far out first, so that the zoom of reading is closer than the field is.
+      const empty = await settled(send, EMPTY);
+      for (let turns = 0; turns < 30 && (await fieldOf(send)).zoom > 0.4; turns++) await send('Input.dispatchMouseEvent', { type: 'mouseWheel', x: empty.x, y: empty.y, deltaX: 0, deltaY: 100 });
+      const far = await rested(send);
+      expect(far.zoom).toBeLessThan(0.4);
+
+      // What the panel says, once it says a name or a kind that is waited for.
+      const panel = (key: 'name' | 'kind', value: string) => waitFor(send, `(() => { const read = ${PANEL}; return read && read.${key} === ${JSON.stringify(value)} && read; })()`);
+
+      // On a line: it is picked, and the field stays.
+      const line = (await waitFor(send, A_LINE)) as string;
+      await doubleClick(send, await middleOf(send, line));
+      expect(await panel('kind', 'Connection')).toMatchObject({ kind: 'Connection' });
+      expect(await rested(send)).toEqual(far);
+
+      // On a box: to the middle of the room beside its panel, at the zoom of reading.
+      const API = '.react-flow__node[data-id="app-order-api"]';
+      await doubleClick(send, await centreOf(send, API));
+      expect(await panel('name', 'Order API')).toMatchObject({ name: 'Order API' });
+      expect((await rested(send)).zoom).toBeCloseTo(0.8, 3);
+      // The field came by itself under a mouse that rests: the hover is none, and the pick's highlight holds.
+      await pause(400);
+      expect((await send('Runtime.evaluate', { expression: `document.querySelector('.react-flow__node.picked')?.getAttribute('data-id') + ' ' + (document.querySelector('.react-flow__node.picked.faded') === null) + ' ' + (document.querySelector('.diagram-hover-label') === null)`, returnByValue: true })).result?.result?.value).toBe('app-order-api true true');
+      const middle = async (selector: string) => {
+        const box = await rectOf(selector);
+        return [Math.round(box.x + box.width / 2 - frame.x), Math.round(box.y + box.height / 2 - frame.y)];
+      };
+      const middleOfRoom = [Math.round(room / 2), Math.round(frame.height / 2)];
+      expect(await middle(API)).toEqual(middleOfRoom);
+
+      // Closer than reading already: the box stays in the middle, and the field as close.
+      const api = await centreOf(send, API);
+      for (let turns = 0; turns < 3; turns++) await send('Input.dispatchMouseEvent', { type: 'mouseWheel', x: api.x, y: api.y, deltaX: 0, deltaY: -100 });
+      const close = await rested(send);
+      expect(close.zoom).toBeGreaterThan(1);
+      await doubleClick(send, await centreOf(send, API));
+      expect((await rested(send)).zoom).toBe(close.zoom);
+      expect(await middle(API)).toEqual(middleOfRoom);
+
+      // On a frame: fitted into the room, no closer than it is drawn. From far out, where its name is in sight.
+      for (let turns = 0; turns < 30 && (await fieldOf(send)).zoom > 0.4; turns++) await send('Input.dispatchMouseEvent', { type: 'mouseWheel', x: api.x, y: api.y, deltaX: 0, deltaY: 100 });
+      await rested(send);
+      const SHOP_FRAME = '.react-flow__node[data-id="system-shop"]';
+      await doubleClick(send, await centreOf(send, `${SHOP_FRAME} .architecture-node-heading strong`));
+      expect(await panel('name', 'Shop')).toMatchObject({ name: 'Shop' });
+      const fitted = await rested(send);
+      expect(fitted.zoom).toBeGreaterThan(0.4);
+      expect(fitted.zoom).toBeLessThanOrEqual(1);
+      const shop = await rectOf(SHOP_FRAME);
+      expect(shop.x - frame.x).toBeGreaterThanOrEqual(39);
+      expect(shop.x + shop.width - frame.x).toBeLessThanOrEqual(room - 39);
+      expect(await middle(SHOP_FRAME)).toEqual(middleOfRoom);
+
+      // On the empty field: twice as close, about the mouse, and the pick is let go.
+      await doubleClick(send, await settled(send, EMPTY));
+      expect(await closed(send)).toBe(true);
+      const closer = await rested(send);
+      expect(closer.zoom).toBeCloseTo(Math.min(2, fitted.zoom * 2), 3);
+      // With Shift held: twice as far.
+      await doubleClick(send, await settled(send, EMPTY), 8);
+      expect((await rested(send)).zoom).toBeCloseTo(closer.zoom / 2, 3);
+    }),
+  30_000,
+);
+
+/** The field is dragged by a way, from a point of it where nothing is drawn. */
+async function dragField(send: Send, by: Point) {
+  const from = await settled(send, EMPTY);
+  await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: from.x, y: from.y });
+  await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: from.x, y: from.y, button: 'left', buttons: 1, clickCount: 1 });
+  for (let step = 1; step <= 5; step++) await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: from.x + (by.x * step) / 5, y: from.y + (by.y * step) / 5, button: 'left', buttons: 1 });
+  await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: from.x + by.x, y: from.y + by.y, button: 'left', buttons: 0, clickCount: 1 });
+  await rested(send);
+}
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME ? 'a double click on a box that stands where its panel opens brings it too, and the panel does not hear the second click' : `skipped: there is no Chrome at ${CHROME}`,
+  () =>
+    inChrome(async (send, address) => {
+      await send('Page.navigate', { url: `${address}/?depth=containers` });
+      const STORE = '.react-flow__node[data-id="store-orders"]';
+      const frame = (await waitFor(send, `(() => { const box = document.querySelector('.react-flow')?.getBoundingClientRect(); return box && box.width > 0 && { x: box.x, y: box.y, width: box.width, height: box.height }; })()`)) as { x: number; y: number; width: number; height: number };
+      // Far out, and the store drawn where the panel's buttons will stand: its top right.
+      const empty = await settled(send, EMPTY);
+      for (let turns = 0; turns < 30 && (await fieldOf(send)).zoom > 0.4; turns++) await send('Input.dispatchMouseEvent', { type: 'mouseWheel', x: empty.x, y: empty.y, deltaX: 0, deltaY: 100 });
+      await rested(send);
+      const store = await centreOf(send, STORE);
+      await dragField(send, { x: frame.x + frame.width - 190 - store.x, y: frame.y + 150 - store.y });
+      const at = await centreOf(send, STORE);
+      expect(Math.abs(frame.x + frame.width - at.x - 190)).toBeLessThanOrEqual(2);
+      await doubleClick(send, at);
+      expect((await rested(send)).zoom).toBeCloseTo(0.8, 3);
+      // It is picked still, it stands in the middle of the room beside the panel, and the page is the diagram's.
+      const now = await centreOf(send, STORE);
+      expect([Math.round(now.x - frame.x), Math.round(now.y - frame.y)]).toEqual([Math.round((frame.width - 392) / 2), Math.round(frame.height / 2)]);
+      expect((await send('Runtime.evaluate', { expression: `location.pathname + location.search + ' ' + document.querySelector('.react-flow__node.picked')?.getAttribute('data-id')`, returnByValue: true })).result?.result?.value).toBe('/?depth=containers store-orders');
+    }),
+  30_000,
+);
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME ? 'where the system asks for less motion the field comes at once, and in a field too narrow for a room beside the panel a box comes to its middle' : `skipped: there is no Chrome at ${CHROME}`,
+  () =>
+    inChrome(async (send, address) => {
+      await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
+      await send('Emulation.setDeviceMetricsOverride', { width: 760, height: 800, deviceScaleFactor: 1, mobile: false });
+      await send('Page.navigate', { url: `${address}/?depth=containers` });
+      const API = '.react-flow__node[data-id="app-order-api"]';
+      const frame = (await waitFor(send, `(() => { const box = document.querySelector('.react-flow')?.getBoundingClientRect(); return box && box.width > 0 && { x: box.x, y: box.y, width: box.width, height: box.height }; })()`)) as { x: number; y: number; width: number; height: number };
+      // The panel leaves less room beside it than a box needs.
+      expect(frame.width - 392).toBeLessThan(240);
+      const empty = await settled(send, EMPTY);
+      for (let turns = 0; turns < 30 && (await fieldOf(send)).zoom > 0.3; turns++) await send('Input.dispatchMouseEvent', { type: 'mouseWheel', x: empty.x, y: empty.y, deltaX: 0, deltaY: 100 });
+      await rested(send);
+      await doubleClick(send, await centreOf(send, API));
+      // No glide: the first look at the field finds it where it stays.
+      const first = await fieldOf(send);
+      expect(first.zoom).toBeCloseTo(0.8, 3);
+      expect(await rested(send)).toEqual(first);
+      const now = await centreOf(send, API);
+      expect([Math.round(now.x - frame.x), Math.round(now.y - frame.y)]).toEqual([Math.round(frame.width / 2), Math.round(frame.height / 2)]);
+    }),
+  30_000,
+);
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME ? 'a double click on a line that lies partly under its panel leaves it clear of the panel' : `skipped: there is no Chrome at ${CHROME}`,
+  () =>
+    inChrome(async (send, address) => {
+      await send('Page.navigate', { url: `${address}/?depth=containers` });
+      const frame = (await waitFor(send, `(() => { const box = document.querySelector('.react-flow')?.getBoundingClientRect(); return box && box.width > 0 && { x: box.x, y: box.y, width: box.width, height: box.height }; })()`)) as { x: number; y: number; width: number; height: number };
+      const line = (await waitFor(send, A_LINE)) as string;
+      const right = `(() => { const path = document.querySelector(${JSON.stringify(`.react-flow__edge[data-id="${line}"] .react-flow__edge-path`)}); const box = path?.getBoundingClientRect(); return box && box.width > 0 && Math.round(box.right); })()`;
+      // The line's right end is brought under where the panel opens.
+      await dragField(send, { x: frame.x + frame.width - 120 - ((await waitFor(send, right)) as number), y: 0 });
+      expect(Math.abs(frame.x + frame.width - ((await waitFor(send, right)) as number) - 120)).toBeLessThanOrEqual(2);
+      await doubleClick(send, await middleOf(send, line));
+      expect(await waitFor(send, PANEL)).toMatchObject({ kind: 'Connection' });
+      await rested(send);
+      expect((await waitFor(send, right)) as number).toBeLessThanOrEqual(Math.round(frame.x + frame.width - 392) + 1);
+    }),
+  30_000,
+);
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME ? 'a view seen before stands at once, and one not seen yet is laid out' : `skipped: there is no Chrome at ${CHROME}`,
+  () =>
+    inChrome(async (send, address) => {
+      await send('Page.navigate', { url: `${address}/` });
+      const boxes = (count: number) => waitFor(send, `document.querySelectorAll('.architecture-node[data-id]').length === ${count} && document.querySelectorAll('.react-flow__edge-path[d^="M"]').length > 0`);
+      const tab = async (href: string) => click(send, await centreOf(send, `nav[aria-label="Depth"] a[href="${href}"]`));
+      expect(await boxes(3)).toBe(true);
+      // Each time the words "Laying out" stand in the field is counted.
+      await send('Runtime.evaluate', { expression: `(() => { window.__laid = 0; new MutationObserver((changes) => { for (const change of changes) for (const node of change.addedNodes) if (node instanceof Element && (node.matches('.canvas-caption') || node.querySelector('.canvas-caption') !== null)) window.__laid += 1; }).observe(document.body, { childList: true, subtree: true }); })()` });
+      const laid = async () => (await send('Runtime.evaluate', { expression: 'window.__laid', returnByValue: true })).result?.result?.value;
+      await tab('/?depth=containers');
+      expect(await boxes(5)).toBe(true);
+      expect(await laid()).toBe(1);
+      await tab('/');
+      expect(await boxes(3)).toBe(true);
+      await tab('/?depth=containers');
+      expect(await boxes(5)).toBe(true);
+      // Systems and Containers were both seen: neither was laid out again.
+      expect(await laid()).toBe(1);
+    }),
+  20_000,
+);
+
 /** A key pressed and let go, as a hand presses it. */
 async function press(send: Send, key: string, code: number) {
   await send('Input.dispatchKeyEvent', { type: 'keyDown', key, code: key, windowsVirtualKeyCode: code });

@@ -4,8 +4,8 @@ import { readModel } from '../src/model/read.ts';
 import type { SourceFile } from '../src/model/read.ts';
 import { viewOf } from '../src/model/view.ts';
 import type { Depth } from '../src/model/view.ts';
-import { layOut, nearestRoute } from '../src/ui/layout.ts';
-import type { Layout } from '../src/ui/layout.ts';
+import { keeper, layOut, nearestRoute } from '../src/ui/layout.ts';
+import type { Engine, Layout } from '../src/ui/layout.ts';
 
 // The layout of the page, run with ELK in Node on small models written inline. The bundled ELK
 // is a CommonJS module that is its own default.
@@ -105,6 +105,73 @@ test('a click means the line it is nearest to, also where two lines run close', 
   expect(nearestRoute(routes, { x: 205, y: 250 })).toBe('lower');
   expect(nearestRoute(routes, { x: 395, y: 150 })).toBe('across');
   expect(nearestRoute(new Map(), { x: 0, y: 0 })).toBeUndefined();
+});
+
+test('the mouse means a line only within its reach, at its end too', () => {
+  const routes = new Map([
+    ['upper', [{ x: 0, y: 100 }, { x: 200, y: 100 }]],
+    ['lower', [{ x: 0, y: 106 }, { x: 200, y: 106 }, { x: 200, y: 300 }]],
+  ]);
+  expect([nearestRoute(routes, { x: 50, y: 88 }, 12), nearestRoute(routes, { x: 50, y: 87 }, 12)]).toEqual(['upper', undefined]);
+  expect([nearestRoute(routes, { x: 50, y: 118 }, 12), nearestRoute(routes, { x: 50, y: 119 }, 12)]).toEqual(['lower', undefined]);
+  // Past the end of a line, the reach is round its end.
+  expect([nearestRoute(routes, { x: 200, y: 312 }, 12), nearestRoute(routes, { x: 209, y: 309 }, 12)]).toEqual(['lower', undefined]);
+  // Between two lines within reach of both, the nearer.
+  expect(nearestRoute(routes, { x: 50, y: 104 }, 12)).toBe('lower');
+});
+
+/** An engine that counts what it is asked, and can be made to fail. */
+function counting(): Engine & { asked: number; fails: boolean } {
+  const engine: Engine & { asked: number; fails: boolean } = {
+    asked: 0,
+    fails: false,
+    layout: ((...args: Parameters<Engine['layout']>) => {
+      engine.asked += 1;
+      return engine.fails ? Promise.reject(new Error('no layout')) : elk.layout(...args);
+    }) as Engine['layout'],
+  };
+  return engine;
+}
+
+test('a layout is kept by its view, its depth and its shape: asked for again it is not made again, and it is there at once', async () => {
+  const read = readModel([{ path: 'seefore.yaml', text: 'format: 1\nname: Test\n' }, ...SHOP]);
+  const view = viewOf(read.records, 'containers');
+  const engine = counting();
+  const kept = keeper();
+  expect(kept.get(view, 'containers')).toBeUndefined();
+  const first = kept.lay(view, 'containers', engine);
+  // Asked while it is being made, and by a view that reads the same: the same work.
+  expect(kept.lay(viewOf(read.records, 'containers'), 'containers', engine)).toBe(first);
+  const layout = await first;
+  expect(engine.asked).toBe(1);
+  expect(kept.get(viewOf(read.records, 'containers'), 'containers')).toBe(layout);
+  expect(layout).toEqual(await layOut(view, 'containers', elk));
+  // Another shape, another depth and another view are layouts of their own.
+  expect(kept.get(view, 'containers', 'flow')).toBeUndefined();
+  expect(await kept.lay(view, 'containers', engine, 'flow')).not.toEqual(layout);
+  await kept.lay(viewOf(read.records, 'systems'), 'systems', engine);
+  await kept.lay(viewOf(read.records, 'containers', 'system-shop'), 'containers', engine);
+  expect(engine.asked).toBeGreaterThanOrEqual(4);
+  const asked = engine.asked;
+  await kept.lay(view, 'containers', engine);
+  expect(engine.asked).toBe(asked);
+});
+
+test('a layout that failed is not kept, and only the last few are', async () => {
+  const read = readModel([{ path: 'seefore.yaml', text: 'format: 1\nname: Test\n' }, ...SHOP]);
+  const [systems, containers, components] = [viewOf(read.records, 'systems'), viewOf(read.records, 'containers'), viewOf(read.records, 'components')];
+  const engine = counting();
+  const kept = keeper(2);
+  engine.fails = true;
+  await expect(kept.lay(containers, 'containers', engine)).rejects.toThrow('no layout');
+  engine.fails = false;
+  const again = await kept.lay(containers, 'containers', engine);
+  expect(kept.get(containers, 'containers')).toBe(again);
+  // Room for two: the one asked for longest ago goes.
+  await kept.lay(components, 'components', engine);
+  await kept.lay(containers, 'containers', engine);
+  await kept.lay(systems, 'systems', engine);
+  expect([kept.get(components, 'components'), kept.get(containers, 'containers') === again, kept.get(systems, 'systems') !== undefined]).toEqual([undefined, true, true]);
 });
 
 /** A system in which one app writes a queue and a database, and another reads both. */

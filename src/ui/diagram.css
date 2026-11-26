@@ -291,11 +291,17 @@
 }
 
 /* A box, a frame and a line can be clicked; the hand shows over a box, a frame's heading and a
-   line. What is picked is lit in the accent colour: a box by an outline that takes no room, a
-   line, and its heads, brighter and thicker. Nothing else changes. */
+   line. A line takes no mouse itself, so that a drag moves the field wherever it starts: the
+   diagram finds the line the mouse means, and marks the field while it is on one. What is picked
+   is lit in the accent colour: a box by an outline that takes no room, a line, and its heads,
+   brighter and thicker. Nothing else changes. */
+.canvas-frame .react-flow__edge {
+  pointer-events: none;
+}
 .canvas-frame .react-flow__node-box,
 .canvas-frame .react-flow__node-frame .architecture-node-heading,
-.canvas-frame .react-flow__edge {
+.canvas-frame .react-flow[data-on-line] .react-flow__pane,
+.canvas-frame .react-flow[data-on-line] .react-flow__node-frame {
   cursor: pointer;
 }
 .canvas-frame .react-flow__node.picked > .architecture-node {
@@ -308,13 +314,10 @@
 }
 
 /* While a box or a line is in focus, by the mouse or by a pick, what it does not join fades to a
-   quarter, over a moment rather than at a jump; base.css stops the motion when the system asks
-   for less. A frame fades its outline and heading only: the boxes inside it are nodes of their
-   own. A line fades with its halo and its heads. A band never fades. */
-.canvas-frame .react-flow__node,
-.canvas-frame .react-flow__edge {
-  transition: opacity var(--duration-fast) var(--ease);
-}
+   quarter, at once: a fade over a moment, on some hundreds of boxes and frames together, held
+   Safari still for up to a third of a second each time the focus changed. A frame fades its
+   outline and heading only: the boxes inside it are nodes of their own. A line fades with its
+   halo and its heads. A band never fades. */
 .canvas-frame .react-flow__node.faded,
 .canvas-frame .react-flow__edge.faded {
   opacity: 0.25;
