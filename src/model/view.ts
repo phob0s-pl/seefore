@@ -54,7 +54,7 @@ export type View = { boxes: Box[]; arrows: Arrow[] };
 /** The stores that hold messages on their way: what is read from one flows on to its reader. */
 const PASSING: readonly unknown[] = ['queue', 'topic'];
 
-/** The folders whose records are drawn. Owners and technologies never are. */
+/** The folders whose records are drawn. Owners, technologies and repositories never are. */
 const DRAWN: readonly string[] = ['people', 'systems', 'apps', 'stores', 'components', 'infrastructure'];
 
 const compare = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);

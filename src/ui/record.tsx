@@ -68,6 +68,8 @@ export function RecordBody({
       <Connection record={record} catalogue={catalogue} travel={travel} />
     ) : kind === 'technologies' ? (
       <Technology record={record} catalogue={catalogue} />
+    ) : kind === 'repositories' ? (
+      <Repository record={record} catalogue={catalogue} />
     ) : kind === 'data' ? (
       <Data record={record} catalogue={catalogue} travel={travel} />
     ) : (
@@ -171,7 +173,7 @@ export function Named({ catalogue, id }: { catalogue: Catalogue; id: unknown }) 
   );
 }
 
-/** "from Shop": where an owner or a condition is taken from, when not from the record itself. */
+/** "from Shop": where an owner, a repository or a condition is taken from, when not from the record itself. */
 export function Taken({ catalogue, from, record }: { catalogue: Catalogue; from: string; record: ModelRecord }) {
   if (from === record.id) return null;
   return (
@@ -285,11 +287,13 @@ function Technologies({ record, catalogue }: { record: ModelRecord; catalogue: C
 }
 
 /**
- * A system, an app, a store, a component or a piece of infrastructure. A system with lines of
- * context has the fact Context, its count, which leads to the list of the context.
+ * A system, an app, a store, a component or a piece of infrastructure. A system or an app whose
+ * code is in a repository of its own, or of its system, has the fact Repository. A system with
+ * lines of context has the fact Context, its count, which leads to the list of the context.
  */
 function Thing({ record, catalogue, travel, lines }: { record: ModelRecord; catalogue: Catalogue; travel: Travel; lines: SystemContext | undefined }) {
   const owner = catalogue.owner(record.id);
+  const repository = catalogue.repository(record.id);
   const facts: Fact[] = [
     { label: 'Type', value: typeWords(record.kind, record.fields.kind) },
     ...(typeof record.fields.in === 'string' ? [{ label: 'In', value: <RecordLink catalogue={catalogue} id={record.fields.in} /> }] : []),
@@ -301,6 +305,19 @@ function Thing({ record, catalogue, travel, lines }: { record: ModelRecord; cata
               <>
                 <RecordLink catalogue={catalogue} id={owner.id} />
                 <Taken catalogue={catalogue} from={owner.from} record={record} />
+              </>
+            ),
+          },
+        ]
+      : []),
+    ...(repository !== undefined
+      ? [
+          {
+            label: 'Repository',
+            value: (
+              <>
+                <RecordLink catalogue={catalogue} id={repository.id} />
+                <Taken catalogue={catalogue} from={repository.from} record={record} />
               </>
             ),
           },
@@ -417,6 +434,55 @@ function Technology({ record, catalogue }: { record: ModelRecord; catalogue: Cat
     })),
   ];
   return <Related title="Used by" rows={rows} widths={['auto', '320px']} always />;
+}
+
+/** Whether a repository's `url` is a web address, and so a link: the page fetches nothing from it. */
+const WEB = /^https?:\/\//;
+
+/**
+ * A repository: where it is cloned from, where its checkout lies when it is beside the model,
+ * and the systems and apps whose code it holds, an app that takes it from its system with "from".
+ */
+function Repository({ record, catalogue }: { record: ModelRecord; catalogue: Catalogue }) {
+  const { url, name, workspace } = record.fields;
+  const facts: Fact[] = [
+    ...(typeof url === 'string'
+      ? [
+          {
+            label: 'URL',
+            value: WEB.test(url) ? (
+              <a href={url} target="_blank" rel="noreferrer">
+                {url}
+              </a>
+            ) : (
+              url
+            ),
+          },
+        ]
+      : []),
+    ...(workspace === true && typeof name === 'string'
+      ? [
+          {
+            label: 'Workspace',
+            value: (
+              <>
+                Checked out beside the model, in <code>{name}/</code>
+              </>
+            ),
+          },
+        ]
+      : []),
+  ];
+  const rows = catalogue.codeIn(record.id).map((part) => ({
+    key: part.id,
+    cells: [<Named catalogue={catalogue} id={part.id} />, typeWords(part.kind, part.fields.kind), <Taken catalogue={catalogue} from={catalogue.repository(part.id)?.from ?? part.id} record={part} />],
+  }));
+  return (
+    <>
+      {facts.length > 0 && <Facts rows={facts} />}
+      <Related title="Holds the code of" rows={rows} widths={['auto', '200px', '240px']} always />
+    </>
+  );
 }
 
 /** An owner: the parts it is written on, and those that take it from what they are in. */

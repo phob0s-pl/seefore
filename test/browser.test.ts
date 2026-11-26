@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { cp, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -789,6 +789,52 @@ test.skipIf(!HAS_CHROME).concurrent(
 
 /** The text of what a selector finds, each with its spaces made one. */
 const texts = (selector: string) => `[...document.querySelectorAll(${JSON.stringify(selector)})].map((each) => each.innerText.replace(/\\s+/g, ' ').trim())`;
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME
+    ? "the Repositories tab opens a repository's page, with where it is cloned from, its checkout beside the model and the code it holds; an app's page has the row Repository, from its system"
+    : `skipped: there is no Chrome at ${CHROME}`,
+  async () => {
+    // A copy of the shop whose system names a repository, checked out beside the model, and one more that no part names.
+    const folder = await mkdtemp(join(tmpdir(), 'seefore-shop-'));
+    try {
+      await cp(SHOP, folder, { recursive: true });
+      await mkdir(join(folder, 'repositories'));
+      await writeFile(join(folder, 'repositories', 'repo-shop.yaml'), 'name: shop\ndescription: The code of the shop.\nurl: https://example.org/tea/shop\nworkspace: true\n');
+      await writeFile(join(folder, 'repositories', 'repo-deploy.yaml'), 'name: deploy\nurl: git@example.org:tea/deploy.git\n');
+      await writeFile(join(folder, 'systems', 'system-shop.yaml'), 'name: Shop\ndescription: Sells things online.\nrepository: repo-shop\n');
+      await inChrome(async (send, address) => {
+        await send('Page.navigate', { url: `${address}/repositories` });
+        const list = `document.querySelector('ul[aria-label="Repositories"] > li') !== null && { tab: document.querySelector('.models-tabs a.active')?.textContent, rows: ${texts('ul[aria-label="Repositories"] > li')} }`;
+        expect(await waitFor(send, list)).toEqual({ tab: 'Repositories', rows: ['deploy', 'shop'] });
+        await click(send, await centreOf(send, 'a[href="/repositories/repo-shop"]'));
+        const page = (id: string) => `location.pathname === '/repositories/${id}' && document.querySelector('section[aria-label="Holds the code of"]') !== null && {
+          tab: document.querySelector('.models-tabs a.active')?.textContent,
+          title: document.querySelector('main h1')?.textContent,
+          facts: ${texts('.facts > div')},
+          links: [...document.querySelectorAll('.facts a')].map((link) => [link.getAttribute('href'), link.getAttribute('target')]),
+          holds: ${texts('section[aria-label="Holds the code of"] tr, section[aria-label="Holds the code of"] .panel-text')},
+        }`;
+        expect(await waitFor(send, page('repo-shop'))).toEqual({
+          tab: 'Repositories',
+          title: 'shop',
+          facts: ['URL https://example.org/tea/shop', 'Workspace Checked out beside the model, in shop/'],
+          links: [['https://example.org/tea/shop', '_blank']],
+          holds: ['Shop System', 'Order API App · service from Shop'],
+        });
+        // A url that is no web address is no link, and a repository that no part names holds no code of them.
+        await send('Page.navigate', { url: `${address}/repositories/repo-deploy` });
+        expect(await waitFor(send, page('repo-deploy'))).toEqual({ tab: 'Repositories', title: 'deploy', facts: ['URL git@example.org:tea/deploy.git'], links: [], holds: ['None.'] });
+        await send('Page.navigate', { url: `${address}/models/app-order-api` });
+        const app = `location.pathname === '/models/app-order-api' && document.querySelector('.facts') !== null && ${texts('.facts > div')}`;
+        expect(await waitFor(send, app)).toEqual(['Type App · service', 'In Shop', 'Repository shop from Shop']);
+      }, folder);
+    } finally {
+      await rm(folder, { recursive: true, force: true });
+    }
+  },
+  20_000,
+);
 
 test.skipIf(!HAS_CHROME).concurrent(
   HAS_CHROME ? 'Rules lists the rules under its title, and a row opens its rule, as written and with what it looked at' : `skipped: there is no Chrome at ${CHROME}`,

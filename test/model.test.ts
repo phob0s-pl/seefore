@@ -136,7 +136,7 @@ const PARTS: SourceFile[] = [
 test('`source` is no key: a part, a connection and a step that bear it are each refused as a key that is not theirs', () => {
   const said = (...files: SourceFile[]) => problemsOf(...PARTS, ...files).map((problem) => [problem.rule, problem.file, problem.line, problem.field, problem.message]);
   expect(said({ path: 'apps/app-web.yaml', text: 'name: Web\nin: system-shop\nsource: [web/]\n' })).toEqual([
-    ['key-unknown', 'apps/app-web.yaml', 3, 'source', '`source` is not a key of an app. Its keys are `name`, `in`, `only`, `description`, `kind`, `technology` and `owner`.'],
+    ['key-unknown', 'apps/app-web.yaml', 3, 'source', '`source` is not a key of an app. Its keys are `name`, `in`, `only`, `description`, `kind`, `technology`, `owner` and `repository`.'],
   ]);
   expect(said({ path: 'connections/connection-api-reads-orders.yaml', text: 'from: app-api\nto: store-orders\naccess: read\nsource: [api/orders.go]\n' })).toEqual([
     [
@@ -213,6 +213,29 @@ test('the lines of `assumed` are held as those of `given` are, and each fault of
   // A change may have both, and either alone.
   expect(said('assumed', ['The copies are files. A database would serve better if the accountants want to search them.'])).toEqual([]);
   expect(problemsOf(...PARTS, { path: 'changes/a-change.yaml', text: 'name: A change\nprompt: Make it so.\ngiven:\n  - A day late is fine.\nassumed:\n  - The copies are files.\n' })).toEqual([]);
+});
+
+test('a repository in form reads; each fault of its form is told, and a `url` that is a path on a disk says that where a checkout lies is never written', () => {
+  const repository = (text: string) => ({ path: 'repositories/repo-shop-deploy.yaml', text });
+  const read = readModel([MARKER, repository('name: shop-deploy\ndescription: The compose file.\nurl: git@example.org:tea/shop-deploy.git\nworkspace: true\n')]);
+  expect(read.problems).toEqual([]);
+  expect(read.records[0]?.fields).toEqual({ name: 'shop-deploy', description: 'The compose file.', url: 'git@example.org:tea/shop-deploy.git', workspace: true });
+  const said = (text: string) => problemsOf(repository(text)).map((problem) => [problem.rule, problem.line, problem.field, problem.message, problem.fix]);
+  const clone = 'Write in `name` the name of the folder a plain clone of the repository makes: the last part of its `url`, without `.git`, as `shop-deploy`.';
+  const slash = "`name` holds a slash. A repository's `name` is the name of the folder a plain clone of it makes, and a folder's name has no slash.";
+  expect(said('name: tea/shop-deploy\n')).toEqual([['repository-name', 1, 'name', slash, clone]]);
+  expect(said('name: tea\\shop-deploy\n')).toEqual([['repository-name', 1, 'name', slash, clone]]);
+  for (const name of ['.', '..']) expect(said(`name: "${name}"\n`)).toEqual([['repository-name', 1, 'name', `\`name\` is \`${name}\`, which names a folder by where it is, and not by its name.`, clone]]);
+  expect(said('name: shop-deploy\nworkspace: false\n')).toEqual([['value-not-allowed', 2, 'workspace', '`workspace` may only be `true`. Otherwise take the key out.', 'Write `true`, or delete the key.']]);
+  expect(said('name: shop-deploy\npath: ../shop-deploy\n').map((each) => [each[0], each[3]])).toEqual([['key-unknown', '`path` is not a key of a repository. Its keys are `name`, `description`, `url` and `workspace`.']]);
+  // Each start of a path on a disk, and its mend.
+  const mend = (problem: unknown[]) => problem[4] as string;
+  for (const [url, start] of [['/home/ann/shop-deploy', '/'], ['\\\\server\\shop-deploy', '\\'], ['~/code/shop-deploy', '~'], ['../shop-deploy', '.'], ['file:///code/shop-deploy', 'file:'], ['C:\\code\\shop-deploy', 'C:']]) {
+    const [problem] = said(`name: shop-deploy\nurl: '${url}'\n`);
+    expect(problem?.slice(0, 4), url).toEqual(['repository-url', 2, 'url', `\`url\` is a path on a disk: it begins with \`${start}\`. A \`url\` says where the repository is cloned from.`]);
+    expect(mend(problem ?? [])).toBe("Write in `url` where the repository is cloned from, as `https://…` or `git@…`, or take `url` out. Where a checkout lies on a machine is never written: with `workspace: true` it lies beside the model's folder, in a folder of its `name`.");
+  }
+  expect(said('name: shop-deploy\nurl: https://example.org/tea/shop deploy\n').map((each) => each[3])).toEqual(['`url` has a space or a line break in it. A `url` is one line with no space, as `https://example.org/tea/shop-deploy`.']);
 });
 
 test('a sentence cut by a comma inside a short mapping is told as that, and a key that is simply not known is not', () => {

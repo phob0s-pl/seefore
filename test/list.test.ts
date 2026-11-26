@@ -99,7 +99,7 @@ test('some folders alone; a folder that is not there is an error that names the 
     'connections/connection-customer-orders  Places an order  person-customer -> app-api',
   ]);
   expect(error({ folders: ['apps', 'app'] })).toBe(
-    '`app` is not a folder of the model. The nearest is `apps`. The folders are `people`, `systems`, `apps`, `stores`, `components`, `connections`, `infrastructure`, `owners`, `technologies`, `features`, `flows`, `data`, `rules` and `context`, and `changes` lists the changes.',
+    '`app` is not a folder of the model. The nearest is `apps`. The folders are `people`, `systems`, `apps`, `stores`, `components`, `connections`, `infrastructure`, `owners`, `technologies`, `repositories`, `features`, `flows`, `data`, `rules` and `context`, and `changes` lists the changes.',
   );
   // A review is no record of the model; the folder `changes` alone is the list of the changes.
   expect(error({ folders: ['reviews'] })).toMatch(/^`reviews` holds no records of the model\./);
@@ -239,4 +239,35 @@ test('a connection says what it passes through, after its two ends', () => {
   ]);
   const listed = listLines(read, { folders: ['connections'] });
   expect('lines' in listed && listed.lines).toEqual(['connections/connection-customer-orders  Places an order  person-customer -> app-api via infra-gateway']);
+});
+
+test("a repository's line ends with `workspace` where it bears it; near a repository, the systems and apps whose code it holds, by their own key or their system's; near an app, its repository", () => {
+  const read = readModel([
+    { path: 'seefore.yaml', text: 'format: 1\nname: Shop\n' },
+    file('systems/system-shop', 'name: Shop\nrepository: repo-shop\n'),
+    file('apps/app-api', 'name: API\nin: system-shop\nkind: service\n'),
+    file('apps/app-web', 'name: Web\nin: system-shop\nkind: browser\nrepository: repo-web\n'),
+    file('repositories/repo-shop', 'name: shop\nurl: https://example.org/tea/shop\nworkspace: true\n'),
+    file('repositories/repo-web', 'name: web\nurl: git@example.org:tea/web.git\n'),
+    file('repositories/repo-deploy', 'name: deploy\ndescription: The compose file of the shop.\n'),
+  ]);
+  expect(read.problems).toEqual([]);
+  const listed = (asked: ListAsked): string[] => {
+    const said = listLines(read, asked);
+    return 'lines' in said ? said.lines : [said.error];
+  };
+  expect(listed({ folders: ['repositories'] })).toEqual(['repositories/repo-deploy  deploy', 'repositories/repo-shop  shop  workspace', 'repositories/repo-web  web']);
+  expect(listed({ near: 'repo-shop' })).toEqual([
+    'repositories/repo-shop  shop  workspace',
+    'named by:',
+    '  systems/system-shop  Shop',
+    'through their system:',
+    '  apps/app-api  API  in system-shop  service',
+  ]);
+  // An app with its own names it; one with none has its system's.
+  expect(listed({ near: 'app-web' })).toEqual(['apps/app-web  Web  in system-shop  browser', 'names:', '  systems/system-shop  Shop', '  repositories/repo-web  web']);
+  expect(listed({ near: 'app-api' })).toEqual(['apps/app-api  API  in system-shop  service', 'names:', '  systems/system-shop  Shop', "its system's repository:", '  repositories/repo-shop  shop  workspace']);
+  expect(listed({ near: 'system-shop', folders: ['repositories'] })).toEqual(['systems/system-shop  Shop', 'names:', '  repositories/repo-shop  shop  workspace']);
+  // One that no part names is no fault, and nothing is near it.
+  expect(listed({ near: 'repo-deploy' })).toEqual(['repositories/repo-deploy  deploy']);
 });

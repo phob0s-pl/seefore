@@ -57,6 +57,12 @@
       "maxLength": 80,
       "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
       "description": "The id of the owner, a record in owners/, who answers for the part. Left out, it is that of what the part is in."
+    },
+    "repository": {
+      "type": "string",
+      "maxLength": 80,
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+      "description": "The id of the repository its code is in, a record in repositories/. Left out, it is that of its system."
     }
   },
   "required": [

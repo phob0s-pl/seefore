@@ -28,7 +28,7 @@ function byPlace(a: ModelRecord, b: ModelRecord): number {
   return folders !== 0 ? folders : a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 }
 
-/** One record in a line: its path, its name, and what it has of what it is in, its two ends and what lies between them, its feature and steps, and its kind. */
+/** One record in a line: its path, its name, and what it has of what it is in, its two ends and what lies between them, its feature and steps, and its kind; a repository checked out beside the model ends with `workspace`. */
 function recordLine(record: ModelRecord): string {
   const fields = record.fields;
   const parts = [`${record.kind}/${record.id}`, text(fields.name) ?? text(fields.must) ?? text(fields.prefer) ?? (record.kind === 'connections' ? 'No name' : record.id)];
@@ -44,6 +44,7 @@ function recordLine(record: ModelRecord): string {
     parts.push(steps === 1 ? '1 step' : `${steps} steps`);
   }
   if (text(fields.kind) !== undefined) parts.push(fields.kind as string);
+  if (record.kind === 'repositories' && fields.workspace === true) parts.push('workspace');
   return parts.join('  ');
 }
 
@@ -104,9 +105,11 @@ function unknown(id: string, ids: readonly string[]): string {
 /**
  * What `seefore list` prints: its lines, or the one line of an error. `folders` keeps the records
  * of those folders; `near` gives one record, then under `names:` each record it names and under
- * `named by:` each that names it; `change` lists the model as that change would make it, each line
- * marked `+`, `~` or `-` for a record it adds, updates or removes, and is an error for a decided
- * change; `changes` lists the changes.
+ * `named by:` each that names it, and for a repository under `through their system:` each app
+ * whose code is in it as its system's, or for an app under `its system's repository:` that one;
+ * `change` lists the model as that change would make it, each line marked `+`, `~` or `-` for a
+ * record it adds, updates or removes, and is an error for a decided change; `changes` lists the
+ * changes.
  */
 export function listLines(model: ModelRead, asked: ListAsked): { lines: string[] } | { error: string } {
   const changes = changesOf(model.records, model.laid);
@@ -162,8 +165,15 @@ export function listLines(model: ModelRead, asked: ListAsked): { lines: string[]
   const names = namesOf(record);
   const itNames = shown.filter((each) => each !== record && names.has(each.id) && kept(each));
   const namesIt = shown.filter((each) => each !== record && namesOf(each).has(record.id) && kept(each));
+  // An app that names no repository has its code in its system's.
+  const systemOf = (app: ModelRecord): ModelRecord | undefined =>
+    app.kind === 'apps' && text(app.fields.repository) === undefined ? shown.find((each) => each.kind === 'systems' && each.id === app.fields.in) : undefined;
+  const fromSystem = shown.filter((each) => each.kind === 'repositories' && each.id === systemOf(record)?.fields.repository && kept(each));
+  const throughSystem = record.kind === 'repositories' ? shown.filter((each) => systemOf(each)?.fields.repository === record.id && kept(each)) : [];
   const lines = [marked(record)];
   if (itNames.length > 0) lines.push('names:', ...itNames.map((each) => `  ${marked(each)}`));
+  if (fromSystem.length > 0) lines.push("its system's repository:", ...fromSystem.map((each) => `  ${marked(each)}`));
   if (namesIt.length > 0) lines.push('named by:', ...namesIt.map((each) => `  ${marked(each)}`));
+  if (throughSystem.length > 0) lines.push('through their system:', ...throughSystem.map((each) => `  ${marked(each)}`));
   return { lines };
 }

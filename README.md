@@ -34,7 +34,9 @@ In the root of the project's repository:
     seefore init --name="Name of the system"
 
 It writes `architecture/seefore.yaml` and five lines into `CLAUDE.md` that say where the model
-is. Then open the project in Claude Code. A skill runs only when you type its name.
+is. Then open the project in Claude Code. A skill runs only when you type its name. Where the
+code lies in several repositories, the model names each in `repositories/`, and a system or an
+app names the one its code is in: `seefore guide repositories`.
 
 | You type | It does | It never |
 | --- | --- | --- |

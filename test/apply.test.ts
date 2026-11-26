@@ -90,6 +90,37 @@ test('a new record is its lines in the change, moved left to the first column, w
   expect(done.after.problems).toEqual([]);
 });
 
+test('a change that adds a repository and an app that names it, and names it on a system, is laid and applied, each key at its place', () => {
+  const body = [
+    'add:',
+    '  repositories/repo-worker:',
+    '    name: worker',
+    '    url: https://example.org/tea/worker',
+    '    workspace: true',
+    '  apps/app-worker:',
+    '    name: Worker',
+    '    in: system-shop',
+    '    repository: repo-worker',
+    'update:',
+    '  systems/system-shop:',
+    '    repository: repo-worker',
+    '',
+  ].join('\n');
+  const files = withChange(body);
+  const read = readModel(files);
+  expect(read.problems).toEqual([]);
+  expect(read.laid.map((laid) => [laid.change, laid.records.map((record) => `${record.kind}/${record.id}`)])).toEqual([['a-change', ['apps/app-worker', 'repositories/repo-worker', 'systems/system-shop']]]);
+  const done = applied(files);
+  expect(done.lines).toEqual(['+ repositories/repo-worker', '+ apps/app-worker', '~ systems/system-shop: repository']);
+  expect(written(done, 'repositories/repo-worker.yaml')).toBe('name: worker\nurl: https://example.org/tea/worker\nworkspace: true\n');
+  expect(written(done, 'apps/app-worker.yaml')).toBe('name: Worker\nin: system-shop\nrepository: repo-worker\n');
+  expect(written(done, 'systems/system-shop.yaml')).toBe('name: Shop\ndescription: Sells things online.\nrepository: repo-worker\n');
+  expect(done.after.problems).toEqual([]);
+  // A key that names no repository is held as any id the change names.
+  const wrong = readModel(withChange('add:\n  apps/app-worker: {name: Worker, in: system-shop, repository: repo-nowhere}\n')).problems;
+  expect(wrong.map((problem) => [problem.file, problem.rule, problem.message])).toEqual([['changes/a-change.yaml', 'reference-unknown', 'With this change, `apps/app-worker`: `repository` names `repo-nowhere`, but no record has that id.']]);
+});
+
 test('an update rewrites only the keys it names: a new key at its place, a key taken out, one with no effect left, every other line as it was', () => {
   const body = ['update:', '  apps/app-api:', '    name: Order API', '    only: when the shop is open', '    kind: service', '    technology: null', ''].join('\n');
   const done = applied(withChange(body));

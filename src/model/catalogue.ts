@@ -4,7 +4,7 @@ import { ofArchitecture } from './kinds.ts';
 /** One row of the Software tab: a record, and how deep it stands in the tree. */
 export type TreeRow = { record: ModelRecord; depth: number };
 
-/** A part's owner: its id, and the id of the record it is written on. */
+/** A part's owner, or the repository a system's or an app's code is in: its id, and the id of the record it is written on. */
 export type Owned = { id: string; from: string };
 
 /** A condition a thing is there under: its words, and the id of the record they are written on. */
@@ -24,6 +24,7 @@ export type Catalogue = {
   connections: ModelRecord[];
   technologies: ModelRecord[];
   owners: ModelRecord[];
+  repositories: ModelRecord[];
   features: ModelRecord[];
   data: ModelRecord[];
   /** What a thing is in, upwards. */
@@ -42,6 +43,10 @@ export type Catalogue = {
   usedBy: (id: string) => { parts: ModelRecord[]; connections: ModelRecord[] };
   /** The parts an owner is written on, and those that take it from what they are in. */
   answersFor: (id: string) => { written: ModelRecord[]; taken: ModelRecord[] };
+  /** The repository a system's or an app's code is in: its own, or for an app its system's. None where neither names one. */
+  repository: (id: string) => Owned | undefined;
+  /** The systems and the apps whose code a repository holds, by their own key or their system's: the systems first, each by name. */
+  codeIn: (id: string) => ModelRecord[];
 };
 
 /** The folders of the things: what is drawn, and what a connection joins. */
@@ -60,6 +65,7 @@ const PAGES: Record<string, string> = {
   connections: 'connections',
   technologies: 'technologies',
   owners: 'owners',
+  repositories: 'repositories',
   features: 'features',
   flows: 'flows',
   data: 'data',
@@ -157,6 +163,18 @@ export function catalogueOf(records: readonly ModelRecord[], touch?: Touch): Cat
     return undefined;
   };
 
+  // An app's code is in its system's repository when it names none of its own; a store, a component and a piece of infrastructure have none.
+  const repository = (id: string): Owned | undefined => {
+    const start = byId.get(id);
+    if (start?.kind !== 'systems' && start?.kind !== 'apps') return undefined;
+    const system = start.kind === 'apps' ? thing(start.fields.in) : undefined;
+    for (const record of [start, ...(system?.kind === 'systems' ? [system] : [])]) {
+      const written = text(record.fields.repository);
+      if (written !== undefined) return { id: written, from: record.id };
+    }
+    return undefined;
+  };
+
   const conditions = (id: string): Condition[] => {
     const start = byId.get(id);
     if (start === undefined) return [];
@@ -179,6 +197,7 @@ export function catalogueOf(records: readonly ModelRecord[], touch?: Touch): Cat
     connections,
     technologies: of('technologies'),
     owners: of('owners'),
+    repositories: of('repositories'),
     features: of('features'),
     data: of('data'),
     chain,
@@ -198,5 +217,7 @@ export function catalogueOf(records: readonly ModelRecord[], touch?: Touch): Cat
         taken: sorted.filter((part) => part.fields.owner === undefined && owner(part.id)?.id === id),
       };
     },
+    repository,
+    codeIn: (id) => [...of('systems'), ...of('apps')].filter((part) => repository(part.id)?.id === id),
   };
 }

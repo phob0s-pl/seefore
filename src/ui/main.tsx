@@ -24,12 +24,12 @@ import { ChangePage, ChangesList } from './changes.tsx';
 import { ContextLinePage, ContextList } from './context.tsx';
 import { FlowPage } from './flow.tsx';
 import { FeaturePage, FeaturesList } from './features.tsx';
-import { ActorsList, ConnectionsList, DataList, OwnersList, SoftwareList, TABS, TechnologiesList } from './models.tsx';
+import { ActorsList, ConnectionsList, DataList, OwnersList, RepositoriesList, SoftwareList, TABS, TechnologiesList } from './models.tsx';
 import { RecordPage } from './record.tsx';
 import { RulePage, RulesList } from './rules.tsx';
 import { Shell } from './shell.tsx';
 
-const [software, actors, connections, technologies, owners, data] = TABS;
+const [software, actors, connections, technologies, owners, repositories, data] = TABS;
 
 const root = document.getElementById('root');
 if (root !== null) {
@@ -55,6 +55,8 @@ if (root !== null) {
             <Route path="technologies/:id" element={<RecordPage tab={technologies} />} />
             <Route path="owners" element={<OwnersList />} />
             <Route path="owners/:id" element={<RecordPage tab={owners} />} />
+            <Route path="repositories" element={<RepositoriesList />} />
+            <Route path="repositories/:id" element={<RecordPage tab={repositories} />} />
             <Route path="data" element={<DataList />} />
             <Route path="data/:id" element={<RecordPage tab={data} />} />
             <Route path="rules" element={<RulesList />} />

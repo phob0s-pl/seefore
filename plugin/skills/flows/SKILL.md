@@ -70,7 +70,9 @@ one to write, and stop.
      the steps that are still true.
 2. **Find where the journey starts**: who or what starts it, a person, a clock or a message,
    and at which part. Find that part's code by what it is: search for its entry point,
-   its route or its command.
+   its route or its command. Where `seefore list --near=<id>` names its repository, the code
+   lies in that repository's folder: with `workspace`, beside the model's folder under its
+   name. Name that folder in each search. A repository you cannot read ends the trail: say which.
 3. **Follow it hop by hop.** Read with the file tools: Glob lists, Grep searches, Read opens.
    The shell is for `seefore` alone, one command a call. At each part find where the thing
    arrives, what the part does with it that the outcome hangs on, and where it sends it on:

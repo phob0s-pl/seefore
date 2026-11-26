@@ -1,10 +1,12 @@
 /**
- * The sixteen kinds of record, a folder each, with its words. The first twelve are the
- * architecture, in the order the page shows them. The thirteenth, `rules`, holds the rules of a
- * team's own, which choose among the twelve. The fourteenth, `context`, holds what is true of
- * the whole model, or of one system, and that no record of the architecture says. The
- * fifteenth, `changes`, holds what is proposed: the records a change adds, updates and removes.
- * The sixteenth, `reviews`, holds what a reader found in a change: a file for each change.
+ * The seventeen kinds of record, a folder each, with its words. The first thirteen are the
+ * architecture, in the order the page shows them. Twelve of them a rule of a team's own chooses
+ * among; the tenth, `repositories`, it does not: a repository holds code of the system, and is
+ * named by a system or an app, as an owner is. The fourteenth, `rules`, holds the rules of a
+ * team's own. The fifteenth, `context`, holds what is true of the whole model, or of one system,
+ * and that no record of the architecture says. The sixteenth, `changes`, holds what is
+ * proposed: the records a change adds, updates and removes. The seventeenth, `reviews`, holds
+ * what a reader found in a change: a file for each change.
  *
  * `word` is the first word of the id of every record of the folder, as `app` in `app-gateway`:
  * an id says its kind. A change and a review have none: they are no records of the model.
@@ -19,6 +21,7 @@ export const KINDS = [
   { folder: 'infrastructure', one: 'piece of infrastructure', many: 'pieces of infrastructure', word: 'infra' },
   { folder: 'owners', one: 'owner', many: 'owners', word: 'owner' },
   { folder: 'technologies', one: 'technology', many: 'technologies', word: 'tech' },
+  { folder: 'repositories', one: 'repository', many: 'repositories', word: 'repo' },
   { folder: 'features', one: 'feature', many: 'features', word: 'feature' },
   { folder: 'flows', one: 'flow', many: 'flows', word: 'flow' },
   { folder: 'data', one: 'data record', many: 'data records', word: 'data' },
@@ -39,6 +42,9 @@ export function folderOfId(id: string): string | undefined {
 /** Whether a folder holds records of the architecture: every folder but `rules`, `context`, `changes` and `reviews`. */
 export const ofArchitecture = (kind: string): boolean => kind !== 'rules' && kind !== 'context' && kind !== 'changes' && kind !== 'reviews';
 
+/** Whether a rule of a team's own chooses among a folder's records: the twelve folders of the architecture that are not `repositories`. */
+export const chosenByRules = (kind: string): boolean => ofArchitecture(kind) && kind !== 'repositories';
+
 /** Whether a folder holds records of the model: all but what is proposed and what was found in it. Such a file is named by a change's id, which is its own. */
 export const ofModel = (kind: string): boolean => kind !== 'changes' && kind !== 'reviews';
 
@@ -56,6 +62,7 @@ export const NOUNS: Record<string, string> = {
   infrastructure: 'a piece of infrastructure',
   owners: 'an owner',
   technologies: 'a technology',
+  repositories: 'a repository',
   features: 'a feature',
   flows: 'a flow',
   data: 'data',

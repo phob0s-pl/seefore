@@ -6,20 +6,21 @@ import { iconOf, typeWords } from './kinds.tsx';
 import type { ModelState } from './shell.tsx';
 import { EmptyState, GridRow, IconTile, Panel, Pill, RowList, RowListHeading, useTitle } from './ui.tsx';
 
-/** The six tabs of Models, in their order: the address of each list and its title. */
+/** The seven tabs of Models, in their order: the address of each list and its title. */
 export const TABS = [
   { to: '/models', title: 'Software' },
   { to: '/actors', title: 'Actors' },
   { to: '/connections', title: 'Connections' },
   { to: '/technologies', title: 'Technologies' },
   { to: '/owners', title: 'Owners' },
+  { to: '/repositories', title: 'Repositories' },
   { to: '/data', title: 'Data' },
 ] as const;
 
 /** The folders whose records have a colour of their own: the things. */
 const COLOURED: readonly string[] = ['people', 'systems', 'apps', 'stores', 'components', 'infrastructure'];
 
-/** The tile of a record's kind, in its colour; neutral for a connection, a technology and an owner. */
+/** The tile of a record's kind, in its colour; neutral for a connection, a technology, an owner and a repository. */
 export function KindTile({ kind, size }: { kind: string; size?: 'sm' | 'lg' }) {
   return <IconTile icon={iconOf(kind)} kind={COLOURED.includes(kind) ? kind : undefined} size={size} />;
 }
@@ -165,6 +166,11 @@ export function TechnologiesList() {
 export function OwnersList() {
   useTitle('Models');
   return <ModelsPage>{(catalogue) => <Names records={catalogue.owners} catalogue={catalogue} label="Owners" empty="No owners yet." />}</ModelsPage>;
+}
+
+export function RepositoriesList() {
+  useTitle('Models');
+  return <ModelsPage>{(catalogue) => <Names records={catalogue.repositories} catalogue={catalogue} label="Repositories" empty="No repositories yet." />}</ModelsPage>;
 }
 
 /** The Data tab: the name of each data record. */

@@ -2,7 +2,7 @@ import type { Problem, Ruling } from './answer.ts';
 import { listOf, stepsOf, textOf } from './model.ts';
 import type { Entry, Model } from './model.ts';
 import { START, list, quote } from './problem.ts';
-import { ofArchitecture } from './kinds.ts';
+import { chosenByRules } from './kinds.ts';
 import { RECORD_FOLDERS } from './records.ts';
 import type { Must, Selector, Subject } from './records.ts';
 import { place } from './rules.ts';
@@ -168,10 +168,10 @@ type Ground = {
 };
 
 function groundOf(model: Model): Ground {
-  const records = model.entries.filter((entry) => entry.ok && ofArchitecture(entry.kind)).sort(byId);
+  const records = model.entries.filter((entry) => entry.ok && chosenByRules(entry.kind)).sort(byId);
   const get = (id: string | undefined): Entry | undefined => {
     const entry = id === undefined ? undefined : model.record(id);
-    return entry?.ok && ofArchitecture(entry.kind) ? entry : undefined;
+    return entry?.ok && chosenByRules(entry.kind) ? entry : undefined;
   };
   const seen = new Map<string, Set<string>>();
   const walked = new Set<string>();

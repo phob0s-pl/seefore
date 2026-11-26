@@ -38,7 +38,7 @@ const LINE: Partial<Record<Verb, string>> = {
 const OPEN: Partial<Record<Verb, string>> = { remove: 'Open it in the system' };
 
 /** The folders whose records have a page of their own under a change: the records of Models, and a feature. */
-const BODIES: readonly string[] = ['people', 'systems', 'apps', 'stores', 'components', 'infrastructure', 'connections', 'technologies', 'owners', 'data', 'features'];
+const BODIES: readonly string[] = ['people', 'systems', 'apps', 'stores', 'components', 'infrastructure', 'connections', 'technologies', 'owners', 'repositories', 'data', 'features'];
 
 const LIST = { to: '/changes', title: 'Changes' };
 

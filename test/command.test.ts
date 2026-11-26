@@ -328,7 +328,7 @@ test('guide prints the words of the format for a folder and for a skill, and the
   expect(apps.out.some((line) => line.trim().startsWith('source'))).toBe(false);
   // A skill's guide holds the guides of the folders it writes; with no topic, the topics.
   const model = await lines('guide', 'model');
-  expect(model.out.filter((line) => line.startsWith('# ')).map((line) => line.split(':')[0])).toEqual(['# people', '# systems', '# apps', '# stores', '# components', '# connections', '# infrastructure', '# owners', '# technologies']);
+  expect(model.out.filter((line) => line.startsWith('# ')).map((line) => line.split(':')[0])).toEqual(['# people', '# systems', '# apps', '# stores', '# components', '# connections', '# infrastructure', '# owners', '# technologies', '# repositories']);
   expect((await lines('guide', 'answer')).out.filter((line) => line.startsWith('# ')).map((line) => line.split(':')[0])).toEqual(['# changes', '# reviews']);
   expect((await lines('guide')).out.some((line) => line.trim().startsWith('review '))).toBe(true);
   expect((await lines('guide')).out).toContain('  answer          changes and reviews');
@@ -352,6 +352,31 @@ test('list says so when there is nothing to list, so that an empty model is told
   expect(await lines('list')).toEqual({ code: 0, out: ['No records yet.'], err: [] });
   expect(await lines('list', 'apps')).toEqual({ code: 0, out: ['No records yet.'], err: [] });
   expect(await lines('list', 'changes')).toEqual({ code: 0, out: ['No changes yet.'], err: [] });
+});
+
+test('the check opens no folder but the model’s: it says the same with a checkout of a repository beside the model and without one', async () => {
+  const workspace = await mkdtemp(join(tmpdir(), 'seefore-workspace-'));
+  const model = join(workspace, 'architecture');
+  const files: Record<string, string> = {
+    'seefore.yaml': 'format: 1\nname: Shop\n',
+    'systems/system-shop.yaml': 'name: Shop\nrepository: repo-shop-deploy\n',
+    'apps/app-api.yaml': 'name: API\nin: system-shop\n',
+    'repositories/repo-shop-deploy.yaml': 'name: shop-deploy\nurl: https://example.org/tea/shop-deploy\nworkspace: true\n',
+    'repositories/repo-docs.yaml': 'name: docs\ndescription: The documents of the shop, which no part names.\n',
+  };
+  for (const [path, text] of Object.entries(files)) {
+    await mkdir(dirname(join(model, path)), { recursive: true });
+    await writeFile(join(model, path), text);
+  }
+  const said = async () => [await runLines(['check', `--workdir=${model}`]), await runLines(['check', '--json', `--workdir=${model}`]), await runLines(['list', '--near=repo-shop-deploy', `--workdir=${model}`])];
+  const without = await said();
+  expect(without[0]).toEqual({ code: 0, out: ['4 records read. No problem: the keys are in form, and every id that is named is there.', 'Counted: 1 app that no connection names: `app-api`.'], err: [] });
+  expect(without[2]?.out).toEqual(['repositories/repo-shop-deploy  shop-deploy  workspace', 'named by:', '  systems/system-shop  Shop', 'through their system:', '  apps/app-api  API  in system-shop']);
+  // The checkout beside the model, with files of its own, changes nothing that is said.
+  await mkdir(join(workspace, 'shop-deploy', 'apps'), { recursive: true });
+  await writeFile(join(workspace, 'shop-deploy', 'apps', 'app-elsewhere.yaml'), 'name: Elsewhere\n');
+  expect(await said()).toEqual(without);
+  await rm(workspace, { recursive: true, force: true });
 });
 
 test('remove takes records away, and refuses while a record that stays names one of them', async () => {
@@ -394,10 +419,10 @@ test('apply lays the change of the guide onto the files and marks it applied, af
   }
   const change = await readFile(join(folder, 'changes/copies-for-accounts.yaml'), 'utf8');
   const lines = ['+ stores/store-order-copies', '+ connections/connection-api-writes-copies', '~ apps/app-order-api: description', 'Review: 1 block waits for the person.'];
-  const clean = '18 records read. No problem: the keys are in form, and every id that is named is there.';
+  const clean = '19 records read. No problem: the keys are in form, and every id that is named is there.';
   const before = await listFiles(folder);
   // While the change is open the check says that it laid it: a clean check else does not show that a change was held.
-  expect((await runLines(['check', `--workdir=${folder}`])).out.slice(0, 2)).toEqual(['16 records read. No problem: the keys are in form, and every id that is named is there.', 'Open changes: 1, each laid over the model alone and held with it.']);
+  expect((await runLines(['check', `--workdir=${folder}`])).out.slice(0, 2)).toEqual(['17 records read. No problem: the keys are in form, and every id that is named is there.', 'Open changes: 1, each laid over the model alone and held with it.']);
   expect(await runLines(['apply', 'copies-for-accounts', '--dry-run', `--workdir=${folder}`])).toEqual({ code: 0, out: [...lines, 'Would apply: 2 added, 1 updated, 0 removed.', clean, 'A dry run: nothing is written.'], err: [] });
   expect(await listFiles(folder)).toEqual(before);
   expect(await readFile(join(folder, 'changes/copies-for-accounts.yaml'), 'utf8')).toBe(change);

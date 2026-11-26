@@ -122,6 +122,10 @@ const partTechnology = ids('Name a technology by the id of its record in `techno
 
 const External = z.literal(true).meta({ description: '`true`: the people this model is kept for cannot change the system. Left out for a system of yours, and when nobody has said.' });
 
+/** The id of the repository a system's or an app's code is in; `left` says what it is when left out. */
+const repository = (left: string) =>
+  id('repository', 'holds the id of a record in `repositories/`.').meta({ description: `The id of the repository its code is in, a record in repositories/. ${left}` });
+
 const Kinds = (what: string, list: readonly string[]) => `${what}: ${list.join(', ')}.`;
 
 /** A kind of person who uses the software, runs it or takes part in an exchange. */
@@ -192,6 +196,7 @@ export const SystemSchema = z
     description: Description.optional(),
     external: External.optional(),
     owner: id('owner', 'holds the id of a record in `owners/`.').meta({ description: 'The id of the owner, a record in owners/, who answers for the system. Left out when nobody has said.' }).optional(),
+    repository: repository("Left out when it is the one the model's folder lies in, and when nobody has said.").optional(),
   })
   .meta({ description: 'Software its users see as one whole, ours or somebody else\'s. Nothing is above it. C4 calls it a software system.' });
 
@@ -210,6 +215,7 @@ export const AppSchema = z
       .optional(),
     technology: partTechnology.optional(),
     owner: Owner.optional(),
+    repository: repository('Left out, it is that of its system.').optional(),
   })
   .meta({
     description:
@@ -288,6 +294,55 @@ export const OwnerSchema = z
 export const TechnologySchema = z
   .strictObject({ name: Name, description: Description.optional() })
   .meta({ description: 'A thing with a name that a part is built with or an exchange is carried in: a language, a product, a protocol, a format.' });
+
+/** The most characters of a repository's `url`. */
+export const URL_MAX = 200;
+
+/** What begins a path on a disk, which a repository's `url` never is: `/`, `\`, `~`, `.`, `file:`, or a drive's letter and a colon. */
+const ON_DISK = /^(?:[/\\~.]|file:|[A-Za-z]:)/;
+
+export const RepositorySchema = z
+  .strictObject({
+    name: oneLine('name', NAME_MAX)
+      .refine((name) => !/[/\\]/.test(name), {
+        error: (issue) => `${subject(issue.path, 'name')} holds a slash. A repository's \`name\` is the name of the folder a plain clone of it makes, and a folder's name has no slash.`,
+        params: { code: 'repository-name' },
+      })
+      .refine((name) => name !== '.' && name !== '..', {
+        error: (issue) => `${subject(issue.path, 'name')} is ${quote(String(issue.input))}, which names a folder by where it is, and not by its name.`,
+        params: { code: 'repository-name' },
+      })
+      .meta({
+        description: 'Its own name, as the folder of a plain clone bears it: one line of 1 to 100 characters, with no slash.',
+        not: { anyOf: [{ pattern: '[/\\\\]' }, { enum: ['.', '..'] }] },
+      }),
+    description: prose(DESCRIPTION_MAX).meta({ description: 'What of the system lies in it, in 1 to 2,000 characters: the code of which parts, the deploy files, the documents.' }).optional(),
+    url: z
+      .string()
+      .min(1, { error: (issue) => `${subject(issue.path, 'url')} is empty.` })
+      .max(URL_MAX)
+      .regex(/^\S+$/, { error: (issue) => `${subject(issue.path, 'url')} has a space or a line break in it. A \`url\` is one line with no space, as \`https://example.org/tea/shop-deploy\`.` })
+      .refine((url) => !ON_DISK.test(url), {
+        error: (issue) => `${subject(issue.path, 'url')} is a path on a disk: it begins with ${quote(ON_DISK.exec(String(issue.input))?.[0] ?? '')}. A \`url\` says where the repository is cloned from.`,
+        params: { code: 'repository-url' },
+      })
+      .meta({
+        description: 'Where it is cloned from, as `https://…` or `git@…`: one line of 1 to 200 characters with no space. Never a path on a disk.',
+        not: { pattern: ON_DISK.source },
+      })
+      .optional(),
+    workspace: z
+      .literal(true)
+      .meta({
+        description:
+          "`true`: on every machine its checkout lies beside the model's folder, in a folder of its `name`, as a workspace's clone script puts it. Read it there, and search it by naming that folder: a search begun above it skips a folder that an ignore file names. Left out when its place differs from one machine to the next: then it is one of the folders the session can read, or it is not in reach, and a skill says so.",
+      })
+      .optional(),
+  })
+  .meta({
+    description:
+      "A repository that holds code or deploy files of the system, other than the one the model's folder lies in: that one needs no record. A system or an app names it with `repository`. It says which repository to read, and never where a checkout lies on a machine: no path, and no folder inside it. Written from a file that names the repository, as a clone script, a workspace's manifest or a package's own `repository`, or from a person's word; never from an image's name. A change writes one, or the key that names it, only from what the person said.",
+  });
 
 const touched = `${parts.replace(' or a piece', ', a piece')} or a connection`;
 
@@ -382,7 +437,7 @@ export const DataSchema = z
   })
   .meta({ description: 'A thing with a name that one part passes to another: what is sent, what comes back, what is put into a store or taken from it. It is no schema.' });
 
-/** The folders of the architecture, which a rule chooses among: all but `rules`. */
+/** The folders of the architecture that a rule chooses among: all but `repositories`, which a rule has no selector for. */
 export const RECORD_FOLDERS = ['people', 'systems', 'apps', 'stores', 'components', 'connections', 'infrastructure', 'owners', 'technologies', 'features', 'flows', 'data'] as const;
 
 /** The words of a selector's `kind`: a folder of the architecture, or a kind of app or of store. */
@@ -730,6 +785,7 @@ export const SHAPES = {
   infrastructure: InfrastructureSchema,
   owners: OwnerSchema,
   technologies: TechnologySchema,
+  repositories: RepositorySchema,
   features: FeatureSchema,
   flows: FlowSchema,
   data: DataSchema,

@@ -111,6 +111,34 @@ test('an app in an app, a component in a system, via a store and an owner that i
   expect(fixes.some((fix) => fix.includes('owners/'))).toBe(true);
 });
 
+test('`repository` on a system and an app names a record of repositories/, as any id that is named; a store and a component have no such key; a rule chooses no repository', () => {
+  const repository = file('repositories/repo-shop.yaml', 'name: shop\n');
+  expect(read(repository, file('systems/system-relay.yaml', 'name: Relay\nrepository: repo-shop\n'), file('apps/app-web.yaml', 'name: Web\nin: system-shop\nrepository: repo-shop\n')).problems).toEqual([]);
+  expect(kindOf(repository, file('apps/app-web.yaml', 'name: Web\nin: system-shop\nrepository: repo-shp\n'))).toEqual([
+    ['reference-unknown', 'error', 'apps/app-web.yaml', 3, '`repository` names `repo-shp`, but no record has that id. The nearest id is `repo-shop`.', 'If `repo-shop` was meant, write it instead of `repo-shp`. Otherwise write `repositories/repo-shp.yaml` with a `name`.'],
+  ]);
+  expect(kindOf(file('systems/system-relay.yaml', 'name: Relay\nrepository: app-api\n'))).toEqual([
+    [
+      'reference-wrong-kind',
+      'error',
+      'systems/system-relay.yaml',
+      2,
+      '`repository` names `app-api`, which is an app. `repository` names the repository the code is in, a record in `repositories/`.',
+      "Name in `repository` the id of a record in `repositories/`, or take the key out where the code is in the repository the model's folder lies in.",
+    ],
+  ]);
+  const refused = read(repository, file('stores/store-carts.yaml', 'name: Carts\nin: system-shop\nrepository: repo-shop\n'), file('components/component-cart.yaml', 'name: Cart\nin: app-api\nrepository: repo-shop\n')).problems;
+  expect(refused.map((problem) => [problem.rule, problem.file, problem.field, problem.message.split('.')[0]])).toEqual([
+    ['key-unknown', 'components/component-cart.yaml', 'repository', '`repository` is not a key of a component'],
+    ['key-unknown', 'stores/store-carts.yaml', 'repository', '`repository` is not a key of a store'],
+  ]);
+  // A rule's `id` names records it chooses among, and a repository is none.
+  expect(kindOf(repository, file('rules/rule-no-shop.yaml', 'name: No shop repository\nnever: {id: repo-shop}\n')).map((each) => [each[0], each[4]])).toEqual([
+    ['reference-wrong-kind', '`never.id` names `repo-shop`, which is a repository. `id` names a person, a system, an app, a store, a component, a connection, a piece of infrastructure, an owner, a technology, a feature, a flow or data.'],
+  ]);
+  expect(read(repository, file('rules/rule-nothing-named.yaml', 'name: Nothing has a name\nnever: {name: any}\n')).rulings[0]?.chosen).toEqual(['app-api', 'person-clerk', 'store-orders', 'system-shop']);
+});
+
 test('access-not-store is an error where to is no store', () => {
   const [problem] = read(file('connections/connection-a.yaml', 'from: person-clerk\nto: app-api\naccess: read\n')).problems;
   expect(problem).toMatchObject({ rule: 'access-not-store', field: 'access', line: 3 });

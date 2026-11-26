@@ -1,4 +1,5 @@
 import { expect, test } from 'vitest';
+import type { ModelRecord } from '../src/model/answer.ts';
 import { catalogueOf } from '../src/model/catalogue.ts';
 import { readModel } from '../src/model/read.ts';
 import type { SourceFile } from '../src/model/read.ts';
@@ -81,6 +82,30 @@ test('a part takes its owner from the nearest thing it is in that has one, with 
   expect(ids(cat.answersFor('owner-sales').written)).toEqual(['system-shop']);
   expect(ids(cat.answersFor('owner-sales').taken)).toEqual(['infra-gateway', 'store-orders', 'app-web']);
   expect(ids(cat.answersFor('owner-platform').taken)).toEqual(['component-checkout', 'store-sessions']);
+});
+
+test("an app's code is in its own repository or else its system's, and a repository holds the code of the systems and apps that name it and of those that take it", () => {
+  // The shop with its system and its web app naming a repository each.
+  const named: Record<string, string> = {
+    'systems/system-shop.yaml': 'name: Shop\nowner: owner-sales\nonly: in Europe\nrepository: repo-shop\n',
+    'apps/app-web.yaml': 'name: Web\nin: system-shop\nkind: browser\nrepository: repo-web\n',
+  };
+  const read = readModel([
+    ...SHOP.map((each) => ({ ...each, text: named[each.path] ?? each.text })),
+    { path: 'repositories/repo-shop.yaml', text: 'name: shop\nworkspace: true\n' },
+    { path: 'repositories/repo-web.yaml', text: 'name: web\nurl: https://example.org/tea/web\n' },
+  ]);
+  expect(read.problems).toEqual([]);
+  const cat = catalogueOf(read.records);
+  expect(cat.repository('system-shop')).toEqual({ id: 'repo-shop', from: 'system-shop' });
+  expect(cat.repository('app-web')).toEqual({ id: 'repo-web', from: 'app-web' });
+  expect(cat.repository('app-api')).toEqual({ id: 'repo-shop', from: 'system-shop' });
+  // A store, a component and a piece of infrastructure have none, nor a system that names none, nor a person.
+  for (const id of ['store-orders', 'component-checkout', 'infra-gateway', 'system-partner', 'person-customer']) expect(cat.repository(id), id).toBeUndefined();
+  expect(ids(cat.codeIn('repo-shop'))).toEqual(['system-shop', 'app-api']);
+  expect(ids(cat.codeIn('repo-web'))).toEqual(['app-web']);
+  expect(ids(cat.repositories)).toEqual(['repo-shop', 'repo-web']);
+  expect(cat.address(cat.record('repo-shop') as ModelRecord)).toBe('/repositories/repo-shop');
 });
 
 test('the conditions of a thing are its own, then those of each thing it is in, upwards', () => {
