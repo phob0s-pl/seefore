@@ -16,12 +16,13 @@ const SKILLS: Readonly<Record<string, readonly string[]>> = {
   flows: ['features', 'flows', 'data'],
   context: ['context', 'rules'],
   change: ['changes'],
+  answer: ['changes', 'reviews'],
   review: ['reviews'],
 };
 
 const FOLDERS: readonly string[] = KINDS.map((kind) => kind.folder);
 
-/** The topics: the sixteen folders, then the five skills. A skill shares its name with a folder twice, `flows` and `context`: its guide holds that folder's. */
+/** The topics: the sixteen folders, then the six skills. A skill shares its name with a folder twice, `flows` and `context`: its guide holds that folder's. */
 export const TOPICS: readonly string[] = [...FOLDERS, ...Object.keys(SKILLS)];
 
 /** One example file of each folder: one small shop, whose files are true to one another. The review's `read` is the mark of the example change, which a test holds. */

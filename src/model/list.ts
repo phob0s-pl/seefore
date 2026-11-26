@@ -64,13 +64,19 @@ function namesOf(record: ModelRecord): Set<string> {
   return named;
 }
 
-/** Who is next on a change, from its review: the corrector while a block is open, the second reading while one is fixed, the person while one is declined or reopened. A note waits for nobody. */
+/**
+ * Who is next on a change, from its review: the corrector while a block is open, the second reading
+ * while a point of either severity is fixed, the person while a block is declined or reopened. A
+ * note that is open, declined or reopened waits for nobody; one that is fixed was corrected, and the
+ * correction is read again as a block's is.
+ */
 function nextOn(changes: Changes, id: string): string {
   const review = changes.review(id);
   if (review === undefined) return 'no review';
   const count = (status: string) => review.points.filter((point) => point.severity === 'block' && point.status === status).length;
+  const fixed = review.points.filter((point) => point.status === 'fixed').length;
   if (count('open') > 0) return `the corrector: ${count('open')} open`;
-  if (count('fixed') > 0) return `the second reading: ${count('fixed')} fixed`;
+  if (fixed > 0) return `the second reading: ${fixed} fixed`;
   const person = (['declined', 'reopened'] as const).filter((status) => count(status) > 0).map((status) => `${count(status)} ${status}`);
   return person.length > 0 ? `the person: ${person.join(', ')}` : 'nothing open';
 }

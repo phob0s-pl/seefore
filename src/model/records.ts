@@ -537,8 +537,8 @@ export const RuleSchema = z
 
 /** The most characters of the prompt a change starts from: room for a full brief. */
 export const PROMPT_MAX = 4000;
-/** The most lines of `given`, and of `assumed`: the answers a person gave and the choices made without them, not the conversation. */
-export const GIVEN_MAX = 10;
+/** The most lines of `given`: the answers a person gave, when the change was drafted and when its review was answered; not the conversation. */
+export const GIVEN_MAX = 15;
 /** The most lines of `assumed`: a large change turns on more choices than a person is asked questions. */
 export const ASSUMED_MAX = 15;
 /** How a change is decided: its records are in the model's files, or the person said no. A change with neither is open. */
@@ -596,7 +596,7 @@ export const ChangeSchema = z
     given: inputLines('given', GIVEN_MAX)
       .meta({
         description:
-          "What the person answered when asked, each answer put into one line of 1 to 300 characters by the assistant: 1 to 10 lines, none twice. Nothing the prompt says already, and nothing the person did not say. Left out when nothing was asked.",
+          "What the person answered when asked, each answer put into one line of 1 to 300 characters by the assistant: 1 to 15 lines, none twice. Nothing the prompt says already, and nothing the person did not say. Left out when nothing was asked.",
       })
       .optional(),
     assumed: inputLines('assumed', ASSUMED_MAX)

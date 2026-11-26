@@ -169,9 +169,9 @@ test('`source` is no key: a part, a connection and a step that bear it are each 
 test('the check names what a list holds, and says that a key of one value may only be that', () => {
   // Found in the first round of the skill `model`: "Take ids out of" a list of paths, and "`opens` must be one of `to`".
   const fixes = (...files: SourceFile[]) => problemsOf(...PARTS, ...files).map((problem) => [problem.rule, problem.message, problem.fix]);
-  const given = Array.from({ length: 11 }, (_, index) => `Answer ${index + 1}.`).join(', ');
+  const given = Array.from({ length: 16 }, (_, index) => `Answer ${index + 1}.`).join(', ');
   expect(fixes({ path: 'changes/a-change.yaml', text: `name: A change\nprompt: Make it so.\ngiven: [${given}]\n` })).toEqual([
-    ['value-too-big', '`given` is too long a list: it may have at most 10.', 'Take lines out of `given` until it has at most 10.'],
+    ['value-too-big', '`given` is too long a list: it may have at most 15.', 'Take lines out of `given` until it has at most 15.'],
   ]);
   expect(fixes({ path: 'changes/a-change.yaml', text: 'name: A change\nprompt: Make it so.\ngiven: []\n' }).map((each) => each[2])).toEqual(['Give `given` at least one line, or delete the key.']);
   expect(fixes({ path: 'connections/connection-api-calls-api.yaml', text: 'from: app-api\nto: app-api\nopens: from\n' }).map((each) => [each[1], each[2]])).toEqual([
@@ -201,11 +201,11 @@ test('the lines of `assumed` are held as those of `given` are, and each fault of
     ['value-too-big', 7, 'assumed', 'The fourth line has 301 characters. It may have at most 300.', 'Shorten the value to the limit the message gives.'],
     ['value-invalid', 9, 'assumed', '`assumed` has the same line twice. Keep one.', change],
   ]);
-  // A large change turns on more choices than a person is asked questions: fifteen lines, where `given` has ten.
+  // Fifteen lines at most, as `given` has: answering a review adds to both.
   const many = Array.from({ length: 16 }, (_, index) => `Choice ${index + 1}.`);
   expect(said('assumed', many.slice(0, 15))).toEqual([]);
   expect(said('assumed', many).map((each) => [each[3], each[4]])).toEqual([['`assumed` is too long a list: it may have at most 15.', 'Take lines out of `assumed` until it has at most 15.']]);
-  expect(said('given', many.slice(0, 11)).map((each) => each[3])).toEqual(['`given` is too long a list: it may have at most 10.']);
+  expect(said('given', many).map((each) => each[3])).toEqual(['`given` is too long a list: it may have at most 15.']);
   expect(said('assumed', []).map((each) => [each[3], each[4]])).toEqual([['`assumed` is an empty list.', 'Give `assumed` at least one line, or delete the key.']]);
   // The two keys share one shape: `given` is told the very same, under its own name.
   const under = (key: string) => (each: unknown[]) => each.map((part) => (typeof part === 'string' ? part.replaceAll('`assumed`', `\`${key}\``).replace(/^assumed$/, key) : part));

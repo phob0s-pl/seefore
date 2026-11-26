@@ -181,7 +181,7 @@ export function holdReviews(reviews: readonly ReadReview[], against: Against): P
     const mark = changeMark(change.fields);
     if (fields.read !== mark)
       told(
-        warning(file, keyPosition(yaml, yaml.map, 'read'), 'review-behind', `\`read\` is ${quote(String(fields.read))}, and the change is ${quote(mark)} now: it moved after this reading.`, `Read what moved, answer for the points it touches, and write ${quote(mark)} into \`read\`.`),
+        warning(file, keyPosition(yaml, yaml.map, 'read'), 'review-behind', `\`read\` is ${quote(String(fields.read))}, and the change is ${quote(mark)} now: it moved after this reading.`, `Only a reading writes \`read\`: where points are \`fixed\`, the second reading reads them and writes ${quote(mark)} there; a correction leaves it as it is.`),
         'read',
       );
   }

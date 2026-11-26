@@ -5,7 +5,7 @@ folder `architecture/` of the repository it describes: the parts, their connecti
 journeys through them, what a design must respect, and the changes proposed to all of it. A
 command holds the files and shows them as a page. Skills for Claude Code write them.
 
-**Its state**: a trial, for work on your own machine from a clone. The five skills are
+**Its state**: a trial, for work on your own machine from a clone. The six skills are
 written. The numbers below are small and say what was not reached.
 
 ## Set it up
@@ -43,15 +43,15 @@ is. Then open the project in Claude Code. A skill runs only when you type its na
 | `/seefore:context <what is about to change>` | Asks you up to fifteen questions, three at a time, and writes what you say | Writes a line you did not say |
 | `/seefore:change <what you want changed>` | Asks at most three questions, then drafts one change in `changes/` | Edits a record of the model, or decides |
 | `/seefore:review <change>` | Four readers, each with a lens of its own, read the change apart from your session; their points become one review of at most ten | Edits the change, or approves |
+| `/seefore:answer <change>` | Asks you what the review asks, corrects the change, and says of each point what was done; `review` then reads what was fixed | Applies before your yes |
 
 A change holds what you asked, what you answered, what the skill chose without you
 (`assumed`), and the records it adds, updates and removes. A review is a list of points, each
-a block or a note; the page shows it beside the change. You decide:
+a block or a note; the page shows it beside the change. You decide, at any time:
 
-    seefore apply <change> --dry-run    # what it would write
-    seefore apply <change>              # writes the records, and `status: applied`
-
-For a no, write `status: rejected` and `why: <your reason>` at the end of the change's file.
+    /seefore:answer <change> yes            # runs `seefore apply`: the records, and `status: applied`
+    /seefore:answer <change> no <reason>    # writes `status: rejected`, and why
+    seefore apply <change> --dry-run        # in a terminal: what a yes would write
 
 ## Look at it
 
@@ -74,7 +74,6 @@ longer fits, with its mend.
 | You see | Do |
 | --- | --- |
 | `is not a model: it has no seefore.yaml` | Go to the project's root, or run `seefore init` |
-| `the page is not built; run "npm run build"` | Run it in the clone |
 | A skill stops as it loads | The session does not find `seefore`: run `npm link` in the clone again |
 | An error of the check | Its `Mend:` line says what to change; Claude can act on it |
 
@@ -92,9 +91,10 @@ cell: a direction, not a rate. The specs in `specs/plan3/` hold the numbers whol
   person and written context a draft broke 4 hidden lines, where the prompt alone broke 9.
 - **`review`**, on the same organisation: 6 of 13 known faults raised as a block, where a plain
   reader raised 4; seven points in ten worth acting on, for about 1.70 US dollars a review.
+- **`answer`**, on the same: of 7 faults that a review had raised, 6 were mended once its
+  questions were answered. What a review missed mostly stayed.
 
 ## What is not there yet
 
-- **Correcting a change after a review**: `change` stops at the draft.
-- **A real person**: `context` and `change` were tried with a played one only.
+- **A real person**: `context`, `change` and `answer` were tried with a played one only.
 - **An install without a clone**, a version, and a list of what each update changes.

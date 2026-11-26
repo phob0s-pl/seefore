@@ -36,8 +36,8 @@ function keysOf(folder: keyof typeof SHAPES): Set<string> {
   return keys;
 }
 
-test('the topics are the sixteen folders, then the five skills', () => {
-  expect(TOPICS).toEqual([...FOLDERS, 'model', 'flows', 'context', 'change', 'review']);
+test('the topics are the sixteen folders, then the six skills', () => {
+  expect(TOPICS).toEqual([...FOLDERS, 'model', 'flows', 'context', 'change', 'answer', 'review']);
 });
 
 test('a folder: what a record is, the word of its ids, each key needed or not with what it holds, and an example', () => {
@@ -102,6 +102,7 @@ test('a skill: the guides of the folders it writes, one after another', () => {
   expect(heads('flows')).toEqual(['features', 'flows', 'data']);
   expect(heads('context')).toEqual(['context', 'rules']);
   expect(heads('change')).toEqual(['changes']);
+  expect(heads('answer')).toEqual(['changes', 'reviews']);
   expect(heads('review')).toEqual(['reviews']);
   // A key that an earlier folder of the skill told in the same words is told by that folder's name, and where the folders lie is said once, at the head.
   const model = text('model');
@@ -116,6 +117,15 @@ test('a skill: the guides of the folders it writes, one after another', () => {
   expect(text('change').split('\n').slice(0, 2)).toEqual(['The skill change writes the folder changes. The folders lie in the model\'s folder, the one that', 'holds `seefore.yaml`. Its guide follows.']);
 });
 
+test('the skill answer: the guides of changes and of reviews, each whole, since no key of a change is one of a review; the index names it', () => {
+  const answer = text('answer');
+  const head = ["The skill answer writes the folders changes and reviews. The folders lie in the model's folder, the", 'one that holds `seefore.yaml`. The guide of each follows.'];
+  // A point's `name` and `status` lie under `points`: they are a review's own, and none is told as in changes.
+  expect(answer).toBe([...head, '', text('changes'), '', text('reviews')].join('\n'));
+  expect(answer).not.toContain('as in changes');
+  expect(text()).toContain('\n  change          changes\n  answer          changes and reviews\n  review          reviews');
+});
+
 test('no topic: the topics, a line each; a topic that is not there is an error that names them', () => {
   const index = text();
   expect(text('')).toBe(index);
@@ -125,7 +135,7 @@ test('no topic: the topics, a line each; a topic that is not there is an error t
   expect(index).toContain('\n  review          reviews');
   expect(guideText('app')).toEqual({
     error:
-      'There is no topic `app`. The topics are the folders `people`, `systems`, `apps`, `stores`, `components`, `connections`, `infrastructure`, `owners`, `technologies`, `features`, `flows`, `data`, `rules`, `context`, `changes` and `reviews`, and the skills `model`, `flows`, `context`, `change` and `review`.',
+      'There is no topic `app`. The topics are the folders `people`, `systems`, `apps`, `stores`, `components`, `connections`, `infrastructure`, `owners`, `technologies`, `features`, `flows`, `data`, `rules`, `context`, `changes` and `reviews`, and the skills `model`, `flows`, `context`, `change`, `answer` and `review`.',
   });
 });
 

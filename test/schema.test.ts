@@ -42,7 +42,7 @@ test('the schema of a change’s input passes a prompt with a name, with or with
   expect(check('changes', { ...input, given: [] })).toBe(false);
   expect(check('changes', { ...input, given: ['One line\nand a second'] })).toBe(false);
   expect(check('changes', { ...input, prompt: '   ' })).toBe(false);
-  expect(check('changes', { ...input, given: Array.from({ length: 11 }, (_, at) => `Answer ${at}`) })).toBe(false);
+  expect(check('changes', { ...input, given: Array.from({ length: 16 }, (_, at) => `Answer ${at}`) })).toBe(false);
 });
 
 test('the schema of a change’s input passes what was assumed, with what was given or without it, and refuses what it refuses of what was given', () => {

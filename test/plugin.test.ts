@@ -8,7 +8,7 @@ import { parse } from 'yaml';
 const root = (path: string): string => fileURLToPath(new URL(`../${path}`, import.meta.url));
 
 /** Each skill, and the stage of plan 3 that writes its text. */
-const SKILLS = ['model', 'flows', 'context', 'change', 'review'];
+const SKILLS = ['model', 'flows', 'context', 'change', 'answer', 'review'];
 
 /** The words of a Git workflow, which no skill holds. */
 const GIT = /\bgit\b|\bcommit|\bbranch|pull request|\bmerge/i;
@@ -28,7 +28,7 @@ test('the plugin and the marketplace name the plugin seefore', async () => {
   expect(market.plugins).toEqual([expect.objectContaining({ name: 'seefore', source: './plugin' })]);
 });
 
-test('the plugin holds the five skills and no other', async () => {
+test('the plugin holds the six skills and no other', async () => {
   const folders = (await readdir(root('plugin/skills'), { withFileTypes: true })).filter((entry) => entry.isDirectory()).map((entry) => entry.name);
   expect(folders.sort()).toEqual([...SKILLS].sort());
 });
@@ -49,6 +49,10 @@ test.each(SKILLS)('the skill %s has its front matter, at most 120 lines and no w
   const tools = String(matter['allowed-tools']);
   for (const verb of ['check', 'list', 'guide']) expect(tools).toContain(`Bash(seefore ${verb} *)`);
   for (const verb of ['rename', 'remove']) expect(tools.includes(`Bash(seefore ${verb} *)`)).toBe(skill === 'model');
+  // Only the skill that answers a review decides a change, so only it may apply one.
+  expect(tools.includes('Bash(seefore apply *)')).toBe(skill === 'answer');
+  // Those and no other command: three each, with two more for model and one more for answer.
+  expect(tools.match(/\bBash\(/g)).toHaveLength(skill === 'model' ? 5 : skill === 'answer' ? 4 : 3);
   expect(matter.context).toBe(skill === 'review' ? 'fork' : undefined);
 });
 

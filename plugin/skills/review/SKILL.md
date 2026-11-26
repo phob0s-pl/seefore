@@ -16,6 +16,10 @@ What the person typed after the skill's name: "$ARGUMENTS". That is the change's
 after it, if they wish, one reader alone: `plain`, `assumed`, `failure` or `trust`. With
 nothing typed, take the one open change that has no review; with several, name them and stop.
 
+**Where `reviews/<id>.yaml` is there already**, a change is not read whole again. With a
+point in it that is `fixed`, do the second reading, below, and start no reader. With none,
+say who is next, as `seefore list changes` has it, and stop.
+
 ## The readers
 
 Each is a subagent that the plugin ships. It reads the change and the model with a fresh
@@ -88,10 +92,26 @@ rests on an "if" that no record states. Lower no block and raise no note for a c
    file: one told in a message alone is none.
 6. Run `seefore check`, and mend what it says of your file, three rounds at most. What it
    holds against the change itself is no thing for you to mend.
-7. End with a short message that asks nothing:
-   - the points by name, the blocks first;
-   - how many points each reader brought, how many you kept, and how many each rule cut;
-   - "Next: read Review on the page, then decide, or have the change corrected."
+7. End with a short message that asks nothing: the points by name, the blocks first; how
+   many points each reader brought, how many you kept, and how many each rule cut; and
+   "Next: `/seefore:answer <id>` answers these points, or decides with yes or no."
+
+## The second reading
+
+The points that are `fixed` were answered by a correction of the change. You read those
+alone, yourself, and write no new point.
+
+1. Run `seefore list changes` for the change's mark as it is now. Read the change whole.
+2. For each fixed point, read its finding, its recommendation and its comments, and the
+   records that `about` and its last comment name. Judge by the recommendation: is what it
+   asks true of the change now?
+3. Write the point's `status` and one line more under `comments`: `closed` where it is true;
+   `reopened` where it is not, where a line of `assumed` or a sentence the correction wrote
+   answers a question the person left open, or where what it wrote holds a new fault.
+4. Write `read` anew. Change no other word of the review, and no point that is not fixed.
+5. Run `seefore check`, and mend your file. End with what you closed and reopened, a line
+   each; a fault you saw in what no correction wrote, which goes into no file; and "Next:
+   `/seefore:answer <id>`, for your word on a point, or with yes or no."
 
 ## The format
 
