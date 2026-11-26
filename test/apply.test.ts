@@ -1,7 +1,9 @@
 import { expect, test } from 'vitest';
+import { parse } from 'yaml';
 import { applyChange } from '../src/model/apply.ts';
 import type { Applied } from '../src/model/apply.ts';
 import { EXAMPLES } from '../src/model/guide.ts';
+import { changeMark } from '../src/model/mark.ts';
 import { readModel } from '../src/model/read.ts';
 import type { SourceFile } from '../src/model/read.ts';
 
@@ -42,6 +44,8 @@ const SHOP: SourceFile[] = [
 
 /** The shop with one change, `changes/a-change.yaml`, whose body is the text given. */
 const withChange = (body: string, model: SourceFile[] = SHOP, id = 'a-change'): SourceFile[] => [...model, { path: `changes/${id}.yaml`, text: `name: A change\nprompt: Make it so.\n${body}` }];
+/** The mark of the change whose body is the text given: what a review that read it as it is bears in `read`. */
+const markOf = (body: string): string => changeMark(parse(`name: A change\nprompt: Make it so.\n${body}`));
 
 /** What applying the change comes to, when it is not refused. */
 function applied(files: readonly SourceFile[], id = 'a-change'): Applied {
@@ -164,8 +168,15 @@ test('what the check faults, a decided change, an input alone and a change that 
 });
 
 test('it says what waits and what is wrong elsewhere, and applies all the same', () => {
-  const point = (status: string, severity = 'block') => [`    severity: ${severity}`, '    about: [need]', '    finding: Something is not right.', ...(status === 'open' ? [] : [`    status: ${status}`, '    comments:', '      - Said why.'])];
-  const review = file('reviews/a-change', 'read: "3f9a0c21"', 'points:', ...['open', 'fixed', 'declined', 'reopened', 'closed'].flatMap((status) => [`  point-${status}:`, `    name: A point that is ${status}`, ...point(status)]), '  point-note:', '    name: A note', ...point('open', 'note'));
+  const point = (status: string, severity = 'block') => [
+    `    severity: ${severity}`,
+    '    about: [need]',
+    '    finding: Something is not right.',
+    ...(severity === 'block' ? ['    recommendation: Something is right.'] : []),
+    ...(status === 'open' ? [] : [`    status: ${status}`, '    comments:', '      - Said why.', ...(status === 'reopened' ? ['      - Said what is still open.'] : [])]),
+  ];
+  const body = 'add:\n  apps/app-worker:\n    name: Worker\n    in: system-shop\nupdate:\n  systems/system-shop:\n    description: Sells things online and by post.\n';
+  const review = file('reviews/a-change', `read: "${markOf(body)}"`, 'points:', ...['open', 'fixed', 'declined', 'reopened', 'closed'].flatMap((status) => [`  point-${status}:`, `    name: A point that is ${status}`, ...point(status)]), '  point-note:', '    name: A note', ...point('open', 'note'));
   const model = [
     ...SHOP,
     review,
@@ -174,7 +185,6 @@ test('it says what waits and what is wrong elsewhere, and applies all the same',
     // Another open change: it adds the same record, and writes the same key otherwise.
     file('changes/other', 'name: Other', 'prompt: Make it otherwise.', 'add:', '  apps/app-worker:', '    name: Worker', '    in: system-shop', 'update:', '  systems/system-shop:', '    description: Sells things in shops.'),
   ];
-  const body = 'add:\n  apps/app-worker:\n    name: Worker\n    in: system-shop\nupdate:\n  systems/system-shop:\n    description: Sells things online and by post.\n';
   const done = applied(withChange(body, model));
   expect(done.warnings.map((problem) => [problem.rule, problem.line])).toEqual([['change-same-key', 9]]);
   expect(done.said).toEqual([
@@ -186,7 +196,14 @@ test('it says what waits and what is wrong elsewhere, and applies all the same',
   expect(written(done, 'systems/system-shop.yaml')).toBe('name: Shop\ndescription: Sells things online and by post.\n');
   // With no review, and nothing wrong elsewhere, it says that there is no review and no more.
   expect(applied(withChange(body)).said).toEqual(['Review: none.']);
-  expect(applied(withChange(body, [...SHOP, file('reviews/a-change', 'read: "3f9a0c21"', 'points:', '  point-note:', '    name: A note', ...point('open', 'note'))])).said).toEqual(['Review: nothing open.']);
+  expect(applied(withChange(body, [...SHOP, file('reviews/a-change', `read: "${markOf(body)}"`, 'points:', '  point-note:', '    name: A note', ...point('open', 'note'))])).said).toEqual(['Review: nothing open.']);
+});
+
+test('it says when the review read the change before it moved, after its line of the review', () => {
+  const body = 'remove:\n  - stores/store-old\n';
+  expect(applied(withChange(body, [...SHOP, file('reviews/a-change', 'read: "3f9a0c21"')])).said).toEqual(['Review: nothing open.', `The review read the change as \`3f9a0c21\`; it is \`${markOf(body)}\` now.`]);
+  // A review that read the change as it is says no more.
+  expect(applied(withChange(body, [...SHOP, file('reviews/a-change', `read: "${markOf(body)}"`)])).said).toEqual(['Review: nothing open.']);
 });
 
 test('a record in braces and a file with carriage returns are written by the library, which is said of a file that was there; a file with no line break at its end gets one', () => {

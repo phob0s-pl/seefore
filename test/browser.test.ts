@@ -1317,7 +1317,7 @@ async function decidedShop(): Promise<string> {
   await writeFile(join(folder, 'changes', 'orders-by-fax.yaml'), 'name: Orders by fax\nprompt: The shop takes orders that come by fax.\ngiven:\n  - The clerk types a faxed order in.\nassumed:\n  - A faxed order is paid as a posted one is. A fax that bears a card would change it.\n  - The fax machine stays outside the shop.\nstatus: rejected\nwhy: Nobody sends the shop a fax.\n');
   await writeFile(
     join(folder, 'reviews', 'a-clerk-in-the-shop.yaml'),
-    'read: "5d2e8f10"\npoints:\n  clerk-works-in-nothing:\n    name: Nothing says what the clerk works in\n    severity: note\n    about: [need]\n    finding: The change adds `person-clerk`, and no connection says what the clerk uses.\n    status: settled\n    comments:\n      - The clerk works on paper, outside the shop.\n',
+    'read: "5d2e8f10"\npoints:\n  clerk-works-in-nothing:\n    name: Nothing says what the clerk works in\n    severity: note\n    about: [need]\n    finding: The change adds `person-clerk`, and no connection says what the clerk uses.\n    status: settled\n    comments:\n      - The clerk works on paper, outside the shop.\n      - The person said it stands.\n',
   );
   return folder;
 }
