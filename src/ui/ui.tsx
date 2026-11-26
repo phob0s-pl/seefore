@@ -200,9 +200,9 @@ export function EmptyState({ title, bare, children }: { title: ReactNode; bare?:
 }
 
 /** The hatched, rounded field a diagram is drawn on. */
-export function CanvasFrame({ label, children }: { label: string; children: ReactNode }) {
+export function CanvasFrame({ label, children, onClickCapture }: { label: string; children: ReactNode; onClickCapture?: ComponentProps<'section'>['onClickCapture'] }) {
   return (
-    <section className="canvas-frame" aria-label={label}>
+    <section className="canvas-frame" aria-label={label} onClickCapture={onClickCapture}>
       {children}
     </section>
   );

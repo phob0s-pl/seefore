@@ -184,11 +184,14 @@ function FitButton({ shape, legend }: { shape: Shape; legend: boolean }) {
 /** The room the panel takes at the field's right, as diagram.css places it, and the gap kept beside it. */
 const PANEL = { width: 360, margin: 16, gap: 16 };
 
+/** How the field comes to a new place by itself: in a short glide, or at once when the system asks for less motion. */
+const glide = (): { duration: number } => ({ duration: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : GLIDE });
+
 /**
  * Slides the diagram left, just enough, when what is picked lies partly under the panel and fits
  * in the room beside it. What is wider than that room is left where it is.
  */
-function KeepClear({ picked, routes }: { picked: string | undefined; routes: Layout['routes'] }) {
+function KeepClear({ picked, routes, again }: { picked: string | undefined; routes: Layout['routes']; again: number }) {
   const { getInternalNode, getViewport, setViewport } = useReactFlow();
   const width = useViewportStore((state) => state.width);
   useEffect(() => {
@@ -202,8 +205,9 @@ function KeepClear({ picked, routes }: { picked: string | undefined; routes: Lay
     const right = Math.max(...xs) * zoom + x;
     const free = width - Math.min(PANEL.width, width - 2 * PANEL.margin) - PANEL.margin - PANEL.gap;
     if (right <= free || right - left > free - PANEL.margin) return;
-    void setViewport({ x: x - (right - free), y, zoom }, { duration: 200 });
-  }, [picked, routes, width, getInternalNode, getViewport, setViewport]);
+    void setViewport({ x: x - (right - free), y, zoom }, glide());
+    // `again` counts the times the slide is asked for anew, since a press of the mouse stops it.
+  }, [picked, routes, width, again, getInternalNode, getViewport, setViewport]);
   return null;
 }
 
@@ -222,8 +226,14 @@ const LABEL = { offset: 14, edge: 8 };
 const REACH = 12;
 /** The zoom a double click on a box lands at, where its name can be read; one that is closer stays. */
 const READ = 0.8;
-/** How long the field takes to come to where a double click sends it, in milliseconds. */
+/** How long the field takes to come to a new place by itself, in milliseconds. */
 const GLIDE = 200;
+/** A hand that slips fewer pixels than this between press and release has clicked, not dragged. */
+const SLIP = 4;
+/** The least room beside the panel into which something is brought. With less, the whole field is the room. */
+const ROOM = 240;
+/** The second click of a double click comes within this time of the first, in milliseconds, and no farther from it than this, in pixels. */
+const TWICE = { within: 800, near: 8 };
 
 /** The layouts made on this page, kept so that a view seen before stands at once. */
 const layouts = keeper();
@@ -293,10 +303,10 @@ function Legend() {
  * mouse says what is under it.
  *
  * A line takes no mouse itself: the mouse means the line that runs nearest to it within its
- * reach, so a drag moves the field wherever it starts. A double click brings what is under it
- * near enough to read: a box to the middle of the room beside the panel, a frame fitted into that
- * room, the empty field twice as close; on a line it does nothing. A layout is kept, so a view
- * seen before stands at once.
+ * reach, so a drag moves the field wherever it starts. A double click brings what its first click
+ * meant near enough to read: a box to the middle of the room beside the panel, a frame fitted
+ * into that room, the empty field twice as close; on a line nothing but the slide clear of the
+ * panel. A layout is kept, so a view seen before stands at once.
  *
  * On the page of a flow, `step` is what the picked step lights: its line, drawn as a pick is with
  * one head where the step travels to, or its box, outlined. With no hover and no pick, all but it
@@ -516,40 +526,71 @@ export function Diagram({
     if (label.current !== null) place();
     hoverOn(meant(event));
   };
-  const pick = (event: MouseEvent) => {
-    const at = meant(event);
-    onPick(at === undefined || at.kind === 'field' ? undefined : at.id);
+  // The click before, for the second click of a double click: what it meant, and where and when it was.
+  const first = useRef<{ at: Meant; x: number; y: number; time: number }>(undefined);
+  const [again, setAgain] = useState(0);
+  const doubled = (event: MouseEvent): boolean => {
+    const was = first.current;
+    return event.detail === 2 && was !== undefined && event.timeStamp - was.time < TWICE.within && Math.hypot(event.clientX - was.x, event.clientY - was.y) < TWICE.near;
   };
 
   /**
-   * A double click brings what is under it near enough to read, in a short glide. A box comes to
-   * the middle of the room beside the panel its pick has opened, at the zoom of reading or closer
-   * if the field is closer; a frame is fitted into that room, at most at its drawn size; the empty
-   * field comes twice as close, about the mouse. On a line nothing moves.
+   * A double click brings what its first click meant near enough to read. A box comes to the
+   * middle of the room beside the panel its pick has opened, at the zoom of reading or closer if
+   * the field is closer; a frame is fitted into that room, at most at its drawn size; the empty
+   * field comes twice as close about the mouse, or goes twice as far with Shift held. On a line
+   * the field only slides clear of the panel again, since the second press stopped that slide.
    */
-  const bring = (event: MouseEvent) => {
-    const at = meant(event);
+  const bring = ({ at, x: left, y: top }: { at: Meant; x: number; y: number }, away: boolean) => {
     const field = root.current?.getBoundingClientRect();
-    if (flow === undefined || field === undefined || at === undefined || at.kind === 'line') return;
+    if (flow === undefined || field === undefined) return;
+    if (at.kind === 'line') {
+      setAgain((count) => count + 1);
+      return;
+    }
     const { x, y, zoom } = flow.getViewport();
     if (at.kind === 'field') {
-      const closer = Math.min(MAX_ZOOM, zoom * 2);
-      const [px, py] = [event.clientX - field.left, event.clientY - field.top];
-      void flow.setViewport({ x: px - ((px - x) * closer) / zoom, y: py - ((py - y) * closer) / zoom, zoom: closer }, { duration: GLIDE });
+      const to = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, away ? zoom / 2 : zoom * 2));
+      const [px, py] = [left - field.left, top - field.top];
+      void flow.setViewport({ x: px - ((px - x) * to) / zoom, y: py - ((py - y) * to) / zoom, zoom: to }, glide());
       return;
     }
     const node = flow.getInternalNode(at.id);
     if (node === undefined) return;
     const [width, height] = [node.width ?? node.measured.width ?? 0, node.height ?? node.measured.height ?? 0];
-    const room = { width: Math.max(1, field.width - Math.min(PANEL.width, field.width - 2 * PANEL.margin) - PANEL.margin - PANEL.gap), height: field.height };
+    // The room beside the panel; in a field too narrow to have one, the field itself.
+    const beside = field.width - Math.min(PANEL.width, field.width - 2 * PANEL.margin) - PANEL.margin - PANEL.gap;
+    const room = { width: beside >= ROOM ? beside : field.width, height: field.height };
     const fitted = Math.min(1, (room.width - 2 * FIT.padding) / Math.max(1, width), (room.height - 2 * FIT.padding) / Math.max(1, height));
     const to = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, at.kind === 'box' ? Math.max(zoom, READ) : fitted));
     const middle = { x: node.internals.positionAbsolute.x + width / 2, y: node.internals.positionAbsolute.y + height / 2 };
-    void flow.setViewport({ x: room.width / 2 - middle.x * to, y: room.height / 2 - middle.y * to, zoom: to }, { duration: GLIDE });
+    void flow.setViewport({ x: room.width / 2 - middle.x * to, y: room.height / 2 - middle.y * to, zoom: to }, glide());
+  };
+
+  /**
+   * A click on the field: one picks what it means, a box, a line or a frame, or clears the pick.
+   * The second of a double click brings what the first one meant, whatever lies under the mouse
+   * by then: the pick's panel, or the slide clear of it, may have changed that. A third does nothing.
+   */
+  const pick = (event: MouseEvent) => {
+    if (event.detail > 1) {
+      if (doubled(event) && first.current !== undefined) bring(first.current, event.shiftKey);
+      return;
+    }
+    const at = meant(event);
+    first.current = at === undefined ? undefined : { at, x: event.clientX, y: event.clientY, time: event.timeStamp };
+    onPick(at === undefined || at.kind === 'field' ? undefined : at.id);
+  };
+  /** The second click of a double click that lands on the panel the first one opened is the diagram's, and the panel does not hear it. */
+  const onPanel = (event: MouseEvent) => {
+    if (!doubled(event) || first.current === undefined || !(event.target instanceof Element) || event.target.closest('.react-flow') !== null) return;
+    event.preventDefault();
+    event.stopPropagation();
+    bring(first.current, event.shiftKey);
   };
 
   return (
-    <CanvasFrame label="Architecture diagram">
+    <CanvasFrame label="Architecture diagram" onClickCapture={onPanel}>
       {layout === undefined ? (
         <div className="canvas-empty">
           <span className={`canvas-caption${failed ? ' failed' : ''}`}>{failed ? 'The diagram could not be laid out.' : 'Laying out…'}</span>
@@ -574,12 +615,13 @@ export function Diagram({
           deleteKeyCode={null}
           // The double click is the diagram's own: it brings what is under it near enough to read.
           zoomOnDoubleClick={false}
+          // A hand that slips a little on a line or a box has clicked it still.
+          paneDragThreshold={SLIP}
           onInit={setFlow}
           // A click on a box picks it; one on a frame or on the field picks the line that runs
-          // within reach of it, else the frame, or clears the pick.
+          // within reach of it, else the frame, or clears the pick. The second of two brings it.
           onNodeClick={pick}
           onPaneClick={pick}
-          onDoubleClick={bring}
           // A box the field brings under a mouse that rests is the hover too; a frame holds other
           // boxes and a band is no thing of the model, so over them it is the line, or none.
           onNodeMouseEnter={(_event, node) => node.type === 'box' && over(node.id)}
@@ -590,11 +632,17 @@ export function Diagram({
             root.current?.removeAttribute('data-on-line');
             setMoving(true);
           }}
-          onMoveEnd={() => {
+          onMoveEnd={(event) => {
             still.current = true;
             setMoving(false);
-            // The field has moved under the mouse: what it means now is found anew.
-            if (mouse.current !== undefined) hoverOn(meantAt(document.elementFromPoint(mouse.current.x, mouse.current.y), mouse.current.x, mouse.current.y));
+            // No move of the mouse is heard while the field is dragged: the mouse is where it was let go.
+            if (event !== null && 'clientX' in event && (event.type === 'mouseup' || mouse.current === undefined)) mouse.current = { x: event.clientX, y: event.clientY };
+            // Moved by a hand, the field has what the mouse means under it still, found anew. Moved
+            // by itself, after a double click or to keep clear of the panel, it has brought
+            // something else under a mouse that rests: the hover is none until the mouse moves,
+            // so that what was picked is not faded for a line that happens to lie there.
+            const at = mouse.current;
+            hoverOn(event !== null && at !== undefined ? meantAt(document.elementFromPoint(at.x, at.y), at.x, at.y) : undefined);
             settle();
           }}
           onMouseMove={follow}
@@ -606,7 +654,7 @@ export function Diagram({
           <Controls className="glass-group glass-group-column" position="bottom-left" showInteractive={false} showFitView={false}>
             <FitButton shape={shape} legend={legend} />
           </Controls>
-          <KeepClear picked={picked} routes={layout.routes} />
+          <KeepClear picked={picked} routes={layout.routes} again={again} />
           <HoverLabel hovered={moving ? undefined : hovered} view={view} label={label} place={place} />
         </ReactFlow>
       )}
