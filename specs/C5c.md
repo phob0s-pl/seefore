@@ -22,9 +22,8 @@ The words of the keys reach `flows` through `seefore guide flows`, which it load
   `flows` stands at 120 since stage H1: its sentence takes the room of words that the builder
   shortens in the same bullet, and no rule of the skill changes. `change` has room for one.
 - **`README.md`**, "What was measured": the line of `flows` gains what this trial counted.
-- **Settled here**: `flows` changes no connection that is there (its rule 5). So a step with
-  data on a connection that has no `access` stays a `way-unsaid`, and the last message names
-  the connection among what the code shows otherwise.
+- **Settled here**: `flows` changes no connection that is there (its rule 5): a step with data
+  on a connection with no `access` stays a `way-unsaid`, and the last message names it.
 
 ## The trial of `flows`
 
@@ -42,8 +41,7 @@ Boxwick and Vellumoak are made up and have no code, so the skill cannot run on t
 are right; no `removes` that the code does not show; two takes of the key in three are
 written; no error of the check. Counted beside it, with no bar: the steps of a run's own flow
 that are a `way-unsaid`, and the steps that no file shows. Where the bar is missed, the
-guide's sentence or the skill's is changed once, the six runs are made again, and this page
-says both rounds. Runs, keys and reviews stay out of Git.
+guide's sentence or the skill's is changed once, and the six runs are made again.
 
 ## The trial of `change`
 
@@ -67,25 +65,38 @@ cannot answer questions now. Draft the change with what you have.", as in plan 3
 | --- | --- | --- |
 | A step with `data` at a store that says no way | 50: 48 under `read-write`, 2 on a connection with no `access` | No item for 42 of the 142 pairs of a store and a data record. 46 of 81 flows show an item of their own |
 | A read that takes a job from a queue in its own words, with no `removes` | 5: Boxwick, "The Notifier sends an email", 3, and "Paying promoters", 10. GitLab, "Catch a Geo secondary site up", 4, and "Process a push", 1. Teleport, "Keep an audit event in Athena", 5 | The job as kept in its queue at Ends |
-| A step that takes a thing out and names it in `data` | 1: Boxwick, "Refunding an order", 12, "Takes the tickets out of its copy of the valid tickets" | Nothing today, since it says no way. With `access: write` alone it would show the tickets as put |
-| A read that names what the reader makes | 2: Vellumoak's backup, 6; Syncthing, "Edit a file in a shared folder", 2 | Database copy as only read in the Catalogue, which holds no such thing |
+| A step that takes a thing out and names it in `data`; a read that names what the reader makes | 1: Boxwick, "Refunding an order", 12. 2: Vellumoak's backup, 6; Syncthing, "Edit a file in a shared folder", 2 | With `access: write` alone the first would show its tickets as put. Database copy is only read in the Catalogue, which holds no such thing |
 
 - **The tries of C5d, C5e and C5f need flows that say their way.** They are made on copies
-  that hold the design's own trial (its section 9): Vellumoak's backup with 6 keys on 5
-  steps; Boxwick's "Buying tickets" with 9 keys on 7 steps and the records Hold, Seat change
-  and Sold seats, and "Getting in through a turnstile" with 1 key. A copy is made for the
-  try and thrown away: no file under `research/trial/` changes.
+  that hold the design's own trial (its section 9), of Vellumoak's backup and of two flows
+  of Boxwick. A copy is thrown away after: no file under `research/trial/` changes.
 
-## How it is checked, and what is out
+## How it was read, and what is out
 
-- **Each run's flow is read against its key**, by the line the run names for each step, and
-  this page says the counts of both rounds where there are two. **The check** runs on each
-  run's model and on each change.
-- **Tests**: none new in the tool. The plugin's test holds both texts at 120 lines.
-- **Out**: a run of `flows` that mends a flow that is there, which plan 3's C1 never made; a
-  played person for `change`; naming data on the 24 steps that write and name none, which
-  needs the code; a word in `plugin/agents/trust.md` (C5).
+- **Each run's flow was read against its key and the code** by an Opus reader. Runs, keys and
+  readings are out of Git: `research/experiments/c5c`, `c5c-r2`, `c5c-change`. No new test.
+- **Out**: a run of `flows` that mends a flow that is there; a played person for `change`;
+  naming data on the 24 steps that write and name none; a word in `plugin/agents/trust.md`.
 
 ## What the trial counted
 
-Written when the runs are made.
+On 2026-11-26: twelve runs of `flows` in two rounds and two of `change`, 13.29 US dollars.
+Between the rounds the guide's sentence on a take changed (C5).
+
+| Of `flows` | Round 1 | Round 2 |
+| --- | --- | --- |
+| Nine `access` in ten right | 10 of 10 | 11 of 12 |
+| No `removes` that the code does not show | 4 written, 4 shown | 2 written, 2 shown |
+| Two takes of the key in three written | 4 of 10; of the 4 on a step the flow has, 4 | 2 of 10; of the 3 on a step the flow has, 2 |
+| No new error of the check | None | None |
+| With no bar: steps of a run's flow that say no way; steps that no file shows | 0; 14 of 79, 12 of them of GitLab's 32 | 0; 14 of 69, 11 of them of GitLab's 29 |
+
+- **The bar on the takes is missed in both rounds, and is published so.** 13 of the 20 takes
+  lie after the step at which a flow ends by the skill's rule 4: the keys counted them. One
+  on a step that the flow has was missed: the run dropped it, having seen no line for it.
+- **Three of the six `removes` were written with no line named**, all on GitLab: the guide
+  says a take is named, the skill drops what no line shows, and runs did either.
+- **One run of GitLab in each round stilled an error that the model had before**, by adding a
+  part to a rule's `debt` with a false reason, as the check's own `Mend:` line offers.
+- **`change` meets its bar.** **Runs said of the guide**: where a queue reads and deletes in
+  two calls, its sentence does not say which of them carries `removes`.
