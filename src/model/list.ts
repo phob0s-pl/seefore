@@ -77,9 +77,9 @@ function nextOn(changes: Changes, id: string): string {
 /** The changes in the order of their ids, as their files lie. */
 const byId = (changes: Changes) => [...changes.all].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 
-/** One line a change: its path, its name, and who is next. */
+/** One line a change: its path, its name, and who is next; or, once it is decided, `applied` or `rejected`. */
 function changeLines(changes: Changes): string[] {
-  return byId(changes).map((change) => [`changes/${change.id}`, change.name, nextOn(changes, change.id)].join('  '));
+  return byId(changes).map((change) => [`changes/${change.id}`, change.name, change.status ?? nextOn(changes, change.id)].join('  '));
 }
 
 /** An id or a path that names no record: the error, with the nearest id. */
@@ -92,7 +92,8 @@ function unknown(id: string, ids: readonly string[]): string {
  * What `seefore list` prints: its lines, or the one line of an error. `folders` keeps the records
  * of those folders; `near` gives one record, then under `names:` each record it names and under
  * `named by:` each that names it; `change` lists the model as that change would make it, each line
- * marked `+`, `~` or `-` for a record it adds, updates or removes; `changes` lists the changes.
+ * marked `+`, `~` or `-` for a record it adds, updates or removes, and is an error for a decided
+ * change; `changes` lists the changes.
  */
 export function listLines(model: ModelRead, asked: ListAsked): { lines: string[] } | { error: string } {
   const changes = changesOf(model.records, model.laid);
@@ -122,6 +123,9 @@ export function listLines(model: ModelRead, asked: ListAsked): { lines: string[]
       const which = close !== undefined ? ` The nearest is ${quote(close)}.` : ids.length > 0 ? ` The changes are ${list(ids)}.` : ' There are no changes.';
       return { error: `There is no change ${quote(asked.change)}.${which}` };
     }
+    // A decided change is laid over the model no more: one applied is in it already.
+    if (change.status === 'applied') return { error: `The change ${quote(change.id)} is applied: the model has its records already.` };
+    if (change.status === 'rejected') return { error: `The change ${quote(change.id)} is rejected: it is not laid over the model.` };
     const world = changes.world(change.id);
     if (world === undefined) return { error: `The check could not lay the change ${quote(change.id)} over the model, so the model as it would be is not known. Run \`seefore check\` and mend changes/${change.id}.yaml.` };
     for (const touched of change.touched) marks.set(touched.path, touched.verb);

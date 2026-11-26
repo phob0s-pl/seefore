@@ -5,6 +5,7 @@ import { idProblem } from './id.ts';
 import { CHANGED_FOLDERS, RECORD_NOUNS } from './kinds.ts';
 import type { Entry } from './model.ts';
 import { error, list, quote, warning } from './problem.ts';
+import type { Position } from './problem.ts';
 import type { SourceFile } from './read.ts';
 import { SHAPES } from './records.ts';
 import { nearest } from './rules.ts';
@@ -16,7 +17,9 @@ import type { YamlFile } from './yaml.ts';
  * The body of a change, held three ways: its own form, each record at its place in the file;
  * the change against the model, which must have what it updates and removes and lack what it
  * adds; and the model as it would be, the model with the change laid over it, read by the
- * whole check. A problem the model does not have today is a problem of the change.
+ * whole check. A problem the model does not have today is a problem of the change. A decided
+ * change is history, held in its form alone. The open changes are also held together: two
+ * that write one key of one record are told at both.
  */
 
 /** A change whose file reads: its file, and the YAML of it. */
@@ -58,21 +61,37 @@ function pathFault(path: string): string | undefined {
 const sameValue = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
 
 /** The steps of a flow as a change writes them, with each bare id become the step the flow has today. */
-function stepsAfter(live: unknown, written: readonly unknown[]): unknown[] {
+export function stepsAfter(live: unknown, written: readonly unknown[]): unknown[] {
   const old = Array.isArray(live) ? (live as { id?: unknown }[]) : [];
   return written.map((step) => (typeof step === 'string' ? (old.find((each) => each.id === step) ?? step) : step));
 }
 
-/** One change held: its problems of form, against the model and of the model as it would be, and the records as they would be. */
+/** Whether a change is decided: applied or rejected. An open change has no `status`. */
+const decided = (status: unknown): boolean => status === 'applied' || status === 'rejected';
+
+/**
+ * One change held: its problems of form, against the model and of the model as it would be, and
+ * the records as they would be. A decided change is held in its form alone, and is not laid.
+ */
 export function holdChange(change: ReadChange, held: Held): HeldChange {
   const { file, yaml } = change;
   const doc = yaml.doc;
   if (!doc) return { problems: [] };
   const problems: Problem[] = [];
   const named: Named[] = [];
-  const body = doc.toJS() as { add?: Record<string, unknown>; update?: Record<string, Record<string, unknown>>; remove?: string[] };
+  const body = doc.toJS() as { add?: Record<string, unknown>; update?: Record<string, Record<string, unknown>>; remove?: string[]; status?: string; why?: string };
 
-  // ---- the form: each path, and each record at its place in the file
+  // ---- the form: the decision, each path, and each record at its place in the file
+  if (yaml.map !== undefined && body.why !== undefined && body.status !== 'rejected')
+    problems.push({
+      ...error(file, keyPosition(yaml, yaml.map, 'why'), 'change-status', '`why` goes with `status: rejected` alone: it holds the person\'s reason for a no.', 'Take `why` out, or write `status: rejected`.'),
+      field: 'why',
+    });
+  if (yaml.map !== undefined && body.status === 'rejected' && body.why === undefined)
+    problems.push({
+      ...error(file, keyPosition(yaml, yaml.map, 'status'), 'change-status', '`status: rejected` needs `why`: the person\'s reason for the no, in one line.', 'Write `why` with the reason the person gave. If they gave none, ask them.'),
+      field: 'status',
+    });
   for (const verb of ['add', 'update'] as const) {
     const map = doc.get(verb, true);
     if (!isMap(map)) continue;
@@ -131,7 +150,8 @@ export function holdChange(change: ReadChange, held: Held): HeldChange {
       problems.push({ ...error(file, yaml.at(each.key), 'change-twice', `${quote(each.id)} is in this change ${where}. A record is in a change once.`), field: each.verb });
     }
   }
-  if (problems.length > 0) return { problems };
+  // A decided change is history: what it adds may be there now, what it removes gone, so it is held against no model.
+  if (problems.length > 0 || decided(body.status)) return { problems };
 
   // ---- against the model: what it adds is not there, what it updates and removes is
   const records = new Map<string, Entry>();
@@ -212,4 +232,51 @@ export function holdChange(change: ReadChange, held: Held): HeldChange {
   }
   // The records the change writes, as that reading has them: what the page shows is what was judged.
   return { problems, laid: read.records.filter((record) => written.has(record.file)) };
+}
+
+/**
+ * The open changes held together: where two or more write the same key of the same record under
+ * `update`, it is told at each of them, at that key in its file. An update replaces a key whole,
+ * so whichever is applied second undoes the first there. Two that write the key alike undo
+ * nothing, and are not told. It is told whatever else is wrong with a change whose file reads; a
+ * decided change is no part of it.
+ */
+export function sameKeys(changes: readonly (ReadChange & { id: string })[]): Problem[] {
+  // Each key of each record an open change updates: the changes that write it, where each writes it, and what.
+  const writers = new Map<string, { id: string; file: string; at: Position; value: unknown }[]>();
+  for (const change of changes) {
+    const doc = change.yaml.doc;
+    if (doc === undefined || decided(doc.get('status'))) continue;
+    const update = doc.get('update', true);
+    if (!isMap(update)) continue;
+    const body = doc.toJS() as { update?: Record<string, Record<string, unknown> | null> };
+    for (const pair of update.items) {
+      const path = isScalar(pair.key) ? String(pair.key.value) : '';
+      if (pathFault(path) !== undefined || !isMap(pair.value)) continue;
+      for (const item of pair.value.items) {
+        if (!isScalar(item.key)) continue;
+        const key = String(item.key.value);
+        const where = `${path}\n${key}`;
+        const each = writers.get(where) ?? [];
+        each.push({ id: change.id, file: change.file, at: change.yaml.at(item.key), value: body.update?.[path]?.[key] ?? null });
+        writers.set(where, each);
+      }
+    }
+  }
+  const problems: Problem[] = [];
+  for (const [where, each] of writers) {
+    if (each.length < 2) continue;
+    const [path, key] = where.split('\n') as [string, string];
+    for (const one of each) {
+      const others = each.filter((other) => other !== one && !sameValue(other.value, one.value)).map((other) => other.id);
+      if (others.length === 0) continue;
+      const by = others.length === 1 ? `the change ${list(others)}` : `the changes ${list(others)}`;
+      problems.push({
+        ...warning(one.file, one.at, 'change-same-key', `${quote(key)} of ${quote(path)} is also written by ${by}. An update replaces a key whole, so the one applied second undoes what the first wrote there.`, 'Apply one of them, then write this key anew in the other, from the record as it is then.'),
+        record: one.id,
+        field: 'update',
+      });
+    }
+  }
+  return problems;
 }

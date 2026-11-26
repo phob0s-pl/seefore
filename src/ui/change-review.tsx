@@ -25,13 +25,14 @@ const SEVERITY: Record<Severity, { icon: LucideIcon; word: string; tone?: Tone }
   note: { icon: StickyNote, word: 'Note' },
 };
 
-/** Each status: the word of its pill and its colour; an open point has none. */
+/** Each status: the word of its pill and its colour. An open point has none; a settled one has the blue of what the person said. */
 const STATUS: Record<Status, { word: string; tone?: Tone }> = {
   open: { word: 'Open' },
   fixed: { word: 'Fixed', tone: 'caution' },
   declined: { word: 'Declined', tone: 'warning' },
   closed: { word: 'Closed', tone: 'success' },
   reopened: { word: 'Reopened', tone: 'danger' },
+  settled: { word: 'Settled', tone: 'info' },
 };
 
 /** The tile of a point: its icon says whether it is a block or a note. */

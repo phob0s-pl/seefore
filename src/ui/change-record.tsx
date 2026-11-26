@@ -6,7 +6,7 @@ import type { ModelRecord } from '../model/answer.ts';
 import { catalogueOf } from '../model/catalogue.ts';
 import type { Catalogue } from '../model/catalogue.ts';
 import { fieldRows } from '../model/changes.ts';
-import type { Change, ChangeRow, Changes, Difference, FieldRow, Touched, Verb } from '../model/changes.ts';
+import type { Change, ChangeRow, Changes, Decision, Difference, FieldRow, Touched, Verb } from '../model/changes.ts';
 import type { FlowUnder } from '../model/flow.ts';
 import { travelOf } from '../model/travel.ts';
 import type { Travel } from '../model/travel.ts';
@@ -56,8 +56,18 @@ export function TouchedName({ row }: { row: ChangeRow }) {
   return row.touched.folder === 'connections' && !named ? <span className="quiet">{row.label}</span> : <>{row.label}</>;
 }
 
-/** What is said of a change the check could not lay over the model. */
-export function Unlaid() {
+/** What is said of a decided change, by its decision: whether the model has its records. */
+const DECIDED: Record<Decision, string> = {
+  applied: 'This change is applied: its records are in the model.',
+  rejected: 'This change is rejected: the model does not have its records.',
+};
+
+/**
+ * What is said of a change that is not laid over the model: of a decided one, how it was decided
+ * and so whether the model has its records; of an open one, that the check finds errors in it.
+ */
+export function Unlaid({ change }: { change: Change }) {
+  if (change.status !== undefined) return <>{DECIDED[change.status]}</>;
   return (
     <>
       <code>seefore check</code> finds errors in this change, so its records cannot be opened.
@@ -97,7 +107,7 @@ function readUnder(changes: Changes, records: readonly ModelRecord[], id: string
   return read;
 }
 
-/** The page of a record under a change. A path the change does not touch, or a change the check could not lay, says so; an id that names no change is missing. */
+/** The page of a record under a change. A path the change does not touch, a change the check could not lay, and a decided change, laid no more, each say so; an id that names no change is missing. */
 export function ChangeRecordPage() {
   const { id = '', '*': path = '' } = useParams();
   const { answer, catalogue, changes, failed, slots } = useOutletContext<ModelState>();
@@ -122,7 +132,7 @@ export function ChangeRecordPage() {
   if (under !== undefined) return <FlowUnderPage key={`${change.id}/${path}`} change={change} changes={changes} under={under} label={label} system={addressOf(catalogue, 'flows', touched.id)} slots={slots} />;
   const shown = touched.verb === 'remove' ? today : after;
   const read = change.laid ? readUnder(changes, answer.records, id, touched.verb === 'remove' ? 'today' : 'after') : undefined;
-  if (shown === undefined || read === undefined) return <EmptyState title={<Unlaid />}>{back}</EmptyState>;
+  if (shown === undefined || read === undefined) return <EmptyState title={<Unlaid change={change} />}>{back}</EmptyState>;
   const before = touched.verb === 'update' ? readUnder(changes, answer.records, id, 'today') : undefined;
   // The link to the record as it is: the system's own address, from the catalogue that knows no change.
   const system = today !== undefined ? catalogue.address(today) : undefined;

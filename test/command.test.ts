@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { expect, test } from 'vitest';
+import { EXAMPLES } from '../src/model/guide.ts';
 import { readModel } from '../src/model/read.ts';
 import { peekTop } from '../src/model/yaml.ts';
 import { findModel, readOptions, readRenameOptions, run } from '../src/server/command.ts';
@@ -37,7 +38,7 @@ test('a folder that is not there, or no --server, ends with 1 and one line', asy
 
   lines.length = 0;
   expect(await run(['--workdir=nowhere'], '/here', io)).toBe(1);
-  expect(lines).toEqual(['seefore: run it as "seefore <verb> [<options>]", the verb one of init, check, list, guide, rename, remove and --server; see seefore --help']);
+  expect(lines).toEqual(['seefore: run it as "seefore <verb> [<options>]", the verb one of init, check, list, guide, apply, rename, remove and --server; see seefore --help']);
 });
 
 test('a folder with no seefore.yaml is not a model', async () => {
@@ -255,7 +256,7 @@ test('--help says the verbs, a line each, and the options of one', async () => {
   expect(all.code).toBe(0);
   expect(all.err).toEqual([]);
   const verbs = all.out.filter((line) => line.startsWith('  ')).map((line) => line.trim().split(' ')[0]);
-  expect(verbs).toEqual(['init', 'check', 'list', 'guide', 'rename', 'remove', '--server']);
+  expect(verbs).toEqual(['init', 'check', 'list', 'guide', 'apply', 'rename', 'remove', '--server']);
 
   const check = await runIn('/here', ['check', '--help']);
   expect(check.code).toBe(0);
@@ -264,6 +265,17 @@ test('--help says the verbs, a line each, and the options of one', async () => {
   expect((await runIn('/here', ['--server', '--help'])).out[0]).toBe('seefore --server [--workdir=<dir>] [--port=<n>]');
   expect((await runIn('/here', ['init', '--help'])).out[0]).toBe('seefore init [<dir>] --name=<name>');
   for (const verb of ['list', 'guide', 'rename']) expect((await runIn('/here', [verb, '--help'])).code).toBe(0);
+  expect(await runIn('/here', ['apply', '--help'])).toEqual({
+    code: 0,
+    out: [
+      'seefore apply <change> [--workdir=<dir>] [--dry-run]',
+      "Lays a change onto the model's files and marks it applied; refuses one that the check faults.",
+      '  <change>         The id of the change: the name of its file in changes/',
+      "  --workdir=<dir>  The model's folder. Else the current folder when it holds seefore.yaml, else architecture/ in it",
+      '  --dry-run        Prints what it would do and writes nothing',
+    ],
+    err: [],
+  });
   expect(await runIn('/here', ['draw', '--help'])).toEqual({ code: 1, out: [], err: ['seefore: there is no verb "draw"; see seefore --help'] });
 });
 
@@ -369,5 +381,44 @@ test('remove takes records away, and refuses while a record that stays names one
   expect(existsSync(join(folder, 'stores/store-orders.yaml'))).toBe(false);
   expect((await runLines(['check', `--workdir=${folder}`])).out[0]).toMatch(/^2 records read\. No problem/);
   expect((await runLines(['remove', 'app-web', `--workdir=${folder}`])).err).toEqual(['seefore: there is no record `app-web`', 'seefore: nothing is removed']);
+});
+
+test('apply lays the change of the guide onto the files and marks it applied, after a dry run that writes nothing; check is clean afterwards', async () => {
+  const folder = await mkdtemp(join(tmpdir(), 'seefore-apply-'));
+  for (const example of [{ path: 'seefore.yaml', text: 'format: 1\nname: Shop' }, ...Object.values(EXAMPLES)]) {
+    await mkdir(dirname(join(folder, example.path)), { recursive: true });
+    await writeFile(join(folder, example.path), `${example.text}\n`);
+  }
+  const change = await readFile(join(folder, 'changes/copies-for-accounts.yaml'), 'utf8');
+  const lines = ['+ stores/store-order-copies', '+ connections/connection-api-writes-copies', '~ apps/app-order-api: description', 'Review: 1 block waits for the person.'];
+  const clean = '18 records read. No problem: the keys are in form, and every id that is named is there.';
+  const before = await listFiles(folder);
+  expect(await runLines(['apply', 'copies-for-accounts', '--dry-run', `--workdir=${folder}`])).toEqual({ code: 0, out: [...lines, 'Would apply: 2 added, 1 updated, 0 removed.', clean, 'A dry run: nothing is written.'], err: [] });
+  expect(await listFiles(folder)).toEqual(before);
+  expect(await readFile(join(folder, 'changes/copies-for-accounts.yaml'), 'utf8')).toBe(change);
+
+  expect(await runLines(['apply', 'copies-for-accounts', `--workdir=${folder}`])).toEqual({ code: 0, out: [...lines, 'Applied: 2 added, 1 updated, 0 removed. `status: applied` is written.', clean], err: [] });
+  expect(await readFile(join(folder, 'changes/copies-for-accounts.yaml'), 'utf8')).toBe(`${change}status: applied\n`);
+  expect(await readFile(join(folder, 'stores/store-order-copies.yaml'), 'utf8')).toBe('name: Order copies\nin: system-shop\nkind: files\ndescription: A copy of each order, written once a night for the accounts.\n');
+  const checked = await runLines(['check', `--workdir=${folder}`]);
+  expect([checked.code, checked.out[0]]).toEqual([0, clean]);
+
+  // Once applied, it is refused; so is a change the check faults, with each error as the check prints it.
+  expect(await runLines(['apply', 'copies-for-accounts', `--workdir=${folder}`])).toEqual({ code: 1, out: [], err: ['seefore: `changes/copies-for-accounts` is applied already.', 'seefore: nothing is applied'] });
+  await writeFile(join(folder, 'changes/more-copies.yaml'), 'name: More copies\nprompt: Copy more.\nupdate:\n  stores/store-copies:\n    kind: database\n');
+  const after = await listFiles(folder);
+  expect(await runLines(['apply', 'more-copies', `--workdir=${folder}`])).toEqual({
+    code: 1,
+    out: [],
+    err: [
+      'seefore: The check faults `changes/more-copies`:',
+      'changes/more-copies.yaml:4:3: error: `update` names `stores/store-copies`, but no record has that id.',
+      '  Mend: Use the path of a record that is there, or, if the record is new, write it whole under `add`.',
+      'seefore: nothing is applied',
+    ],
+  });
+  expect(await listFiles(folder)).toEqual(after);
+  expect((await runLines(['apply', `--workdir=${folder}`])).err).toEqual(['seefore: run it as "seefore apply <change> [--workdir=<dir>] [--dry-run]"']);
+  expect((await runLines(['apply', 'more-copies', '--json', `--workdir=${folder}`])).err).toEqual(['seefore: unknown option "--json"']);
 });
 

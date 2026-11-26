@@ -7,7 +7,7 @@ import { runRules } from './rules.ts';
 import { MARKER_FILE, readMarker } from './marker.ts';
 import { START, compareProblems, error, list, quote, warning } from './problem.ts';
 import { SHAPES } from './records.ts';
-import { holdChange } from './change.ts';
+import { holdChange, sameKeys } from './change.ts';
 import type { ReadChange } from './change.ts';
 import { checkShape } from './shape.ts';
 import { readYaml } from './yaml.ts';
@@ -43,7 +43,7 @@ export function readModel(files: readonly SourceFile[]): ModelRead {
     const outside = (file: string) => !file.startsWith('rules/') && !file.startsWith('context/') && !file.startsWith('changes/') && !file.startsWith('reviews/');
     const whole = !problems.some((problem) => problem.severity === 'error' && outside(problem.file)) && entries.every((entry) => entry.ok || !outside(entry.file));
     const ruled = runRules(entries, whole, read.readable);
-    // Each change that reads is held alone: against the model as it is today, and with the model as it would be.
+    // Each change that reads is held alone: against the model as it is today, and with the model as it would be. A decided one, in its form alone.
     const today = [...problems, ...ruled.problems];
     const held = { files: sorted, entries, problems: today, read: readModel };
     const changed: Problem[] = [];
@@ -53,6 +53,8 @@ export function readModel(files: readonly SourceFile[]): ModelRead {
       changed.push(...came.problems.map((problem) => ({ ...problem, record: change.id })));
       if (came.laid !== undefined) laid.push({ change: change.id, records: came.laid });
     }
+    // And the open changes together: two that write one key of one record undo each other.
+    changed.push(...sameKeys(changes));
     return {
       ...(read.name !== undefined ? { name: read.name } : {}),
       records,

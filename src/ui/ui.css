@@ -177,7 +177,7 @@
 :is(.tile, .pill)[class*='kind-'] {
   --tone-tint: color-mix(in srgb, var(--tone) 16%, transparent);
 }
-/* The tones of a state, as the rules have them: broken, not judged, holds; and caution, the yellow of what a change updates. */
+/* The tones of a state, as the rules have them: broken, not judged, holds; caution, the yellow of what a change updates; and info, the blue of what the person settled. */
 .tone-danger {
   --tone: var(--danger);
   --tone-tint: var(--danger-tint);
@@ -193,6 +193,10 @@
 .tone-success {
   --tone: var(--success);
   --tone-tint: var(--success-tint);
+}
+.tone-info {
+  --tone: var(--info);
+  --tone-tint: var(--info-tint);
 }
 
 .text-link {

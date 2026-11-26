@@ -54,3 +54,18 @@ export async function writeRenamed(folder: string, files: readonly SourceFile[],
   }
   for (const file of changed) if (file.from !== file.to && !written.has(file.from)) await rm(join(folder, file.from));
 }
+
+/**
+ * Writes what an apply did: the files of the records it adds and rewrites, each in its folder,
+ * made when it is not there; then takes away the files it removes; and last the change's own
+ * file, with `status: applied`. Stopped halfway, the change is still open, and the check tells
+ * what is in. Nothing is undone here: the folder is in Git.
+ */
+export async function writeApplied(folder: string, written: readonly SourceFile[], gone: readonly string[], change: SourceFile): Promise<void> {
+  for (const file of written) {
+    await mkdir(dirname(join(folder, file.path)), { recursive: true });
+    await writeFile(join(folder, file.path), file.text, 'utf8');
+  }
+  await removeFiles(folder, gone);
+  await writeFile(join(folder, change.path), change.text, 'utf8');
+}

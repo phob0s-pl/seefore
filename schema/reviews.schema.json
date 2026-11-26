@@ -62,9 +62,10 @@
               "fixed",
               "declined",
               "closed",
-              "reopened"
+              "reopened",
+              "settled"
             ],
-            "description": "Where the point stands. Left out, it is `open`. The corrector sets `fixed` or `declined`; the reviewer, at the second reading, `closed` or `reopened`."
+            "description": "Where the point stands. Left out, it is `open`. The corrector sets `fixed` or `declined`; the reviewer, at the second reading, `closed` or `reopened`. `settled`: the person said how a declined or reopened point ends, and their word is its next comment."
           },
           "comments": {
             "minItems": 1,

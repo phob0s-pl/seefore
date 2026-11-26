@@ -71,6 +71,26 @@ test('a change has its input: the prompt, and what the person answered when aske
   expect(faulty.change('worse')).toMatchObject({ id: 'worse', name: 'Worse', given: [] });
 });
 
+test('a decided change has its status, and a rejected one the reason for the no; neither is laid', () => {
+  const read = changes(
+    change('kept', 'name: Kept\nprompt: Open the shop.\nstatus: applied\nadd:\n  systems/system-shop: {name: Shop}\n'),
+    change('refused', 'name: Refused\nprompt: Take orders by post.\nstatus: rejected\nwhy: Orders by post are too few.\n'),
+    change('post', 'name: Orders by post\nprompt: Take orders by post.\n'),
+  );
+  expect(read.change('kept')).toMatchObject({ status: 'applied', laid: false });
+  expect(read.change('kept')).not.toHaveProperty('why');
+  expect(read.change('refused')).toMatchObject({ status: 'rejected', why: 'Orders by post are too few.', laid: false });
+  expect(read.world('refused')).toBeUndefined();
+  // An open change has neither key, and is laid.
+  expect(read.change('post')).toMatchObject({ laid: true });
+  expect(read.change('post')).not.toHaveProperty('status');
+  expect(read.change('post')).not.toHaveProperty('why');
+  // The check tells a status that is no decision, and a reason that is no text; the page leaves them out.
+  const faulty = changesOf([record('changes', 'odd', { name: 'Odd', prompt: 'A.', status: 'done', why: 7 })]);
+  expect(faulty.change('odd')).not.toHaveProperty('status');
+  expect(faulty.change('odd')).not.toHaveProperty('why');
+});
+
 test('a model with no change has none, and finds none', () => {
   const read = changes();
   expect(read.all).toEqual([]);

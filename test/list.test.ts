@@ -162,6 +162,37 @@ test('a line a change, with who is next from its blocks; a note waits for nobody
   expect(listLines(readModel(MODEL.filter((each) => !each.path.startsWith('changes/'))), { changes: true })).toEqual({ lines: [] });
 });
 
+/** The model with two decided changes: one applied, whose store is in the model now, and one rejected, with a review that still has a block open. */
+const DECIDED: SourceFile[] = [
+  ...MODEL,
+  file('changes/kept', 'name: Kept\nprompt: Keep the orders.\nstatus: applied\nadd:\n  stores/store-orders: {name: Orders, in: system-shop, kind: database}\n'),
+  file('changes/refused', 'name: Refused\nprompt: Rename the API.\nstatus: rejected\nwhy: The API keeps its name.\nupdate:\n  apps/app-api: {name: Order API}\n'),
+  review('refused', point('one', 'block')),
+];
+
+test('a decided change says applied or rejected in place of who is next', () => {
+  const read = readModel(DECIDED);
+  expect(read.problems.map((problem) => problem.file)).toEqual(['changes/broken.yaml']);
+  expect(listLines(read, { changes: true })).toEqual({
+    lines: [
+      'changes/broken  A broken change  no review',
+      'changes/done  Done  nothing open',
+      'changes/fixing  Fixing  the second reading: 1 fixed',
+      'changes/kept  Kept  applied',
+      'changes/ledger  A ledger  the corrector: 2 open',
+      'changes/refused  Refused  rejected',
+      'changes/waiting  Waiting  the person: 1 declined, 1 reopened',
+    ],
+  });
+});
+
+test('a decided change is not laid over the model, and asking for the model as it would make it says why', () => {
+  const read = readModel(DECIDED);
+  expect(read.laid.map((laid) => laid.change)).toEqual(['done', 'fixing', 'ledger', 'waiting']);
+  expect(listLines(read, { change: 'kept' })).toEqual({ error: 'The change `kept` is applied: the model has its records already.' });
+  expect(listLines(read, { change: 'refused' })).toEqual({ error: 'The change `refused` is rejected: it is not laid over the model.' });
+});
+
 test('a connection says what it passes through, after its two ends', () => {
   const read = readModel([
     { path: 'seefore.yaml', text: 'format: 1\nname: Shop\n' },

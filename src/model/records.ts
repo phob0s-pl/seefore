@@ -539,6 +539,8 @@ export const RuleSchema = z
 export const PROMPT_MAX = 4000;
 /** The most lines of `given`: the answers a person gave, not the conversation. */
 export const GIVEN_MAX = 10;
+/** How a change is decided: its records are in the model's files, or the person said no. A change with neither is open. */
+export const DECISIONS = ['applied', 'rejected'] as const;
 
 /** One line of `given`: an answer of the person, in one sentence or two on one line. */
 const GivenLine = z
@@ -555,9 +557,8 @@ const GivenLine = z
   });
 
 /**
- * The input of a change: what a person brings before anything is drafted. It is the head of a
- * change's record. What a change holds beside it, and where its file lies, is not defined yet,
- * so no folder is read with this shape.
+ * A change, a file of `changes/`: its input, what a person brings before anything is drafted;
+ * its body, the records it adds, updates and removes; and, once it is decided, its status.
  */
 export const ChangeSchema = z
   .strictObject({
@@ -604,16 +605,29 @@ export const ChangeSchema = z
       .min(1)
       .meta({ description: 'The records the change removes: the path of each, `folder/id`. What still names one of them is told by the check.' })
       .optional(),
+    // The decision. That `why` goes with `status: rejected` alone is held by `change.ts`, which tells each way it fails with its own mend.
+    status: z
+      .enum(DECISIONS)
+      .meta({
+        description:
+          "Whether the change is decided. Left out while it is open. `applied`: its records are in the model's files; written by `seefore apply` alone, never by hand. `rejected`: the person said no, and `why` says why. A decided change is history: the check holds its form alone and lays it over the model no more.",
+      })
+      .optional(),
+    why: oneLine('why', NOTE_MAX).meta({ description: "With `status: rejected` alone: the person's reason for the no, in one line of 1 to 300 characters." }).optional(),
   })
   .meta({
     description:
-      'A change: its input (the prompt a person gave, what they answered when asked, and a name written last), and its body, the records it adds, updates and removes. With no body it is an input alone.',
+      'A change: its input (the prompt a person gave, what they answered when asked, and a name written last), and its body, the records it adds, updates and removes. With no body it is an input alone. Once it is decided it bears `status`.',
+    // `why` with `status: rejected` alone, and never a rejection without it, as the check holds it.
+    if: { properties: { status: { const: 'rejected' } }, required: ['status'] },
+    then: { required: ['why'] },
+    else: { not: { required: ['why'] } },
   });
 
 /** How heavy a point of a review is: a block must be answered, and a note waits for nobody. */
 export const SEVERITIES = ['block', 'note'] as const;
-/** Where a point of a review stands, and so who is next: the corrector, the reviewer or the person. */
-export const STATUSES = ['open', 'fixed', 'declined', 'closed', 'reopened'] as const;
+/** Where a point of a review stands, and so who is next: the corrector, the reviewer or the person; after `closed` and `settled`, nobody. */
+export const STATUSES = ['open', 'fixed', 'declined', 'closed', 'reopened', 'settled'] as const;
 /** The most characters of the finding of a point. */
 export const FINDING_MAX = 500;
 /** The most addresses a point is about. */
@@ -654,7 +668,7 @@ const PointSchema = z.strictObject({
     .optional(),
   status: z
     .enum(STATUSES)
-    .meta({ description: 'Where the point stands. Left out, it is `open`. The corrector sets `fixed` or `declined`; the reviewer, at the second reading, `closed` or `reopened`.' })
+    .meta({ description: 'Where the point stands. Left out, it is `open`. The corrector sets `fixed` or `declined`; the reviewer, at the second reading, `closed` or `reopened`. `settled`: the person said how a declined or reopened point ends, and their word is its next comment.' })
     .optional(),
   comments: z
     .array(oneLine('comment', NOTE_MAX))

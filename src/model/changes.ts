@@ -4,6 +4,7 @@ import type { Touch } from './catalogue.ts';
 import { flowSteps, flowUnder, orderOfBoth } from './flow.ts';
 import type { FlowUnder, Mark } from './flow.ts';
 import { ofModel } from './kinds.ts';
+import { DECISIONS } from './records.ts';
 import { reviewOf } from './review.ts';
 import type { About, Review } from './review.ts';
 
@@ -22,12 +23,16 @@ export type Verb = 'add' | 'update' | 'remove';
 /** A record a change names: its path, `folder/id`; what the change does to it; and for an update the keys it writes, in the file's order. */
 export type Touched = { path: string; folder: string; id: string; verb: Verb; keys: string[] };
 
+/** How a change is decided: applied, or rejected. An open change has none. */
+export type Decision = (typeof DECISIONS)[number];
+
 /**
  * One change as its pages show it: its id; its name, or its id when it has no name of text; what
  * was asked for, when it is text; what the person answered when asked, line by line; the records
- * it names, in the file's order; and whether the check could lay it over the model.
+ * it names, in the file's order; whether the check could lay it over the model, which it never
+ * does for a decided one; and, once it is decided, how, with the person's reason for a no.
  */
-export type Change = { id: string; name: string; prompt?: string; given: string[]; touched: Touched[]; laid: boolean };
+export type Change = { id: string; name: string; prompt?: string; given: string[]; touched: Touched[]; laid: boolean; status?: Decision; why?: string };
 
 /** The model as it would be with a change: its records, and what the change touches, for a catalogue made of them. */
 export type World = { records: ModelRecord[]; touch: Touch };
@@ -157,7 +162,19 @@ export function changesOf(records: readonly ModelRecord[], laid: readonly Laid[]
     const prompt = text(record.fields.prompt);
     // A line that is no text is a fault the check tells; the page leaves it out.
     const given = Array.isArray(record.fields.given) ? record.fields.given.flatMap((line) => text(line) ?? []) : [];
-    return { id: record.id, name: text(record.fields.name) ?? record.id, ...(prompt !== undefined ? { prompt } : {}), given, touched: touchedOf(record.fields), laid: read.has(record.id) };
+    // The check lays no decided change, so its `laid` is false by itself.
+    const status = DECISIONS.find((decision) => decision === record.fields.status);
+    const why = text(record.fields.why);
+    return {
+      id: record.id,
+      name: text(record.fields.name) ?? record.id,
+      ...(prompt !== undefined ? { prompt } : {}),
+      given,
+      touched: touchedOf(record.fields),
+      laid: read.has(record.id),
+      ...(status !== undefined ? { status } : {}),
+      ...(why !== undefined ? { why } : {}),
+    };
   });
   const byId = new Map(all.map((change) => [change.id, change]));
 
@@ -221,7 +238,8 @@ export function changesOf(records: readonly ModelRecord[], laid: readonly Laid[]
     const touched = change?.touched.find((each) => each.path === path);
     const record = (touched?.verb === 'remove' ? undefined : after(id).get(path)) ?? today.get(path);
     if (split === undefined || record === undefined) return { address, label: address };
-    const base = touched === undefined ? addressInSystem(record) : change?.laid === true ? addressUnder(id, path) : undefined;
+    // A decided change is laid no more: what it touched leads to the record's own page, where the model has it.
+    const base = touched === undefined || change?.status !== undefined ? addressInSystem(record) : change?.laid === true ? addressUnder(id, path) : undefined;
     const label = labelOf(record, { ...split, path, verb: 'update', keys: [] });
     if (hash < 0) return { address, label, record, ...(base !== undefined ? { to: base } : {}) };
     // The step's words: as the flow under the change has them, which holds a step that goes too; else as the flow has them today.

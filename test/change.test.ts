@@ -214,3 +214,65 @@ test('a record that a change adds is held by id-kind too, told at the change wit
   ]);
 });
 
+test('a decided change is held in its form alone: nothing against the model, and it is not laid', () => {
+  // Applied: what it adds is there now, and what it removes is gone.
+  const applied = read('status: applied\nadd:\n  apps/app-api: {name: API, in: system-shop}\nremove:\n  - apps/app-worker\n');
+  expect(applied.problems).toEqual([]);
+  expect(applied.laid).toEqual([]);
+  // Rejected: what it updates need not be there.
+  const rejected = read('status: rejected\nwhy: The API keeps its words.\nupdate:\n  apps/app-apy: {description: New words.}\n');
+  expect(rejected.problems).toEqual([]);
+  expect(rejected.laid).toEqual([]);
+  // Its form is held all the same: each path, a record under `add` by its folder's shape, a key under `update` of its kind.
+  expect(said('status: applied\nadd:\n  worker: {name: Worker}\n  apps/app-worker: {name: Worker}\nupdate:\n  apps/app-api: {colour: red}\n')).toEqual([
+    ['change-path', 'error', 5, '`worker` is not the path of a record. A path is a folder and an id, as `apps/app-ledger`.'],
+    ['key-missing', 'error', 6, '`in` is missing from `apps/app-worker`.'],
+    ['key-unknown', 'error', 8, '`colour` is not a key of an app. Its keys are `name`, `in`, `only`, `description`, `kind`, `technology` and `owner`.'],
+  ]);
+});
+
+test('`why` goes with `status: rejected` alone, and `rejected` needs it, each told at its key', () => {
+  const told = (body: string) => read(body).problems.map((problem) => [problem.rule, problem.severity, problem.line, problem.field, problem.message, problem.fix]);
+  const why = (line: number) => ['change-status', 'error', line, 'why', "`why` goes with `status: rejected` alone: it holds the person's reason for a no.", 'Take `why` out, or write `status: rejected`.'];
+  expect(told('why: Nobody asked.\n')).toEqual([why(3)]);
+  expect(told('status: applied\nwhy: It was done.\n')).toEqual([why(4)]);
+  expect(told('status: rejected\n')).toEqual([
+    ['change-status', 'error', 3, 'status', "`status: rejected` needs `why`: the person's reason for the no, in one line.", 'Write `why` with the reason the person gave. If they gave none, ask them.'],
+  ]);
+  expect(told('status: rejected\nwhy: The shop stays small.\n')).toEqual([]);
+});
+
+test('two open changes that write one key of one record are told at both, and not once one of them is decided', () => {
+  const changes = (...bodies: [string, string][]) => readModel([...SHOP, ...bodies.map(([id, body]) => file(`changes/${id}`, `name: Change ${id}\nprompt: Make it so.\n${body}`))]);
+  const told = (...bodies: [string, string][]) => changes(...bodies).problems.map((problem) => [problem.rule, problem.severity, problem.file, problem.line, problem.record, problem.field, problem.message]);
+  const first: [string, string] = ['first', 'update:\n  apps/app-api:\n    name: Order API\n    description: Takes the orders.\n'];
+  // The second has a fault of its own, and is told all the same.
+  const second: [string, string] = ['second', 'update:\n  apps/app-api: {description: Keeps the orders.}\n  apps/app-apy: {name: Nothing}\n'];
+  const third: [string, string] = ['third', 'update:\n  apps/app-api: {description: Answers the customers.}\n  systems/system-shop: {name: The shop}\n'];
+  const also = (by: string) => `\`description\` of \`apps/app-api\` is also written by ${by}. An update replaces a key whole, so the one applied second undoes what the first wrote there.`;
+  expect(told(first, second)).toEqual([
+    ['change-same-key', 'warning', 'changes/first.yaml', 6, 'first', 'update', also('the change `second`')],
+    ['change-same-key', 'warning', 'changes/second.yaml', 4, 'second', 'update', also('the change `first`')],
+    ['change-no-record', 'error', 'changes/second.yaml', 5, 'second', 'update', '`update` names `apps/app-apy`, but no record has that id. The nearest id is `app-api`.'],
+  ]);
+  expect(changes(first, second).problems[0]?.fix).toBe('Apply one of them, then write this key anew in the other, from the record as it is then.');
+  // With three, each names the other two; a key that one change alone writes is told nowhere.
+  expect(told(first, second, third).filter((each) => each[0] === 'change-same-key').map((each) => [each[2], each[6]])).toEqual([
+    ['changes/first.yaml', also('the changes `second` and `third`')],
+    ['changes/second.yaml', also('the changes `first` and `third`')],
+    ['changes/third.yaml', also('the changes `first` and `second`')],
+  ]);
+  // Two that write the key alike undo nothing of each other: each is told only of the one that writes it otherwise.
+  expect(told(first, [second[0], second[1].replace('Keeps the orders.', 'Takes the orders.')], third).filter((each) => each[0] === 'change-same-key').map((each) => [each[2], each[6]])).toEqual([
+    ['changes/first.yaml', also('the change `third`')],
+    ['changes/second.yaml', also('the change `third`')],
+    ['changes/third.yaml', also('the changes `first` and `second`')],
+  ]);
+  // A decided change is history, and is no part of it.
+  expect(told(first, [second[0], `status: applied\n${second[1]}`])).toEqual([]);
+  expect(told(first, [second[0], `status: rejected\nwhy: Not now.\n${second[1]}`], third).map((each) => [each[2], each[6]])).toEqual([
+    ['changes/first.yaml', also('the change `third`')],
+    ['changes/third.yaml', also('the change `first`')],
+  ]);
+});
+

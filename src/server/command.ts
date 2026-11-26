@@ -1,9 +1,9 @@
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
-import type { ModelAnswer } from '../model/answer.ts';
+import type { ModelAnswer, ModelRead, Problem } from '../model/answer.ts';
 import { fileURLToPath } from 'node:url';
-import { readFolder, readTexts, removeFiles, writeRenamed } from './files.ts';
+import { readFolder, readTexts, removeFiles, writeApplied, writeRenamed } from './files.ts';
 import { guideText } from '../model/guide.ts';
 import { listLines } from '../model/list.ts';
 import { HOST, startServer } from './server.ts';
@@ -11,6 +11,7 @@ import { countLines, rulingsLine } from '../model/counts.ts';
 import { readRenames, renameRecords } from '../model/rename.ts';
 import type { Rename, RenameAccount } from '../model/rename.ts';
 import { removeRecords } from '../model/remove.ts';
+import { applyChange } from '../model/apply.ts';
 import { ARCHITECTURE, init } from './init.ts';
 
 /** What the command was asked to do. */
@@ -25,7 +26,9 @@ export const PORT = 4400;
 /** The built page, found from this file, so that the command works from any folder. */
 const PAGE = fileURLToPath(new URL('../../dist/ui/', import.meta.url));
 
-const USAGE = 'run it as "seefore <verb> [<options>]", the verb one of init, check, list, guide, rename, remove and --server; see seefore --help';
+const USAGE = 'run it as "seefore <verb> [<options>]", the verb one of init, check, list, guide, apply, rename, remove and --server; see seefore --help';
+
+const APPLY_USAGE = 'run it as "seefore apply <change> [--workdir=<dir>] [--dry-run]"';
 
 const RENAME_USAGE = 'run it as "seefore rename <old> <new> [--workdir=<dir>] [--dry-run]" or "seefore rename --list=<file> [--workdir=<dir>] [--dry-run]"';
 
@@ -80,6 +83,16 @@ const VERBS: readonly Verb[] = [
     call: 'seefore guide [<topic>]',
     what: 'The words of the format for a folder or a skill: its keys, limits and one example',
     options: [['<topic>', 'A folder, as apps, or a skill, as model. With none, the topics, a line each']],
+  },
+  {
+    verb: 'apply',
+    call: 'seefore apply <change> [--workdir=<dir>] [--dry-run]',
+    what: "Lays a change onto the model's files and marks it applied; refuses one that the check faults",
+    options: [
+      ['<change>', 'The id of the change: the name of its file in changes/'],
+      WORKDIR,
+      ['--dry-run', 'Prints what it would do and writes nothing'],
+    ],
   },
   {
     verb: 'rename',
@@ -202,6 +215,7 @@ export async function run(args: readonly string[], cwd: string, io: Io): Promise
   if (verb === 'init') return init(args, cwd, io, fail);
   if (verb === 'rename') return rename(args, cwd, io, fail);
   if (verb === 'remove') return remove(args, cwd, io, fail);
+  if (verb === 'apply') return apply(args, cwd, io, fail);
   if (verb === 'guide') return guide(args, io, fail);
   if (verb === 'list') return list(args, cwd, io, fail);
   const options = readOptions(args, cwd);
@@ -332,6 +346,62 @@ async function remove(args: readonly string[], cwd: string, io: Io, fail: (messa
 }
 
 /**
+ * Lays one change onto the model's files and marks it applied. It prints a line a record, what it
+ * says and applies all the same, then the outcome and the last line of the check on the model as
+ * it is afterwards. With `--dry-run` it prints the same and writes nothing. A refusal prints its
+ * lines, writes nothing, and gives 1.
+ */
+async function apply(args: readonly string[], cwd: string, io: Io, fail: (message: string) => number): Promise<number> {
+  const ids: string[] = [];
+  let workdir: string | undefined;
+  let dryRun = false;
+  let verb = false;
+  for (const arg of args) {
+    if (arg === 'apply' && !verb) verb = true;
+    else if (arg === '--dry-run') dryRun = true;
+    else if (arg.startsWith('--workdir=')) workdir = arg.slice('--workdir='.length);
+    else if (arg.startsWith('--')) return fail(`unknown option "${arg}"`);
+    else ids.push(arg);
+  }
+  if (workdir === '') return fail('give a folder, as in --workdir=<dir>');
+  if (ids.length !== 1) return fail(APPLY_USAGE);
+  const folder = findModel(cwd, workdir);
+  let files: Awaited<ReturnType<typeof readTexts>>;
+  try {
+    files = await readTexts(folder);
+  } catch {
+    return fail(`cannot read the folder "${folder}"`);
+  }
+  if (!existsSync(join(folder, 'seefore.yaml'))) return fail(`"${folder}" is not a model: it has no seefore.yaml`);
+  const done = applyChange(files, ids[0] as string);
+  if ('refusals' in done) {
+    for (const refusal of done.refusals) io.err(`seefore: ${refusal}`);
+    for (const problem of done.faults) for (const line of problemLines(problem)) io.err(line);
+    io.err('seefore: nothing is applied');
+    return 1;
+  }
+  for (const line of done.lines) io.out(line);
+  for (const problem of done.warnings) for (const line of problemLines(problem)) io.out(line);
+  for (const line of done.said) io.out(line);
+  const counts = `${done.added} added, ${done.updated} updated, ${done.removed} removed.`;
+  if (dryRun) {
+    io.out(`Would apply: ${counts}`);
+    io.out(summaryLine(done.after));
+    io.out('A dry run: nothing is written.');
+    return 0;
+  }
+  try {
+    await writeApplied(folder, done.written, done.gone, done.change);
+  } catch {
+    // The change's own file is written last, so whatever was stopped, it is still open.
+    return fail(`cannot write the files in "${folder}"; the change is still open, and \`seefore check\` tells what is in`);
+  }
+  io.out(`Applied: ${counts} \`status: applied\` is written.`);
+  io.out(summaryLine(done.after));
+  return 0;
+}
+
+/**
  * Renames records in the model's files, moves the files of those renamed and prints what it did.
  * With `--dry-run` it prints the same and writes nothing. A refusal prints its lines, and gives 1.
  */
@@ -395,6 +465,24 @@ export function renameLines(account: RenameAccount): string[] {
   return lines;
 }
 
+/** A problem as the check prints it: where it is and what, then how to mend it. */
+function problemLines(problem: Problem): string[] {
+  return [`${problem.file}:${problem.line}:${problem.column}: ${problem.severity}: ${problem.message}`, `  Mend: ${problem.fix}`];
+}
+
+/**
+ * The line the check ends its problems with: how many records were read, and how many errors and
+ * warnings. With no problem it says what was held, so that nobody takes the check for a look at
+ * the keys alone.
+ */
+function summaryLine(model: ModelRead): string {
+  const errors = model.problems.filter((problem) => problem.severity === 'error').length;
+  const warnings = model.problems.length - errors;
+  const many = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`;
+  const summary = model.problems.length === 0 ? 'No problem: the keys are in form, and every id that is named is there.' : `${many(errors, 'error')}, ${many(warnings, 'warning')}.`;
+  return `${many(model.records.length, 'record')} read. ${summary}`;
+}
+
 /** Prints the problems and the counts of a model, and gives 1 when there is an error. */
 function check(model: ModelAnswer, json: boolean, io: Io): number {
   const errors = model.problems.filter((problem) => problem.severity === 'error').length;
@@ -404,15 +492,9 @@ function check(model: ModelAnswer, json: boolean, io: Io): number {
     io.out(JSON.stringify({ folder, name, records: records.length, errors, warnings, problems, counts, rulings }));
     return errors > 0 ? 1 : 0;
   }
-  for (const problem of model.problems) {
-    io.out(`${problem.file}:${problem.line}:${problem.column}: ${problem.severity}: ${problem.message}`);
-    io.out(`  Mend: ${problem.fix}`);
-  }
+  for (const problem of model.problems) for (const line of problemLines(problem)) io.out(line);
   if (model.problems.length > 0) io.out('');
-  const many = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`;
-  // With no problem it says what was held, so that nobody takes the check for a look at the keys alone.
-  const summary = model.problems.length === 0 ? 'No problem: the keys are in form, and every id that is named is there.' : `${many(errors, 'error')}, ${many(warnings, 'warning')}.`;
-  io.out(`${many(model.records.length, 'record')} read. ${summary}`);
+  io.out(summaryLine(model));
   // A count is no problem, and the line says so: a line with no word before it was taken for a warning.
   for (const line of countLines(model.counts)) io.out(line.startsWith('Not counted') ? line : `Counted: ${line}`);
   const rulings = rulingsLine(model.rulings);

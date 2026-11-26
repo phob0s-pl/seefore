@@ -2,16 +2,20 @@ import { ArrowLeft, PencilRuler } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Link, NavLink, useOutletContext, useParams } from 'react-router-dom';
 import type { Problem } from '../model/answer.ts';
-import { addressUnder } from '../model/catalogue.ts';
-import type { Change, ChangeRow, Changes } from '../model/changes.ts';
+import { addressInSystem, addressUnder } from '../model/catalogue.ts';
+import type { Change, ChangeRow, Changes, Decision } from '../model/changes.ts';
 import { TouchedName, TouchedTile, Unlaid } from './change-record.tsx';
 import { SeverityTile, StatusPill } from './change-review.tsx';
 import { Missing } from './models.tsx';
 import type { ModelState } from './shell.tsx';
-import { EmptyState, GridRow, IconTile, LargeTitle, MarkPill, Panel, RowList, Section, SectionStack, TextPanel, useTitle } from './ui.tsx';
+import { EmptyState, GridRow, IconTile, LargeTitle, MarkPill, Panel, Pill, RowList, Section, SectionStack, TextPanel, useTitle } from './ui.tsx';
+import type { Tone } from './ui.tsx';
 
 /** The name alone. */
 const COLS = 'minmax(0, 1fr)';
+
+/** The name, and the decision of a decided change at the right. */
+const DECIDED_COLS = 'minmax(0, 1fr) 110px';
 
 /** The name, and the mark at the right. */
 const RECORD_COLS = 'minmax(0, 1fr) 110px';
@@ -31,6 +35,17 @@ const SECTIONS: readonly { section: Section; word: string; path: string }[] = [
   { section: 'review', word: 'Review', path: '/review' },
 ];
 
+/** Each decision: the word of its pill and its colour, those of a point closed and of one reopened. */
+const DECISION: Record<Decision, { word: string; tone: Tone }> = {
+  applied: { word: 'Applied', tone: 'success' },
+  rejected: { word: 'Rejected', tone: 'danger' },
+};
+
+/** The pill of how a change is decided: Applied in green, Rejected in red. An open change has none. */
+function DecisionPill({ status }: { status: Decision }) {
+  return <Pill tone={DECISION[status].tone}>{DECISION[status].word}</Pill>;
+}
+
 /** What a page of the changes shows while the model is read, or why it cannot be. */
 function useChanges(): { changes?: Changes; problems?: readonly Problem[]; line?: ReactNode } {
   const { answer, changes, failed } = useOutletContext<ModelState>();
@@ -39,7 +54,11 @@ function useChanges(): { changes?: Changes; problems?: readonly Problem[]; line?
   return { changes, problems: answer.problems };
 }
 
-/** The list of the changes, `/changes`: a row for each, by name, that leads to the change. */
+/**
+ * The list of the changes, `/changes`: a row for each, by name, that leads to the change. A
+ * decided change bears the pill of its decision at the right of its row; an open one has its
+ * name alone.
+ */
 export function ChangesList() {
   useTitle('Changes');
   const { changes, line } = useChanges();
@@ -55,7 +74,14 @@ export function ChangesList() {
         <Panel lift className="changes-list">
           <RowList label="Changes">
             {changes.all.map((change) => (
-              <GridRow key={change.id} to={`/changes/${change.id}`} cols={COLS} tile={<IconTile icon={PencilRuler} size="sm" />} name={change.name} />
+              <GridRow
+                key={change.id}
+                to={`/changes/${change.id}`}
+                cols={change.status !== undefined ? DECIDED_COLS : COLS}
+                tile={<IconTile icon={PencilRuler} size="sm" />}
+                name={change.name}
+                cells={change.status !== undefined ? [<DecisionPill status={change.status} />] : []}
+              />
             ))}
           </RowList>
         </Panel>
@@ -66,7 +92,8 @@ export function ChangesList() {
 
 /**
  * What was asked for: the prompt as prose, and under it what the person answered when asked,
- * a row a line. A change with no answers has no section for them.
+ * a row a line. A change with no answers has no section for them. Under them, for a rejected
+ * change, why the person said no.
  */
 function Need({ change }: { change: Change }) {
   return (
@@ -87,19 +114,28 @@ function Need({ change }: { change: Change }) {
           </Panel>
         </Section>
       )}
+      {change.status === 'rejected' && change.why !== undefined && (
+        <Section title="Why not">
+          <TextPanel>{change.why}</TextPanel>
+        </Section>
+      )}
     </SectionStack>
   );
 }
 
 /**
  * A record of the Records page: the tile of its kind, its name, and the mark of what the change
- * does to it. It leads to the record under the change; for a change the check could not lay it
- * is a row alone, with the same look.
+ * does to it. It leads to the record under the change. A decided change is laid no more: its
+ * record leads to its own page in the model, where the model has it today. For a change the
+ * check could not lay, and a decided one's record the model does not have, it is a row alone,
+ * with the same look.
  */
-function RecordRow({ change, row }: { change: Change; row: ChangeRow }) {
+function RecordRow({ change, changes, row }: { change: Change; changes: Changes; row: ChangeRow }) {
   const tile = <TouchedTile folder={row.touched.folder} record={row.record} size="sm" />;
   const mark = <MarkPill verb={row.touched.verb} />;
-  if (change.laid) return <GridRow to={addressUnder(change.id, row.touched.path)} cols={RECORD_COLS} tile={tile} name={<TouchedName row={row} />} cells={[mark]} />;
+  const today = change.status !== undefined ? changes.record(change.id, row.touched.path)?.today : undefined;
+  const to = change.laid ? addressUnder(change.id, row.touched.path) : today !== undefined ? addressInSystem(today) : undefined;
+  if (to !== undefined) return <GridRow to={to} cols={RECORD_COLS} tile={tile} name={<TouchedName row={row} />} cells={[mark]} />;
   return (
     <li className="row row-grid-item change-row-still">
       <div className="row-grid" style={{ gridTemplateColumns: RECORD_COLS }}>
@@ -117,11 +153,13 @@ function RecordRow({ change, row }: { change: Change; row: ChangeRow }) {
 
 /**
  * The records a change adds, updates and removes, in a section for each of the page's own lists
- * that it touches, each by name with its mark. A change that touches nothing is an input alone;
- * one the check could not lay is read from its file, under the line that says why its rows lead
- * nowhere.
+ * that it touches, each by name with its mark. A change that touches nothing is an input alone,
+ * or, once it is decided, was decided with nothing in it. One the check could not lay is read
+ * from its file, under the line that says why its rows lead nowhere; a decided one too, under
+ * the line that says what the model has of its records.
  */
 function Records({ change, changes }: { change: Change; changes: Changes }) {
+  if (change.touched.length === 0 && change.status !== undefined) return <EmptyState title="No records.">This change is {change.status}: it adds, updates and removes nothing.</EmptyState>;
   if (change.touched.length === 0)
     return (
       <EmptyState title="No records yet.">
@@ -132,7 +170,7 @@ function Records({ change, changes }: { change: Change; changes: Changes }) {
     <SectionStack>
       {!change.laid && (
         <p className="change-note">
-          <Unlaid />
+          <Unlaid change={change} />
         </p>
       )}
       {changes.sections(change.id).map((section) => (
@@ -140,7 +178,7 @@ function Records({ change, changes }: { change: Change; changes: Changes }) {
           <Panel lift className="change-records">
             <RowList label={section.title}>
               {section.rows.map((row) => (
-                <RecordRow key={row.touched.path} change={change} row={row} />
+                <RecordRow key={row.touched.path} change={change} changes={changes} row={row} />
               ))}
             </RowList>
           </Panel>
@@ -184,6 +222,22 @@ function ReviewList({ change, changes, problems }: { change: Change; changes: Ch
 }
 
 /**
+ * A change's name as the title of its pages. A decided change bears the pill of its decision
+ * beside it, as a point bears its pills; an open change has its name alone.
+ */
+function ChangeTitle({ change }: { change: Change }) {
+  if (change.status === undefined) return <LargeTitle>{change.name}</LargeTitle>;
+  return (
+    <header className="record-title">
+      <h1 className="large-title">{change.name}</h1>
+      <span className="record-marks">
+        <DecisionPill status={change.status} />
+      </span>
+    </header>
+  );
+}
+
+/**
  * The page of a section of a change, under the change's name as its title: `/changes/<id>` for
  * Need, which shows what was asked for, `/changes/<id>/records` for Records, the records it
  * touches, and `/changes/<id>/review` for Review, the points its reader found. The sidebar says
@@ -198,7 +252,7 @@ export function ChangePage({ section }: { section: Section }) {
   if (change === undefined) return <Missing list={LIST} />;
   return (
     <section className="change-frame" aria-label={SECTIONS.find((each) => each.section === section)?.word}>
-      <LargeTitle>{change.name}</LargeTitle>
+      <ChangeTitle change={change} />
       {section === 'need' ? <Need change={change} /> : section === 'records' ? <Records change={change} changes={changes} /> : <ReviewList change={change} changes={changes} problems={problems} />}
     </section>
   );
