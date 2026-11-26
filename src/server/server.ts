@@ -49,6 +49,14 @@ function fromHere(host: string | undefined): boolean {
   return name === HOST || name === 'localhost';
 }
 
+/**
+ * How long a file may be kept by the browser. A file of the build under `assets/` has the hash of
+ * what it holds in its name, so it never changes and is kept for a year; the page names them
+ * anew after each build. Everything else, the page and the model among it, is asked for each time.
+ */
+const FRESH = 'no-store';
+const KEPT = 'max-age=31536000, immutable';
+
 async function answer(folder: string, page: string, url: string, response: ServerResponse): Promise<void> {
   const path = decodeURIComponent(url.split('?')[0] ?? '/');
   if (path === '/api/model') await model(folder, response);
@@ -84,10 +92,10 @@ async function file(page: string, path: string, response: ServerResponse): Promi
     send(response, 404, 'text/plain; charset=utf-8', 'Not found.\n');
     return;
   }
-  send(response, 200, type, body);
+  send(response, 200, type, body, wanted.startsWith(join(root, 'assets') + sep) ? KEPT : FRESH);
 }
 
-function send(response: ServerResponse, status: number, type: string, body: string | Buffer): void {
-  response.writeHead(status, { 'Content-Type': type, 'Cache-Control': 'no-store' });
+function send(response: ServerResponse, status: number, type: string, body: string | Buffer, cache = FRESH): void {
+  response.writeHead(status, { 'Content-Type': type, 'Cache-Control': cache });
   response.end(body);
 }

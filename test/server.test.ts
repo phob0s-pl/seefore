@@ -90,6 +90,22 @@ test("the page's files are served, and nothing outside them", async () => {
   expect((await fetch(`${address}/..%2fsecret.json`)).status).toBe(404);
 });
 
+test('a file of the build is kept by the browser, and the page, the model and what is not there are asked for each time', async () => {
+  const page = join(await mkdtemp(join(tmpdir(), 'seefore-')), 'page');
+  await mkdir(join(page, 'assets'), { recursive: true });
+  await writeFile(join(page, 'index.html'), '<!doctype html><title>seefore</title>');
+  await writeFile(join(page, 'top.js'), 'console.log(0);');
+  await writeFile(join(page, 'assets', 'page-1a2b3c.js'), 'console.log(1);');
+  const address = await serve(SMALL, page);
+  const cache = async (path: string) => (await fetch(`${address}${path}`)).headers.get('cache-control');
+
+  expect(await cache('/assets/page-1a2b3c.js')).toBe('max-age=31536000, immutable');
+  expect([await cache('/'), await cache('/models/app-order-api'), await cache('/top.js'), await cache('/api/model'), await cache('/assets/missing.js')]).toEqual(['no-store', 'no-store', 'no-store', 'no-store', 'no-store']);
+  // A way round through the folder of the build is the page still.
+  const round = await new Promise<string | undefined>((done) => request(`${address}/assets/../index.html`, (response) => done(response.headers['cache-control'])).end());
+  expect(round).toBe('no-store');
+});
+
 test('a font file is served with its type', async () => {
   const page = await mkdtemp(join(tmpdir(), 'seefore-'));
   await mkdir(join(page, 'assets'));

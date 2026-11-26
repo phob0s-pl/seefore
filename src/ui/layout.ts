@@ -297,11 +297,57 @@ export async function layOut(view: View, depth: Depth, elk: Engine, shape: Shape
 }
 
 /**
- * The line that runs nearest to a point of the diagram. The reach of a line is wider than the
- * line, so that it is easy to catch, and where lines run close the reach of one lies on its
- * neighbour: a click then means the line it is nearest to, whichever reach is on top.
+ * A layout is kept by what it was made from, so that a view seen before is not laid out again: its
+ * view, its depth and its shape, which is all a layout is made from, ELK's answer being the same
+ * each time. `get` gives a layout that is ready, at once; `lay` gives it when it is, and starts the
+ * work once however often it is asked. The last `most` are kept, and one that failed is not.
  */
-export function nearestRoute(routes: Map<string, ElkPoint[]>, at: ElkPoint): string | undefined {
+export function keeper(most = 24): {
+  get: (view: View, depth: Depth, shape?: Shape) => Layout | undefined;
+  lay: (view: View, depth: Depth, elk: Engine, shape?: Shape) => Promise<Layout>;
+} {
+  const kept = new Map<string, { layout?: Layout; coming: Promise<Layout> }>();
+  const keyOf = (view: View, depth: Depth, shape: Shape): string => JSON.stringify([depth, shape, view]);
+  return {
+    get: (view, depth, shape = 'model') => kept.get(keyOf(view, depth, shape))?.layout,
+    lay: (view, depth, elk, shape = 'model') => {
+      const key = keyOf(view, depth, shape);
+      const found = kept.get(key);
+      if (found !== undefined) {
+        // Asked for again, it is the last to go.
+        kept.delete(key);
+        kept.set(key, found);
+        return found.coming;
+      }
+      const entry: { layout?: Layout; coming: Promise<Layout> } = {
+        coming: layOut(view, depth, elk, shape).then(
+          (layout) => {
+            entry.layout = layout;
+            return layout;
+          },
+          (cause: unknown) => {
+            if (kept.get(key) === entry) kept.delete(key);
+            throw cause;
+          },
+        ),
+      };
+      kept.set(key, entry);
+      for (const oldest of kept.keys()) {
+        if (kept.size <= most) break;
+        kept.delete(oldest);
+      }
+      return entry.coming;
+    },
+  };
+}
+
+/**
+ * The line that runs nearest to a point of the diagram, and with `within`, only when it runs no
+ * farther from the point than that. A line takes no mouse itself: the mouse means the line it is
+ * nearest to within its reach, so where lines run close the nearer one is meant, and a drag that
+ * starts on a line moves the field as one that starts beside it.
+ */
+export function nearestRoute(routes: Map<string, ElkPoint[]>, at: ElkPoint, within = Infinity): string | undefined {
   let nearest: string | undefined;
   let least = Infinity;
   for (const [id, points] of routes) {
@@ -320,5 +366,5 @@ export function nearestRoute(routes: Map<string, ElkPoint[]>, at: ElkPoint): str
       }
     }
   }
-  return nearest;
+  return least <= within ? nearest : undefined;
 }

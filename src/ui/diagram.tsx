@@ -10,7 +10,7 @@ import { litBy } from '../model/view.ts';
 import type { Box, Depth, View } from '../model/view.ts';
 import { engine } from './elk.ts';
 import { iconOf, KIND, typeWords } from './kinds.tsx';
-import { layOut, nearestRoute } from './layout.ts';
+import { keeper, nearestRoute } from './layout.ts';
 import type { Band, Layout, Shape } from './layout.ts';
 import { CanvasFrame } from './ui.tsx';
 
@@ -20,6 +20,9 @@ type RouteEdge = Edge<{ points: ElkPoint[] }, 'route'>;
 
 /** The room a fitted diagram leaves at each edge of the field, in pixels. */
 const FIT = { padding: 40 };
+/** How far out and how close the field goes. */
+const MIN_ZOOM = 0.05;
+const MAX_ZOOM = 2;
 
 /** A mark that is shown: what a change does to a box or a line that it does not leave as it is. */
 type Shown = Exclude<Mark, 'same'>;
@@ -127,7 +130,11 @@ function BandCard({ data: { band } }: NodeProps<BandNode>) {
   );
 }
 
-/** An arrow along the route ELK gave it, on a halo in the field's colour, its head at the far end, and at the start too when it goes both ways. */
+/**
+ * An arrow along the route ELK gave it, on a halo in the field's colour, its head at the far end,
+ * and at the start too when it goes both ways. It has no path to catch the mouse: the diagram
+ * finds the line the mouse means.
+ */
 const RouteLine = memo(function RouteLine({ id, data, markerStart, markerEnd }: EdgeProps<RouteEdge>) {
   const points = data?.points ?? [];
   if (points.length < 2) return null;
@@ -135,7 +142,7 @@ const RouteLine = memo(function RouteLine({ id, data, markerStart, markerEnd }: 
   return (
     <>
       <path className="diagram-edge-halo" d={path} fill="none" stroke="var(--surface-canvas)" strokeWidth={6} />
-      <BaseEdge id={id} path={path} markerStart={markerStart} markerEnd={markerEnd} interactionWidth={24} />
+      <BaseEdge id={id} path={path} markerStart={markerStart} markerEnd={markerEnd} interactionWidth={0} />
     </>
   );
 });
@@ -211,6 +218,18 @@ const SMALL = 0.6;
 const LIFT = 3;
 /** The label stands this far right of and below the mouse, and this far inside the field's edge. */
 const LABEL = { offset: 14, edge: 8 };
+/** How far from a line the mouse still means it, on each side, in the diagram's own pixels. */
+const REACH = 12;
+/** The zoom a double click on a box lands at, where its name can be read; one that is closer stays. */
+const READ = 0.8;
+/** How long the field takes to come to where a double click sends it, in milliseconds. */
+const GLIDE = 200;
+
+/** The layouts made on this page, kept so that a view seen before stands at once. */
+const layouts = keeper();
+
+/** What the mouse means where it is: a box, a line within its reach, a frame, or the field with nothing on it. */
+type Meant = { kind: 'box' | 'line' | 'frame'; id: string } | { kind: 'field' };
 
 /**
  * One object for each node or line and each look of it, made once: a change of focus gives a new
@@ -273,6 +292,12 @@ function Legend() {
  * over a box or a line, or else the pick, fades all but it and what it joins, and a label at the
  * mouse says what is under it.
  *
+ * A line takes no mouse itself: the mouse means the line that runs nearest to it within its
+ * reach, so a drag moves the field wherever it starts. A double click brings what is under it
+ * near enough to read: a box to the middle of the room beside the panel, a frame fitted into that
+ * room, the empty field twice as close; on a line it does nothing. A layout is kept, so a view
+ * seen before stands at once.
+ *
  * On the page of a flow, `step` is what the picked step lights: its line, drawn as a pick is with
  * one head where the step travels to, or its box, outlined. With no hover and no pick, all but it
  * and what it joins fades. A change of step lays nothing out. A flow's own diagram has the
@@ -302,12 +327,13 @@ export function Diagram({
   marks?: ReadonlyMap<string, Mark> | undefined;
   children?: ReactNode;
 }) {
-  const [layout, setLayout] = useState<Layout>();
+  // A view laid out before on this page stands at once.
+  const [layout, setLayout] = useState<Layout | undefined>(() => layouts.get(view, depth, shape));
   const [failed, setFailed] = useState(false);
   const [flow, setFlow] = useState<ReactFlowInstance<BoxNode | BandNode, RouteEdge>>();
   useEffect(() => {
     let current = true;
-    layOut(view, depth, engine(), shape).then(
+    layouts.lay(view, depth, engine(), shape).then(
       (done) => current && setLayout(done),
       () => current && setFailed(true),
     );
@@ -464,13 +490,63 @@ export function Diagram({
     const top = y + LABEL.offset + tag.offsetHeight <= bottom ? y + LABEL.offset : y - LABEL.offset - tag.offsetHeight;
     tag.style.transform = `translate(${Math.round(Math.max(LABEL.edge, left))}px, ${Math.round(Math.max(LABEL.edge, top))}px)`;
   }, [open]);
+  /**
+   * What the mouse means at a point of the screen, with what the browser finds under it there: a
+   * box before a line, a line before the frame or the field it runs over, by the rule of B6 the
+   * nearest of those within reach. Nothing over the zoom column, and nothing outside the field.
+   */
+  const meantAt = (target: EventTarget | null, x: number, y: number): Meant | undefined => {
+    if (!(target instanceof Element) || target.closest('.react-flow') === null || target.closest('.react-flow__panel') !== null) return undefined;
+    const node = target.closest('.react-flow__node');
+    const id = node?.getAttribute('data-id') ?? undefined;
+    if (id !== undefined && node?.classList.contains('react-flow__node-box')) return { kind: 'box', id };
+    const line = flow && layout ? nearestRoute(layout.routes, flow.screenToFlowPosition({ x, y }), REACH) : undefined;
+    if (line !== undefined) return { kind: 'line', id: line };
+    return id !== undefined && node?.classList.contains('react-flow__node-frame') ? { kind: 'frame', id } : { kind: 'field' };
+  };
+  const meant = (event: MouseEvent): Meant | undefined => meantAt(event.target, event.clientX, event.clientY);
+  /** What the hover is on: a box or a line. Over a line the hand shows, as over a box. */
+  const root = useRef<HTMLDivElement>(null);
+  const hoverOn = (at: Meant | undefined) => {
+    root.current?.toggleAttribute('data-on-line', at?.kind === 'line');
+    over(at?.kind === 'box' || at?.kind === 'line' ? at.id : undefined);
+  };
   const follow = (event: MouseEvent) => {
     mouse.current = { x: event.clientX, y: event.clientY };
     if (label.current !== null) place();
+    hoverOn(meant(event));
+  };
+  const pick = (event: MouseEvent) => {
+    const at = meant(event);
+    onPick(at === undefined || at.kind === 'field' ? undefined : at.id);
   };
 
-  /** The line a click or the mouse at an event means: the nearest to it, by the rule of B6. */
-  const lineAt = (event: MouseEvent, edge: RouteEdge): string => (flow && layout && nearestRoute(layout.routes, flow.screenToFlowPosition({ x: event.clientX, y: event.clientY }))) ?? edge.id;
+  /**
+   * A double click brings what is under it near enough to read, in a short glide. A box comes to
+   * the middle of the room beside the panel its pick has opened, at the zoom of reading or closer
+   * if the field is closer; a frame is fitted into that room, at most at its drawn size; the empty
+   * field comes twice as close, about the mouse. On a line nothing moves.
+   */
+  const bring = (event: MouseEvent) => {
+    const at = meant(event);
+    const field = root.current?.getBoundingClientRect();
+    if (flow === undefined || field === undefined || at === undefined || at.kind === 'line') return;
+    const { x, y, zoom } = flow.getViewport();
+    if (at.kind === 'field') {
+      const closer = Math.min(MAX_ZOOM, zoom * 2);
+      const [px, py] = [event.clientX - field.left, event.clientY - field.top];
+      void flow.setViewport({ x: px - ((px - x) * closer) / zoom, y: py - ((py - y) * closer) / zoom, zoom: closer }, { duration: GLIDE });
+      return;
+    }
+    const node = flow.getInternalNode(at.id);
+    if (node === undefined) return;
+    const [width, height] = [node.width ?? node.measured.width ?? 0, node.height ?? node.measured.height ?? 0];
+    const room = { width: Math.max(1, field.width - Math.min(PANEL.width, field.width - 2 * PANEL.margin) - PANEL.margin - PANEL.gap), height: field.height };
+    const fitted = Math.min(1, (room.width - 2 * FIT.padding) / Math.max(1, width), (room.height - 2 * FIT.padding) / Math.max(1, height));
+    const to = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, at.kind === 'box' ? Math.max(zoom, READ) : fitted));
+    const middle = { x: node.internals.positionAbsolute.x + width / 2, y: node.internals.positionAbsolute.y + height / 2 };
+    void flow.setViewport({ x: room.width / 2 - middle.x * to, y: room.height / 2 - middle.y * to, zoom: to }, { duration: GLIDE });
+  };
 
   return (
     <CanvasFrame label="Architecture diagram">
@@ -480,6 +556,7 @@ export function Diagram({
         </div>
       ) : (
         <ReactFlow<BoxNode | BandNode, RouteEdge>
+          ref={root}
           proOptions={{ hideAttribution: true }}
           nodes={nodes}
           edges={edges}
@@ -487,37 +564,44 @@ export function Diagram({
           edgeTypes={edgeTypes}
           fitView
           fitViewOptions={fitOf(shape, legend)}
-          minZoom={0.05}
-          maxZoom={2}
+          minZoom={MIN_ZOOM}
+          maxZoom={MAX_ZOOM}
           nodesDraggable={false}
           nodesConnectable={false}
           nodesFocusable={false}
           edgesFocusable={false}
           elementsSelectable={false}
           deleteKeyCode={null}
-          onNodeClick={(_event, node) => onPick(node.type === 'band' ? undefined : node.id)}
+          // The double click is the diagram's own: it brings what is under it near enough to read.
+          zoomOnDoubleClick={false}
           onInit={setFlow}
-          // Where lines run close, the reach of one lies on its neighbour: the click means the
-          // line nearest to the mouse, not the one whose reach is on top.
-          onEdgeClick={(event, edge) => onPick(lineAt(event, edge))}
-          onPaneClick={() => onPick()}
-          // A frame holds other boxes and a band is no thing of the model: over them the hover is none.
+          // A click on a box picks it; one on a frame or on the field picks the line that runs
+          // within reach of it, else the frame, or clears the pick.
+          onNodeClick={pick}
+          onPaneClick={pick}
+          onDoubleClick={bring}
+          // A box the field brings under a mouse that rests is the hover too; a frame holds other
+          // boxes and a band is no thing of the model, so over them it is the line, or none.
           onNodeMouseEnter={(_event, node) => node.type === 'box' && over(node.id)}
           onNodeMouseLeave={(_event, node) => node.type === 'box' && over(undefined)}
-          onEdgeMouseEnter={(event, edge) => over(lineAt(event, edge))}
-          onEdgeMouseMove={(event, edge) => over(lineAt(event, edge))}
-          onEdgeMouseLeave={() => over(undefined)}
           onMoveStart={() => {
             still.current = false;
             clearTimeout(timer.current);
+            root.current?.removeAttribute('data-on-line');
             setMoving(true);
           }}
           onMoveEnd={() => {
             still.current = true;
             setMoving(false);
+            // The field has moved under the mouse: what it means now is found anew.
+            if (mouse.current !== undefined) hoverOn(meantAt(document.elementFromPoint(mouse.current.x, mouse.current.y), mouse.current.x, mouse.current.y));
             settle();
           }}
           onMouseMove={follow}
+          onMouseLeave={() => {
+            mouse.current = undefined;
+            hoverOn(undefined);
+          }}
         >
           <Controls className="glass-group glass-group-column" position="bottom-left" showInteractive={false} showFitView={false}>
             <FitButton shape={shape} legend={legend} />
