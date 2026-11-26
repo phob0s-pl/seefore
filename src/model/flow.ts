@@ -257,10 +257,11 @@ export type ActDoes = 'put' | 'read' | 'take';
 /**
  * One act on an item, at a step of this flow: the step's number and id; what it does; the part
  * that acts, the `from` of the connection of the step that acts; whether a flow that the step
- * runs does it; and its condition's words, the outermost first: "when the fan pays by card and
- * when Scan answers".
+ * runs does it; its condition's words, the outermost first: "when the fan pays by card and when
+ * Scan answers"; and its place among all the acts of the flow, from 0, which says which of two
+ * acts of one step on two items comes first.
  */
-export type Act = { number: number; step: string; does: ActDoes; part: { id: string; name: string }; byRun: boolean; only?: string };
+export type Act = { number: number; step: string; does: ActDoes; part: { id: string; name: string }; byRun: boolean; only?: string; order: number };
 
 /**
  * An item: one data record in one store, in one flow, worked out from the steps. Its condition's
@@ -305,6 +306,7 @@ function itemsIn(records: readonly ModelRecord[], flowId: string, view: View): I
 
   // One item for each store and data record, in the order of its first act.
   const items = new Map<string, Item>();
+  let order = 0;
   const acts = (steps: readonly Step[], top: Step | undefined, above: readonly string[], down: readonly string[]): void => {
     for (const step of steps) {
       if (step.reply !== undefined) continue;
@@ -327,7 +329,7 @@ function itemsIn(records: readonly ModelRecord[], flowId: string, view: View): I
         const key = JSON.stringify([store.store, data]);
         const item = items.get(key) ?? { store: nameOf(store.store), data: nameOf(data), acts: [] };
         items.set(key, item);
-        item.acts.push({ number: at.index + 1, step: at.id, does, part: nameOf(part), byRun: top !== undefined, ...(under.length > 0 ? { only: under.join(' and ') } : {}) });
+        item.acts.push({ number: at.index + 1, step: at.id, does, part: nameOf(part), byRun: top !== undefined, ...(under.length > 0 ? { only: under.join(' and ') } : {}), order: order++ });
       }
     }
   };

@@ -6,7 +6,7 @@ import type { Catalogue } from '../model/catalogue.ts';
 import { countWords } from '../model/context.ts';
 import type { Context, SystemContext } from '../model/context.ts';
 import type { RuleOf, Rulebook } from '../model/rulebook.ts';
-import type { StepAt, Travel, Way } from '../model/travel.ts';
+import type { KeptAct, StepAt, Travel, Way } from '../model/travel.ts';
 import { KIND, typeWords } from './kinds.tsx';
 import { addressOf, KindTile, Missing, ModelsPage, NameOf, RecordLink, TABS } from './models.tsx';
 import type { ModelState } from './shell.tsx';
@@ -261,6 +261,31 @@ function FlowsThrough({ record, catalogue, travel }: { record: ModelRecord; cata
   return <Related title="Flows" rows={rows} widths={['50%', '50%']} />;
 }
 
+/** What an act does, as "Kept here" and "Kept in" say it, before the part that acts. */
+const DONE: Record<KeptAct['does'], string> = { put: 'Put by', read: 'Read by', take: 'Taken out by' };
+
+/**
+ * "Kept here" of a store, or "Kept in" of a data record: a row for each act of a step at the store
+ * on the data record, in every flow. First the other record of the two, then what is done and by
+ * which part, then the flow's name and the step's number, one link to the flow opened on the step.
+ * With no row it is left out.
+ */
+function Kept({ title, acts, first, catalogue }: { title: string; acts: readonly KeptAct[]; first: 'data' | 'store'; catalogue: Catalogue }) {
+  const rows = acts.map((act, index) => ({
+    key: `${index}`,
+    cells: [
+      <Named catalogue={catalogue} id={act[first]} />,
+      <>
+        {DONE[act.does]} <RecordLink catalogue={catalogue} id={act.by} />
+      </>,
+      <Link to={`${addressOf(catalogue, 'flows', act.flow)}${act.step !== '' ? `#${encodeURIComponent(act.step)}` : ''}`}>
+        {act.flowName}, step {act.number}
+      </Link>,
+    ],
+  }));
+  return <Related title={title} rows={rows} widths={['auto', '220px', '320px']} />;
+}
+
 /** The rows of the things a list of ids names, with the type of each. */
 const thingRows = (catalogue: Catalogue, records: readonly ModelRecord[]): Row[] =>
   records.map((each) => ({ key: each.id, cells: [<Named catalogue={catalogue} id={each.id} />, typeWords(each.kind, each.fields.kind)] }));
@@ -289,7 +314,8 @@ function Technologies({ record, catalogue }: { record: ModelRecord; catalogue: C
 /**
  * A system, an app, a store, a component or a piece of infrastructure. A system or an app whose
  * code is in a repository of its own, or of its system, has the fact Repository. A system with
- * lines of context has the fact Context, its count, which leads to the list of the context.
+ * lines of context has the fact Context, its count, which leads to the list of the context. A
+ * store says what is kept in it, before the flows through it.
  */
 function Thing({ record, catalogue, travel, lines }: { record: ModelRecord; catalogue: Catalogue; travel: Travel; lines: SystemContext | undefined }) {
   const owner = catalogue.owner(record.id);
@@ -332,6 +358,7 @@ function Thing({ record, catalogue, travel, lines }: { record: ModelRecord; cata
       <Related title="Inside it" rows={thingRows(catalogue, catalogue.inside(record.id))} widths={['auto', '200px']} />
       <Technologies record={record} catalogue={catalogue} />
       <Acts record={record} catalogue={catalogue} />
+      {record.kind === 'stores' && <Kept title="Kept here" acts={travel.keptHere(record.id)} first="data" catalogue={catalogue} />}
       <FlowsThrough record={record} catalogue={catalogue} travel={travel} />
     </>
   );
@@ -399,7 +426,7 @@ function Connection({ record, catalogue, travel }: { record: ModelRecord; catalo
   );
 }
 
-/** A data record: its fields, the steps that name it, and the connections it is seen on, with the way it goes. */
+/** A data record: its fields, the steps that name it, the connections it is seen on, with the way it goes, and the stores it is kept in. */
 function Data({ record, catalogue, travel }: { record: ModelRecord; catalogue: Catalogue; travel: Travel }) {
   const fields = (Array.isArray(record.fields.fields) ? (record.fields.fields as unknown[]) : []).flatMap((field, index): Row[] => {
     const { name, description } = (typeof field === 'object' && field !== null ? field : {}) as Record<string, unknown>;
@@ -414,6 +441,7 @@ function Data({ record, catalogue, travel }: { record: ModelRecord; catalogue: C
       <Related title="Fields" rows={fields} widths={['240px', 'auto']} />
       <Steps steps={travel.stepsWith(record.id)} catalogue={catalogue} />
       <Related title="Connections" rows={ways} widths={['auto', '360px']} />
+      <Kept title="Kept in" acts={travel.keptIn(record.id)} first="store" catalogue={catalogue} />
     </>
   );
 }

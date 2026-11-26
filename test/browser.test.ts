@@ -716,7 +716,8 @@ test.skipIf(!HAS_CHROME).concurrent(
       const saves = await flowAt(send, '#saves');
       expect(saves).toMatchObject({ current: 'saves', stepped: ['app-order-api->store-orders'], heads: [false, true] });
       expect(saves.bar).toContain('2 of 3 Saves the order');
-      expect(saves.bar).toContain('Order API to Orders Only when the customer has paid Data Order details');
+      // The step writes the store: what it puts stands in place of "Data".
+      expect(saves.bar).toContain('Order API to Orders Only when the customer has paid Puts into Orders Order details');
       expect(saves.faded).toEqual(['person-customer', 'person-customer->app-order-api']);
 
       // The reply travels back along the customer's line: its one head is at the customer.
@@ -788,10 +789,10 @@ test.skipIf(!HAS_CHROME).concurrent(
 );
 
 /**
- * A copy of the shop with a flow that keeps things in its stores: the Order API puts a receipt in
- * an outbox, runs the flow of placing an order, which puts the order's details in the store of
- * orders when the customer has paid, only reads the customer there, and takes the receipt out of
- * the outbox again.
+ * A copy of the shop with a flow that keeps things in its stores: the customer's request passes to
+ * the Order API, which puts a receipt in an outbox, runs the flow of placing an order, which puts
+ * the order's details in the store of orders when the customer has paid, only reads the customer
+ * there, and takes the receipt out of the outbox again, a queue.
  */
 async function keptShop(): Promise<string> {
   const folder = await mkdtemp(join(tmpdir(), 'seefore-shop-'));
@@ -800,6 +801,7 @@ async function keptShop(): Promise<string> {
     'stores/store-outbox.yaml': 'name: Outbox\nin: system-shop\nkind: queue\n',
     'data/data-receipt.yaml': 'name: Receipt\ndescription: What the customer is sent once the order is kept.\n',
     'data/data-customer.yaml': 'name: Customer\ndescription: Who orders.\n',
+    'data/data-request.yaml': 'name: Request\ndescription: What the customer asks for.\n',
     'connections/connection-api-reads-orders.yaml': 'from: app-order-api\nto: store-orders\naccess: read\n',
     'connections/connection-api-uses-outbox.yaml': 'from: app-order-api\nto: store-outbox\naccess: read-write\n',
     'flows/flow-sending-a-receipt.yaml': [
@@ -808,7 +810,7 @@ async function keptShop(): Promise<string> {
       'ends: The receipt is sent',
       'feature: feature-ordering',
       'steps:',
-      '  - {id: asks, does: connection-customer-orders, name: Asks for a receipt}',
+      '  - {id: asks, does: connection-customer-orders, name: Asks for a receipt, data: [data-request]}',
       '  - {id: writes, does: connection-api-uses-outbox, name: Puts the receipt in the outbox, data: [data-receipt], access: write}',
       '  - {id: places, does: flow-placing-an-order}',
       '  - {id: looks-up, does: connection-api-reads-orders, name: Looks up the customer, data: [data-customer]}',
@@ -993,6 +995,123 @@ test.skipIf(!HAS_CHROME).concurrent(
 
 /** The text of what a selector finds, each with its spaces made one. */
 const texts = (selector: string) => `[...document.querySelectorAll(${JSON.stringify(selector)})].map((each) => each.innerText.replace(/\\s+/g, ' ').trim())`;
+
+/** The lines of the bar under its title, each with its spaces made one. */
+const BAR = texts('section[aria-label="Current step"] .flow-bar-lines > p');
+/** The lines of the bar once the page stands at the step of the hash, or at none, and one of them is the line waited for. */
+async function barAt(send: Send, hash: string, line: string): Promise<string[]> {
+  await flowAt(send, hash);
+  return (await waitFor(send, `(() => { const lines = ${BAR}; return lines.includes(${JSON.stringify(line)}) && lines; })()`)) as string[];
+}
+/** An item's pill in the bar: its classes, whether its name is struck through, and the words of its sign. */
+const pillOf = (data: string) =>
+  `(() => { const pill = document.querySelector('section[aria-label="Current step"] .flow-item-pill[data-item="${data}"]'); return pill && [pill.className, getComputedStyle(pill.querySelector('.flow-item-name')).textDecorationLine, pill.querySelector('.flow-item-sign')?.getAttribute('title') ?? null]; })()`;
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME ? 'the bar of a put reads "Puts into" with its pill, which opens the item\'s panel and picks its row; a take from a queue reads in two lines' : `skipped: there is no Chrome at ${CHROME}`,
+  () =>
+    inKeptShop(async (send) => {
+      await stepTo(send, 'writes');
+      expect(await barAt(send, '#writes', 'Puts into Outbox Receipt')).toEqual(['Order API to Outbox', 'Puts into Outbox Receipt']);
+      expect(await waitFor(send, pillOf('data-receipt'))).toEqual(['pill flow-item-pill flow-item-kept', 'none', null]);
+      await click(send, await centreOf(send, 'section[aria-label="Current step"] .flow-item-pill[data-item="data-receipt"]'));
+      expect(await lifeOf(send, 'Receipt')).toMatchObject({ kind: 'Data · in Outbox', picked: ['data-receipt'], boxes: 0 });
+      expect((await flowAt(send, '#writes')).current).toBe('writes');
+      // The receipt is read and taken off the queue in one step: two lines, the read first.
+      await press(send, 'Escape', 27);
+      expect(await closed(send)).toBe(true);
+      await stepTo(send, 'takes');
+      expect(await barAt(send, '#takes', 'Takes out of Outbox Receipt')).toEqual(['Order API to Outbox', 'The receipt leaves the outbox as it is sent.', 'Reads from Outbox Receipt', 'Takes out of Outbox Receipt']);
+      const looks = `[...document.querySelectorAll('section[aria-label="Current step"] .flow-item-pill')].map((pill) => pill.className + ' ' + getComputedStyle(pill.querySelector('.flow-item-name')).textDecorationLine)`;
+      expect(await waitFor(send, looks)).toEqual(['pill flow-item-pill flow-item-plain none', 'pill flow-item-pill flow-item-gone line-through']);
+    }),
+  20_000,
+);
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME ? 'a step that runs a flow says "by the flow it runs", its pill with the sign of a condition; "Data" keeps what makes no act' : `skipped: there is no Chrome at ${CHROME}`,
+  () =>
+    inKeptShop(async (send) => {
+      await stepTo(send, 'places');
+      // Under the line that says what it runs, and no "Data".
+      expect((await barAt(send, '#places', 'Puts into Orders Order details by the flow it runs')).slice(1)).toEqual(['Puts into Orders Order details by the flow it runs']);
+      expect(await waitFor(send, pillOf('data-order-details'))).toEqual(['pill flow-item-pill flow-item-kept', 'none', 'Only when the customer has paid']);
+      // A step between two parts makes no act: its data stands as it did.
+      await stepTo(send, 'asks');
+      expect(await barAt(send, '#asks', 'Data Request')).toEqual(['Customer to Order API', 'Data Request']);
+      expect(await waitFor(send, `document.querySelectorAll('section[aria-label="Current step"] .flow-item-pill').length === 0 && document.querySelector('section[aria-label="Current step"] .flow-data-pill')?.dataset.data`)).toBe('data-request');
+    }),
+  20_000,
+);
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME ? 'the down key goes on from the last step to Ends and the up key back; Ends lists Kept by store, Gone, Only read, Only passed and Also runs, and leaves out a line with nothing' : `skipped: there is no Chrome at ${CHROME}`,
+  () =>
+    inKeptShop(async (send, address) => {
+      await stepTo(send, 'answers');
+      await flowAt(send, '#answers');
+      await press(send, 'ArrowDown', 40);
+      expect(await waitFor(send, `document.querySelector('[data-row="ends"].current') !== null && document.querySelector('section[aria-label="Current step"] h2')?.textContent`)).toBe('Sending a receipt');
+      expect(await barAt(send, '', 'The receipt is sent')).toEqual([
+        'The receipt is sent',
+        'Kept Orders Order details',
+        'Gone Outbox Receipt Only read Orders Customer Only passed Request',
+        'Also runs Placing an order What they keep in other stores is on their own pages.',
+      ]);
+      const ends = `({
+        next: document.querySelector('button[aria-label="Next step"]').disabled,
+        runs: ${hrefs('section[aria-label="Current step"] [data-line="runs"] a')},
+        pills: [...document.querySelectorAll('section[aria-label="Current step"] .flow-item-pill')].map((pill) => (pill.dataset.store ?? '') + ' ' + (pill.dataset.item ?? pill.dataset.data) + ' ' + pill.className.split(' ').at(-1)),
+      })`;
+      expect(await waitFor(send, ends)).toEqual({
+        next: true,
+        runs: ['/flows/flow-placing-an-order'],
+        pills: ['store-orders data-order-details flow-item-kept', 'store-outbox data-receipt flow-item-gone', 'store-orders data-customer flow-item-plain', ' data-request flow-item-plain'],
+      });
+      // A pill of Ends opens its item's panel, as a step's does.
+      await click(send, await centreOf(send, 'section[aria-label="Current step"] .flow-item-pill[data-item="data-customer"]'));
+      expect(await lifeOf(send, 'Customer')).toMatchObject({ picked: ['data-customer'] });
+      await press(send, 'Escape', 27);
+      expect(await closed(send)).toBe(true);
+      await press(send, 'ArrowUp', 38);
+      expect((await flowAt(send, '#answers')).current).toBe('answers');
+
+      // A flow that runs none and keeps no more: the sentence and Kept alone.
+      await send('Page.navigate', { url: `${address}/flows/flow-placing-an-order` });
+      await flowAt(send, '');
+      await press(send, 'End', 35);
+      expect(await barAt(send, '', 'The order is kept in the store of orders')).toEqual(['The order is kept in the store of orders', 'Kept Orders Order details']);
+    }),
+  20_000,
+);
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME ? 'a store\'s page has "Kept here" before its flows, and its link opens the flow on the step; a data record\'s page has "Kept in"' : `skipped: there is no Chrome at ${CHROME}`,
+  () =>
+    inKeptShop(async (send, address) => {
+      const kept = (path: string, title: string) =>
+        `location.pathname === ${JSON.stringify(path)} && document.querySelector('section[aria-label="${title}"]') !== null && { sections: ${texts('main .section-label')}, rows: ${texts(`section[aria-label="${title}"] tr`)}, links: ${hrefs(`section[aria-label="${title}"] td a[href^="/flows/"]`)} }`;
+      await send('Page.navigate', { url: `${address}/models/store-outbox` });
+      expect(await waitFor(send, kept('/models/store-outbox', 'Kept here'))).toEqual({
+        sections: ['Acts on', 'Is acted on by', 'Kept here', 'Flows'],
+        rows: ['Receipt Put by Order API Sending a receipt, step 2', 'Receipt Read by Order API Sending a receipt, step 5', 'Receipt Taken out by Order API Sending a receipt, step 5'],
+        links: ['/flows/flow-sending-a-receipt#writes', '/flows/flow-sending-a-receipt#takes', '/flows/flow-sending-a-receipt#takes'],
+      });
+      // What the flow it runs puts stands under that flow alone.
+      await send('Page.navigate', { url: `${address}/models/store-orders` });
+      expect(await waitFor(send, kept('/models/store-orders', 'Kept here'))).toMatchObject({
+        rows: ['Customer Read by Order API Sending a receipt, step 4', 'Order details Put by Order API Placing an order, step 2'],
+      });
+      await click(send, await centreOf(send, 'section[aria-label="Kept here"] a[href="/flows/flow-placing-an-order#saves"]'));
+      expect((await flowAt(send, '#saves')).current).toBe('saves');
+      await send('Page.navigate', { url: `${address}/data/data-receipt` });
+      expect(await waitFor(send, kept('/data/data-receipt', 'Kept in'))).toMatchObject({
+        sections: ['Steps', 'Connections', 'Kept in'],
+        rows: ['Outbox Put by Order API Sending a receipt, step 2', 'Outbox Read by Order API Sending a receipt, step 5', 'Outbox Taken out by Order API Sending a receipt, step 5'],
+      });
+    }),
+  20_000,
+);
 
 test.skipIf(!HAS_CHROME).concurrent(
   HAS_CHROME

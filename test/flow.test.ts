@@ -233,8 +233,8 @@ test('a put, a read and a take give kept, only read and gone; data where no way 
   expect(at(records, 'flow-plain', 'ends')).toEqual(['Order kept', 'Note only-read', 'Job gone']);
   // An act names the step of this flow, and the part that acts.
   expect(flowItems(records, 'flow-plain')[2]?.acts).toEqual([
-    { number: 3, step: 'queues', does: 'put', part: { id: 'app-web', name: 'Web' }, byRun: false },
-    { number: 4, step: 'takes', does: 'take', part: { id: 'app-worker', name: 'Worker' }, byRun: false },
+    { number: 3, step: 'queues', does: 'put', part: { id: 'app-web', name: 'Web' }, byRun: false, order: 2 },
+    { number: 4, step: 'takes', does: 'take', part: { id: 'app-worker', name: 'Worker' }, byRun: false, order: 3 },
   ]);
   expect(flowItems(records, 'flow-plain')[0]?.store).toEqual({ id: 'store-orders', name: 'Orders' });
 });
@@ -278,7 +278,7 @@ const NOTES = flowOf('flow-notes', ['{id: audits, does: connection-worker-notes-
 test('a step that runs a flow acts at that step in a store this flow draws, and in no other', () => {
   const records = kept(NOTES, flowOf('flow-main', ['{id: keeps, does: connection-web-writes-orders, data: [data-order]}', '{id: notes, does: flow-notes}']));
   expect(items(records, 'flow-main')).toEqual(['Order in Orders: put 1', 'Note in Orders: put 2*']);
-  expect(flowItems(records, 'flow-main')[1]?.acts).toEqual([{ number: 2, step: 'notes', does: 'put', part: { id: 'app-worker', name: 'Worker' }, byRun: true }]);
+  expect(flowItems(records, 'flow-main')[1]?.acts).toEqual([{ number: 2, step: 'notes', does: 'put', part: { id: 'app-worker', name: 'Worker' }, byRun: true, order: 1 }]);
   // The run flow's own page has both.
   expect(items(records, 'flow-notes')).toEqual(['Note in Audit: put 1', 'Note in Orders: put 2']);
 });
@@ -299,6 +299,16 @@ test('a flow run twice acts twice, once at each of its two steps', () => {
   const records = kept(NOTES, flowOf('flow-twice', ['{id: keeps, does: connection-web-writes-orders, data: [data-order]}', '{id: first, does: flow-notes}', '{id: reads, does: connection-web-reads-orders, data: [data-note]}', '{id: second, does: flow-notes}']));
   expect(items(records, 'flow-twice')).toEqual(['Order in Orders: put 1', 'Note in Orders: put 2*, read 3, put 4*']);
   expect(flowItems(records, 'flow-twice')[1]?.acts.map((act) => act.step)).toEqual(['first', 'reads', 'second']);
+});
+
+test('the acts of one step on two items say which comes first, where the items, by their first act, stand the other way', () => {
+  const records = kept(
+    flowOf('flow-both', ['{id: queues, does: connection-web-queues-jobs, data: [data-job]}', '{id: reads, does: connection-web-reads-orders, data: [data-order]}']),
+    flowOf('flow-first', ['{id: keeps, does: connection-web-writes-orders, data: [data-order]}', '{id: both, does: flow-both}', '{id: looks, does: connection-worker-takes-jobs, data: [data-job]}']),
+  );
+  expect(items(records, 'flow-first')).toEqual(['Order in Orders: put 1, read 2*', 'Job in Jobs: put 2*, read 3']);
+  const second = flowItems(records, 'flow-first').flatMap((item) => item.acts.filter((act) => act.number === 2).map((act) => ({ order: act.order, does: `${act.does} ${item.data.name}` })));
+  expect(second.sort((a, b) => a.order - b.order).map((act) => act.does)).toEqual(['put Job', 'read Order']);
 });
 
 test('a flow that runs itself does not loop: a flow already on the way down does nothing', () => {

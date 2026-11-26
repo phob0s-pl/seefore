@@ -2,17 +2,25 @@ import type { ModelRecord } from './answer.ts';
 import { byName, catalogueOf } from './catalogue.ts';
 import type { Catalogue } from './catalogue.ts';
 import { flowSteps } from './flow.ts';
+import type { ActDoes } from './flow.ts';
 import { stepsOf, wayOf } from './model.ts';
 import type { Step } from './model.ts';
 
 /**
  * What the pages of features, data, parts and connections ask of the flows, worked out from the
  * steps and never written: a feature's flows and parts, where data travels, the flows through a
- * part and the steps on a connection. A reference that names nothing is not followed.
+ * part, the steps on a connection, and what the steps put into a store, read there and take out.
+ * A reference that names nothing is not followed.
  */
 
 /** A step as another page names it: its flow, its place and what happens in it. */
 export type StepAt = { flow: string; flowName: string; step: string; number: number; happens: string };
+
+/** What a step does at its store to a data record, as the items of a flow have it (C5b): the store, the data, the act, and the part that acts, the `from` of the step's connection. */
+type KeptBy = { store: string; data: string; does: ActDoes; by: string };
+
+/** An act of a step at a store on a data record, with the step. */
+export type KeptAct = StepAt & KeptBy;
 
 /**
  * The way data goes on a connection: from one end to the other, and whether it comes `back` as a
@@ -62,13 +70,22 @@ export type Travel = {
   stepsIn: (id: string) => StepAt[];
   /** The data seen on a connection, with the way it goes, once each. */
   dataOn: (id: string) => DataWay[];
+  /**
+   * Every act of a flow's own step at a store, the Kept here of its page: by the data's name, then
+   * the flow's, then the step's number. What a flow does there through one it runs stands under
+   * the flow it runs alone; a step that says no way does nothing there.
+   */
+  keptHere: (store: string) => KeptAct[];
+  /** Every act of a flow's own step on a data record, the Kept in of its page: by the store's name, then the flow's, then the step's number. */
+  keptIn: (data: string) => KeptAct[];
 };
 
 /**
  * One step of a flow, where it is: the connection it travels and the way, or the part it is in.
  * `data` travels; what the step only `removes` does not, and is among the data of its feature.
+ * `kept` is what it does at the store its connection ends at.
  */
-type Walk = StepAt & { feature?: string; data: string[]; removes: string[]; connection?: ModelRecord; way?: Way; part?: string };
+type Walk = StepAt & { feature?: string; data: string[]; removes: string[]; connection?: ModelRecord; way?: Way; part?: string; kept: KeptBy[] };
 
 const text = (value: unknown): string | undefined => (typeof value === 'string' ? value : undefined);
 const list = (value: unknown): string[] => (Array.isArray(value) ? value.filter((each): each is string => typeof each === 'string') : []);
@@ -114,10 +131,20 @@ export function travelOf(records: readonly ModelRecord[], catalogue: Catalogue =
         const connection = found?.kind === 'connections' ? found : undefined;
         // A read of a store brings what the reader takes, by the step's way; where that is not said, by the connection's `access`. A reply goes back the way it came.
         const [start, end] = [text(connection?.fields.from) ?? '', text(connection?.fields.to) ?? ''];
-        const way = walker !== undefined ? wayOf(walker, catalogue.record)?.way : undefined;
+        const store = walker !== undefined ? wayOf(walker, catalogue.record) : undefined;
+        const way = store?.way;
         const reads = way !== undefined ? way === 'read' : connection?.fields.access === 'read';
         const forward = reads ? { from: end, to: start } : { from: start, to: end };
         const part = step.kind === 'part' && own?.does !== undefined && things.has(catalogue.record(own.does)?.kind ?? '') ? own.does : undefined;
+        // What the step does at its store: of `data` a put or a read by its way, none where that is not said; of `removes` a take. A reply does nothing there.
+        const done: [string, ActDoes][] =
+          step.kind === 'connection' && own !== undefined && store !== undefined
+            ? [...(way === undefined ? [] : own.data.map((id): [string, ActDoes] => [id, way === 'write' ? 'put' : 'read'])), ...own.removes.map((id): [string, ActDoes] => [id, 'take'])]
+            : [];
+        const kept = once(
+          done.filter(([id]) => catalogue.record(id)?.kind === 'data'),
+          ([id, does]) => `${id} ${does}`,
+        ).map(([data, does]): KeptBy => ({ store: store?.store ?? '', data, does, by: start }));
         return {
           flow: flow.id,
           flowName: read.name,
@@ -135,6 +162,7 @@ export function travelOf(records: readonly ModelRecord[], catalogue: Catalogue =
           ),
           ...(connection !== undefined ? { connection, way: step.kind === 'reply' ? { from: forward.to, to: forward.from, back: true } : { ...forward, back: false } } : {}),
           ...(part !== undefined ? { part } : {}),
+          kept,
         };
       });
     });
@@ -143,6 +171,16 @@ export function travelOf(records: readonly ModelRecord[], catalogue: Catalogue =
   const at = ({ flow, flowName, step, number, happens }: Walk): StepAt => ({ flow, flowName, step, number, happens });
   const wayKey = (way: Way) => `${way.from} ${way.to} ${way.back}`;
   const ends = (walk: Walk): string[] => (walk.connection ? [text(walk.connection.fields.from), text(walk.connection.fields.to)].flatMap((id) => id ?? []) : walk.part ? [walk.part] : []);
+
+  // Every act at a store, in the order of the walks: the flows by name, the steps in order, and of
+  // one step the puts and reads before the takes.
+  let acts: KeptAct[] | undefined;
+  const allKept = (): KeptAct[] => (acts ??= all().flatMap((walk) => walk.kept.map((each) => ({ ...at(walk), ...each }))));
+  // By the name of a record; the sort is stable, so the order of the walks stands under it.
+  const named = (a: string, b: string): number => {
+    const [first, second] = [catalogue.record(a), catalogue.record(b)];
+    return first !== undefined && second !== undefined ? byName(first, second) : 0;
+  };
 
   // The parts in the order of the tree, people first; a part the tree does not hold stands last.
   const order = new Map([...catalogue.people, ...catalogue.software.map((row) => row.record)].map((record, index) => [record.id, index]));
@@ -189,5 +227,7 @@ export function travelOf(records: readonly ModelRecord[], catalogue: Catalogue =
         all().flatMap(({ connection, way, data }) => (connection?.id === id && way !== undefined ? data.map((each) => ({ data: each, ...way })) : [])),
         (seen) => `${seen.data} ${wayKey(seen)}`,
       ),
+    keptHere: (id) => allKept().filter((act) => act.store === id).sort((a, b) => named(a.data, b.data)),
+    keptIn: (id) => allKept().filter((act) => act.data === id).sort((a, b) => named(a.store, b.store)),
   };
 }

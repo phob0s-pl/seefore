@@ -382,6 +382,87 @@
   color: var(--link-hover);
 }
 
+/* What a step does at its store, and what a flow leaves behind at Ends: an item's pill in the look
+   of its row, put or kept in the tint of stores, read plain, taken out or gone in red with its name
+   struck through; the sign of a condition straight after the name. */
+.flow-item-pill {
+  --gone-ink: color-mix(in srgb, var(--danger) 55%, #fff);
+  height: 20px;
+  gap: 5px;
+  border: 1px solid var(--border-strong);
+  font-weight: 500;
+  cursor: pointer;
+}
+.flow-item-kept {
+  border-color: color-mix(in srgb, var(--kind-stores) 50%, transparent);
+  background: color-mix(in srgb, var(--kind-stores) 16%, transparent);
+  color: var(--text-strong);
+}
+.flow-item-plain {
+  background: var(--neutral-tint);
+  color: var(--text-body);
+}
+.flow-item-gone {
+  border-color: var(--danger-border);
+  background: var(--danger-tint);
+  color: var(--gone-ink);
+}
+.flow-item-gone > .flow-item-name {
+  text-decoration: line-through;
+}
+.flow-item-pill:hover {
+  border-color: var(--text-secondary);
+}
+.flow-item-sign {
+  display: inline-flex;
+}
+.flow-item-sign svg {
+  width: 12px;
+  height: 12px;
+  stroke-width: 2.2;
+}
+.flow-bar-quiet {
+  color: var(--text-tertiary);
+}
+
+/* The bar at Ends: a label at the left of each line, and what it holds wrapping beside it, each
+   store's name quiet before its pills. Gone, Only read and Only passed share a line. The rows are
+   tight, so that a flow that keeps much is read whole in the bar's height. */
+.flow-bar-lines > .flow-bar-sum {
+  display: flex;
+  align-items: flex-start;
+  margin-top: 2px;
+}
+.flow-bar-sum > .flow-bar-label {
+  flex: 0 0 84px;
+  margin: 0;
+  line-height: 20px;
+}
+.flow-bar-sum-items {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 6px;
+  min-width: 0;
+}
+.flow-bar-sum-items > .flow-data-pill {
+  height: 20px;
+}
+.flow-bar-sum-items > .flow-bar-label {
+  margin: 0 0 0 10px;
+}
+.flow-bar-held {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 6px;
+  margin-right: 10px;
+}
+.flow-bar-store {
+  color: var(--text-secondary);
+}
+
 /* Under a change, a line whose key the change writes otherwise: a yellow rule at its left, and
    today's words under it, quiet. The title bears the rule too when the name changes. A step that
    only moved says so quietly after its title; a flow the change removes says so first. */
