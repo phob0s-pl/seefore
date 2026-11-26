@@ -12,7 +12,7 @@ import { CanvasFrame, EmptyState, useTitle } from './ui.tsx';
  */
 export function Architecture() {
   useTitle('Architecture');
-  const { answer, catalogue, failed } = useOutletContext<ModelState>();
+  const { answer, catalogue, travel, failed } = useOutletContext<ModelState>();
   const [params] = useSearchParams();
   const depth = depthOf(params.get('depth'));
   // A focus the model does not have at this depth is none: everything is drawn.
@@ -42,7 +42,7 @@ export function Architecture() {
   // A new depth or focus is a new diagram, laid out and fitted afresh.
   return (
     <Diagram key={scene} view={view} depth={depth} picked={picked} onPick={onPick}>
-      {picked !== undefined && catalogue !== undefined && <Inspector picked={picked} view={view} catalogue={catalogue} onClose={clear} />}
+      {picked !== undefined && catalogue !== undefined && <Inspector picked={picked} view={view} catalogue={catalogue} travel={travel} onClose={clear} />}
     </Diagram>
   );
 }

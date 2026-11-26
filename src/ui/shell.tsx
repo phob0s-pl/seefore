@@ -12,7 +12,7 @@ import { rulebookOf } from '../model/rulebook.ts';
 import type { Rulebook } from '../model/rulebook.ts';
 import { travelOf } from '../model/travel.ts';
 import type { Travel } from '../model/travel.ts';
-import { DEPTHS, depthOf, focusesOf, focusFor } from '../model/view.ts';
+import { DEPTHS, depthOf, diagramAt, focusesOf, focusFor } from '../model/view.ts';
 import type { Depth, Focus } from '../model/view.ts';
 import { ChangeSidebar } from './changes.tsx';
 import { TABS } from './models.tsx';
@@ -33,26 +33,21 @@ export type Slots = { steps: HTMLElement | null; crumbs: HTMLElement | null };
 /** The depths as the top bar names them. */
 const DEPTH_WORDS: Record<Depth, string> = { systems: 'Systems', containers: 'Containers', components: 'Components' };
 
-/** The first choice of the focus at a depth, which shows everything. */
-const ALL_WORDS: Partial<Record<Depth, string>> = { containers: 'All systems', components: 'All apps' };
-
-/** The address of the diagram at a depth, with a focus or none. */
-function diagramAt(depth: Depth, focus?: string): string {
-  if (depth === 'systems') return '/';
-  return `/?${new URLSearchParams(focus === undefined ? { depth } : { depth, focus }).toString()}`;
-}
+/** The first choice of the focus at both depths, which shows everything. */
+const WHOLE = 'Whole model';
 
 /**
  * The focus of the diagram: a pill that names the current choice and opens the list of choices
- * under it, "All" first. A choice is a link to its address. The list closes on a choice, on
- * Escape, which then closes nothing else, and on a click outside it.
+ * under it, the whole model first. At Components an app stands under its system, set in from it.
+ * A choice is a link to its address. The list closes on a choice, on Escape, which then closes
+ * nothing else, and on a click outside it.
  */
 function FocusMenu({ depth, focus, choices }: { depth: Depth; focus: string | undefined; choices: readonly Focus[] }) {
   const [open, setOpen] = useState(false);
   const menu = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const list = useId();
-  const options = [{ id: undefined, name: ALL_WORDS[depth] ?? '' }, ...choices];
+  const options: readonly { id: string | undefined; name: string; in?: string }[] = [{ id: undefined, name: WHOLE }, ...choices];
   const current = options.find((option) => option.id === focus) ?? options[0];
 
   useEffect(() => {
@@ -101,7 +96,7 @@ function FocusMenu({ depth, focus, choices }: { depth: Depth; focus: string | un
       {open && (
         <div id={list} className="focus-menu-list" role="listbox" aria-label="Focus">
           {options.map((option) => (
-            <Link key={option.id ?? ''} to={diagramAt(depth, option.id)} role="option" aria-selected={option.id === current?.id} onClick={() => setOpen(false)}>
+            <Link key={option.id ?? ''} to={diagramAt(depth, option.id)} role="option" aria-selected={option.id === current?.id} className={option.in !== undefined ? 'focus-menu-under' : undefined} onClick={() => setOpen(false)}>
               <span className="focus-menu-check">{option.id === current?.id && <Check aria-hidden="true" />}</span>
               <span className="focus-menu-name">{option.name}</span>
             </Link>
@@ -135,7 +130,7 @@ export function Shell() {
   const wanted = params.get('focus');
   const focus = useMemo(() => (records ? focusFor(records, depth, wanted) : undefined), [records, depth, wanted]);
   const choices = useMemo(() => (records ? focusesOf(records, depth) : []), [records, depth]);
-  // Each depth link keeps the focus where it fits: an app's system at Containers.
+  // Each depth link keeps the focus: a system stays, and an app is its system at Containers.
   const links = useMemo(() => DEPTHS.map((item) => ({ depth: item, to: diagramAt(item, records && focusFor(records, item, focus)) })), [records, focus]);
   // Models is current on each of its lists and on the page of every record.
   const inModels = TABS.some((tab) => pathname === tab.to || pathname.startsWith(`${tab.to}/`));

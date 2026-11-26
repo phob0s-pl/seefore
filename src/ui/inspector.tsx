@@ -4,9 +4,11 @@ import type { ModelRecord } from '../model/answer.ts';
 import type { Catalogue } from '../model/catalogue.ts';
 import type { Verb } from '../model/changes.ts';
 import type { Mark } from '../model/flow.ts';
-import type { Arrow, View } from '../model/view.ts';
+import type { StepAt, Travel } from '../model/travel.ts';
+import { diagramAt } from '../model/view.ts';
+import type { Arrow, Depth, View } from '../model/view.ts';
 import { typeWords } from './kinds.tsx';
-import { KindTile, NameOf } from './models.tsx';
+import { addressOf, KindTile, NameOf } from './models.tsx';
 import { End, ids } from './record.tsx';
 import { Button, ButtonLink, GridRow, MarkPill, Pill, RowList } from './ui.tsx';
 
@@ -51,6 +53,40 @@ function Details({ catalogue, record, children }: { catalogue: Catalogue; record
   );
 }
 
+/** The words on the way from a box to the view it is the focus of, by the depth of that view. */
+const SHOWS: Partial<Record<Depth, string>> = { containers: 'Show its containers', components: 'Show its components' };
+
+/**
+ * The steps of the flows that happen in a part itself, as rows flush with the panel's edges: what
+ * happens, and under it the flow and the step's number. A row opens the flow on that step.
+ */
+function StepsIn({ steps, catalogue }: { steps: readonly StepAt[]; catalogue: Catalogue }) {
+  if (steps.length === 0) return null;
+  return (
+    <>
+      <h3>Steps</h3>
+      <RowList label="Steps">
+        {steps.map((step) => (
+          <GridRow
+            key={`${step.flow} ${step.number}`}
+            to={`${addressOf(catalogue, 'flows', step.flow)}${step.step !== '' ? `#${encodeURIComponent(step.step)}` : ''}`}
+            cols={ROW}
+            tile={<KindTile kind="flows" size="sm" />}
+            name={
+              <>
+                <strong>{step.happens}</strong>
+                <small>
+                  {step.flowName} · step {step.number}
+                </small>
+              </>
+            }
+          />
+        ))}
+      </RowList>
+    </>
+  );
+}
+
 /** The description of a record, when it has one. */
 function Description({ record }: { record: ModelRecord }) {
   const { description } = record.fields;
@@ -60,9 +96,11 @@ function Description({ record }: { record: ModelRecord }) {
 /**
  * A box or a frame: its type, the mark of an outside system, its name, its description and its
  * page. Under a change, the pill of what the change does to its record stands beside its type, and
- * a sentence under its name says when the flow newly passes it or no longer does.
+ * a sentence under its name says when the flow newly passes it or no longer does. On the
+ * Architecture page, a box that can be the focus has the way to that view before the way to its
+ * page, and a part that steps of flows happen in has those steps last.
  */
-function Thing({ record, catalogue, under }: { record: ModelRecord; catalogue: Catalogue; under: Under | undefined }) {
+function Thing({ record, catalogue, under, opens, steps }: { record: ModelRecord; catalogue: Catalogue; under: Under | undefined; opens: Depth | undefined; steps: readonly StepAt[] }) {
   const { kind, fields } = record;
   return (
     <>
@@ -76,9 +114,17 @@ function Thing({ record, catalogue, under }: { record: ModelRecord; catalogue: C
       </h2>
       <Passes id={record.id} under={under} />
       <Description record={record} />
-      <Details catalogue={catalogue} record={record}>
-        {kind === 'people' ? 'Open actor details' : 'Open model details'}
-      </Details>
+      <div className="diagram-inspector-actions">
+        {opens !== undefined && (
+          <ButtonLink to={diagramAt(opens, record.id)} variant="outline" size="sm" className="diagram-inspector-action">
+            {SHOWS[opens]}
+          </ButtonLink>
+        )}
+        <Details catalogue={catalogue} record={record}>
+          {kind === 'people' ? 'Open actor details' : 'Open model details'}
+        </Details>
+      </div>
+      <StepsIn steps={steps} catalogue={catalogue} />
     </>
   );
 }
@@ -186,13 +232,15 @@ function Connections({ arrow, records, catalogue, under }: { arrow: Arrow; recor
  * The panel on the field: what the picked box, frame or line is, or a data record a step passes,
  * and the way to its page. Its button, and Escape, close it. On an updated flow under a change,
  * `marks` and `verbs` say what the change does; on any other page, and on a flow the change adds
- * or removes, the marks are none and the panel is as it is anywhere.
+ * or removes, the marks are none and the panel is as it is anywhere. With `travel`, on the
+ * Architecture page, a part's panel lists the steps of flows that happen in it.
  */
 export function Inspector({
   picked,
   view,
   catalogue,
   onClose,
+  travel,
   marks,
   verbs,
 }: {
@@ -200,6 +248,7 @@ export function Inspector({
   view: View;
   catalogue: Catalogue;
   onClose: () => void;
+  travel?: Travel | undefined;
   marks?: ReadonlyMap<string, Mark> | undefined;
   verbs?: ReadonlyMap<string, Verb> | undefined;
 }) {
@@ -224,7 +273,7 @@ export function Inspector({
       record.kind === 'data' ? (
         <Data record={record} catalogue={catalogue} />
       ) : (
-        <Thing record={record} catalogue={catalogue} under={under} />
+        <Thing record={record} catalogue={catalogue} under={under} opens={view.boxes.find((box) => box.id === picked)?.opens} steps={travel?.stepsIn(record.id) ?? []} />
       )
     ) : shown.length === 1 ? (
       <Connection record={record} catalogue={catalogue} under={under} />
