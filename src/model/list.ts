@@ -5,6 +5,7 @@ import { ruleReferences } from './judge.ts';
 import { changesOf } from './changes.ts';
 import type { Changes, Verb } from './changes.ts';
 import { KINDS, ofModel } from './kinds.ts';
+import { changeMark } from './mark.ts';
 import { stepsOf } from './model.ts';
 import { list, quote } from './problem.ts';
 
@@ -77,9 +78,15 @@ function nextOn(changes: Changes, id: string): string {
 /** The changes in the order of their ids, as their files lie. */
 const byId = (changes: Changes) => [...changes.all].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 
-/** One line a change: its path, its name, and who is next; or, once it is decided, `applied` or `rejected`. */
-function changeLines(changes: Changes): string[] {
-  return byId(changes).map((change) => [`changes/${change.id}`, change.name, change.status ?? nextOn(changes, change.id)].join('  '));
+/**
+ * One line a change: its path, its name, who is next, and its mark, which a review writes into
+ * `read`; or, once it is decided, `applied` or `rejected`, since its reading is over.
+ */
+function changeLines(changes: Changes, records: readonly ModelRecord[]): string[] {
+  // Each change is the first record of `changes/` with its id, as in the changes' views.
+  const marks = new Map<string, string>();
+  for (const record of records) if (record.kind === 'changes' && !marks.has(record.id)) marks.set(record.id, changeMark(record.fields));
+  return byId(changes).map((change) => [`changes/${change.id}`, change.name, ...(change.status !== undefined ? [change.status] : [nextOn(changes, change.id), marks.get(change.id) as string])].join('  '));
 }
 
 /** An id or a path that names no record: the error, with the nearest id. */
@@ -101,7 +108,7 @@ export function listLines(model: ModelRead, asked: ListAsked): { lines: string[]
   // `list changes` may come as the folder `changes`.
   if (asked.changes === true || (folders.length === 1 && folders[0] === 'changes')) {
     if (asked.near !== undefined || asked.change !== undefined) return { error: 'The changes are listed alone, with no record near and no change laid over the model.' };
-    return { lines: changeLines(changes) };
+    return { lines: changeLines(changes, model.records) };
   }
   for (const folder of folders) {
     if (folder === 'changes' || folder === 'reviews') return { error: `${quote(folder)} holds no records of the model. The changes are listed alone: \`changes\` gives each, with who is next.` };

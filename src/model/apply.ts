@@ -6,6 +6,7 @@ import { readModel } from './read.ts';
 import type { SourceFile } from './read.ts';
 import { stepsAfter } from './change.ts';
 import { changesOf } from './changes.ts';
+import { canonical, changeMark } from './mark.ts';
 import { list, quote } from './problem.ts';
 import { SHAPES } from './records.ts';
 import type { Review } from './review.ts';
@@ -32,7 +33,7 @@ export type Applied = {
   removed: number;
   /** The warnings of the check at the change. They refuse nothing. */
   warnings: Problem[];
-  /** What else it says, a line each: the review, the errors the model has of its own, and each other change the check now faults. */
+  /** What else it says, a line each: the review, and whether it read the change as it is; the errors the model has of its own; and each other change the check now faults. */
   said: string[];
   /** The files of the records added and rewritten, in the change's order. */
   written: SourceFile[];
@@ -131,9 +132,7 @@ function shift(lines: string, by: number): string {
     .join('\n');
 }
 
-/** A value as text with the keys of each mapping in order, so that two values compare whatever the order of their keys. */
-const canonical = (value: unknown): string =>
-  JSON.stringify(value, (_key, inner: unknown) => (inner !== null && typeof inner === 'object' && !Array.isArray(inner) ? Object.fromEntries(Object.entries(inner).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) : inner));
+/** Whether two values are one, whatever the order of their keys. */
 const same = (a: unknown, b: unknown): boolean => canonical(a) === canonical(b);
 
 /** The file of a record that the change adds: the record's lines in the change, moved left to the first column. Folded text stays as it is folded. */
@@ -338,7 +337,11 @@ export function applyChange(files: readonly SourceFile[], asked: string): Applie
 
   // ---- what it says, and applies all the same
   const warnings = before.problems.filter((problem) => problem.file === path && problem.severity === 'warning');
-  const said = [reviewLine(changesOf(before.records, before.laid).review(id))];
+  const review = changesOf(before.records, before.laid).review(id);
+  const said = [reviewLine(review)];
+  // A review that read the change before it moved does not answer for the change as it is.
+  const mark = changeMark(record.fields);
+  if (review?.read !== undefined && review.read !== mark) said.push(`The review read the change as ${quote(review.read)}; it is ${quote(mark)} now.`);
   const ownErrors = before.problems.filter((problem) => problem.severity === 'error' && !problem.file.startsWith('changes/') && !problem.file.startsWith('reviews/')).length;
   if (ownErrors > 0) {
     said.push(`The model has ${many(ownErrors, 'error')} of its own: \`seefore check\` lists ${ownErrors === 1 ? 'it' : 'them'}.`);

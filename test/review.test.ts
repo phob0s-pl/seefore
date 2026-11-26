@@ -1,6 +1,8 @@
 import { expect, test } from 'vitest';
+import { parse } from 'yaml';
 import { changesOf } from '../src/model/changes.ts';
 import { flowSteps } from '../src/model/flow.ts';
+import { changeMark } from '../src/model/mark.ts';
 import { readModel } from '../src/model/read.ts';
 import type { SourceFile } from '../src/model/read.ts';
 
@@ -34,7 +36,9 @@ const MODEL: SourceFile[] = [
     ].join('\n'),
   ),
 ];
-const POINT = ['    name: An order is never saved', '    severity: block', '    about: [stores/store-orders]', '    finding: No step writes the store.'];
+/** The mark of the change `post`, which a review that read it as it is bears in `read`. */
+const MARK = changeMark(parse((MODEL.find((each) => each.path === 'changes/post.yaml') as SourceFile).text));
+const POINT = ['    name: An order is never saved', '    severity: block', '    about: [stores/store-orders]', '    finding: No step writes the store.', '    recommendation: The flow says where an order is written.'];
 const review = (id: string, lines: string[]): SourceFile => file(`reviews/${id}`, [...lines, ''].join('\n'));
 const read = (...files: SourceFile[]) => {
   const model = readModel([...MODEL, ...files]);
@@ -42,12 +46,12 @@ const read = (...files: SourceFile[]) => {
 };
 
 test('a review is read from the file that bears its change id, and leaves the check of the model as it was', () => {
-  const { model, changes } = read(review('post', ['read: "4c1d9a70"', 'points:', '  never-saved:', ...POINT]));
+  const { model, changes } = read(review('post', [`read: "${MARK}"`, 'points:', '  never-saved:', ...POINT]));
   expect(model.problems).toEqual([]);
   expect(model.records.filter((record) => record.kind === 'reviews').map((record) => record.id)).toEqual(['post']);
-  expect(changes.review('post')).toMatchObject({ read: '4c1d9a70', points: [{ id: 'never-saved', name: 'An order is never saved', severity: 'block', status: 'open', comments: [] }] });
+  expect(changes.review('post')).toMatchObject({ read: MARK, points: [{ id: 'never-saved', name: 'An order is never saved', severity: 'block', status: 'open', comments: [] }] });
   // A reading that found nothing is a full answer; a change with no file has no review.
-  expect(read(review('post', ['read: "4c1d9a70"'])).changes.review('post')).toEqual({ read: '4c1d9a70', points: [] });
+  expect(read(review('post', [`read: "${MARK}"`])).changes.review('post')).toEqual({ read: MARK, points: [] });
   expect(read().changes.review('post')).toBeUndefined();
   expect(changes.review('none')).toBeUndefined();
 });
@@ -76,7 +80,7 @@ test('the faults of the form of a review are told, each at its place', () => {
 test('a point says what it is about by name, and each address leads under the change where the change touches the record', () => {
   const { model, changes } = read(
     review('post', [
-      'read: "4c1d9a70"',
+      `read: "${MARK}"`,
       'points:',
       '  never-saved:',
       '    name: An order is never saved',
@@ -98,7 +102,11 @@ test('a point says what it is about by name, and each address leads under the ch
       '    finding: It names what no record has.',
     ]),
   );
-  expect(model.problems).toEqual([]);
+  // The check faults the two addresses that name nothing; the page reads them all the same.
+  expect(model.problems.map((problem) => [problem.rule, problem.line, problem.column])).toEqual([
+    ['reference-unknown', 19, 13],
+    ['reference-unknown', 19, 30],
+  ]);
   const [first, second, third] = changes.review('post')?.points ?? [];
   expect(first).toMatchObject({ status: 'reopened', recommendation: 'The flow says where an order is written.', comments: ['It says so now.', 'A description says it.'] });
   expect(first?.about.map((each) => [each.address, each.label, each.step ?? null, each.to ?? null, each.record?.kind ?? null])).toEqual([
@@ -126,14 +134,15 @@ test('a point says what it is about by name, and each address leads under the ch
 test('a change and its review that bear the id of a record shadow nothing of the model', () => {
   // The change and the review are named `store-orders`, as the store is, and `flow-placing`, as the flow is.
   const body = 'name: Orders\nprompt: Keep the orders longer.\nupdate:\n  stores/store-orders: {description: Kept for ten years.}\n';
-  const { model, changes } = read(file('changes/store-orders', body), review('store-orders', ['read: "4c1d9a70"', 'points:', '  never-saved:', ...POINT]), file('changes/flow-placing', body.replace('Orders', 'Placing')), review('flow-placing', ['read: "4c1d9a70"']));
+  const placing = body.replace('Orders', 'Placing');
+  const { model, changes } = read(file('changes/store-orders', body), review('store-orders', [`read: "${changeMark(parse(body))}"`, 'points:', '  never-saved:', ...POINT]), file('changes/flow-placing', placing), review('flow-placing', [`read: "${changeMark(parse(placing))}"`]));
   expect(model.problems).toEqual([]);
   expect(flowSteps(model.records, 'flow-placing')?.steps.map((step) => [step.id, step.acts])).toEqual([
     ['places', 'Customer to API'],
     ['saves', 'API to Orders'],
   ]);
   expect(changes.review('store-orders')?.points[0]?.about).toMatchObject([{ label: 'Orders', to: '/changes/store-orders/records/stores/store-orders' }]);
-  expect(changes.review('flow-placing')).toEqual({ read: '4c1d9a70', points: [] });
+  expect(changes.review('flow-placing')).toEqual({ read: changeMark(parse(placing)), points: [] });
 });
 
 test('the review of a decided change leads to each record on its own page, where the model has it, and settled is a status', () => {

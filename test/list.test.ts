@@ -1,25 +1,32 @@
 import { expect, test } from 'vitest';
+import { parse } from 'yaml';
 import { listLines } from '../src/model/list.ts';
 import type { ListAsked } from '../src/model/list.ts';
+import { changeMark } from '../src/model/mark.ts';
 import { readModel } from '../src/model/read.ts';
 import type { SourceFile } from '../src/model/read.ts';
 
 const file = (path: string, text: string): SourceFile => ({ path: `${path}.yaml`, text });
-const review = (id: string, points: string[]): SourceFile => file(`reviews/${id}`, ['read: "4c1d9a70"', 'points:', ...points, ''].join('\n'));
+/** The mark of a change among the files: what a review that read it as it is bears in `read`. */
+const markOf = (id: string, files: readonly SourceFile[]): string => changeMark(parse((files.find((each) => each.path === `changes/${id}.yaml`) as SourceFile).text));
+/** The review of a change that read it as it is. */
+const review = (id: string, points: string[], files: readonly SourceFile[]): SourceFile => file(`reviews/${id}`, [`read: "${markOf(id, files)}"`, 'points:', ...points, ''].join('\n'));
+/** A point in a status, with a recommendation when it is a block and the comments its status has had. */
 const point = (id: string, severity: 'block' | 'note', status?: string): string[] => [
   `  ${id}:`,
   `    name: Point ${id}`,
   `    severity: ${severity}`,
   '    about: [need]',
   '    finding: Something is wrong.',
-  ...(status !== undefined ? [`    status: ${status}`] : []),
+  ...(severity === 'block' ? ['    recommendation: Something is right.'] : []),
+  ...(status !== undefined ? [`    status: ${status}`, '    comments:', '      - Said why.', ...(status === 'reopened' ? ['      - Said what is still open.'] : [])] : []),
 ];
 /**
  * A shop with a flow, a rule and a line of context; a change that adds a ledger, updates the API
  * and removes the clerk; a change the check cannot lay; and three changes that are an input alone,
  * each with a review that waits for somebody else.
  */
-const MODEL: SourceFile[] = [
+const CHANGED: SourceFile[] = [
   { path: 'seefore.yaml', text: 'format: 1\nname: Shop\n' },
   file('people/person-customer', 'name: Customer\n'),
   file('people/person-clerk', 'name: Clerk\n'),
@@ -44,10 +51,13 @@ const MODEL: SourceFile[] = [
   file('changes/fixing', 'name: Fixing\nprompt: Fix it.\n'),
   file('changes/waiting', 'name: Waiting\nprompt: Wait.\n'),
   file('changes/done', 'name: Done\nprompt: Done.\n'),
-  review('ledger', [...point('one', 'block'), ...point('two', 'block'), ...point('three', 'note'), ...point('four', 'block', 'fixed')]),
-  review('fixing', [...point('one', 'block', 'fixed'), ...point('two', 'block', 'declined')]),
-  review('waiting', [...point('one', 'block', 'declined'), ...point('two', 'block', 'reopened'), ...point('three', 'note')]),
-  review('done', [...point('one', 'block', 'closed'), ...point('two', 'note')]),
+];
+const MODEL: SourceFile[] = [
+  ...CHANGED,
+  review('ledger', [...point('one', 'block'), ...point('two', 'block'), ...point('three', 'note'), ...point('four', 'block', 'fixed')], CHANGED),
+  review('fixing', [...point('one', 'block', 'fixed'), ...point('two', 'block', 'declined')], CHANGED),
+  review('waiting', [...point('one', 'block', 'declined'), ...point('two', 'block', 'reopened'), ...point('three', 'note')], CHANGED),
+  review('done', [...point('one', 'block', 'closed'), ...point('two', 'note')], CHANGED),
 ];
 const model = readModel(MODEL);
 const lines = (asked: ListAsked): string[] => {
@@ -151,23 +161,33 @@ test('the model as a change would make it: each record it adds, updates and remo
 });
 
 test('a line a change, with who is next from its blocks; a note waits for nobody', () => {
+  const mark = (id: string) => markOf(id, MODEL);
   expect(lines({ changes: true })).toEqual([
-    'changes/broken  A broken change  no review',
-    'changes/done  Done  nothing open',
-    'changes/fixing  Fixing  the second reading: 1 fixed',
-    'changes/ledger  A ledger  the corrector: 2 open',
-    'changes/waiting  Waiting  the person: 1 declined, 1 reopened',
+    `changes/broken  A broken change  no review  ${mark('broken')}`,
+    `changes/done  Done  nothing open  ${mark('done')}`,
+    `changes/fixing  Fixing  the second reading: 1 fixed  ${mark('fixing')}`,
+    `changes/ledger  A ledger  the corrector: 2 open  ${mark('ledger')}`,
+    `changes/waiting  Waiting  the person: 1 declined, 1 reopened  ${mark('waiting')}`,
   ]);
   expect(error({ changes: true, near: 'app-api' })).toBe('The changes are listed alone, with no record near and no change laid over the model.');
   expect(listLines(readModel(MODEL.filter((each) => !each.path.startsWith('changes/'))), { changes: true })).toEqual({ lines: [] });
 });
 
+test('the line of an open change ends with its mark, and a review that writes the mark into `read` is not behind', () => {
+  const listed = listLines(model, { changes: true });
+  const printed = ('lines' in listed ? listed.lines.find((line) => line.startsWith('changes/ledger  ')) : undefined)?.split('  ').at(-1) ?? '';
+  expect(printed).toMatch(/^[0-9a-f]{8}$/);
+  const behind = (read: string) => readModel([...CHANGED, file('reviews/ledger', `read: "${read}"\n`)]).problems.filter((problem) => problem.rule === 'review-behind').length;
+  expect([behind(printed), behind('00000000')]).toEqual([0, 1]);
+});
+
 /** The model with two decided changes: one applied, whose store is in the model now, and one rejected, with a review that still has a block open. */
+const REFUSED = file('changes/refused', 'name: Refused\nprompt: Rename the API.\nstatus: rejected\nwhy: The API keeps its name.\nupdate:\n  apps/app-api: {name: Order API}\n');
 const DECIDED: SourceFile[] = [
   ...MODEL,
   file('changes/kept', 'name: Kept\nprompt: Keep the orders.\nstatus: applied\nadd:\n  stores/store-orders: {name: Orders, in: system-shop, kind: database}\n'),
-  file('changes/refused', 'name: Refused\nprompt: Rename the API.\nstatus: rejected\nwhy: The API keeps its name.\nupdate:\n  apps/app-api: {name: Order API}\n'),
-  review('refused', point('one', 'block')),
+  REFUSED,
+  review('refused', point('one', 'block'), [REFUSED]),
 ];
 
 test('a decided change says applied or rejected in place of who is next', () => {
@@ -175,13 +195,13 @@ test('a decided change says applied or rejected in place of who is next', () => 
   expect(read.problems.map((problem) => problem.file)).toEqual(['changes/broken.yaml']);
   expect(listLines(read, { changes: true })).toEqual({
     lines: [
-      'changes/broken  A broken change  no review',
-      'changes/done  Done  nothing open',
-      'changes/fixing  Fixing  the second reading: 1 fixed',
+      `changes/broken  A broken change  no review  ${markOf('broken', MODEL)}`,
+      `changes/done  Done  nothing open  ${markOf('done', MODEL)}`,
+      `changes/fixing  Fixing  the second reading: 1 fixed  ${markOf('fixing', MODEL)}`,
       'changes/kept  Kept  applied',
-      'changes/ledger  A ledger  the corrector: 2 open',
+      `changes/ledger  A ledger  the corrector: 2 open  ${markOf('ledger', MODEL)}`,
       'changes/refused  Refused  rejected',
-      'changes/waiting  Waiting  the person: 1 declined, 1 reopened',
+      `changes/waiting  Waiting  the person: 1 declined, 1 reopened  ${markOf('waiting', MODEL)}`,
     ],
   });
 });

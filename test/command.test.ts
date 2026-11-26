@@ -305,7 +305,8 @@ test('list prints one line a record, those of a folder, those near one, the mode
     '  connections/connection-customer-orders  Places an order  person-customer -> app-order-api',
     '- technologies/tech-go  Go',
   ]);
-  expect((await onShop('list', 'changes')).out).toEqual(['changes/orders-by-post  Orders by post  the corrector: 1 open', 'changes/orders-on-paper-only  Orders on paper only  nothing open']);
+  // A change's line ends with its mark, which each review of the shop bears in `read`.
+  expect((await onShop('list', 'changes')).out).toEqual(['changes/orders-by-post  Orders by post  the corrector: 1 open  c10dcc9b', 'changes/orders-on-paper-only  Orders on paper only  nothing open  1e14249b']);
   // What is not there gives 1 and one line.
   for (const args of [['list', 'drafts'], ['list', '--near=app-nothing'], ['list', '--change=nothing'], ['list', '--colour']]) {
     const wrong = await onShop(...args);

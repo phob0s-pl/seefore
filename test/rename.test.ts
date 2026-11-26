@@ -1,4 +1,6 @@
 import { expect, test } from 'vitest';
+import { parse } from 'yaml';
+import { changeMark } from '../src/model/mark.ts';
 import { readModel } from '../src/model/read.ts';
 import type { SourceFile } from '../src/model/read.ts';
 import { readRenames, renameRecords } from '../src/model/rename.ts';
@@ -148,7 +150,27 @@ test("only the id's own characters change: comments, quotes, layout and line end
   expect(textAt(done.files, 'apps/app-api-gateway.yaml')).toBe('name: Gateway\nin: system-shop\n');
 });
 
-/** A shop with a change that adds, updates and removes, and a review of it. */
+/** A change that adds, updates and removes. */
+const ORDERS_BY_POST = lines(
+  'name: Orders by post',
+  'prompt: The clerk types in the orders that come by post.',
+  'add:',
+  '  connections/connection-clerk-types-in:',
+  '    from: person-clerk',
+  '    to: app-api',
+  '    name: Types in a posted order',
+  'update:',
+  '  apps/app-api:',
+  '    description: Takes the orders.',
+  '  flows/flow-placing:',
+  '    steps:',
+  '      - app-api',
+  '      - {id: types-in, does: connection-clerk-types-in, name: Types the order in}',
+  '      - saves',
+  'remove:',
+  '  - people/person-courier',
+);
+/** A shop with that change, and a review that read it as it is. */
 const CHANGED: SourceFile[] = [
   MARKER,
   file('systems/system-shop', 'name: Shop\n'),
@@ -163,32 +185,11 @@ const CHANGED: SourceFile[] = [
     'flows/flow-placing',
     lines('name: Placing an order', 'starts: A customer orders', 'ends: The order is kept', 'feature: feature-ordering', 'steps:', '  - {id: app-api, does: app-api, name: Checks the stock}', '  - {id: saves, does: connection-api-writes-orders}'),
   ),
-  file(
-    'changes/orders-by-post',
-    lines(
-      'name: Orders by post',
-      'prompt: The clerk types in the orders that come by post.',
-      'add:',
-      '  connections/connection-clerk-types-in:',
-      '    from: person-clerk',
-      '    to: app-api',
-      '    name: Types in a posted order',
-      'update:',
-      '  apps/app-api:',
-      '    description: Takes the orders.',
-      '  flows/flow-placing:',
-      '    steps:',
-      '      - app-api',
-      '      - {id: types-in, does: connection-clerk-types-in, name: Types the order in}',
-      '      - saves',
-      'remove:',
-      '  - people/person-courier',
-    ),
-  ),
+  file('changes/orders-by-post', ORDERS_BY_POST),
   file(
     'reviews/orders-by-post',
     lines(
-      'read: "4c1d9a70"',
+      `read: "${changeMark(parse(ORDERS_BY_POST))}"`,
       'points:',
       '  clerk-sees-nothing:',
       '    name: The clerk cannot see an order',
@@ -208,7 +209,9 @@ const CHANGED: SourceFile[] = [
 test("a change's paths and fields, and a review's addresses, are rewritten; an id only a change adds is renamed too", () => {
   expect(problems(CHANGED)).toEqual([]);
   const done = renamed(CHANGED, 'app-api app-backend', 'connections/connection-clerk-types-in connection-clerk-keys-in', 'person-courier person-messenger', 'flow-placing flow-buying');
-  expect(problems(done.files)).toEqual([]);
+  // The rename rewrites the change, so the review read it as it was: that alone is told.
+  const [was, now] = [ORDERS_BY_POST, textAt(done.files, 'changes/orders-by-post.yaml') as string].map((text) => changeMark(parse(text)));
+  expect(problems(done.files)).toEqual([`reviews/orders-by-post.yaml:1: review-behind: \`read\` is \`${was}\`, and the change is \`${now}\` now: it moved after this reading.`]);
   expect(textAt(done.files, 'changes/orders-by-post.yaml')).toBe(
     lines(
       'name: Orders by post',

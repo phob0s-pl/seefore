@@ -1,7 +1,9 @@
 import { expect, test } from 'vitest';
+import { parse } from 'yaml';
 import { z } from 'zod';
 import { EXAMPLES, TOPICS, guideText } from '../src/model/guide.ts';
 import { KINDS } from '../src/model/kinds.ts';
+import { changeMark } from '../src/model/mark.ts';
 import { readModel } from '../src/model/read.ts';
 import { SHAPES } from '../src/model/records.ts';
 
@@ -125,6 +127,10 @@ test('no topic: the topics, a line each; a topic that is not there is an error t
     error:
       'There is no topic `app`. The topics are the folders `people`, `systems`, `apps`, `stores`, `components`, `connections`, `infrastructure`, `owners`, `technologies`, `features`, `flows`, `data`, `rules`, `context`, `changes` and `reviews`, and the skills `model`, `flows`, `context`, `change` and `review`.',
   });
+});
+
+test('the example review bears the mark of the example change in `read`, so that it read the change as it is', () => {
+  expect(EXAMPLES.reviews?.text.split('\n')[0]).toBe(`read: "${changeMark(parse(EXAMPLES.changes?.text ?? ''))}"`);
 });
 
 test('every example is a file of its folder, and all sixteen read together as one model with no problem at all', () => {

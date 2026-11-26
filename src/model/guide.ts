@@ -24,7 +24,7 @@ const FOLDERS: readonly string[] = KINDS.map((kind) => kind.folder);
 /** The topics: the sixteen folders, then the five skills. A skill shares its name with a folder twice, `flows` and `context`: its guide holds that folder's. */
 export const TOPICS: readonly string[] = [...FOLDERS, ...Object.keys(SKILLS)];
 
-/** One example file of each folder: one small shop, whose files are true to one another. */
+/** One example file of each folder: one small shop, whose files are true to one another. The review's `read` is the mark of the example change, which a test holds. */
 export const EXAMPLES: Readonly<Record<string, { path: string; text: string }>> = {
   people: { path: 'people/person-customer.yaml', text: ['name: Customer', 'description: Somebody who buys tea from the shop on its website.'].join('\n') },
   systems: { path: 'systems/system-shop.yaml', text: ['name: Shop', 'description: Sells tea online and sends the orders out.', 'owner: owner-shop-team'].join('\n') },
@@ -117,7 +117,7 @@ export const EXAMPLES: Readonly<Record<string, { path: string; text: string }>> 
   reviews: {
     path: 'reviews/copies-for-accounts.yaml',
     text: [
-      'read: "3f9a0c21"',
+      'read: "c8e1d54f"',
       'points:',
       '  copies-unread:',
       '    name: Nothing takes the copies to the accounts',

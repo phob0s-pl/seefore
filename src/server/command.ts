@@ -72,7 +72,7 @@ const VERBS: readonly Verb[] = [
     what: 'One line a record: its path, its name, what it is in or its two ends, and its kind',
     options: [
       ['<folder>...', 'The records of those folders alone'],
-      ['changes', 'One line a change: its path, its name and who is next'],
+      ['changes', "One line a change: its path, its name, who is next and its mark, for a review's `read`"],
       ['--near=<id>', 'The record, each record it names and each that names it'],
       ['--change=<id>', 'The model as it would be with the change: + adds, ~ updates, - removes'],
       WORKDIR,
@@ -261,7 +261,7 @@ function guide(args: readonly string[], io: Io, fail: (message: string) => numbe
 
 /**
  * Prints one line a record: all of them, those of the folders named, those near one record, or
- * the model as it would be with a change; and with `changes`, one line a change with who is next.
+ * the model as it would be with a change; and with `changes`, one line a change with who is next and its mark.
  */
 async function list(args: readonly string[], cwd: string, io: Io, fail: (message: string) => number): Promise<number> {
   const asked: { folders: string[]; near?: string; change?: string } = { folders: [] };

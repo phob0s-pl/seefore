@@ -9,6 +9,8 @@ import { START, compareProblems, error, list, quote, warning } from './problem.t
 import { SHAPES } from './records.ts';
 import { holdChange, sameKeys } from './change.ts';
 import type { ReadChange } from './change.ts';
+import { holdReviews } from './reading.ts';
+import type { ReadReview } from './reading.ts';
 import { checkShape } from './shape.ts';
 import { readYaml } from './yaml.ts';
 import { isMap, isSeq } from 'yaml';
@@ -27,6 +29,7 @@ export function readModel(files: readonly SourceFile[]): ModelRead {
   const records: ModelRecord[] = [];
   const entries: Entry[] = [];
   const changes: (ReadChange & { id: string })[] = [];
+  const reviews: ReadReview[] = [];
   const sorted = [...files].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
 
   const marker = sorted.find((file) => file.path === MARKER_FILE);
@@ -44,8 +47,9 @@ export function readModel(files: readonly SourceFile[]): ModelRead {
     const whole = !problems.some((problem) => problem.severity === 'error' && outside(problem.file)) && entries.every((entry) => entry.ok || !outside(entry.file));
     const ruled = runRules(entries, whole, read.readable);
     // Each change that reads is held alone: against the model as it is today, and with the model as it would be. A decided one, in its form alone.
+    // The model as it would be is read with no review: it has no change, and a review there would be one with none.
     const today = [...problems, ...ruled.problems];
-    const held = { files: sorted, entries, problems: today, read: readModel };
+    const held = { files: sorted.filter((file) => !file.path.startsWith('reviews/')), entries, problems: today, read: readModel };
     const changed: Problem[] = [];
     const laid: Laid[] = [];
     for (const change of changes) {
@@ -55,6 +59,8 @@ export function readModel(files: readonly SourceFile[]): ModelRead {
     }
     // And the open changes together: two that write one key of one record undo each other.
     changed.push(...sameKeys(changes));
+    // Each review, against its change and the model: a review of a decided change in its form alone.
+    changed.push(...holdReviews(reviews, { paths: new Set(sorted.map((file) => file.path)), entries, changes: records.filter((record) => record.kind === 'changes') }));
     return {
       ...(read.name !== undefined ? { name: read.name } : {}),
       records,
@@ -101,8 +107,10 @@ export function readModel(files: readonly SourceFile[]): ModelRead {
     problems.push(...yaml.problems);
     const entry: Entry = { id, kind: folder, file: file.path, ok: false, fields: {}, at: new Map() };
     // A change is no record of the model: its id is its own, and may be that of a record it adds.
-    // So it is for a review, whose id is its change's.
+    // So it is for a review, whose id is its change's; a review is held once every file is read.
     if (ofModel(folder)) entries.push(entry);
+    const review: ReadReview | undefined = folder === 'reviews' ? { id, file: file.path, yaml } : undefined;
+    if (review !== undefined) reviews.push(review);
     if (!yaml.doc || !yaml.map) continue;
     const shape = checkShape(file.path, yaml, SHAPES[folder as keyof typeof SHAPES] as z.ZodType, RECORD_NOUNS[folder] as string);
     problems.push(...shape.problems.map((problem) => ({ ...problem, record: id })));
@@ -114,6 +122,7 @@ export function readModel(files: readonly SourceFile[]): ModelRead {
         entry.fields = fields;
         entry.at = placesOf(yaml);
         if (folder === 'changes') changes.push({ id, file: file.path, yaml });
+        if (review !== undefined) review.fields = fields;
       }
     }
   }
