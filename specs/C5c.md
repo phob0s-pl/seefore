@@ -19,8 +19,8 @@ The words of the keys reach `flows` through `seefore guide flows`, which it load
 | `change`, step 5, under `update` | "… a new or changed step is written whole, at its place." | "… a new or changed step is written whole, at its place: at a store with its `data`, `access` and `removes`, as `seefore guide flows` says." |
 
 - **Each text has at most 120 lines after it**, and the test of the plugin holds that.
-  `flows` stands at 120 since stage H1: its sentence takes the room of words that the builder
-  shortens in the same bullet, and no rule of the skill changes. `change` has room for one.
+  `flows` stands at 120 since stage H1: its sentence takes the room of words shortened in
+  its rule 2 and its step 1, and no rule of the skill changes. `change` has room for one.
 - **`README.md`**, "What was measured": the line of `flows` gains what this trial counted.
 - **Settled here**: `flows` changes no connection that is there (its rule 5): a step with data
   on a connection with no `access` stays a `way-unsaid`, and the last message names it.

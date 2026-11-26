@@ -24,9 +24,9 @@ newly keeps, what it no longer keeps, and what it keeps otherwise, each with its
 | Updated | Both have it, and its acts differ; or the change updates its data record | Yellow, "Updated" |
 
 - **Settled here**: its acts differ when the two lists of acts are not alike, an act being
-  the id of this flow's step, what it does, whether a flow that the step runs does it, and
-  its condition's words; a number that shifts differs nothing. **An item that today's steps
-  name with no way is not drawn today**: a change that says the way adds it, as Basket.
+  the id of this flow's step, what it does, the part that acts, whether a flow that the step
+  runs does it, and its condition's words; a number that shifts differs nothing. **An item that
+  today's steps name with no way is not drawn today**: a change that says the way adds it.
 - **A change that turns a connection's `access`, or moves its end, marks what it alters**,
   though no key of a step differs: the acts differ, or the item is Removed in one store and
   Added in the other. So does a change to a flow that this one runs. **`flowUnder` in
@@ -59,8 +59,8 @@ newly keeps, what it no longer keeps, and what it keeps otherwise, each with its
   "Paid order, no way said". "Today: nothing" where it names none; "Taken out" over them
   where the step names none now. On a step at no store, the names alone, as today.
 - **Settled here**: only a step the change updates has the rule (`flow.ts`, lines 455 to
-  470): one that stays has none, though its connection turns, and its items say it. At Ends
-  the lists are those of the flow as it would be.
+  470): one that stays has none, though its connection turns, and its items say it. A step that
+  goes says what it does at its store as today has it. At Ends the lists are the Result's.
 
 ## The panel of a marked item
 
@@ -68,8 +68,8 @@ newly keeps, what it no longer keeps, and what it keeps otherwise, each with its
 | --- | --- |
 | Added, and today's steps name it here with no way | "Today: not drawn. Step 11 names it and says no way." As the mock-up |
 | Added, else | "Today: not in this store, by what the flow says." As the mock-up |
-| Removed | Its life is today's. "With this change: not in this store, by what the flow says." |
-| Updated, by its acts | "Today:", and today's life, a row an act, as the life above |
+| Removed | Its life is today's, read as above. "With this change: not in this store, by what the flow says." |
+| Updated, by its acts | "Today:", and today's life, a row an act, as the life above: each with its step's words and description as today has them, and "at what was step 4" where its step goes |
 | Updated, by its data record alone | "The change updates the data record." |
 
 ## What is out

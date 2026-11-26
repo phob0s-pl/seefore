@@ -35,8 +35,8 @@ reads there and takes out, step by step. A click on a row says which steps did i
 | Gone | A tint of red; its name struck through | None |
 | Touched by the current step | The tint of stores, strong, and a bright outline; the red one, strong, when the step leaves it gone | The step's word: "Put", "Read" or "Gone" |
 
-- **A row is the data's name**, at 12 pixels, cut with "…" where it is too long; the word at
-  11. No step number, no example value, and no legend: the owner chose so.
+- **A row is the data's name**, at 12 pixels, cut with "…" where it is too long and whole
+  under the pointer; the word at 11. No step number, no example value, and no legend.
 - **Before the first step every row is hollow.** At a step each row is what the acts so far
   make it. **Ends shows each as after the last step**, with none lit.
 - **The sign of a condition** stands straight after the name of an item under one, in every
@@ -56,9 +56,9 @@ reads there and takes out, step by step. A click on a row says which steps did i
 ## A click on a row
 
 - **It picks the item, not the box**: the row gets the outline of a pick, the panel opens,
-  and the step stays. A row is a button, and the mouse means it before the box it is in.
-  **Settled here**: the field slides to keep the item's box clear of the panel, as for a
-  picked box; the hover over a row is its box's; a double click on a row brings its box.
+  and the step stays. A row is a button for the keys and for a reader of the screen, and the
+  mouse means it before the box it is in. **Settled here**: the field slides to keep the
+  item's box clear of the panel; the hover over a row is its box's; a double click brings it.
 
 | Part of the panel, which is that of a data pill with the item's life first | Words |
 | --- | --- |
@@ -96,5 +96,5 @@ On copies that hold the design's own trial (C5c), at 1440 by 900, each against i
 | Boxwick, "Getting in through a turnstile" | 8, Ends | `mock-turnstile-step-8.png`, `mock-turnstile-ends.png`: two signs |
 | Boxwick, "The Notifier sends an email"; Vellumoak, "Making the nightly backup" | 3; Ends | Email struck through in the queue, kept in the database. The picture of the design's section 5 |
 
-Every one of the 81 flows opens. The fit of each is read again and said here: the design
-measured the least at 0.49, from 0.53, and names that can be read in 75 flows.
+As it went: all 92 flows of the eight trial models and the two copies open. The least fit is
+0.467 (Boxwick, "Refunding an order", 0.4875 before); Sentry's 27 steps fit at 0.472.

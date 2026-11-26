@@ -18,8 +18,8 @@ never written on a store. Nothing is guessed from a step's name or from the stor
 | `data` | Not said | None. Nothing is drawn; `way-unsaid` counts the step |
 | `removes` | Any | A take. The item is gone from that step on |
 
-- **An act is at the store its step's connection ends at.** A reply, a step in a part, one
-  with no place and one between two parts make none. One record in two stores is two items.
+- **An act is at the store its step's connection ends at** (`actsOf`, beside `wayOf`). A reply,
+  a step in a part or with no place, and one between two parts make none. Two stores, two items.
 - **Settled here**: of one step, the acts of `data` come first, in its order, then those of
   `removes`. So one id in both is a read, then a take.
 

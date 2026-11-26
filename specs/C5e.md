@@ -35,7 +35,7 @@ the flow's name and these lines, a line with nothing in it left out:
 
 | Line | What it holds |
 | --- | --- |
-| The sentence | The flow's `ends` |
+| The sentence | The flow's `ends`; under a change that rewrites it, with the rule and today's words, as D7b reads a flow's own keys |
 | "Kept" | Each store with an item kept at Ends: its name, then its pills, which open the item's panel as a step's do |
 | "Gone", "Only read", "Only passed" | On one line that wraps, each with its label. Gone and only read by store, as Kept. "Only passed": a plain pill for each data record that a step of this flow names in `data` and that is no item in any store here, in the order they are first named |
 | "Also runs" | A link for each flow that a step of this flow runs, each once, in order. Then, quiet: "What they keep in other stores is on their own pages." |
