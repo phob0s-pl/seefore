@@ -38,6 +38,8 @@ export type Box = {
   caller?: true;
   /** The depth at which it can be the focus, in the views of the whole model and of a focus; not on the focus itself at its own depth. */
   opens?: Depth;
+  /** On a store's box in the view of a flow: how many items of the flow it holds, a row each. None where it holds none. */
+  rows?: number;
 };
 
 /**
