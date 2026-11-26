@@ -88,7 +88,8 @@ typed, ask what they want changed, and end your turn.
      for each folder you add to, and take its keys from there, not from memory.
    - Under `update`, only the keys that change, each whole as it will be. A description that
      gains a sentence is written whole. In `steps` of a flow, a step that stays is its id
-     alone; a new or changed step is written whole, at its place.
+     alone; a new or changed step is written whole, at its place: at a store with its
+     `data`, `access` and `removes`, as `seefore guide flows` says.
    - Under `remove`, a record that goes; what named it is updated or removed in the same
      change.
    - Every sentence you write into a record is true of the system once the change is built:

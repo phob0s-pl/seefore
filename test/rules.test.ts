@@ -2,7 +2,10 @@ import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { expect, test } from 'vitest';
+import type { Count } from '../src/model/answer.ts';
 import { countLine, countLines } from '../src/model/counts.ts';
+import { wayOf } from '../src/model/model.ts';
+import type { Step } from '../src/model/model.ts';
 import { readModel } from '../src/model/read.ts';
 import type { SourceFile } from '../src/model/read.ts';
 import { run } from '../src/server/command.ts';
@@ -280,13 +283,215 @@ test('the three counts: a feature alone, a step unplaced, and data and an owner 
     flow('flow-sale', '  - {id: asks, does: connection-asks}\n  - {id: who-pays, name: Who pays}\n'),
   ).counts;
   const found = Object.fromEntries(counts.map((count) => [count.rule, [count.checked, ...count.found.map((item) => item.record)]]));
-  expect(found).toEqual({ 'record-unused': [3, 'data-order', 'owner-sales'], 'part-alone': [2], 'feature-alone': [3, 'feature-returns'], 'step-unplaced': [1, 'flow-sale'] });
+  expect(found).toEqual({ 'record-unused': [3, 'data-order', 'owner-sales'], 'part-alone': [2], 'feature-alone': [3, 'feature-returns'], 'step-unplaced': [1, 'flow-sale'], 'way-unsaid': [1], 'put-unnamed': [1], 'take-unsaid': [1] });
   expect(counts.map(countLine)).toEqual([
     '2 owners or data records that nothing names: `owner-sales`, `data-order`.',
     undefined,
     '1 feature that no flow names and that touches nothing: `feature-returns`.',
     '1 step with neither `does` nor `reply`: `flow-sale#who-pays`.',
+    undefined,
+    undefined,
+    undefined,
   ]);
+});
+
+// ---- what a step does to its store
+
+test("the way of a step at a store: the connection's `access` where it is `read` or `write`, the step's own where it is `read-write`, and none where neither says", () => {
+  const records = new Map<string, { kind: string; fields: Record<string, unknown> }>([
+    ['store-orders', { kind: 'stores', fields: { name: 'Orders', in: 'system-shop' } }],
+    ['app-api', { kind: 'apps', fields: { name: 'API', in: 'system-shop' } }],
+    ['connection-reads', { kind: 'connections', fields: { from: 'app-api', to: 'store-orders', access: 'read' } }],
+    ['connection-writes', { kind: 'connections', fields: { from: 'app-api', to: 'store-orders', access: 'write' } }],
+    ['connection-both', { kind: 'connections', fields: { from: 'app-api', to: 'store-orders', access: 'read-write' } }],
+    ['connection-plain', { kind: 'connections', fields: { from: 'app-api', to: 'store-orders' } }],
+    ['connection-calls', { kind: 'connections', fields: { from: 'person-clerk', to: 'app-api' } }],
+  ]);
+  const way = (step: Partial<Step>) => wayOf({ index: 0, id: 'step', after: [], data: [], removes: [], fields: {}, ...step }, (id) => records.get(id));
+  const at = (connection: string, said?: 'read' | 'write') => ({ connection, store: 'store-orders', ...(said !== undefined ? { way: said } : {}) });
+  expect(way({ does: 'connection-reads' })).toEqual(at('connection-reads', 'read'));
+  expect(way({ does: 'connection-writes' })).toEqual(at('connection-writes', 'write'));
+  // A step's own `access` counts only where its connection says `read-write`.
+  expect(way({ does: 'connection-reads', access: 'write' })).toEqual(at('connection-reads', 'read'));
+  expect(way({ does: 'connection-both', access: 'read' })).toEqual(at('connection-both', 'read'));
+  expect(way({ does: 'connection-both', access: 'write' })).toEqual(at('connection-both', 'write'));
+  expect(way({ does: 'connection-both' })).toEqual(at('connection-both'));
+  expect(way({ does: 'connection-plain', access: 'read' })).toEqual(at('connection-plain'));
+  // A step at no store has no way: on a connection between two parts, in a part, a reply.
+  expect([way({ does: 'connection-calls' }), way({ does: 'store-orders' }), way({ reply: 'asks' }), way({ does: 'connection-missing' })]).toEqual([undefined, undefined, undefined, undefined]);
+});
+
+/** Stores of two kinds more and the connections to them, for what a step does to its store. `store-orders` has no `kind`. */
+const KEPT = [
+  file('apps/app-web.yaml', 'name: Web\nin: system-shop\n'),
+  file('stores/store-jobs.yaml', 'name: Jobs\nin: system-shop\nkind: queue\n'),
+  file('stores/store-ledger.yaml', 'name: Ledger\nin: system-shop\nkind: database\n'),
+  file('connections/connection-web-calls-api.yaml', 'from: app-web\nto: app-api\nname: Calls the API\n'),
+  file('connections/connection-api-writes-orders.yaml', 'from: app-api\nto: store-orders\naccess: write\nname: Saves the order\n'),
+  file('connections/connection-api-keeps-ledger.yaml', 'from: app-api\nto: store-ledger\naccess: read-write\nname: Keeps the ledger\n'),
+  file('connections/connection-api-reads-ledger.yaml', 'from: app-api\nto: store-ledger\naccess: read\nname: Reads the ledger\n'),
+  file('connections/connection-api-takes-jobs.yaml', 'from: app-api\nto: store-jobs\naccess: read\nname: Takes a job\n'),
+  file('connections/connection-api-queues-jobs.yaml', 'from: app-api\nto: store-jobs\nname: Queues a job\n'),
+  file('data/data-job.yaml', 'name: Job\n'),
+];
+/** The problems of `flow-sale` with the steps given, among the stores, as rule, message and mend. */
+const kept = (steps: string, ...files: SourceFile[]) => read(...SELLING, ...KEPT, flow('flow-sale', steps), ...files).problems.map((problem) => [problem.rule, problem.message, problem.fix]);
+
+test('step-shape: `access` or `removes` on a step at no store is a problem at the key: on a reply, in a part, in a store itself, with no `does`, on a step that runs a flow and between two apps', () => {
+  const store = '`access` and `removes` say what a step does to a store.';
+  const access = 'Take `access` off this step. What a connection does to a store is said in its own `access`.';
+  const removes = 'Take `removes` off this step, and name the data on the step whose connection ends at the store it leaves.';
+  const [reply] = read(...SELLING, ...KEPT, flow('flow-sale', '  - {id: asks, does: connection-asks}\n  - {id: gets, reply: asks, name: The order, access: read}\n')).problems;
+  expect(reply).toMatchObject({ rule: 'step-shape', line: 7, column: 54, field: 'steps', message: `The second step has \`access\`, but it is a reply. ${store}`, fix: access });
+  expect(kept('  - {id: works, does: app-api, name: Works, removes: [data-job]}\n')).toEqual([['step-shape', `The first step has \`removes\`, but it happens at \`app-api\`, which is an app. ${store}`, removes]]);
+  // A step that names the store itself is told that it names no connection that ends at it.
+  expect(kept('  - {id: clears, does: store-orders, name: Clears, removes: [data-order]}\n')).toEqual([
+    ['step-shape', `The first step has \`removes\`, but it names the store \`store-orders\` itself, and no connection that ends at it. ${store}`, removes],
+  ]);
+  expect(kept('  - {id: who, name: Who pays, removes: [data-job]}\n')).toEqual([['step-shape', `The first step has \`removes\`, but neither \`does\` nor \`reply\`: nothing says where it happens. ${store}`, removes]]);
+  expect(kept('  - {id: runs, does: flow-more, access: write}\n', flow('flow-more', '  - {id: saves, does: connection-api-writes-orders, data: [data-order]}\n'))).toEqual([
+    ['step-shape', `The first step has \`access\`, but it runs the flow \`flow-more\`. ${store}`, access],
+  ]);
+  // Each key is a fault of its own.
+  expect(kept('  - {id: calls, does: connection-web-calls-api, access: read, removes: [data-job]}\n')).toEqual([
+    ['step-shape', `The first step has \`access\`, but its connection \`connection-web-calls-api\` ends at \`app-api\`, which is an app. ${store}`, access],
+    ['step-shape', `The first step has \`removes\`, but its connection \`connection-web-calls-api\` ends at \`app-api\`, which is an app. ${store}`, removes],
+  ]);
+});
+
+test('`removes` names data: an id that names nothing and one that names a store are each one problem, at the id', () => {
+  const problems = read(...SELLING, ...KEPT, flow('flow-sale', '  - {id: clears, does: connection-api-writes-orders, removes: [data-jbo, store-jobs]}\n')).problems;
+  expect(problems.map((problem) => [problem.rule, problem.line, problem.column, problem.field, problem.message, problem.fix])).toEqual([
+    ['reference-unknown', 6, 64, 'steps', '`removes` of the first step names `data-jbo`, but no record has that id. The nearest id is `data-job`.', 'If `data-job` was meant, write it instead of `data-jbo`. Otherwise write `data/data-jbo.yaml` with a `name`.'],
+    [
+      'reference-wrong-kind',
+      6,
+      74,
+      'steps',
+      '`removes` of the first step names `store-jobs`, which is a store. `removes` names what is no longer in the store after the step, records in `data/`.',
+      'Name in `removes` the data record that leaves the store. The connection goes in `does`.',
+    ],
+  ]);
+});
+
+test("step-access: `access` on a step whose connection says `write`, or has no `access`, is a problem at the step's `access`; under `read-write` it is the step's way", () => {
+  const [write] = read(...SELLING, ...KEPT, flow('flow-sale', '  - {id: saves, does: connection-api-writes-orders, access: read, data: [data-order]}\n')).problems;
+  expect(write).toMatchObject({
+    rule: 'step-access',
+    line: 6,
+    column: 61,
+    message: 'The first step says `access: read`, and its connection `connection-api-writes-orders` says `write`. A step says its own way only where its connection says `read-write`.',
+    fix: 'Take `access` off the step: its connection says the way. If this step goes the other way, name in `does` a connection that does.',
+  });
+  expect(kept('  - {id: queues, does: connection-api-queues-jobs, access: write, data: [data-job]}\n')).toEqual([
+    [
+      'step-access',
+      'The first step says `access: write`, and its connection `connection-api-queues-jobs` has no `access`. A step says its own way only where its connection says `read-write`.',
+      'Say in `access` of `connection-api-queues-jobs` what it does to the store. Keep `access` on the step only where that is `read-write`.',
+    ],
+  ]);
+  expect(kept('  - {id: keeps, does: connection-api-keeps-ledger, access: write, data: [data-order]}\n')).toEqual([]);
+});
+
+test('step-access: `removes` on a read of a database, or of a store with no `kind`, is a problem at `removes`; on a read of a queue it is a take', () => {
+  const fix = 'If the step deletes, it writes: say `access: write` on it where its connection says `read-write`, or name in `does` a connection that writes. If the store is a queue, say `kind: queue` on it.';
+  expect(kept('  - {id: reads, does: connection-api-reads-ledger, removes: [data-order]}\n')).toEqual([
+    ['step-access', 'The first step has `removes`, and it reads `store-ledger`, which is a database. A read takes a thing out only of a queue.', fix],
+  ]);
+  // A read by the step's own way, and a store that says no kind.
+  expect(kept('  - {id: reads, does: connection-api-keeps-ledger, access: read, removes: [data-order]}\n')).toEqual([
+    ['step-access', 'The first step has `removes`, and it reads `store-ledger`, which is a database. A read takes a thing out only of a queue.', fix],
+  ]);
+  expect(kept('  - {id: reads, does: connection-reads, name: Reads, removes: [data-order]}\n')).toEqual([
+    ['step-access', 'The first step has `removes`, and it reads `store-orders`, which has no `kind`. A read takes a thing out only of a queue.', fix],
+  ]);
+  expect(kept('  - {id: takes, does: connection-api-takes-jobs, data: [data-job], removes: [data-job]}\n')).toEqual([]);
+});
+
+test('step-access: one id in both `data` and `removes` is a problem at the id on a write and on a step that says no way; on a read of a database only `removes` is told, and on a step whose own way is told only its `access`', () => {
+  const fix = 'Name it in `removes` alone if the step takes it out, or in `data` alone if the step puts it.';
+  const [write] = read(...SELLING, ...KEPT, flow('flow-sale', '  - {id: saves, does: connection-api-writes-orders, data: [data-order, data-job], removes: [data-job]}\n')).problems;
+  expect(write).toMatchObject({
+    rule: 'step-access',
+    line: 6,
+    column: 93,
+    message: '`data-job` is in both `data` and `removes` of the first step, which writes `store-orders`. One id in both is a take: a read that takes the thing out of a queue.',
+    fix,
+  });
+  expect(kept('  - {id: keeps, does: connection-api-keeps-ledger, data: [data-job], removes: [data-job]}\n')).toEqual([
+    ['step-access', '`data-job` is in both `data` and `removes` of the first step, which does not say its way. One id in both is a take: a read that takes the thing out of a queue.', fix],
+  ]);
+  expect(kept('  - {id: reads, does: connection-api-reads-ledger, data: [data-job], removes: [data-job]}\n').map((each) => each[1])).toEqual([
+    'The first step has `removes`, and it reads `store-ledger`, which is a database. A read takes a thing out only of a queue.',
+  ]);
+  // A take on a connection to a queue that says no `access`: `read-write` there mends both, so it is one problem.
+  expect(kept('  - {id: takes, does: connection-api-queues-jobs, access: read, data: [data-job], removes: [data-job]}\n')).toEqual([
+    [
+      'step-access',
+      'The first step says `access: read`, and its connection `connection-api-queues-jobs` has no `access`. A step says its own way only where its connection says `read-write`.',
+      'Say in `access` of `connection-api-queues-jobs` what it does to the store. Keep `access` on the step only where that is `read-write`.',
+    ],
+  ]);
+});
+
+test('the three counts of a step at a store: data and no way said, a write that names nothing, a read of a queue that takes nothing out; data that only `removes` names is in use', () => {
+  const model = read(
+    ...SELLING,
+    ...KEPT,
+    file('data/data-entry.yaml', 'name: Entry\n'),
+    flow(
+      'flow-sale',
+      [
+        '  - {id: keeps, does: connection-api-keeps-ledger, data: [data-order]}',
+        '  - {id: queues, does: connection-api-queues-jobs, data: [data-job]}',
+        '  - {id: saves, does: connection-api-writes-orders}',
+        '  - {id: takes, does: connection-api-takes-jobs, data: [data-job]}',
+        '  - {id: clears, does: connection-api-keeps-ledger, access: write, removes: [data-entry]}',
+        '  - {id: done, does: connection-api-takes-jobs, data: [data-job], removes: [data-job]}',
+        '',
+      ].join('\n'),
+    ),
+  );
+  expect(model.problems).toEqual([]);
+  const count = (rule: string) => model.counts.find((each) => each.rule === rule);
+  const found = (rule: string) => count(rule)?.found.map((item) => [item.line, item.message, item.fix]);
+  expect(found('record-unused')).toEqual([]);
+  expect(found('way-unsaid')).toEqual([
+    [6, '`flow-sale#keeps` names data at `store-ledger` and does not say whether it reads or writes, so the store shows none of it.', 'Say `access: read` or `access: write` on the step.'],
+    [7, '`flow-sale#queues` names data at `store-jobs` and does not say whether it reads or writes, so the store shows none of it.', 'Say in `access` of `connection-api-queues-jobs` what it does to the store.'],
+  ]);
+  expect(found('put-unnamed')).toEqual([
+    [8, '`flow-sale#saves` writes `store-orders` and names no data, so the store shows nothing of it.', 'Name in `data` what the step puts, or in `removes` what it takes out. Where no data record says it, write one.'],
+  ]);
+  expect(found('take-unsaid')).toEqual([
+    [9, '`flow-sale#takes` reads `data-job` from the queue `store-jobs` and takes nothing out, so the queue keeps it.', 'If the step takes it off the queue, name it in `removes` too. If the queue keeps its rows, leave it.'],
+  ]);
+  expect(['way-unsaid', 'put-unnamed', 'take-unsaid'].map((rule) => countLine(count(rule) as Count))).toEqual([
+    '2 steps name data at a store and say no way, so the store shows none: `flow-sale#keeps` and `flow-sale#queues`.',
+    '1 step writes a store and names no data: `flow-sale#saves`.',
+    '1 read of a queue takes nothing out: `flow-sale#takes`.',
+  ]);
+});
+
+test('the three counts leave a step at a store that names nothing and says no way, a read that names nothing, and a read with `data` of a database and of a topic', () => {
+  const model = read(
+    ...SELLING,
+    ...KEPT,
+    file('stores/store-events.yaml', 'name: Events\nin: system-shop\nkind: topic\n'),
+    file('connections/connection-api-hears-events.yaml', 'from: app-api\nto: store-events\naccess: read\nname: Hears the events\n'),
+    flow(
+      'flow-sale',
+      [
+        '  - {id: waits, does: connection-api-keeps-ledger}',
+        '  - {id: looks, does: connection-api-reads-ledger}',
+        '  - {id: finds, does: connection-api-reads-ledger, data: [data-order]}',
+        '  - {id: hears, does: connection-api-hears-events, data: [data-job]}',
+        '',
+      ].join('\n'),
+    ),
+  );
+  expect(model.problems).toEqual([]);
+  expect(['way-unsaid', 'put-unnamed', 'take-unsaid'].map((rule) => model.counts.find((each) => each.rule === rule)?.found)).toEqual([[], [], []]);
 });
 
 test('seefore check ends with 1 on an error and 0 on a warning, and --json gives the problems as data', async () => {
@@ -332,7 +537,7 @@ test('part-alone is a count: an app, a store or a component that no connection n
   expect(read(...parts).problems).toEqual([]);
   const broken = read(...parts, file('people/person-bob.yaml', 'name: [\n'));
   expect(countLines(broken.counts)).toEqual([
-    'Not counted until the errors are mended: owners, technologies and data that nothing names; apps, stores and components that no connection names; features that no flow names and that touch nothing; steps with neither `does` nor `reply`.',
+    'Not counted until the errors are mended: owners, technologies and data that nothing names; apps, stores and components that no connection names; features that no flow names and that touch nothing; steps with neither `does` nor `reply`; steps with data at a store and no way said; steps that write a store and name no data; reads of a queue that take nothing out.',
   ]);
 });
 

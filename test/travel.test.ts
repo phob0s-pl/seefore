@@ -2,6 +2,7 @@ import { expect, test } from 'vitest';
 import { readModel } from '../src/model/read.ts';
 import type { SourceFile } from '../src/model/read.ts';
 import { travelOf } from '../src/model/travel.ts';
+import type { KeptAct } from '../src/model/travel.ts';
 
 const file = (path: string, text: string): SourceFile => ({ path, text });
 const connection = (id: string, from: string, to: string, name: string): SourceFile => file(`connections/${id}.yaml`, `from: ${from}\nto: ${to}\nname: ${name}\n`);
@@ -121,6 +122,38 @@ test('the steps in a part are those that name it, not those on a connection that
   expect([steps.stepsIn('app-web'), steps.stepsIn('system-shop'), steps.stepsIn('store-nowhere')]).toEqual([[], [], []]);
 });
 
+test("`access: read` on a step turns its data round on a connection's page and a data record's; with no way said both show it as today; what a step only removes does not travel, and is among its feature's data", () => {
+  const on = travel(
+    file('connections/connection-api-uses-orders.yaml', 'from: app-api\nto: store-orders\naccess: read-write\nname: Uses the orders\n'),
+    file('data/data-refund.yaml', 'name: Refund\n'),
+    file(
+      'flows/flow-refunds.yaml',
+      [
+        'name: Refunding an order',
+        'starts: A fan asks for the money back',
+        'ends: The order is refunded',
+        'feature: feature-refunds',
+        'steps:',
+        '  - {id: finds, does: connection-api-uses-orders, access: read, data: [data-order]}',
+        '  - {id: notes, does: connection-api-uses-orders, data: [data-payment]}',
+        '  - {id: clears, does: connection-api-uses-orders, access: write, removes: [data-refund]}',
+        '',
+      ].join('\n'),
+    ),
+  );
+  expect(on.dataOn('connection-api-uses-orders')).toEqual([
+    { data: 'data-order', from: 'store-orders', to: 'app-api', back: false },
+    { data: 'data-payment', from: 'app-api', to: 'store-orders', back: false },
+  ]);
+  expect(on.waysOf('data-order')).toContainEqual({ connection: 'connection-api-uses-orders', from: 'store-orders', to: 'app-api', back: false });
+  expect(on.waysOf('data-payment')).toContainEqual({ connection: 'connection-api-uses-orders', from: 'app-api', to: 'store-orders', back: false });
+  // A read the connection says goes as it did.
+  expect(on.dataOn('connection-web-reads-orders')).toEqual([{ data: 'data-order', from: 'store-orders', to: 'app-web', back: false }]);
+  expect([on.stepsWith('data-refund'), on.waysOf('data-refund')]).toEqual([[], []]);
+  expect(on.stepsOn('connection-api-uses-orders').map((step) => step.step)).toEqual(['finds', 'notes', 'clears']);
+  expect(ids(on.feature('feature-refunds').data)).toEqual(['data-order', 'data-payment', 'data-refund']);
+});
+
 test('a data record is named by its steps, the flows by name and the steps in order, and is seen on each connection once a way', () => {
   const data = travel();
   expect(data.stepsWith('data-payment')).toEqual([
@@ -132,4 +165,72 @@ test('a data record is named by its steps, the flows by name and the steps in or
   const ways = (id: string) => data.waysOf(id).map((way) => `${way.connection}: ${way.back ? 'back from ' : ''}${way.from} to ${way.to}`);
   expect(ways('data-payment')).toEqual(['connection-api-pays: app-api to system-bank', 'connection-api-pays: back from system-bank to app-api', 'connection-web-calls-api: back from app-api to app-web']);
   expect(ways('data-order')).toEqual(['connection-web-calls-api: app-web to app-api', 'connection-api-keeps-orders: app-api to store-orders', 'connection-web-reads-orders: store-orders to app-web']);
+});
+
+/**
+ * The API writes payments and orders and queues jobs; the web app reads the orders and takes the
+ * jobs off their queue. "Answering" runs the flow that queues, and reads a payment itself.
+ */
+const KEPT: SourceFile[] = [
+  file('stores/store-jobs.yaml', 'name: Jobs\nin: system-shop\nkind: queue\n'),
+  file('connections/connection-api-writes-orders.yaml', 'from: app-api\nto: store-orders\naccess: write\nname: Writes the order\n'),
+  file('connections/connection-api-queues-jobs.yaml', 'from: app-api\nto: store-jobs\naccess: write\nname: Queues a job\n'),
+  file('connections/connection-web-takes-jobs.yaml', 'from: app-web\nto: store-jobs\naccess: read\nname: Takes a job\n'),
+  file('data/data-job.yaml', 'name: Job\n'),
+  file(
+    'flows/flow-queues.yaml',
+    [
+      'name: Queuing a job',
+      'starts: An order is paid',
+      'ends: A job waits, and is taken',
+      'feature: feature-stock',
+      'steps:',
+      '  - {id: writes, does: connection-api-writes-orders, data: [data-payment, data-order]}',
+      '  - {id: queues, does: connection-api-queues-jobs, data: [data-job, data-payment]}',
+      '  - {id: takes, does: connection-web-takes-jobs, data: [data-job], removes: [data-job]}',
+      '',
+    ].join('\n'),
+  ),
+  file(
+    'flows/flow-answers.yaml',
+    ['name: Answering', 'starts: A fan asks', 'ends: The fan is answered', 'feature: feature-stock', 'steps:', '  - {id: queues, does: flow-queues}', '  - {id: looks, does: connection-web-reads-orders, data: [data-payment]}', ''].join('\n'),
+  ),
+];
+/** Each act as `data or store: does by part, flow step`. */
+const said = (acts: readonly KeptAct[], first: 'data' | 'store') => acts.map((act) => `${act[first]}: ${act.does} by ${act.by}, ${act.flowName} ${act.number}`);
+
+test("the acts at a store stand by the data's name, then the flow's, then the step's number, each with the part that acts; a step that says no way makes none", () => {
+  // "Saving an order" writes the order on a line that says no way: only its read stands.
+  expect(said(travel(...KEPT).keptHere('store-orders'), 'data')).toEqual([
+    'data-order: put by app-api, Queuing a job 1',
+    'data-order: read by app-web, Saving an order 2',
+    'data-payment: read by app-web, Answering 2',
+    'data-payment: put by app-api, Queuing a job 1',
+  ]);
+  expect(travel(...KEPT).keptHere('app-api')).toEqual([]);
+});
+
+test('an act that a flow it runs does stands under the flow it runs alone, once', () => {
+  const kept = travel(...KEPT);
+  expect(kept.keptIn('data-job').map((act) => `${act.flow}#${act.step}`)).toEqual(['flow-queues#queues', 'flow-queues#takes', 'flow-queues#takes']);
+  expect([...kept.keptHere('store-orders'), ...kept.keptHere('store-jobs')].filter((act) => act.flow === 'flow-answers').map((act) => act.step)).toEqual(['looks']);
+});
+
+test("a read and a take of one step are two acts, the read first; a data record's acts stand by the store's name", () => {
+  // A refund that a step passes between two parts, and that no step names at a store.
+  const kept = travel(
+    ...KEPT,
+    file('data/data-refund.yaml', 'name: Refund\n'),
+    file('flows/flow-asks.yaml', 'name: Asking for a refund\nstarts: A fan asks\nends: The API knows\nfeature: feature-refunds\nsteps:\n  - {id: asks, does: connection-web-calls-api, data: [data-refund]}\n'),
+  );
+  expect(said(kept.keptHere('store-jobs'), 'data')).toEqual(['data-job: put by app-api, Queuing a job 2', 'data-job: read by app-web, Queuing a job 3', 'data-job: take by app-web, Queuing a job 3', 'data-payment: put by app-api, Queuing a job 2']);
+  expect(said(kept.keptIn('data-payment'), 'store')).toEqual(['store-jobs: put by app-api, Queuing a job 2', 'store-orders: read by app-web, Answering 2', 'store-orders: put by app-api, Queuing a job 1']);
+  expect(kept.stepsWith('data-refund').map((step) => `${step.flow}#${step.step}`)).toEqual(['flow-asks#asks']);
+  expect(kept.keptIn('data-refund')).toEqual([]);
+});
+
+test('a take stands in Kept here whatever the way, also on a step that says none', () => {
+  // The API's line to the orders says no `access`, and the step no way of its own.
+  const kept = travel(file('flows/flow-clears.yaml', 'name: Clearing an order\nstarts: An order is old\nends: It is gone\nfeature: feature-stock\nsteps:\n  - {id: clears, does: connection-api-keeps-orders, removes: [data-order]}\n'));
+  expect(said(kept.keptHere('store-orders'), 'data')).toEqual(['data-order: take by app-api, Clearing an order 1', 'data-order: read by app-web, Saving an order 2']);
 });

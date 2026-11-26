@@ -1,6 +1,7 @@
 /* The diagram: the hatched field it is drawn on, React Flow read through the tokens, its zoom
-   column of glass at the lower left, the boxes, frames and lines on it, what is picked, and
-   the panel that floats on the field's right and says what it is. */
+   column of glass at the lower left, the boxes, frames and lines on it, the rows in a store's
+   box on the page of a flow, what is picked, and the panel that floats on the field's right and
+   says what it is. */
 
 /* The field fills the page under the top bar and ends level with the sidebar's foot. */
 .canvas-frame {
@@ -170,6 +171,128 @@
   height: 14px;
   stroke-width: 1.9;
 }
+/* On the page of a flow, a store's box holds a row for each item of the flow: a data record kept
+   there. The rows stand beside the box's card, from 76 pixels below its top, 22 high with a gap
+   of 2, as wide as the box less 9 a side; the layout made the box taller by them. A row's look
+   says what its item is at the place the page stands at: hollow, with no ground and a quiet
+   dashed outline, until a step touches it; kept, in the tint of stores; only read, on a grey
+   ground; gone, in red with its name struck through. The current step lights the rows it
+   touches: the tint strong and a bright outline, the red one strong where the step leaves it
+   gone. The name is cut with "…" where it is too long. No row has a transition: a fade over a
+   moment held Safari still. */
+.diagram-rows {
+  position: absolute;
+  top: 76px;
+  right: 9px;
+  left: 9px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.diagram-row {
+  --gone-ink: color-mix(in srgb, var(--danger) 55%, #fff);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+  height: 22px;
+  padding: 0 9px 0 10px;
+  border: 1px solid color-mix(in srgb, var(--kind-stores) 50%, transparent);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--kind-stores) 16%, transparent);
+  color: var(--text-strong);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 20px;
+  text-align: left;
+  transition: none;
+}
+.diagram-row-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The sign of a condition, straight after the name: a path that parts in two. */
+.diagram-row-sign {
+  display: inline-flex;
+  flex: none;
+  color: var(--text-body);
+}
+.diagram-row-sign svg {
+  width: 12px;
+  height: 12px;
+  stroke-width: 2.2;
+}
+/* The word at the right: the step's, at its own step, or "only read". */
+.diagram-row-word {
+  flex: none;
+  margin-left: auto;
+  padding-left: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.diagram-row[data-is='hollow'] {
+  border-style: dashed;
+  border-color: var(--text-faint);
+  background: none;
+  color: var(--text-faint);
+}
+.diagram-row[data-is='hollow'] .diagram-row-sign {
+  color: var(--text-faint);
+}
+.diagram-row[data-is='only-read'] {
+  border-color: var(--text-faint);
+  background: var(--neutral-tint);
+  color: var(--text-body);
+}
+.diagram-row[data-lit] {
+  border-color: var(--text-strong);
+  background: color-mix(in srgb, var(--kind-stores) 50%, transparent);
+  box-shadow: 0 0 0 0.6px var(--text-strong);
+  color: var(--text-strong);
+}
+.diagram-row[data-lit] .diagram-row-word,
+.diagram-row[data-lit] .diagram-row-sign {
+  color: var(--text-strong);
+}
+.diagram-row[data-is='gone'] {
+  border-color: var(--danger-border);
+  background: var(--danger-tint);
+  color: var(--gone-ink);
+}
+.diagram-row[data-is='gone'] .diagram-row-name {
+  text-decoration: line-through;
+}
+.diagram-row[data-lit][data-is='gone'] {
+  border-color: var(--text-strong);
+  background: color-mix(in srgb, var(--danger-solid) 34%, transparent);
+}
+/* A picked row has the outline of a pick, in the accent colour, whatever it is. */
+.diagram-rows > .diagram-row[data-picked] {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+/* Under a change, a row the change marks: a rule of 3 pixels at its left, and the mark's word at
+   its right, both in the mark's colour (`.mark-added` and the others, below), in every state, also
+   while the row is hollow. At its own step the row bears the step's word, lit, and keeps the rule. */
+.diagram-row[data-mark] {
+  position: relative;
+}
+.diagram-row[data-mark]::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: 1px;
+  width: 3px;
+  border-radius: 1.5px;
+  background: var(--mark);
+}
+.diagram-row[data-mark]:not([data-lit]) .diagram-row-word {
+  color: var(--mark);
+}
 /* A frame keeps a quiet dashed outline: its colour would compete with the boxes inside it. */
 .architecture-boundary {
   border: 1.5px dashed var(--text-faint);
@@ -318,9 +441,18 @@
    Safari still for up to a third of a second each time the focus changed. A frame fades its
    outline and heading only: the boxes inside it are nodes of their own. A line fades with its
    halo and its heads. A band never fades. */
-.canvas-frame .react-flow__node.faded,
+.canvas-frame .react-flow__node.faded:not(.has-rows),
 .canvas-frame .react-flow__edge.faded {
   opacity: 0.25;
+}
+/* A store's box with rows fades by its parts, for a row cannot be brighter than its box: its
+   outline, ground and heading to a quarter, a row the flow has touched to 0.72, and a hollow row
+   keeps its own look. */
+.canvas-frame .react-flow__node.faded.has-rows > .architecture-node {
+  opacity: 0.25;
+}
+.canvas-frame .react-flow__node.faded .diagram-row:not([data-is='hollow']) {
+  opacity: 0.72;
 }
 
 /* The label at the mouse: small glass that says what is under it, and takes no click. */

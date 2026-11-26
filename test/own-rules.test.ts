@@ -136,6 +136,17 @@ test('data is seen on a connection from the steps of a flow, and a rule over dat
   expect(model.rulings.find((ruling) => ruling.rule === 'rule-orders-data')).toMatchObject({ state: 'nothing', walked: { connections: 2, walked: 0 } });
 });
 
+test("a rule over `data` does not see what a step only removes: the step walks its connection, and passes nothing on it", () => {
+  const clearing = (step: string) =>
+    file('flows/flow-clearing.yaml', `name: Clearing old orders\nstarts: An order is a year old\nends: It is gone\nfeature: feature-selling\nsteps:\n  - ${step}\n`);
+  const base = [file('features/feature-selling.yaml', 'name: Selling\n'), file('data/data-order.yaml', 'name: Order\n'), rule('rule-no-order-kept', 'name: No order is written to a store\nnever: {to: {kind: stores}, data: data-order}\n')];
+  const removes = read(...base, clearing('{id: clears, does: connection-api-writes-orders, name: Deletes the order, removes: [data-order]}'));
+  expect(removes.problems).toEqual([]);
+  expect(removes.rulings.find((ruling) => ruling.rule === 'rule-no-order-kept')).toMatchObject({ state: 'holds', walked: { connections: 2, walked: 1 } });
+  const passes = read(...base, clearing('{id: saves, does: connection-api-writes-orders, name: Saves the order, data: [data-order]}'));
+  expect(stateOf(passes, 'rule-no-order-kept')).toBe('broken');
+});
+
 test('debt lets a break stand, a new break still fails, and a debt that breaks nothing is paid', () => {
   const model = read(rule('rule-only-api', `${ONLY_API}debt: [connection-worker-writes-orders, connection-api-writes-orders]\n`), file('connections/connection-web-writes-orders.yaml', 'from: app-web\nto: store-orders\naccess: write\n'));
   expect(model.problems.map((problem) => [problem.rule, problem.file, problem.line])).toEqual([

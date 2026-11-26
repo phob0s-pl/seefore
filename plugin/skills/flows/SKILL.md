@@ -34,8 +34,7 @@ one to write, and stop.
 2. **A step stands on a record of the model.** `does` names the connection the thing travels
    on, or the part it happens in. So read the model before the code, and at each hop ask
    what the model holds:
-   - a connection between the two parts for this purpose: the step is on it, whatever its
-     name.
+   - a connection between the two parts for this purpose: the step is on it, by any name.
    - both parts, and no such connection: write the connection too, as
      `seefore guide connections` says.
    - one of the parts is not in the model: write **no part**. The step gets its `name`, and
@@ -64,8 +63,7 @@ one to write, and stop.
      folders after `list`, all but `connections`, and take a part's connections from
      `seefore list --near=<id>`.
    - Note the parts near the journey, and the features, flows and data that are there. A
-     line shows no `access` and no `description`: open the record of each connection you
-     put a step on.
+     line shows no `access` and no `description`: open each connection you put a step on.
    - A flow of this journey that is there is mended in place: keep its id, and the ids of
      the steps that are still true.
 2. **Find where the journey starts**: who or what starts it, a person, a clock or a message,
@@ -90,12 +88,14 @@ one to write, and stop.
      follow one earlier step each name it in `after`.
    - **Data**: the few things the journey is about, named in the words people use, with the
      code's own name in `description`, each in `data` of the steps on a connection that
-     carry it. A field is one a file showed you in this session, written in words; with
-     none seen, the record has no `fields`.
+     carry it. On a step at a store, write `data` on every write you saw, `access` from the
+     line that reads or writes, where the connection says `read-write`, and `removes` from
+     the line that deletes the thing or takes it off a queue. A field is one a file showed
+     you in this session, written in words; with none seen, the record has no `fields`.
 5. **Hold every step against rule 1 once more**, before the check, by what you kept. A step
    with no file and line that a Read or a search of this session showed you goes, with each
-   `reply` and `after` that names it. So does a number, a default or a field that no such
-   line shows.
+   `reply` and `after` that names it. So does a number, a default, a field, an `access` or
+   a `removes` that no such line shows.
 6. Run `seefore check`. Mend what it says by its `Mend:` line, and check again; three rounds
    at most. Then say what is left.
 7. End with a short message:

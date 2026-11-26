@@ -86,7 +86,10 @@ cell: a direction, not a rate. The specs in `specs/plan3/` hold the numbers whol
 
 - **`model`**, on five open-source systems: no app of 86 wrong, nothing made up, and 41 of
   469 connections with one end only.
-- **`flows`**, on four journeys held back: 54 of 55 steps shown in the code.
+- **`flows`**, on four journeys held back: 54 of 55 steps shown in the code. With the two keys
+  of a step at a store, on three journeys in two rounds: 21 of 22 `access` right, and no
+  `removes` that the code does not show; 6 of 20 takes written, 13 of the rest after the
+  flow's end; on one journey 23 of 61 steps with no file that shows them.
 - **`context`**, with a played person: 15 of 38 hidden lines found, and none written that the
   person did not say. It finds facts and misses preferences.
 - **`change`**, on an organisation held back: no error of the check in 29 drafts. With a

@@ -81,11 +81,26 @@ test("the guide of flows says that a flow tells one way, that its id says the ta
   expect(flows).toContain(
     'name (may be left out) What happens, verb first: one line of 1 to 100 characters. Left out only where the name of the connection or of the flow in `does` says this step and no more. A reply always has one: it says what comes back. A step that happens once for each of several things says "each", as in `Weighs each tea of the order`. Where copies of one app take turns, it says which copy acts. ',
   );
-  // A step's keys end at `data`, and the step of the example names no file.
-  expect(flows).toContain('data (may be left out) The ids of the data this step passes, records in data/: on a step on a connection, or on a reply. A list with no id twice. Example, flows/flow-placing-an-order.yaml:');
+  // A step's keys end at `removes`, and the step of the example names no file.
+  expect(flows).toContain('A step that takes a job off a queue, so that no other worker gets it, names the job in `removes`, and in `data` too where the same step reads it. A read that leaves the thing there, as of a topic, names it in `data` alone. Example, flows/flow-placing-an-order.yaml:');
   expect(flows).toContain('name: Checks the order and works out the price - id: confirms');
   // Every other folder's id says what it is.
   for (const folder of FOLDERS.filter((each) => each !== 'flows' && each !== 'changes' && each !== 'reviews')) expect(words(folder), folder).toContain(' and says what it is, as ');
+});
+
+test("the guide of flows tells a step's `access` and `removes` after `data`, and what a step that reads a store names in `data`; its example flow stays", () => {
+  const flows = text('flows').replace(/\s+/g, ' ');
+  expect(flows).toContain(
+    [
+      'data (may be left out) The ids of the data this step passes, records in data/: on a step on a connection, or on a reply. A list with no id twice.',
+      'On a step that writes a store it names what the step puts there; on one that reads a store, what the store holds: what the reader makes of it is named on the step that puts it somewhere.',
+      'access (may be left out) Whether this step reads or writes the store its connection ends at: `read` or `write`.',
+      "Only on a step whose connection says `access: read-write`; left out there, the store shows nothing of the step's `data`. A step that reads one thing and writes another is two steps.",
+      'removes (may be left out) The ids of the data that is no longer in the store after this step, records in data/, none twice: on a step on a connection that ends at a store.',
+      'A step that takes a job off a queue, so that no other worker gets it, names the job in `removes`, and in `data` too where the same step reads it. A read that leaves the thing there, as of a topic, names it in `data` alone.',
+    ].join(' '),
+  );
+  expect(EXAMPLES.flows?.text).not.toMatch(/access|removes/);
 });
 
 test('every key of every shape is in the guide of its folder, no guide speaks of `source`, and every line of a guide has at most 100 characters', () => {
