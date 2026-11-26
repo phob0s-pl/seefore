@@ -192,7 +192,7 @@ test('a block with no recommendation, a status with no comment, and a reopened o
 
 test('a review that read the change before it moved is behind, at `read`, and says the mark to write there', () => {
   expect(told(file('reviews/post', 'read: "3f9a0c21"', 'points:', ...point('one')))).toEqual([
-    ['review-behind', 'warning', 1, 1, `\`read\` is \`3f9a0c21\`, and the change is \`${MARK}\` now: it moved after this reading.`, `Read what moved, answer for the points it touches, and write \`${MARK}\` into \`read\`.`],
+    ['review-behind', 'warning', 1, 1, `\`read\` is \`3f9a0c21\`, and the change is \`${MARK}\` now: it moved after this reading.`, `Only a reading writes \`read\`: where points are \`fixed\`, the second reading reads them and writes \`${MARK}\` there; a correction leaves it as it is.`],
   ]);
 });
 

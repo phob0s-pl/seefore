@@ -219,18 +219,25 @@ const byLibrary = (fields: unknown): string => stringify(fields, { lineWidth: 0,
 /** How many of a thing, as `1 error` and `2 errors`. */
 const many = (n: number, one: string): string => `${n} ${one}${n === 1 ? '' : 's'}`;
 
-/** The review of a change in one line: none, nothing open, or what waits, of the blocks alone. A note waits for nobody. */
+/**
+ * The review of a change in one line: none, nothing open, or what waits. A block waits while it is
+ * open, and for the person while it is declined or reopened; a point of either severity waits while
+ * it is fixed, since its correction is read again. A note that is open, declined or reopened waits
+ * for nobody. The word "block" goes with the first count of blocks alone: the count of what is fixed
+ * may hold notes, so it has none.
+ */
 function reviewLine(review: Review | undefined): string {
   if (review === undefined) return 'Review: none.';
   const count = (...statuses: string[]) => review.points.filter((point) => point.severity === 'block' && statuses.includes(point.status)).length;
   const person = count('declined', 'reopened');
   const waits = [
-    { n: count('open'), what: 'open' },
-    { n: count('fixed'), what: 'fixed and not read again' },
-    { n: person, what: person === 1 ? 'waits for the person' : 'wait for the person' },
+    { n: count('open'), what: 'open', blocks: true },
+    { n: review.points.filter((point) => point.status === 'fixed').length, what: 'fixed and not read again', blocks: false },
+    { n: person, what: person === 1 ? 'waits for the person' : 'wait for the person', blocks: true },
   ].filter((each) => each.n > 0);
   if (waits.length === 0) return 'Review: nothing open.';
-  return `Review: ${waits.map((each, index) => `${each.n}${index === 0 ? (each.n === 1 ? ' block' : ' blocks') : ''} ${each.what}`).join(', ')}.`;
+  const named = waits.find((each) => each.blocks);
+  return `Review: ${waits.map((each) => `${each.n}${each === named ? (each.n === 1 ? ' block' : ' blocks') : ''} ${each.what}`).join(', ')}.`;
 }
 
 /**

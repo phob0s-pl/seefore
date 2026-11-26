@@ -329,7 +329,9 @@ test('guide prints the words of the format for a folder and for a skill, and the
   // A skill's guide holds the guides of the folders it writes; with no topic, the topics.
   const model = await lines('guide', 'model');
   expect(model.out.filter((line) => line.startsWith('# ')).map((line) => line.split(':')[0])).toEqual(['# people', '# systems', '# apps', '# stores', '# components', '# connections', '# infrastructure', '# owners', '# technologies']);
+  expect((await lines('guide', 'answer')).out.filter((line) => line.startsWith('# ')).map((line) => line.split(':')[0])).toEqual(['# changes', '# reviews']);
   expect((await lines('guide')).out.some((line) => line.trim().startsWith('review '))).toBe(true);
+  expect((await lines('guide')).out).toContain('  answer          changes and reviews');
   const wrong = await lines('guide', 'nothing');
   expect([wrong.code, wrong.out, wrong.err.length]).toEqual([1, [], 1]);
 });

@@ -160,7 +160,7 @@ test('the model as a change would make it: each record it adds, updates and remo
   );
 });
 
-test('a line a change, with who is next from its blocks; a note waits for nobody', () => {
+test('a line a change, with who is next from its review: the corrector, the second reading, the person or nobody', () => {
   const mark = (id: string) => markOf(id, MODEL);
   expect(lines({ changes: true })).toEqual([
     `changes/broken  A broken change  no review  ${mark('broken')}`,
@@ -171,6 +171,21 @@ test('a line a change, with who is next from its blocks; a note waits for nobody
   ]);
   expect(error({ changes: true, near: 'app-api' })).toBe('The changes are listed alone, with no record near and no change laid over the model.');
   expect(listLines(readModel(MODEL.filter((each) => !each.path.startsWith('changes/'))), { changes: true })).toEqual({ lines: [] });
+});
+
+test('a fixed note waits for the second reading, as a fixed block does; a note that is open, declined or reopened waits for nobody', () => {
+  /** Who is next on the change `done`, with a review of these points. */
+  const next = (points: string[]): string | undefined => {
+    const read = readModel([...CHANGED, review('done', points, CHANGED)]);
+    expect(read.problems.map((problem) => problem.file)).toEqual(['changes/broken.yaml']);
+    const listed = listLines(read, { changes: true });
+    return ('lines' in listed ? listed.lines.find((line) => line.startsWith('changes/done  ')) : undefined)?.split('  ')[2];
+  };
+  expect(next([...point('one', 'block', 'closed'), ...point('two', 'note', 'fixed')])).toBe('the second reading: 1 fixed');
+  expect(next([...point('one', 'block', 'fixed'), ...point('two', 'note', 'fixed'), ...point('three', 'note')])).toBe('the second reading: 2 fixed');
+  // While a block is open the corrector is next, whatever else is fixed.
+  expect(next([...point('one', 'block'), ...point('two', 'note', 'fixed')])).toBe('the corrector: 1 open');
+  expect(next([...point('one', 'note'), ...point('two', 'note', 'declined'), ...point('three', 'note', 'reopened'), ...point('four', 'block', 'closed')])).toBe('nothing open');
 });
 
 test('the line of an open change ends with its mark, and a review that writes the mark into `read` is not behind', () => {
