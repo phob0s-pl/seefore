@@ -170,11 +170,12 @@ const PANEL = `(() => {
     kind: texts('.eyebrow')[0],
     name: texts('h2')[0],
     text: texts('p')[0],
-    button: texts('a.button')[0],
+    shows: texts('a.button[href^="/?"]')[0],
+    button: texts('a.button:not([href^="/?"])')[0],
     path: [...panel.querySelectorAll('.connection-path li')].map((stop) => stop.querySelector('small')?.textContent + ' ' + stop.querySelector('strong')?.textContent),
   };
 })()`;
-type Read = { kind?: string; name?: string; text?: string; button?: string; path: string[] };
+type Read = { kind?: string; name?: string; text?: string; shows?: string; button?: string; path: string[] };
 
 const closed = (send: Send) => waitFor(send, `document.querySelector('aside[aria-label="Diagram inspector"]') === null`);
 
@@ -252,7 +253,7 @@ test.skipIf(!HAS_CHROME).concurrent(
       await click(send, await centreOf(send, '.react-flow__node[data-id="system-shop"]'));
       const read = (await waitFor(send, PANEL)) as Read | false;
       expect(read).toMatchObject({ kind: 'System', name: 'Shop', text: 'Sells things online.', button: 'Open model details' });
-      await click(send, await centreOf(send, 'aside[aria-label="Diagram inspector"] a.button'));
+      await click(send, await centreOf(send, 'aside[aria-label="Diagram inspector"] a.button:not([href^="/?"])'));
       expect(await waitFor(send, `document.title === 'Shop · seefore' && location.pathname`)).toBe('/models/system-shop');
     }),
   20_000,
@@ -350,8 +351,35 @@ test.skipIf(!HAS_CHROME).concurrent(
       // The clerk has no line with the shop.
       expect(await boxes(4)).toBe(true);
       await click(send, await centreOf(send, 'button[aria-label="Go back"]'));
-      expect(await shows('?depth=containers', 'All systems')).toBe(true);
+      expect(await shows('?depth=containers', 'Whole model')).toBe(true);
       expect(await boxes(5)).toBe(true);
+    }),
+  20_000,
+);
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME ? 'a box with an inside bears a stack, its panel leads to the view of it, and the tab of a deeper depth keeps that choice' : `skipped: there is no Chrome at ${CHROME}`,
+  () =>
+    inChrome(async (send, address) => {
+      await send('Page.navigate', { url: `${address}/` });
+      // The shop has parts; the people have none.
+      const marks = `(() => {
+        const found = [...document.querySelectorAll('.architecture-node .diagram-inside')].map((mark) => mark.closest('[data-id]').getAttribute('data-id') + ': ' + mark.getAttribute('aria-label'));
+        return found.length > 0 && found;
+      })()`;
+      expect(await waitFor(send, marks)).toEqual(['system-shop: Has containers inside']);
+      await click(send, await centreOf(send, SHOP_BOX));
+      expect(await waitFor(send, PANEL)).toMatchObject({ name: 'Shop', shows: 'Show its containers', button: 'Open model details' });
+      await click(send, await centreOf(send, 'aside[aria-label="Diagram inspector"] a.button[href^="/?"]'));
+      const shows = (search: string, choice: string) => waitFor(send, `location.search === ${JSON.stringify(search)} && document.querySelector('button[aria-label="Focus"]')?.textContent === ${JSON.stringify(choice)}`);
+      expect(await shows('?depth=containers&focus=system-shop', 'Shop')).toBe(true);
+      // The view is the shop's own: its frame leads nowhere deeper, and its panel has the way to its page alone.
+      expect(await waitFor(send, `document.querySelectorAll('.architecture-node[data-id]').length === 4 && document.querySelector('.diagram-inside') === null`)).toBe(true);
+      // The tab of Components keeps the shop, and the tab of Systems lets it go.
+      await click(send, await centreOf(send, 'nav[aria-label="Depth"] a[href="/?depth=components&focus=system-shop"]'));
+      expect(await shows('?depth=components&focus=system-shop', 'Shop')).toBe(true);
+      await click(send, await centreOf(send, 'nav[aria-label="Depth"] a[href="/"]'));
+      expect(await waitFor(send, `location.search === '' && document.querySelector('button[aria-label="Focus"]') === null`)).toBe(true);
     }),
   20_000,
 );

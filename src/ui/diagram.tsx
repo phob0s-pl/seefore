@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import type { MouseEvent, ReactNode, RefObject } from 'react';
 import { BaseEdge, ControlButton, Controls, Handle, MarkerType, Position, ReactFlow, useReactFlow, useViewportStore } from '@xyflow/react';
 import type { Edge, EdgeProps, Node, NodeProps, ReactFlowInstance } from '@xyflow/react';
-import { Scan } from 'lucide-react';
+import { Layers, Scan } from 'lucide-react';
 import type { ElkPoint } from 'elkjs/lib/elk-api.js';
 import { litByStep } from '../model/flow.ts';
 import type { Lights, Mark } from '../model/flow.ts';
@@ -71,16 +71,26 @@ function Ends() {
   );
 }
 
+/** What the small stack on a closed box says, by the depth of the view that opens the box. */
+const INSIDE: Partial<Record<Depth, string>> = { containers: 'Has containers inside', components: 'Has components inside' };
+
 /**
  * A box: its icon, its name and, small, its kind. Under a change, a box with a mark has its sign
- * at its top right; diagram.css gives it the band and the wash. It is drawn again only when its
- * box changes, not when its class does.
+ * at its top right; diagram.css gives it the band and the wash. A closed box that a deeper view
+ * opens has a small stack at its lower right. It is drawn again only when its box changes, not
+ * when its class does.
  */
 const BoxCard = memo(function BoxCard({ data: { box, mark } }: NodeProps<BoxNode>) {
+  const inside = box.opens !== undefined ? INSIDE[box.opens] : undefined;
   return (
     <div className={`architecture-node architecture-node-${box.kind}`} data-id={box.id} data-mark={mark}>
       <Ends />
       {mark !== undefined && <MarkSign mark={mark} />}
+      {inside !== undefined && (
+        <span className="diagram-inside" role="img" aria-label={inside} title={inside}>
+          <Layers aria-hidden="true" />
+        </span>
+      )}
       <div className="architecture-node-heading">
         <KindIcon kind={box.kind} />
         <div>

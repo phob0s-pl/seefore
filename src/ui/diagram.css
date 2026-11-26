@@ -157,6 +157,19 @@
 .architecture-node-infrastructure {
   --kind: var(--kind-infrastructure);
 }
+/* A closed box that a deeper view opens: a small stack at its lower right, clear of its kind. */
+.architecture-node > .diagram-inside {
+  position: absolute;
+  right: 9px;
+  bottom: 8px;
+  display: inline-flex;
+  color: var(--text-tertiary);
+}
+.architecture-node > .diagram-inside svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 1.9;
+}
 /* A frame keeps a quiet dashed outline: its colour would compete with the boxes inside it. */
 .architecture-boundary {
   border: 1.5px dashed var(--text-faint);
@@ -416,6 +429,16 @@
 }
 .diagram-inspector .diagram-inspector-action {
   margin-top: 6px;
+}
+/* The ways from a box: to the view it is the focus of, and to its page, side by side. */
+.diagram-inspector-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+.diagram-inspector .diagram-inspector-actions .diagram-inspector-action {
+  margin-top: 0;
 }
 /* Several connections behind one line read as rows flush with the panel's edges: the name,
    and its path beneath in small quiet words, both wrapping. */

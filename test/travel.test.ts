@@ -114,6 +114,13 @@ test('the data seen on a connection goes from its start to its end, on a reply b
   expect(on.stepsOn('connection-api-pays').map((step) => `${step.flow}#${step.step} ${step.number} ${step.happens}`)).toEqual(['flow-pays#charges 3 Charges the card', 'flow-pays#link 4 A link']);
 });
 
+test('the steps in a part are those that name it, not those on a connection that ends at it or at what it holds', () => {
+  const steps = travel();
+  expect(steps.stepsIn('app-api')).toEqual([{ flow: 'flow-pays', flowName: 'Paying for an order', step: 'keeps', number: 5, happens: 'Keeps the payment' }]);
+  expect(steps.stepsIn('store-orders').map((step) => `${step.flow}#${step.step} ${step.number} ${step.happens}`)).toEqual(['flow-checks#counts 1 Counts the orders']);
+  expect([steps.stepsIn('app-web'), steps.stepsIn('system-shop'), steps.stepsIn('store-nowhere')]).toEqual([[], [], []]);
+});
+
 test('a data record is named by its steps, the flows by name and the steps in order, and is seen on each connection once a way', () => {
   const data = travel();
   expect(data.stepsWith('data-payment')).toEqual([

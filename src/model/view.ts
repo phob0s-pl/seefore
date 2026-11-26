@@ -36,6 +36,8 @@ export type Box = {
   zone?: Zone;
   /** An external system in the people's zone, since it only calls ours. */
   caller?: true;
+  /** The depth at which it can be the focus, in the views of the whole model and of a focus; not on the focus itself at its own depth. */
+  opens?: Depth;
 };
 
 /**
@@ -86,11 +88,36 @@ export function thingsOf(records: readonly ModelRecord[]): Things {
   return { sorted, things, chains };
 }
 
-/** What a focus can be at each depth: a system at Containers, an app at Components. */
-const FOCUSED: Partial<Record<Depth, string>> = { containers: 'systems', components: 'apps' };
+/**
+ * One choice of focus: a system or an app, by its id and its name. At Components an app is listed
+ * under its system: `in` names it.
+ */
+export type Focus = { id: string; name: string; in?: string };
 
-/** One choice of focus: a system or an app, by its id and its name. */
-export type Focus = { id: string; name: string };
+/**
+ * What can be the focus at a depth, by id. At Containers and at Components, a system with
+ * something in it; at Components also an app with a component in it. An app that holds only a
+ * store is none: it is opened in the view of its system. None at Systems.
+ */
+function focusable({ things, chains }: Things, depth: Depth): Set<string> {
+  const found = new Set<string>();
+  if (depth === 'systems') return found;
+  for (const [id, chain] of chains) {
+    const holder = chain?.[0];
+    const kind = holder === undefined ? undefined : things.get(holder)?.kind;
+    if (kind === 'systems' || (depth === 'components' && kind === 'apps' && things.get(id)?.kind === 'components')) found.add(holder as string);
+  }
+  return found;
+}
+
+/** The depth at which a thing is first a focus of its own: a system at Containers, an app at Components. */
+const OPENED: Partial<Record<string, Depth>> = { systems: 'containers', apps: 'components' };
+
+/** The address of the diagram at a depth, with a focus or none. */
+export function diagramAt(depth: Depth, focus?: string): string {
+  if (depth === 'systems') return '/';
+  return `/?depth=${depth}${focus === undefined ? '' : `&focus=${encodeURIComponent(focus)}`}`;
+}
 
 /**
  * What the whole model shows at a depth. A thing is drawn when it is no deeper than the depth:
@@ -98,10 +125,14 @@ export type Focus = { id: string; name: string };
  * Containers on; what is in an app at Components. Each end of a connection is drawn at the
  * deepest drawn thing it is, or is in.
  *
- * With a focus, a system at Containers or an app at Components that the whole view opens, only
- * the focus is opened, with what it holds as the whole view draws it. Around it stand, closed,
- * the things beside it and beside each thing it is in, which are not drawn; of them only those
- * with an arrow to the focus, and only those arrows. A focus that is none of these is ignored.
+ * With a focus, only the focus is opened, with what it holds as the whole view draws it: at
+ * Components a system has its apps opened too. Around it stand, closed, the things beside it and
+ * beside each thing it is in, which are not drawn; of them only those with an arrow to the focus,
+ * and only those arrows. A focus that cannot be one at this depth is ignored.
+ *
+ * A box that can be a focus of its own says at which depth it first is, in `opens`: a system
+ * with something in it at Containers, an app with a component at Components. The focus itself
+ * does not, at that depth: the view is its own.
  */
 export function viewOf(records: readonly ModelRecord[], depth: Depth, focus?: string): View {
   const base = thingsOf(records);
@@ -112,18 +143,24 @@ export function viewOf(records: readonly ModelRecord[], depth: Depth, focus?: st
     const chain = chains.get(id);
     return chain !== undefined && chain.length <= deepest;
   });
-  const parents = new Set(whole.map((id) => chains.get(id)?.[0]));
 
-  // The focus, when the whole view opens it and it is of the kind its depth focuses on. Within it
-  // is the focus and what it holds; with no focus, everything is.
-  const into = focus !== undefined && parents.has(focus) && things.get(focus)?.kind === FOCUSED[depth] ? focus : undefined;
+  // The focus, when it can be one at this depth. Within it is the focus and what it holds; with
+  // no focus, everything is.
+  const into = focus !== undefined && focusable(base, depth).has(focus) ? focus : undefined;
   const within = (id: string): boolean => into === undefined || id === into || (chains.get(id)?.includes(into) ?? false);
   // Around a focus stand, closed, the things beside it and beside each thing it is in. The things
   // it is in are not drawn.
   const above = into === undefined ? [] : [into, ...(chains.get(into) ?? [])];
   const beside = new Set(above.map((id) => chains.get(id)?.[0]));
   const drawn = whole.filter((id) => within(id) || (!above.includes(id) && beside.has(chains.get(id)?.[0])));
-  return drawingOf(base, drawn, sorted.filter((record) => record.kind === 'connections'), within);
+  const view = drawingOf(base, drawn, sorted.filter((record) => record.kind === 'connections'), within);
+  // The depth each box opens at, when it can be a focus there and this view is not that one.
+  const opened = new Map(DEPTHS.map((each) => [each, focusable(base, each)]));
+  const opens = (box: Box): Depth | undefined => {
+    const at = OPENED[box.kind];
+    return at !== undefined && opened.get(at)?.has(box.id) && !(box.id === into && at === depth) ? at : undefined;
+  };
+  return { ...view, boxes: view.boxes.map((box) => (opens(box) !== undefined ? { ...box, opens: opens(box) as Depth } : box)) };
 }
 
 /**
@@ -223,28 +260,34 @@ export function drawingOf({ sorted, things, chains }: Things, drawn: readonly st
 }
 
 /**
- * What can be chosen as a focus at a depth, by name without regard to capitals and then by id:
- * at Containers each system, at Components each app, that the whole view opens. None at Systems.
+ * What can be chosen as a focus at a depth, by name without regard to capitals and then by id.
+ * At Containers each system with something in it. At Components the same systems, and after each
+ * its apps that hold a component, each with `in`. None at Systems.
  */
 export function focusesOf(records: readonly ModelRecord[], depth: Depth): Focus[] {
-  const kind = FOCUSED[depth];
-  if (kind === undefined) return [];
-  return viewOf(records, depth)
-    .boxes.filter((box) => box.frame && box.kind === kind)
-    .map(({ id, name }) => ({ id, name }))
+  const base = thingsOf(records);
+  const { things, chains } = base;
+  const named = [...focusable(base, depth)]
+    .map((id) => {
+      const fields = things.get(id)?.fields;
+      return { id, name: typeof fields?.name === 'string' ? fields.name : id };
+    })
     .sort((a, b) => compare(a.name.toLowerCase(), b.name.toLowerCase()) || compare(a.id, b.id));
+  const systems = named.filter((choice) => things.get(choice.id)?.kind === 'systems');
+  return systems.flatMap((system) => [system, ...named.filter((choice) => things.get(choice.id)?.kind === 'apps' && chains.get(choice.id)?.[0] === system.id).map((app) => ({ ...app, in: system.id }))]);
 }
 
 /**
  * The focus an id in the address means at a depth, or none for everything: the id when it can be
- * chosen there, and at Containers, for a thing inside a system that can be, that system.
+ * chosen there, and else the nearest thing it is in that can be. So a system chosen at Containers
+ * is kept at Components, an app chosen at Components means its system at Containers, and an app
+ * with no component means its system at both.
  */
 export function focusFor(records: readonly ModelRecord[], depth: Depth, wanted: string | null | undefined): string | undefined {
   if (wanted === null || wanted === undefined) return undefined;
-  const choices = new Set(focusesOf(records, depth).map((choice) => choice.id));
-  if (choices.has(wanted)) return wanted;
-  if (depth !== 'containers') return undefined;
-  return thingsOf(records).chains.get(wanted)?.find((id) => choices.has(id));
+  const base = thingsOf(records);
+  const choices = focusable(base, depth);
+  return [wanted, ...(base.chains.get(wanted) ?? [])].find((id) => choices.has(id));
 }
 
 /**

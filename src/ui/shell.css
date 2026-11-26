@@ -287,6 +287,10 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* At Components an app stands under its system, set in from it. */
+.focus-menu-list a.focus-menu-under .focus-menu-name {
+  padding-left: 16px;
+}
 /* Where the sidebar is replaced, the home button stands first, a hairline after it. */
 .history-divider {
   flex-shrink: 0;

@@ -58,6 +58,8 @@ export type Travel = {
   flowsThrough: (id: string) => FlowThrough[];
   /** The steps on a connection, and the replies to them. */
   stepsOn: (id: string) => StepAt[];
+  /** The steps that happen in a part itself: those that name it in `does`. The flows by name, the steps in order. */
+  stepsIn: (id: string) => StepAt[];
   /** The data seen on a connection, with the way it goes, once each. */
   dataOn: (id: string) => DataWay[];
 };
@@ -170,6 +172,7 @@ export function travelOf(records: readonly ModelRecord[], catalogue: Catalogue =
         (walk) => walk.flow,
       ).map((walk) => ({ flow: walk.flow, ...(walk.feature !== undefined ? { feature: walk.feature } : {}) })),
     stepsOn: (id) => all().filter((walk) => walk.connection?.id === id).map(at),
+    stepsIn: (id) => all().filter((walk) => walk.part === id).map(at),
     dataOn: (id) =>
       once(
         all().flatMap(({ connection, way, data }) => (connection?.id === id && way !== undefined ? data.map((each) => ({ data: each, ...way })) : [])),

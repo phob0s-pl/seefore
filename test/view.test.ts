@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest';
 import { readModel } from '../src/model/read.ts';
 import type { SourceFile } from '../src/model/read.ts';
-import { depthOf, focusesOf, focusFor, litBy, viewOf } from '../src/model/view.ts';
+import { depthOf, diagramAt, focusesOf, focusFor, litBy, viewOf } from '../src/model/view.ts';
 import type { Depth, View } from '../src/model/view.ts';
 
 /** A shop and a partner: one system with parts, one with none, and an app with parts of its own. */
@@ -46,7 +46,7 @@ test('Systems draws each person, each system and the infrastructure in no system
   expect(view('systems').boxes).toEqual([
     { id: 'person-customer', kind: 'people', name: 'Customer', frame: false, zone: 'people' },
     { id: 'system-partner', kind: 'systems', name: 'Partner', frame: false, external: true, zone: 'external' },
-    { id: 'system-shop', kind: 'systems', name: 'Shop', frame: false, zone: 'ours' },
+    { id: 'system-shop', kind: 'systems', name: 'Shop', frame: false, zone: 'ours', opens: 'containers' },
     { id: 'infra-dns', kind: 'infrastructure', name: 'DNS', frame: false, zone: 'ours' },
   ]);
 });
@@ -160,24 +160,73 @@ test('the depth in the address is Systems when none is given or it is not known'
 /** A bank: a second system with an app, named in small letters. */
 const BANK = [file('systems/system-bank.yaml', 'name: bank\n'), file('apps/app-ledger.yaml', 'name: Ledger\nin: system-bank\n')];
 
-test('a focus can be a system at Containers and an app at Components that the whole view opens, by name without regard to capitals', () => {
+test('a focus can be a system with something in it at both deeper depths, and at Components an app with a component too, under its system, by name without regard to capitals', () => {
   const all = records(...BANK, file('components/component-cart.yaml', 'name: Cart\nin: app-web\n'));
   expect(focusesOf(all, 'systems')).toEqual([]);
-  // The partner has no parts, and the ledger nothing inside.
+  // The partner has no parts.
   expect(focusesOf(all, 'containers')).toEqual([
     { id: 'system-bank', name: 'bank' },
     { id: 'system-shop', name: 'Shop' },
   ]);
+  // The ledger has nothing inside: the bank stands with no app under it.
   expect(focusesOf(all, 'components')).toEqual([
-    { id: 'app-api', name: 'API' },
-    { id: 'app-web', name: 'Web' },
+    { id: 'system-bank', name: 'bank' },
+    { id: 'system-shop', name: 'Shop' },
+    { id: 'app-api', name: 'API', in: 'system-shop' },
+    { id: 'app-web', name: 'Web', in: 'system-shop' },
+  ]);
+});
+
+test('an app that holds only a store is no choice at Components: its id means its system, whose view opens it', () => {
+  const all = records(...BANK, file('stores/store-books.yaml', 'name: Books\nin: app-ledger\n'));
+  expect(focusesOf(all, 'components').map((choice) => choice.id)).toEqual(['system-bank', 'system-shop', 'app-api']);
+  expect(focusFor(all, 'components', 'app-ledger')).toBe('system-bank');
+  expect(viewOf(all, 'components', 'app-ledger')).toEqual(viewOf(all, 'components'));
+  expect(boxesIn(viewOf(all, 'components', 'system-bank'))).toEqual(['[system-bank]', '[app-ledger] in system-bank', 'store-books in app-ledger']);
+});
+
+test('at Components a focused system is a frame with its apps opened, and another system it has a line with is one closed box', () => {
+  const focused = viewOf(records(...BANK, connection('connection-looks', 'person-customer', 'app-web'), connection('connection-books', 'component-checkout', 'app-ledger')), 'components', 'system-shop');
+  expect(boxesIn(focused)).toEqual([
+    'person-customer',
+    'system-bank',
+    '[system-shop]',
+    '[app-api] in system-shop',
+    'app-web in system-shop',
+    'store-orders in system-shop',
+    'store-sessions in app-api',
+    'component-checkout in app-api',
+    'infra-gateway in system-shop',
+  ]);
+  // A line from a component to an app of another system ends at that system.
+  expect(arrowsIn(focused)).toEqual(['person-customer > app-web: connection-looks', 'component-checkout > system-bank: connection-books']);
+});
+
+test('a box that can be the focus says at which depth it first is, and the focus itself does not at its own depth', () => {
+  const all = records(...BANK);
+  const opens = (view: View) => view.boxes.flatMap((box) => (box.opens !== undefined ? [`${box.id}: ${box.opens}`] : []));
+  // The partner has no parts; the ledger and the web hold nothing, and the API holds a component.
+  expect(opens(viewOf(all, 'systems'))).toEqual(['system-bank: containers', 'system-shop: containers']);
+  expect(opens(viewOf(all, 'containers'))).toEqual(['system-bank: containers', 'system-shop: containers', 'app-api: components']);
+  expect(opens(viewOf(all, 'containers', 'system-shop'))).toEqual(['app-api: components']);
+  expect(opens(viewOf(all, 'components', 'system-shop'))).toEqual(['system-shop: containers', 'app-api: components']);
+  expect(opens(viewOf(all, 'components', 'app-api'))).toEqual([]);
+});
+
+test('the address of the diagram holds the depth and the focus, and Systems has neither', () => {
+  expect([diagramAt('systems'), diagramAt('systems', 'system-shop'), diagramAt('containers'), diagramAt('containers', 'system-shop'), diagramAt('components', 'app-api')]).toEqual([
+    '/',
+    '/',
+    '/?depth=containers',
+    '/?depth=containers&focus=system-shop',
+    '/?depth=components&focus=app-api',
   ]);
 });
 
 test('a focused system is a frame with what is inside it, and another system it has a line with is one closed box', () => {
   const focused = viewOf(records(...BANK, connection('connection-looks', 'person-customer', 'app-web'), connection('connection-books', 'component-checkout', 'app-ledger')), 'containers', 'system-shop');
   expect(boxesIn(focused)).toEqual(['person-customer', 'system-bank', '[system-shop]', 'app-api in system-shop', 'app-web in system-shop', 'store-orders in system-shop', 'infra-gateway in system-shop']);
-  expect(focused.boxes.find((box) => box.id === 'system-bank')).toEqual({ id: 'system-bank', kind: 'systems', name: 'bank', frame: false, zone: 'ours' });
+  expect(focused.boxes.find((box) => box.id === 'system-bank')).toEqual({ id: 'system-bank', kind: 'systems', name: 'bank', frame: false, zone: 'ours', opens: 'containers' });
   // A line from inside to an app of another system ends at that system.
   expect(arrowsIn(focused)).toEqual(['person-customer > app-web: connection-looks', 'app-api > system-bank: connection-books']);
 });
@@ -205,15 +254,17 @@ test('a focused app stands with its sister apps and stores as closed boxes, and 
 
 test('a focus that is not a choice of its depth gives everything', () => {
   const all = records(connection('connection-looks', 'person-customer', 'app-web'), connection('connection-pays', 'component-checkout', 'system-partner'));
-  for (const [depth, focus] of [['containers', 'system-nowhere'], ['containers', 'app-api'], ['containers', 'system-partner'], ['components', 'system-shop'], ['components', 'app-web'], ['systems', 'system-shop']] as const) {
+  for (const [depth, focus] of [['containers', 'system-nowhere'], ['containers', 'app-api'], ['containers', 'system-partner'], ['components', 'system-partner'], ['components', 'app-web'], ['systems', 'system-shop']] as const) {
     expect(viewOf(all, depth, focus)).toEqual(viewOf(all, depth));
   }
 });
 
-test('the focus in the address: a choice itself, at Containers the system a thing is in, and else none', () => {
+test('the focus in the address: a choice itself, else the nearest thing it is in that is one, and else none', () => {
   const all = records();
   expect([focusFor(all, 'containers', 'system-shop'), focusFor(all, 'containers', 'app-api'), focusFor(all, 'containers', 'component-checkout'), focusFor(all, 'components', 'app-api')]).toEqual(['system-shop', 'system-shop', 'system-shop', 'app-api']);
-  expect([focusFor(all, 'components', 'system-shop'), focusFor(all, 'components', 'component-checkout'), focusFor(all, 'containers', 'system-partner'), focusFor(all, 'containers', 'infra-dns')]).toEqual([undefined, undefined, undefined, undefined]);
+  // A system chosen at Containers is kept at Components. There a component and a store mean their app, and an app with no component its system.
+  expect([focusFor(all, 'components', 'system-shop'), focusFor(all, 'components', 'component-checkout'), focusFor(all, 'components', 'store-sessions'), focusFor(all, 'components', 'app-web')]).toEqual(['system-shop', 'app-api', 'app-api', 'system-shop']);
+  expect([focusFor(all, 'containers', 'system-partner'), focusFor(all, 'components', 'system-partner'), focusFor(all, 'containers', 'infra-dns')]).toEqual([undefined, undefined, undefined]);
   expect([focusFor(all, 'systems', 'system-shop'), focusFor(all, 'containers', null), focusFor(all, 'containers', 'system-nowhere')]).toEqual([undefined, undefined, undefined]);
 });
 
