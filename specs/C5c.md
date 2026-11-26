@@ -67,9 +67,8 @@ cannot answer questions now. Draft the change with what you have.", as in plan 3
 | A read that takes a job from a queue in its own words, with no `removes` | 5: Boxwick, "The Notifier sends an email", 3, and "Paying promoters", 10. GitLab, "Catch a Geo secondary site up", 4, and "Process a push", 1. Teleport, "Keep an audit event in Athena", 5 | The job as kept in its queue at Ends |
 | A step that takes a thing out and names it in `data`; a read that names what the reader makes | 1: Boxwick, "Refunding an order", 12. 2: Vellumoak's backup, 6; Syncthing, "Edit a file in a shared folder", 2 | With `access: write` alone the first would show its tickets as put. Database copy is only read in the Catalogue, which holds no such thing |
 
-- **The tries of C5d, C5e and C5f need flows that say their way.** They are made on copies
-  that hold the design's own trial (its section 9), of Vellumoak's backup and of two flows
-  of Boxwick. A copy is thrown away after: no file under `research/trial/` changes.
+- **The tries of C5d, C5e and C5f are made on copies** that hold the design's own trial (its
+  section 9). A copy is thrown away after: no file under `research/trial/` changes.
 
 ## How it was read, and what is out
 
@@ -80,10 +79,9 @@ cannot answer questions now. Draft the change with what you have.", as in plan 3
 
 ## What the trial counted
 
-On 2026-11-26: twelve runs of `flows` in two rounds and two of `change`, 13.29 US dollars.
-Between the rounds the guide's sentence on a take changed (C5).
+Twelve runs of `flows` in two rounds and two of `change`, on 2026-11-26, for 13.29 US dollars.
 
-| Of `flows` | Round 1 | Round 2 |
+| Of `flows` | Round 1 | Round 2, after the guide's sentence on a take changed (C5) |
 | --- | --- | --- |
 | Nine `access` in ten right | 10 of 10 | 11 of 12 |
 | No `removes` that the code does not show | 4 written, 4 shown | 2 written, 2 shown |
