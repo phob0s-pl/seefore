@@ -27,7 +27,7 @@ context, and answers with its points.
 
 | Reader | Its lens |
 | --- | --- |
-| `seefore:plain` | None: a careful architect who will have to live with what is built |
+| `seefore:plain` | None: a careful architect who will have to live with what is built. It alone reads the code, where it is in reach |
 | `seefore:assumed` | What was decided without the person, in `assumed` or silently in the records |
 | `seefore:failure` | The steps of each flow the change moves: their order, their moment, their failure |
 | `seefore:trust` | By whose leave the data is where the change sends it |
@@ -73,28 +73,48 @@ rests on an "if" that no record states. Lower no block and raise no note for a c
    or here when this folder holds `seefore.yaml`.
 2. Run `seefore list --change=<id>`, and keep the lines it marks: `+` adds, `~` updates, `-`
    removes. Where the shell cuts the list off and saves it to a file, read that file.
+   - **The code in reach**, where `plain` is to be started, and for it alone. Run `seefore
+     list repositories`. A repository whose line ends with `workspace` has its folder beside
+     the model's folder, under its name: list that folder once, and with files there it is
+     in reach. The repository that the model's folder lies in is the folder above the
+     model's, or the model's own where code lies in it beside the records: it is in reach
+     where it holds build files, deploy files or folders of code, and a folder that holds
+     several projects is not it. A repository without `workspace`, or with no files in its
+     folder, is not in reach: never look for it. With no repository and no code, no reader
+     reads code, and you say nothing of it.
 3. **Start the readers, all in one message**, each as a subagent of its type, with this task
    and no word of your own view: "Review the change `<id>`. The model's folder is `<folder>`.
    The change's file is `<folder>/changes/<id>.yaml`. It touches these records:" and the
    marked lines. With one reader named, start that one alone. **Never start a reader in the
    background, and do not end your turn before every reader has answered**: a turn that
    ends on "waiting for the readers" leaves no review.
+   - To `plain` alone add a line for each folder in reach: "The code in reach: `<folder>`
+     holds `<the repository's id, or the model's own repository>`"; and for each repository
+     that is not: "Not in reach: `<its id>`".
 4. **Join their answers by the rules.** Read the change's file yourself first, so that you
    can tell one subject from another. What a reader passed on under `outside` is a point
    when another reader raised it too, when it is a question to the person, or when it names
    a record of `context/` or `rules/`, or a sentence of the need, that the change may not
    meet: open that record and judge the line. A line of `assumed` that a reader names there
    as the person's is a point.
+   - **A point of `plain` that rests on the code** comes with its file and lines under
+     `witness`. Before you keep it, open that file, in a folder you handed, and read them.
+     Where there is none, or they do not show what the finding says of the code, the point
+     goes out, unless the records alone carry it. What `plain` gave under `code` is no point.
+   - A line of `assumed` begun "Read in the code:" is what the drafter read, not a choice. A
+     reader's question on it is kept only where it asks what the person wants done about it.
 5. **Write `reviews/<id>.yaml`** as the guide below says: `read` is the mark, in quotes; the
    points stand the weightiest first, each under an id of a few words. A finding names the
    records by their ids and holds no remedy; a recommendation is an outcome or a question.
    With nothing kept, the review is `read` alone: that is a full answer. The review is the
-   file: one told in a message alone is none.
+   file: one told in a message alone is none. No file, folder or line of the code stands in
+   it: a finding names the code by its own word in backticks at most.
 6. Run `seefore check`, and mend what it says of your file, three rounds at most. What it
    holds against the change itself is no thing for you to mend.
 7. End with a short message that asks nothing: the points by name, the blocks first; how
-   many points each reader brought, how many you kept, and how many each rule cut; and
-   "Next: `/seefore:answer <id>` answers these points, or decides with yes or no."
+   many points each reader brought, how many you kept, and how many each rule cut; where
+   `plain` read code, what it gave under `code`, three lines at most; and "Next:
+   `/seefore:answer <id>` answers these points, or decides with yes or no."
 
 ## The second reading
 

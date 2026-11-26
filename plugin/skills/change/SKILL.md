@@ -76,8 +76,10 @@ typed, ask what they want changed, and end your turn.
    Another open change that names the same records is said in your last message.
 3. **Read what the prompt touches**: find its parts in the list by their names, then
    `seefore list --near=<id>` for each, and read those records, the flows that pass them and
-   the data they carry. Read both sides of every connection you would move. Read no code.
-4. **Sketch, then ask** (rules 2 and 3). End your turn after the questions.
+   the data they carry. Read both sides of every connection you would move.
+4. **Sketch, look, then ask** (rules 2 and 3). Look at the code as "The code in reach" says,
+   below; with none, read no code. Ask nothing it answered. End your turn after the questions;
+   with none to ask, go on to step 5.
 5. **When the answers come, write `changes/<id>.yaml`** as the guide below says. The id is
    the change's own: a few words of what it does, as `copies-for-accounts`.
    - `prompt`, then `given`, then `assumed`, then the body, and `name` last, from all of it.
@@ -112,6 +114,59 @@ typed, ask what they want changed, and end your turn.
    - **not known**: what nobody could say, who could where the person named one, and what
      the design leaves out for want of it;
    - "Next: `/seefore:review`."
+
+## The code in reach
+
+What you do at step 4 where you can read the code of the parts your sketch touches. With none
+in reach you read no code. Where your design leans on code that is not in reach, you say so by
+the repository's name; else you write and say nothing of code.
+
+- **What is in reach**, found by one listing each, for the parts your sketch touches, and for
+  a repository of deploy files where a fact of an install bears on the design:
+  - A part says which repository its code is in (`seefore list --near=<id>`); with none
+    named, by itself or by its system, it is the repository the model's folder lies in: the
+    folder above the model's, or the model's own folder where code lies in it beside the
+    records. List it once. Build files, deploy files or folders of code there: in reach, but
+    not the folders of other repositories inside it. The model and documents alone: no
+    code. A folder that holds several projects is not it: go no further up.
+  - A repository whose line of `seefore list repositories` ends with `workspace`: list the
+    folder of its name beside the model's folder once. Files there: in reach. None:
+    "`<name>` is not here: I could not look."
+  - A repository without `workspace` is in reach only where the person named its folder to
+    you in this session. Never look for it.
+- **What to look for**: only a fact of the system as it is whose reversal would change a
+  record of your draft. First: does a part do this already? Then: who sends, reads or
+  writes the thing, each of them and not the first alone; what it holds; under which setting
+  or default it happens, and whether each kind of install sets it; whether a record you lean
+  on is as the code has it; what a step of yours does at a store that is there: reads it,
+  writes it or takes a thing out. At most six facts, and twenty files opened.
+- **Look once more where an answer moves the design**, before you write the change. The six
+  facts and the twenty files are for both looks together. What they leave open is a line of
+  `assumed`: you ask once.
+- **How to read**: name the folder in every search: a search begun above it skips what an
+  ignore file names. A fact is what the lines that do the act show, under their condition.
+  A comment, a name, a document, the model's folder, your own draft and what you remember
+  are none.
+- **Three endings**, each a line of `assumed`:
+  - *Read*: begun "Read in the code:", the parts by their ids, the code by its own word in
+    backticks, no file, and what would change it. Four such lines at most. Never "only",
+    "all" or "none". **Name the part that does an act only after you opened the file that
+    starts that part, its consumer, its command or its route, and saw it call what you
+    read.** A function is not yet a part, and the model's word for who runs it is the
+    thing in doubt.
+  - *Not found*: "I searched the code of `<the repository's id>` for `a` and `b` and found
+    no …", with the design that holds either way.
+  - *Could not look*: said by the repository's name; a question to the person where the
+    design turns on it, else a line of `assumed`.
+- **Where the code shows a record otherwise**, the design rests on what you read. Leave the
+  record as it is: no `update` because the code differs. Your last message says "the model
+  says …, the code shows …: `/seefore:model` mends it".
+- **Ask the person nothing the code answered.** Ask what the code made you see and only they
+  can settle. Where the person and the code differ, write both, and say so.
+- **In your last message**, under "assumed", the file and line of each fact you read. No
+  file, folder or line of the code stands in the change.
+- A fault of the code that no record of your draft would differ for is nothing of yours: a
+  line of the last message at most.
 
 ## The format
 
