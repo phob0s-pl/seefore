@@ -62,7 +62,7 @@
       "type": "string",
       "maxLength": 80,
       "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
-      "description": "The id of the repository its code is in, a record in repositories/. Left out, it is that of its system."
+      "description": "The id of the repository its code is in, a record in repositories/. Left out, it is that of its system: leave it out where it is the same."
     }
   },
   "required": [

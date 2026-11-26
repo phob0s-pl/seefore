@@ -86,6 +86,9 @@ function allowed(kinds: readonly string[]): string {
   return nouns.length === 1 ? (nouns[0] as string) : `${nouns.slice(0, -1).join(', ')} or ${nouns[nouns.length - 1]}`;
 }
 
+/** Where a repository is named instead of a part, said in the mend of each field that names a part and is given a repository. */
+const IN_REPOSITORY = 'A repository is named in `repository` of the system or app whose code is in it.';
+
 /** A case of a field that names the wrong kind: what is said, and how to mend it. */
 type Wrong = { field: string; folder?: string; ways?: boolean; found: readonly string[]; says: string; fix: string };
 
@@ -124,16 +127,34 @@ const WRONG: Wrong[] = [
     fix: 'Take it out of `via`, or name a piece of infrastructure, an app, a component or a system that the exchange passes through. Say anything more in the description.',
   },
   {
+    field: 'via',
+    found: ['repositories'],
+    says: '`via` names what the exchange passes through: a piece of infrastructure, an app, a component or a system.',
+    fix: `Name in \`via\` the piece of infrastructure, app, component or system the exchange passes through. ${IN_REPOSITORY}`,
+  },
+  {
     field: 'from',
     found: ['connections', ...NOT_THINGS],
     says: 'An end of a connection is a person, a system, an app, a store, a component or a piece of infrastructure.',
     fix: 'Name the one that acts, which is a person, a system, an app, a store, a component or a piece of infrastructure. An owner or a technology is named in `owner` or `technology` of a part instead.',
   },
   {
+    field: 'from',
+    found: ['repositories'],
+    says: 'An end of a connection is a person, a system, an app, a store, a component or a piece of infrastructure.',
+    fix: `Name the one that acts, which is a person, a system, an app, a store, a component or a piece of infrastructure. ${IN_REPOSITORY}`,
+  },
+  {
     field: 'to',
     found: ['connections', ...NOT_THINGS],
     says: 'An end of a connection is a person, a system, an app, a store, a component or a piece of infrastructure.',
     fix: 'Name the one it acts on, which is a person, a system, an app, a store, a component or a piece of infrastructure. An owner or a technology is named in `owner` or `technology` of a part instead.',
+  },
+  {
+    field: 'to',
+    found: ['repositories'],
+    says: 'An end of a connection is a person, a system, an app, a store, a component or a piece of infrastructure.',
+    fix: `Name the one it acts on, which is a person, a system, an app, a store, a component or a piece of infrastructure. ${IN_REPOSITORY}`,
   },
   {
     field: 'owner',
@@ -179,6 +200,12 @@ const WRONG: Wrong[] = [
   },
   {
     field: 'touches',
+    found: ['repositories'],
+    says: '`touches` names the parts and connections that are the feature\'s own.',
+    fix: `Take it out of \`touches\`. ${IN_REPOSITORY}`,
+  },
+  {
+    field: 'touches',
     found: ['features'],
     says: '`touches` names the parts and connections that are the feature\'s own.',
     fix: 'Take it out of `touches`. A feature is in no other feature, and names none: say in its `description` how the two belong together.',
@@ -206,6 +233,12 @@ const WRONG: Wrong[] = [
     found: ['owners', 'technologies'],
     says: 'A step happens on a connection, in a part or as a whole flow.',
     fix: 'Name in `does` the connection, part or flow the step happens on. An owner or a technology is named on a part instead.',
+  },
+  {
+    field: 'does',
+    found: ['repositories'],
+    says: 'A step happens on a connection, in a part or as a whole flow.',
+    fix: `Name in \`does\` the connection, part or flow the step happens on. ${IN_REPOSITORY}`,
   },
   {
     field: 'data',

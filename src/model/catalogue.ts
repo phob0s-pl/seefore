@@ -163,16 +163,15 @@ export function catalogueOf(records: readonly ModelRecord[], touch?: Touch): Cat
     return undefined;
   };
 
-  // An app's code is in its system's repository when it names none of its own; a store, a component and a piece of infrastructure have none.
+  // As an owner is: the id as it is written, whether or not it names a record, and the page says which it names.
+  // An app's code is in its system's repository only when the app has no key of its own; a store, a component and a piece of infrastructure have none.
   const repository = (id: string): Owned | undefined => {
     const start = byId.get(id);
     if (start?.kind !== 'systems' && start?.kind !== 'apps') return undefined;
     const system = start.kind === 'apps' ? thing(start.fields.in) : undefined;
-    for (const record of [start, ...(system?.kind === 'systems' ? [system] : [])]) {
-      const written = text(record.fields.repository);
-      if (written !== undefined) return { id: written, from: record.id };
-    }
-    return undefined;
+    const holder = start.fields.repository !== undefined ? start : system?.kind === 'systems' ? system : undefined;
+    const written = text(holder?.fields.repository);
+    return holder !== undefined && written !== undefined ? { id: written, from: holder.id } : undefined;
   };
 
   const conditions = (id: string): Condition[] => {

@@ -2,6 +2,7 @@ import { expect, test } from 'vitest';
 import { parse } from 'yaml';
 import { applyChange } from '../src/model/apply.ts';
 import type { Applied } from '../src/model/apply.ts';
+import { catalogueOf } from '../src/model/catalogue.ts';
 import { EXAMPLES } from '../src/model/guide.ts';
 import { changeMark } from '../src/model/mark.ts';
 import { readModel } from '../src/model/read.ts';
@@ -119,6 +120,25 @@ test('a change that adds a repository and an app that names it, and names it on 
   // A key that names no repository is held as any id the change names.
   const wrong = readModel(withChange('add:\n  apps/app-worker: {name: Worker, in: system-shop, repository: repo-nowhere}\n')).problems;
   expect(wrong.map((problem) => [problem.file, problem.rule, problem.message])).toEqual([['changes/a-change.yaml', 'reference-unknown', 'With this change, `apps/app-worker`: `repository` names `repo-nowhere`, but no record has that id.']]);
+});
+
+test("a change that updates a repository's own keys and takes an app's `repository` out with `null` is applied, and the app takes its system's", () => {
+  const model = [
+    ...SHOP.filter((each) => each.path !== 'systems/system-shop.yaml' && each.path !== 'apps/app-api.yaml'),
+    file('systems/system-shop', 'name: Shop', 'description: Sells things online.', 'repository: repo-shop'),
+    file('apps/app-api', 'name: API', 'in: system-shop', 'kind: service', 'technology:', '  - tech-go', 'repository: repo-api'),
+    file('repositories/repo-shop', 'name: shop'),
+    file('repositories/repo-api', 'name: api', 'url: https://example.org/tea/api'),
+  ];
+  expect(readModel(model).problems).toEqual([]);
+  const body = ['update:', '  repositories/repo-shop:', '    url: git@example.org:tea/shop.git', '    workspace: true', '  apps/app-api:', '    repository: null', ''].join('\n');
+  const done = applied(withChange(body, model));
+  expect(done.lines).toEqual(['~ repositories/repo-shop: url, workspace', '~ apps/app-api: repository']);
+  expect(written(done, 'repositories/repo-shop.yaml')).toBe('name: shop\nurl: git@example.org:tea/shop.git\nworkspace: true\n');
+  expect(written(done, 'apps/app-api.yaml')).toBe('name: API\nin: system-shop\nkind: service\ntechnology:\n  - tech-go\n');
+  expect(done.after.problems).toEqual([]);
+  // The repository no part names is no fault, and the app's code is now in its system's.
+  expect(catalogueOf(done.after.records).repository('app-api')).toEqual({ id: 'repo-shop', from: 'system-shop' });
 });
 
 test('an update rewrites only the keys it names: a new key at its place, a key taken out, one with no effect left, every other line as it was', () => {

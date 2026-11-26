@@ -122,9 +122,8 @@ const partTechnology = ids('Name a technology by the id of its record in `techno
 
 const External = z.literal(true).meta({ description: '`true`: the people this model is kept for cannot change the system. Left out for a system of yours, and when nobody has said.' });
 
-/** The id of the repository a system's or an app's code is in; `left` says what it is when left out. */
-const repository = (left: string) =>
-  id('repository', 'holds the id of a record in `repositories/`.').meta({ description: `The id of the repository its code is in, a record in repositories/. ${left}` });
+/** The id of the repository a system's or an app's code is in, with the words of where it is written. */
+const repository = (description: string) => id('repository', 'holds the id of a record in `repositories/`.').meta({ description });
 
 const Kinds = (what: string, list: readonly string[]) => `${what}: ${list.join(', ')}.`;
 
@@ -196,7 +195,9 @@ export const SystemSchema = z
     description: Description.optional(),
     external: External.optional(),
     owner: id('owner', 'holds the id of a record in `owners/`.').meta({ description: 'The id of the owner, a record in owners/, who answers for the system. Left out when nobody has said.' }).optional(),
-    repository: repository("Left out when it is the one the model's folder lies in, and when nobody has said.").optional(),
+    repository: repository(
+      "The id of the repository its code is in, a record in repositories/: written on the system only when the code of all its apps is there, else on each app. Left out when it is the one the model's folder lies in, and when nobody has said.",
+    ).optional(),
   })
   .meta({ description: 'Software its users see as one whole, ours or somebody else\'s. Nothing is above it. C4 calls it a software system.' });
 
@@ -215,7 +216,7 @@ export const AppSchema = z
       .optional(),
     technology: partTechnology.optional(),
     owner: Owner.optional(),
-    repository: repository('Left out, it is that of its system.').optional(),
+    repository: repository('The id of the repository its code is in, a record in repositories/. Left out, it is that of its system: leave it out where it is the same.').optional(),
   })
   .meta({
     description:
@@ -298,14 +299,38 @@ export const TechnologySchema = z
 /** The most characters of a repository's `url`. */
 export const URL_MAX = 200;
 
-/** What begins a path on a disk, which a repository's `url` never is: `/`, `\`, `~`, `.`, `file:`, or a drive's letter and a colon. */
-const ON_DISK = /^(?:[/\\~.]|file:|[A-Za-z]:)/;
+/** What a repository is cloned from: an address begun with `https://`, `http://`, `ssh://` or `git://` and more, or `user@host:path`, with no `/`, `\`, `:` or `@` in the user or the host. No space, line break or U+0085 anywhere. */
+const CLONED = /^(?:(?:https|http|ssh|git):\/\/[^\s\u0085]+|[^\s\u0085/\\:@]+@[^\s\u0085/\\:@]+:[^\s\u0085]+)$/;
+
+/** What begins a path on a disk: `/`, `\`, `~`, `.`, `file:` in any case, or a drive's letter and a colon. */
+const ON_DISK = /^(?:[/\\~.]|file:|[a-z]:)/i;
+
+/** Why a `url` is no address a repository is cloned from, in words that start after its name: a path on a disk, a space, or neither form. */
+function notCloned(url: string): string {
+  const disk = ON_DISK.exec(url)?.[0];
+  if (disk !== undefined) return `is a path on a disk: it begins with ${quote(disk)}. A \`url\` says where the repository is cloned from.`;
+  if (/[\s\u0085]/.test(url)) return 'has a space or a line break in it. An address a repository is cloned from has neither.';
+  return 'is no address a repository is cloned from: it neither begins with `https://`, `http://`, `ssh://` or `git://`, nor has the form `user@host:path`.';
+}
+
+/** What a folder's name cannot hold, and so a repository's `name`: a slash, a backslash, a colon or a control character. */
+const NOT_IN_NAME = /[/\\:\u0000-\u001f]/;
+
+/** The first character of a name that a folder's name cannot hold, in words: "`:`", or "the control character U+0009". */
+function heldInName(name: string): string {
+  const found = NOT_IN_NAME.exec(name)?.[0] ?? '';
+  return found < ' ' ? `the control character U+${found.codePointAt(0)?.toString(16).toUpperCase().padStart(4, '0')}` : quote(found);
+}
+
+/** A check that runs only on a value whose other checks hold, so that one fault is told once. */
+const afterTheRest = (payload: { issues: readonly unknown[] }): boolean => payload.issues.length === 0;
 
 export const RepositorySchema = z
   .strictObject({
     name: oneLine('name', NAME_MAX)
-      .refine((name) => !/[/\\]/.test(name), {
-        error: (issue) => `${subject(issue.path, 'name')} holds a slash. A repository's \`name\` is the name of the folder a plain clone of it makes, and a folder's name has no slash.`,
+      .refine((name) => !NOT_IN_NAME.test(name), {
+        when: afterTheRest,
+        error: (issue) => `${subject(issue.path, 'name')} holds ${heldInName(String(issue.input))}. A repository's \`name\` is the name of the folder a plain clone of it makes, and a folder's name cannot hold it.`,
         params: { code: 'repository-name' },
       })
       .refine((name) => name !== '.' && name !== '..', {
@@ -313,22 +338,23 @@ export const RepositorySchema = z
         params: { code: 'repository-name' },
       })
       .meta({
-        description: 'Its own name, as the folder of a plain clone bears it: one line of 1 to 100 characters, with no slash.',
-        not: { anyOf: [{ pattern: '[/\\\\]' }, { enum: ['.', '..'] }] },
+        description: 'Its own name, as the folder of a plain clone bears it: one line of 1 to 100 characters, with no slash, backslash or colon.',
+        not: { anyOf: [{ pattern: NOT_IN_NAME.source }, { enum: ['.', '..'] }] },
       }),
     description: prose(DESCRIPTION_MAX).meta({ description: 'What of the system lies in it, in 1 to 2,000 characters: the code of which parts, the deploy files, the documents.' }).optional(),
     url: z
       .string()
       .min(1, { error: (issue) => `${subject(issue.path, 'url')} is empty.` })
       .max(URL_MAX)
-      .regex(/^\S+$/, { error: (issue) => `${subject(issue.path, 'url')} has a space or a line break in it. A \`url\` is one line with no space, as \`https://example.org/tea/shop-deploy\`.` })
-      .refine((url) => !ON_DISK.test(url), {
-        error: (issue) => `${subject(issue.path, 'url')} is a path on a disk: it begins with ${quote(ON_DISK.exec(String(issue.input))?.[0] ?? '')}. A \`url\` says where the repository is cloned from.`,
+      // An empty `url` is told by `min` alone.
+      .refine((url) => url === '' || CLONED.test(url), {
+        error: (issue) => `${subject(issue.path, 'url')} ${notCloned(String(issue.input))}`,
         params: { code: 'repository-url' },
       })
       .meta({
-        description: 'Where it is cloned from, as `https://…` or `git@…`: one line of 1 to 200 characters with no space. Never a path on a disk.',
-        not: { pattern: ON_DISK.source },
+        description:
+          'Where it is cloned from: one line of 1 to 200 characters with no space, begun with `https://`, `http://`, `ssh://` or `git://`, or of the form `git@host:path`. Never a path on a disk.',
+        pattern: CLONED.source,
       })
       .optional(),
     workspace: z
@@ -341,7 +367,7 @@ export const RepositorySchema = z
   })
   .meta({
     description:
-      "A repository that holds code or deploy files of the system, other than the one the model's folder lies in: that one needs no record. A system or an app names it with `repository`. It says which repository to read, and never where a checkout lies on a machine: no path, and no folder inside it. Written from a file that names the repository, as a clone script, a workspace's manifest or a package's own `repository`, or from a person's word; never from an image's name. A change writes one, or the key that names it, only from what the person said.",
+      "A repository that holds code or deploy files of the system, other than the one the model's folder lies in: that one needs no record. A system or an app whose code is in it names it with `repository`; one that holds only deploy files or documents is named by none. It says which repository to read, and never where a checkout lies on a machine: no path, and no folder inside it. Written from a file that names the repository, as a clone script, a workspace's manifest or a package's own `repository`, or from a person's word; never from an image's name.",
   });
 
 const touched = `${parts.replace(' or a piece', ', a piece')} or a connection`;

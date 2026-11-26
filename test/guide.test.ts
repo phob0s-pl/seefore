@@ -56,7 +56,7 @@ test('a folder: what a record is, the word of its ids, each key needed or not wi
   expect(apps).toContain('\nKeys:\n  name (needed)\n    What people call it: one line of 1 to 100 characters, with no space at either end.\n  in (needed)\n');
   // An app's keys end at `repository`, which names a record and never says where its code lies on a disk.
   expect(apps).toContain('\n  owner (may be left out)\n    The id of the owner, a record in owners/, who answers for the part. Left out, it is that of what\n    the part is in.\n  repository (may be left out)\n');
-  expect(apps).toContain('\n  repository (may be left out)\n    The id of the repository its code is in, a record in repositories/. Left out, it is that of its\n    system.\n\nExample, apps/app-order-api.yaml:\n');
+  expect(apps).toContain('\n  repository (may be left out)\n    The id of the repository its code is in, a record in repositories/. Left out, it is that of its\n    system: leave it out where it is the same.\n\nExample, apps/app-order-api.yaml:\n');
   expect(apps).toContain(`\nExample, apps/app-order-api.yaml:\n${EXAMPLES.apps?.text.split('\n').map((line) => `  ${line}`).join('\n')}`);
   // A nested shape shows its keys under the key that holds it.
   expect(text('data')).toContain('\n  fields (may be left out)\n    What it holds: a list of at least one field, each with a `name` that stands once.\n    One thing a data record holds');
@@ -123,15 +123,20 @@ test('the guide of repositories says what a record is written from and never, wh
   const repositories = words('repositories');
   expect(repositories).toContain("# repositories: one repository a file A repository that holds code or deploy files of the system, other than the one the model's folder lies in: that one needs no record.");
   expect(repositories).toContain('It says which repository to read, and never where a checkout lies on a machine: no path, and no folder inside it.');
-  expect(repositories).toContain("Written from a file that names the repository, as a clone script, a workspace's manifest or a package's own `repository`, or from a person's word; never from an image's name. A change writes one, or the key that names it, only from what the person said.");
+  expect(repositories).toContain('A system or an app whose code is in it names it with `repository`; one that holds only deploy files or documents is named by none.');
+  expect(repositories).toContain("Written from a file that names the repository, as a clone script, a workspace's manifest or a package's own `repository`, or from a person's word; never from an image's name. Its id begins with");
   expect(repositories).toContain('Its id begins with `repo-` and says what it is, as `repo-shop-deploy`');
   expect(repositories).toContain('Read it there, and search it by naming that folder: a search begun above it skips a folder that an ignore file names.');
-  expect(repositories).toContain('url (may be left out) Where it is cloned from, as `https://…` or `git@…`: one line of 1 to 200 characters with no space. Never a path on a disk.');
+  expect(repositories).toContain(
+    'url (may be left out) Where it is cloned from: one line of 1 to 200 characters with no space, begun with `https://`, `http://`, `ssh://` or `git://`, or of the form `git@host:path`. Never a path on a disk.',
+  );
   expect(text('repositories')).toContain(`\nExample, repositories/repo-shop-deploy.yaml:\n${EXAMPLES.repositories?.text.split('\n').map((line) => `  ${line}`).join('\n')}`);
   // The skill model writes it after the technologies, and a system's key differs from an app's.
   expect(text('model')).toContain(`\n# repositories: one repository a file\n`);
   expect(text('model')).toContain(`\nKeys:\n${text('repositories').split('\nKeys:\n')[1]}`);
-  expect(words('systems')).toContain("repository (may be left out) The id of the repository its code is in, a record in repositories/. Left out when it is the one the model's folder lies in, and when nobody has said.");
+  expect(words('systems')).toContain(
+    "repository (may be left out) The id of the repository its code is in, a record in repositories/: written on the system only when the code of all its apps is there, else on each app. Left out when it is the one the model's folder lies in, and when nobody has said.",
+  );
   expect(EXAMPLES.repositories?.text).toBe(['name: shop-deploy', 'description: The compose file and the scripts that start every app of the shop.', 'url: https://example.org/tea/shop-deploy', 'workspace: true'].join('\n'));
 });
 

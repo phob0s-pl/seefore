@@ -271,3 +271,24 @@ test("a repository's line ends with `workspace` where it bears it; near a reposi
   // One that no part names is no fault, and nothing is near it.
   expect(listed({ near: 'repo-deploy' })).toEqual(['repositories/repo-deploy  deploy']);
 });
+
+test('under a change, a record it removes is held against the model as it was: a removed app is not near the repository its system is given', () => {
+  const read = readModel([
+    { path: 'seefore.yaml', text: 'format: 1\nname: Shop\n' },
+    file('systems/system-shop', 'name: Shop\nrepository: repo-old\n'),
+    file('apps/app-api', 'name: API\nin: system-shop\n'),
+    file('apps/app-worker', 'name: Worker\nin: system-shop\n'),
+    file('repositories/repo-old', 'name: old\n'),
+    file('repositories/repo-new', 'name: new\nworkspace: true\n'),
+    file('changes/moved', 'name: Moved\nprompt: The shop moves to the new repository, and the worker goes.\nupdate:\n  systems/system-shop: {repository: repo-new}\nremove: [apps/app-worker]\n'),
+  ]);
+  expect(read.problems).toEqual([]);
+  const listed = (asked: ListAsked): string[] => {
+    const said = listLines(read, asked);
+    return 'lines' in said ? said.lines : [said.error];
+  };
+  expect(listed({ change: 'moved', near: 'repo-new' })).toEqual(['  repositories/repo-new  new  workspace', 'named by:', '  ~ systems/system-shop  Shop', 'through their system:', '    apps/app-api  API  in system-shop']);
+  // The worker, as it was, took the old one from its system; so it is listed there, marked as removed.
+  expect(listed({ change: 'moved', near: 'repo-old' })).toEqual(['  repositories/repo-old  old', 'through their system:', '  - apps/app-worker  Worker  in system-shop']);
+  expect(listed({ change: 'moved', near: 'app-worker' })).toEqual(['- apps/app-worker  Worker  in system-shop', 'names:', '  ~ systems/system-shop  Shop', "its system's repository:", '    repositories/repo-old  old']);
+});

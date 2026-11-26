@@ -130,8 +130,10 @@ test('the schema of a repository passes one in form and refuses a path on a disk
   const repository = { name: 'shop-deploy', description: 'The compose file.', url: 'https://example.org/tea/shop-deploy', workspace: true };
   expect(check('repositories', repository)).toBe(true);
   expect(check('repositories', { name: 'shop-deploy', url: 'git@example.org:tea/shop-deploy.git' })).toBe(true);
-  for (const url of ['/home/ann/shop-deploy', '\\\\server\\shop-deploy', '~/shop-deploy', '../shop-deploy', 'file:///shop-deploy', 'C:\\shop-deploy', 'https://example.org/a b']) expect(check('repositories', { ...repository, url }), url).toBe(false);
-  for (const name of ['tea/shop-deploy', 'tea\\shop-deploy', '.', '..']) expect(check('repositories', { ...repository, name }), name).toBe(false);
+  for (const url of ['https://example.org/a', 'http://example.org/a', 'ssh://git@example.org/a.git', 'git://example.org/a', 'git@example.org:tea/shop.git']) expect(check('repositories', { ...repository, url }), url).toBe(true);
+  for (const url of ['src/shop', 'shop.git', 'src\\shop', 'FILE:///x', 'h:/srv/shop.git', '/tmp/x', '~/x', './x', 'C:\\x', 'https://example.org/a b', 'https://example.org/a\u0085', 'HTTPS://example.org/a', `https://example.org/${'a'.repeat(181)}`])
+    expect(check('repositories', { ...repository, url }), url).toBe(false);
+  for (const name of ['tea/shop-deploy', 'tea\\shop-deploy', 'tea:shop', 'shop\tdeploy', '.', '..']) expect(check('repositories', { ...repository, name }), name).toBe(false);
   expect(check('repositories', { ...repository, workspace: false })).toBe(false);
   expect(check('repositories', { ...repository, path: '../shop-deploy' })).toBe(false);
   expect(check('systems', { name: 'Shop', repository: 'repo-shop' })).toBe(true);

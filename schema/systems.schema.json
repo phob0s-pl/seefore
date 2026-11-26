@@ -38,7 +38,7 @@
       "type": "string",
       "maxLength": 80,
       "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
-      "description": "The id of the repository its code is in, a record in repositories/. Left out when it is the one the model's folder lies in, and when nobody has said."
+      "description": "The id of the repository its code is in, a record in repositories/: written on the system only when the code of all its apps is there, else on each app. Left out when it is the one the model's folder lies in, and when nobody has said."
     }
   },
   "required": [

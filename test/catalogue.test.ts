@@ -106,6 +106,18 @@ test("an app's code is in its own repository or else its system's, and a reposit
   expect(ids(cat.codeIn('repo-web'))).toEqual(['app-web']);
   expect(ids(cat.repositories)).toEqual(['repo-shop', 'repo-web']);
   expect(cat.address(cat.record('repo-shop') as ModelRecord)).toBe('/repositories/repo-shop');
+  // As an owner is, a key is taken as it is written, though it name nothing or another kind; an app's own is never replaced by its system's.
+  const broken = catalogueOf(
+    readModel([
+      ...SHOP.map((each) => ({ ...each, text: named[each.path] ?? each.text })),
+      { path: 'repositories/repo-shop.yaml', text: 'name: shop\n' },
+      { path: 'apps/app-lost.yaml', text: 'name: Lost\nin: system-shop\nrepository: repo-nowhere\n' },
+      { path: 'apps/app-odd.yaml', text: 'name: Odd\nin: system-shop\nrepository: owner-sales\n' },
+    ]).records,
+  );
+  expect(broken.repository('app-lost')).toEqual({ id: 'repo-nowhere', from: 'app-lost' });
+  expect(broken.repository('app-odd')).toEqual({ id: 'owner-sales', from: 'app-odd' });
+  expect(ids(broken.codeIn('repo-shop'))).toEqual(['system-shop', 'app-api']);
 });
 
 test('the conditions of a thing are its own, then those of each thing it is in, upwards', () => {

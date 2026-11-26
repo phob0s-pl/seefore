@@ -215,27 +215,61 @@ test('the lines of `assumed` are held as those of `given` are, and each fault of
   expect(problemsOf(...PARTS, { path: 'changes/a-change.yaml', text: 'name: A change\nprompt: Make it so.\ngiven:\n  - A day late is fine.\nassumed:\n  - The copies are files.\n' })).toEqual([]);
 });
 
-test('a repository in form reads; each fault of its form is told, and a `url` that is a path on a disk says that where a checkout lies is never written', () => {
+test('a repository in form reads; each fault of its form is told with its mend, and a `url` is held by the forms it is cloned from', () => {
   const repository = (text: string) => ({ path: 'repositories/repo-shop-deploy.yaml', text });
   const read = readModel([MARKER, repository('name: shop-deploy\ndescription: The compose file.\nurl: git@example.org:tea/shop-deploy.git\nworkspace: true\n')]);
   expect(read.problems).toEqual([]);
   expect(read.records[0]?.fields).toEqual({ name: 'shop-deploy', description: 'The compose file.', url: 'git@example.org:tea/shop-deploy.git', workspace: true });
   const said = (text: string) => problemsOf(repository(text)).map((problem) => [problem.rule, problem.line, problem.field, problem.message, problem.fix]);
+  // A name is that of a folder, which holds no slash, backslash, colon or control character.
   const clone = 'Write in `name` the name of the folder a plain clone of the repository makes: the last part of its `url`, without `.git`, as `shop-deploy`.';
-  const slash = "`name` holds a slash. A repository's `name` is the name of the folder a plain clone of it makes, and a folder's name has no slash.";
-  expect(said('name: tea/shop-deploy\n')).toEqual([['repository-name', 1, 'name', slash, clone]]);
-  expect(said('name: tea\\shop-deploy\n')).toEqual([['repository-name', 1, 'name', slash, clone]]);
+  const holds = (what: string) => `\`name\` holds ${what}. A repository's \`name\` is the name of the folder a plain clone of it makes, and a folder's name cannot hold it.`;
+  expect(said('name: tea/shop-deploy\n')).toEqual([['repository-name', 1, 'name', holds('`/`'), clone]]);
+  expect(said('name: tea\\shop-deploy\n')).toEqual([['repository-name', 1, 'name', holds('`\\`'), clone]]);
+  expect(said('name: "tea: shop"\n')).toEqual([['repository-name', 1, 'name', holds('`:`'), clone]]);
+  expect(said('name: "shop\\tdeploy"\n')).toEqual([['repository-name', 1, 'name', holds('the control character U+0009'), clone]]);
   for (const name of ['.', '..']) expect(said(`name: "${name}"\n`)).toEqual([['repository-name', 1, 'name', `\`name\` is \`${name}\`, which names a folder by where it is, and not by its name.`, clone]]);
+  // A fault of the line is told once, by the line.
+  expect(said('name: "shop\\ndeploy"\n').map((each) => each[3])).toEqual(['`name` must be on one line.']);
   expect(said('name: shop-deploy\nworkspace: false\n')).toEqual([['value-not-allowed', 2, 'workspace', '`workspace` may only be `true`. Otherwise take the key out.', 'Write `true`, or delete the key.']]);
-  expect(said('name: shop-deploy\npath: ../shop-deploy\n').map((each) => [each[0], each[3]])).toEqual([['key-unknown', '`path` is not a key of a repository. Its keys are `name`, `description`, `url` and `workspace`.']]);
-  // Each start of a path on a disk, and its mend.
-  const mend = (problem: unknown[]) => problem[4] as string;
-  for (const [url, start] of [['/home/ann/shop-deploy', '/'], ['\\\\server\\shop-deploy', '\\'], ['~/code/shop-deploy', '~'], ['../shop-deploy', '.'], ['file:///code/shop-deploy', 'file:'], ['C:\\code\\shop-deploy', 'C:']]) {
-    const [problem] = said(`name: shop-deploy\nurl: '${url}'\n`);
-    expect(problem?.slice(0, 4), url).toEqual(['repository-url', 2, 'url', `\`url\` is a path on a disk: it begins with \`${start}\`. A \`url\` says where the repository is cloned from.`]);
-    expect(mend(problem ?? [])).toBe("Write in `url` where the repository is cloned from, as `https://…` or `git@…`, or take `url` out. Where a checkout lies on a machine is never written: with `workspace: true` it lies beside the model's folder, in a folder of its `name`.");
-  }
-  expect(said('name: shop-deploy\nurl: https://example.org/tea/shop deploy\n').map((each) => each[3])).toEqual(['`url` has a space or a line break in it. A `url` is one line with no space, as `https://example.org/tea/shop-deploy`.']);
+  expect(said('name: shop-deploy\npath: ../shop-deploy\n')).toEqual([
+    [
+      'key-unknown',
+      2,
+      'path',
+      '`path` is not a key of a repository. Its keys are `name`, `description`, `url` and `workspace`.',
+      'Delete the key `path` from the file, or, if a known key was meant, rename it. Its keys are `name`, `description`, `url` and `workspace`.',
+    ],
+  ]);
+  // A `url` is an address of one of the forms a repository is cloned from; anything else is refused, a path on a disk by what it begins with.
+  const mend =
+    "Write in `url` where the repository is cloned from: an address begun with `https://`, `http://`, `ssh://` or `git://`, or one of the form `git@host:path`; where the host is one letter, write `ssh://host/path`. Or take `url` out. Where a checkout lies on a machine is never written: with `workspace: true` it lies beside the model's folder, in a folder of its `name`.";
+  const url = (value: string) => said(`name: shop-deploy\nurl: '${value}'\n`);
+  for (const good of ['https://example.org/a', 'http://example.org/a', 'ssh://git@example.org/a.git', 'git://example.org/a', 'git@example.org:tea/shop.git']) expect(url(good), good).toEqual([]);
+  const disk = (start: string) => `\`url\` is a path on a disk: it begins with \`${start}\`. A \`url\` says where the repository is cloned from.`;
+  const none = '`url` is no address a repository is cloned from: it neither begins with `https://`, `http://`, `ssh://` or `git://`, nor has the form `user@host:path`.';
+  for (const [bad, message] of [
+    ['src/shop', none],
+    ['shop.git', none],
+    ['src\\shop', none],
+    ['HTTPS://example.org/a', none],
+    ['https://', none],
+    ['git@ex/ample.org:tea/shop.git', none],
+    ['FILE:///x', disk('FILE:')],
+    ['h:/srv/shop.git', disk('h:')],
+    ['/tmp/x', disk('/')],
+    ['\\\\server\\x', disk('\\')],
+    ['~/x', disk('~')],
+    ['./x', disk('.')],
+    ['C:\\x', disk('C:')],
+    ['https://example.org/tea/shop deploy', '`url` has a space or a line break in it. An address a repository is cloned from has neither.'],
+    ['https://example.org/tea/shop\u0085', '`url` has a space or a line break in it. An address a repository is cloned from has neither.'],
+  ] as const)
+    expect(url(bad), bad).toEqual([['repository-url', 2, 'url', message, mend]]);
+  // Its limit is told as every other limit is; an empty one once.
+  expect(url(`https://example.org/${'a'.repeat(181)}`)).toEqual([['value-too-big', 2, 'url', '`url` has 201 characters. It may have at most 200.', 'Shorten the value to the limit the message gives.']]);
+  expect(url(`https://example.org/${'a'.repeat(180)}`)).toEqual([]);
+  expect(said("name: shop-deploy\nurl: ''\n").map((each) => each[3])).toEqual(['`url` is empty.']);
 });
 
 test('a sentence cut by a comma inside a short mapping is told as that, and a key that is simply not known is not', () => {

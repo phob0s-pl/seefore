@@ -792,10 +792,10 @@ const texts = (selector: string) => `[...document.querySelectorAll(${JSON.string
 
 test.skipIf(!HAS_CHROME).concurrent(
   HAS_CHROME
-    ? "the Repositories tab opens a repository's page, with where it is cloned from, its checkout beside the model and the code it holds; an app's page has the row Repository, from its system"
+    ? "the Repositories tab opens a repository's page, with its description, where it is cloned from, where its checkout lies beside the model's folder and the code it holds; the system's page and its app's have the row Repository, the app's from its system"
     : `skipped: there is no Chrome at ${CHROME}`,
   async () => {
-    // A copy of the shop whose system names a repository, checked out beside the model, and one more that no part names.
+    // A copy of the shop whose system names a repository, checked out beside the model, one more that no part names, and an app whose key is wrong.
     const folder = await mkdtemp(join(tmpdir(), 'seefore-shop-'));
     try {
       await cp(SHOP, folder, { recursive: true });
@@ -803,6 +803,8 @@ test.skipIf(!HAS_CHROME).concurrent(
       await writeFile(join(folder, 'repositories', 'repo-shop.yaml'), 'name: shop\ndescription: The code of the shop.\nurl: https://example.org/tea/shop\nworkspace: true\n');
       await writeFile(join(folder, 'repositories', 'repo-deploy.yaml'), 'name: deploy\nurl: git@example.org:tea/deploy.git\n');
       await writeFile(join(folder, 'systems', 'system-shop.yaml'), 'name: Shop\ndescription: Sells things online.\nrepository: repo-shop\n');
+      // An app whose own key names a record that is no repository: the check faults it, and the page leads nowhere from it.
+      await writeFile(join(folder, 'apps', 'app-odd.yaml'), 'name: Odd\nin: system-shop\nrepository: system-shop\n');
       await inChrome(async (send, address) => {
         await send('Page.navigate', { url: `${address}/repositories` });
         const list = `document.querySelector('ul[aria-label="Repositories"] > li') !== null && { tab: document.querySelector('.models-tabs a.active')?.textContent, rows: ${texts('ul[aria-label="Repositories"] > li')} }`;
@@ -811,6 +813,7 @@ test.skipIf(!HAS_CHROME).concurrent(
         const page = (id: string) => `location.pathname === '/repositories/${id}' && document.querySelector('section[aria-label="Holds the code of"]') !== null && {
           tab: document.querySelector('.models-tabs a.active')?.textContent,
           title: document.querySelector('main h1')?.textContent,
+          description: ${texts('main .section-stack > :not(section) .panel-text')},
           facts: ${texts('.facts > div')},
           links: [...document.querySelectorAll('.facts a')].map((link) => [link.getAttribute('href'), link.getAttribute('target')]),
           holds: ${texts('section[aria-label="Holds the code of"] tr, section[aria-label="Holds the code of"] .panel-text')},
@@ -818,16 +821,22 @@ test.skipIf(!HAS_CHROME).concurrent(
         expect(await waitFor(send, page('repo-shop'))).toEqual({
           tab: 'Repositories',
           title: 'shop',
-          facts: ['URL https://example.org/tea/shop', 'Workspace Checked out beside the model, in shop/'],
+          description: ['The code of the shop.'],
+          facts: ['URL https://example.org/tea/shop', "Workspace Beside the model's folder, in shop/"],
           links: [['https://example.org/tea/shop', '_blank']],
           holds: ['Shop System', 'Order API App · service from Shop'],
         });
         // A url that is no web address is no link, and a repository that no part names holds no code of them.
         await send('Page.navigate', { url: `${address}/repositories/repo-deploy` });
-        expect(await waitFor(send, page('repo-deploy'))).toEqual({ tab: 'Repositories', title: 'deploy', facts: ['URL git@example.org:tea/deploy.git'], links: [], holds: ['None.'] });
+        expect(await waitFor(send, page('repo-deploy'))).toEqual({ tab: 'Repositories', title: 'deploy', description: [], facts: ['URL git@example.org:tea/deploy.git'], links: [], holds: ['None.'] });
+        // The system names it, and its app takes it from the system; each row leads to the repository's page.
+        const facts = (path: string) => `location.pathname === '${path}' && document.querySelector('.facts') !== null && { facts: ${texts('.facts > div')}, links: ${hrefs('.facts a')} }`;
+        await send('Page.navigate', { url: `${address}/models/system-shop` });
+        expect(await waitFor(send, facts('/models/system-shop'))).toEqual({ facts: ['Type System', 'Repository shop', 'Context 1 prefer'], links: ['/repositories/repo-shop', '/context'] });
         await send('Page.navigate', { url: `${address}/models/app-order-api` });
-        const app = `location.pathname === '/models/app-order-api' && document.querySelector('.facts') !== null && ${texts('.facts > div')}`;
-        expect(await waitFor(send, app)).toEqual(['Type App · service', 'In Shop', 'Repository shop from Shop']);
+        expect(await waitFor(send, facts('/models/app-order-api'))).toEqual({ facts: ['Type App · service', 'In Shop', 'Repository shop from Shop'], links: ['/models/system-shop', '/repositories/repo-shop', '/models/system-shop'] });
+        await send('Page.navigate', { url: `${address}/models/app-odd` });
+        expect(await waitFor(send, facts('/models/app-odd'))).toEqual({ facts: ['Type App', 'In Shop', 'Repository system-shop'], links: ['/models/system-shop'] });
       }, folder);
     } finally {
       await rm(folder, { recursive: true, force: true });

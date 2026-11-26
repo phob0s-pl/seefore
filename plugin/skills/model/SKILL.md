@@ -45,11 +45,11 @@ work as "With several agents" says below.
    records are there, this is a mend: keep every record that is still true, with its id, and
    change only what the code shows otherwise. An id changes by `seefore rename <old> <new>`,
    and a record that is no longer true goes by `seefore remove <id>`, never by another way.
-2. **Find what runs.** Read with the file tools: Glob lists, Grep searches, Read opens. The
-   shell is for `seefore` alone, one command a call: anything else may be refused. List the tree
-   first, with Glob; search freely, a search opens no file. Where it holds several repositories,
-   read each in its own folder and name that folder in a search. Keep, for each app, the file
-   that starts it and the folders of its code. Open at most 120 files, in this order:
+2. **Find what runs.** Read with the file tools: Glob lists, Grep searches, Read opens. The shell
+   is for `seefore` alone, one command a call: anything else may be refused. List the tree first,
+   with Glob; search freely, a search opens no file. Where a clone script or a manifest names
+   several repositories, read each in its folder and name it in every search. Keep, for each app,
+   the file that starts it and the folders of its code. Open at most 120 files, in this order:
    - build and package files, which name the programs: a module's commands, a workspace's
      packages, the scripts and entry points of a package;
    - deploy files, which name what is started and what it needs: image and compose files,

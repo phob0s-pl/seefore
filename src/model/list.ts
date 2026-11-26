@@ -165,9 +165,12 @@ export function listLines(model: ModelRead, asked: ListAsked): { lines: string[]
   const names = namesOf(record);
   const itNames = shown.filter((each) => each !== record && names.has(each.id) && kept(each));
   const namesIt = shown.filter((each) => each !== record && namesOf(each).has(record.id) && kept(each));
-  // An app that names no repository has its code in its system's.
-  const systemOf = (app: ModelRecord): ModelRecord | undefined =>
-    app.kind === 'apps' && text(app.fields.repository) === undefined ? shown.find((each) => each.kind === 'systems' && each.id === app.fields.in) : undefined;
+  // An app with no key of its own has its code in its system's repository. A record the change removes is held against the model as it was.
+  const systemOf = (app: ModelRecord): ModelRecord | undefined => {
+    if (app.kind !== 'apps' || app.fields.repository !== undefined) return undefined;
+    const model = marks.get(`${app.kind}/${app.id}`) === 'remove' ? today : shown;
+    return model.find((each) => each.kind === 'systems' && each.id === app.fields.in);
+  };
   const fromSystem = shown.filter((each) => each.kind === 'repositories' && each.id === systemOf(record)?.fields.repository && kept(each));
   const throughSystem = record.kind === 'repositories' ? shown.filter((each) => systemOf(each)?.fields.repository === record.id && kept(each)) : [];
   const lines = [marked(record)];

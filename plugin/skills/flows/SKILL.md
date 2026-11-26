@@ -70,14 +70,16 @@ one to write, and stop.
      the steps that are still true.
 2. **Find where the journey starts**: who or what starts it, a person, a clock or a message,
    and at which part. Find that part's code by what it is: search for its entry point,
-   its route or its command. Where `seefore list --near=<id>` names its repository, the code
-   lies in that repository's folder: with `workspace`, beside the model's folder under its
-   name. Name that folder in each search. A repository you cannot read ends the trail: say which.
+   its route or its command.
 3. **Follow it hop by hop.** Read with the file tools: Glob lists, Grep searches, Read opens.
    The shell is for `seefore` alone, one command a call. At each part find where the thing
    arrives, what the part does with it that the outcome hangs on, and where it sends it on:
    search for the route, the topic, the queue, the client's name, and open the file that
    answers. Open at most 40 files. Keep, for each step, the file and line that shows it.
+   - At each hop, a part's code lies in the repository that its app or its system names
+     (`seefore list --near=<id>`): with `workspace`, in the folder of its name beside the
+     model's folder; else in a folder you can read that is it. Name that folder in each
+     search. A repository you cannot read ends the trail there: say which.
 4. **Write the records** with the file tool, all in one message, in this order: the feature,
    the data, the connections the model lacked, the flow. Use a feature or a data record that
    is there before you write one. No record holds a path of the code, in any key.

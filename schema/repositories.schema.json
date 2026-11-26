@@ -7,11 +7,11 @@
       "minLength": 1,
       "maxLength": 100,
       "pattern": "^\\S(?:[^\\n\\r\\u0085\\u2028\\u2029]*\\S)?$",
-      "description": "Its own name, as the folder of a plain clone bears it: one line of 1 to 100 characters, with no slash.",
+      "description": "Its own name, as the folder of a plain clone bears it: one line of 1 to 100 characters, with no slash, backslash or colon.",
       "not": {
         "anyOf": [
           {
-            "pattern": "[/\\\\]"
+            "pattern": "[/\\\\:\\u0000-\\u001f]"
           },
           {
             "enum": [
@@ -33,11 +33,8 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 200,
-      "pattern": "^\\S+$",
-      "description": "Where it is cloned from, as `https://…` or `git@…`: one line of 1 to 200 characters with no space. Never a path on a disk.",
-      "not": {
-        "pattern": "^(?:[/\\\\~.]|file:|[A-Za-z]:)"
-      }
+      "description": "Where it is cloned from: one line of 1 to 200 characters with no space, begun with `https://`, `http://`, `ssh://` or `git://`, or of the form `git@host:path`. Never a path on a disk.",
+      "pattern": "^(?:(?:https|http|ssh|git):\\/\\/[^\\s\\u0085]+|[^\\s\\u0085/\\\\:@]+@[^\\s\\u0085/\\\\:@]+:[^\\s\\u0085]+)$"
     },
     "workspace": {
       "type": "boolean",
@@ -49,5 +46,5 @@
     "name"
   ],
   "additionalProperties": false,
-  "description": "A repository that holds code or deploy files of the system, other than the one the model's folder lies in: that one needs no record. A system or an app names it with `repository`. It says which repository to read, and never where a checkout lies on a machine: no path, and no folder inside it. Written from a file that names the repository, as a clone script, a workspace's manifest or a package's own `repository`, or from a person's word; never from an image's name. A change writes one, or the key that names it, only from what the person said."
+  "description": "A repository that holds code or deploy files of the system, other than the one the model's folder lies in: that one needs no record. A system or an app whose code is in it names it with `repository`; one that holds only deploy files or documents is named by none. It says which repository to read, and never where a checkout lies on a machine: no path, and no folder inside it. Written from a file that names the repository, as a clone script, a workspace's manifest or a package's own `repository`, or from a person's word; never from an image's name."
 }

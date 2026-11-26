@@ -316,7 +316,7 @@ function Thing({ record, catalogue, travel, lines }: { record: ModelRecord; cata
             label: 'Repository',
             value: (
               <>
-                <RecordLink catalogue={catalogue} id={repository.id} />
+                {catalogue.record(repository.id)?.kind === 'repositories' ? <RecordLink catalogue={catalogue} id={repository.id} /> : <span className="dangling">{repository.id}</span>}
                 <Taken catalogue={catalogue} from={repository.from} record={record} />
               </>
             ),
@@ -440,8 +440,9 @@ function Technology({ record, catalogue }: { record: ModelRecord; catalogue: Cat
 const WEB = /^https?:\/\//;
 
 /**
- * A repository: where it is cloned from, where its checkout lies when it is beside the model,
- * and the systems and apps whose code it holds, an app that takes it from its system with "from".
+ * A repository: where it is cloned from, where its checkout lies when it is beside the model's
+ * folder, which the page never looks at, and the systems and apps whose code it holds, an app that
+ * takes it from its system with "from".
  */
 function Repository({ record, catalogue }: { record: ModelRecord; catalogue: Catalogue }) {
   const { url, name, workspace } = record.fields;
@@ -466,7 +467,7 @@ function Repository({ record, catalogue }: { record: ModelRecord; catalogue: Cat
             label: 'Workspace',
             value: (
               <>
-                Checked out beside the model, in <code>{name}/</code>
+                Beside the model's folder, in <code>{name}/</code>
               </>
             ),
           },
