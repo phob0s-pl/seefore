@@ -424,7 +424,7 @@ const StepSchema = z
     removes: ids('`removes` holds the ids of records in `data/`.')
       .meta({
         description:
-          'The ids of the data that is no longer in the store after this step, records in data/, none twice: on a step on a connection that ends at a store. A read that takes a job off a queue names the job in `data` and in `removes`.',
+          'The ids of the data that is no longer in the store after this step, records in data/, none twice: on a step on a connection that ends at a store. A step that takes a job off a queue, so that no other worker gets it, names the job in `removes`, and in `data` too where the same step reads it. A read that leaves the thing there, as of a topic, names it in `data` alone.',
       })
       .optional(),
   })
