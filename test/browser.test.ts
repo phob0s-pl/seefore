@@ -1304,3 +1304,105 @@ test.skipIf(!HAS_CHROME).concurrent(
   20_000,
 );
 
+/**
+ * A copy of the shop with two decided changes: one applied, whose review has a point the person
+ * settled, and one rejected, with the person's reason. The applied one added the clerk, who is in
+ * the model now, and removed a technology that is no longer there.
+ */
+async function decidedShop(): Promise<string> {
+  const folder = await mkdtemp(join(tmpdir(), 'seefore-shop-'));
+  await cp(SHOP, folder, { recursive: true });
+  await writeFile(join(folder, 'changes', 'a-clerk-in-the-shop.yaml'), 'name: A clerk in the shop\nprompt: A clerk types in the orders that do not come online.\nstatus: applied\nadd:\n  people/person-clerk: {name: Clerk}\nremove:\n  - technologies/tech-rust\n');
+  await writeFile(join(folder, 'changes', 'orders-by-fax.yaml'), 'name: Orders by fax\nprompt: The shop takes orders that come by fax.\ngiven:\n  - The clerk types a faxed order in.\nstatus: rejected\nwhy: Nobody sends the shop a fax.\n');
+  await writeFile(
+    join(folder, 'reviews', 'a-clerk-in-the-shop.yaml'),
+    'read: "5d2e8f10"\npoints:\n  clerk-works-in-nothing:\n    name: Nothing says what the clerk works in\n    severity: note\n    about: [need]\n    finding: The change adds `person-clerk`, and no connection says what the clerk uses.\n    status: settled\n    comments:\n      - The clerk works on paper, outside the shop.\n',
+  );
+  return folder;
+}
+
+/** The pills a selector finds, each as its class and its word. */
+const pills = (selector: string) => `[...document.querySelectorAll(${JSON.stringify(selector)})].map((pill) => pill.className + ' ' + pill.textContent)`;
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME ? 'a decided change bears its pill at the right of its row and beside its title, and an open one none; Need of a rejected change says why not' : `skipped: there is no Chrome at ${CHROME}`,
+  async () => {
+    const folder = await decidedShop();
+    try {
+      await inChrome(async (send, address) => {
+        await send('Page.navigate', { url: `${address}/changes` });
+        const list = `document.querySelectorAll('ul[aria-label="Changes"] > li').length === 4 && {
+          rows: ${texts('ul[aria-label="Changes"] > li')},
+          pills: [...document.querySelectorAll('ul[aria-label="Changes"] > li')].map((row) => [...row.querySelectorAll('.row-cell .pill')].map((pill) => pill.className + ' ' + pill.textContent).join()),
+        }`;
+        expect(await waitFor(send, list)).toEqual({
+          // The rows keep their order, by name.
+          rows: ['A clerk in the shop Applied', 'Orders by fax Rejected', 'Orders by post', 'Orders on paper only'],
+          pills: ['pill tone-success Applied', 'pill tone-danger Rejected', '', ''],
+        });
+        await click(send, await centreOf(send, 'ul[aria-label="Changes"] a[href="/changes/orders-by-fax"]'));
+        const need = `location.pathname === '/changes/orders-by-fax' && document.querySelector('main h1')?.textContent === 'Orders by fax' && document.querySelector('main .section-label') !== null && {
+          marks: ${pills('main .record-marks .pill')},
+          sections: ${texts('main .section-label')},
+          why: ${texts('section[aria-label="Why not"] .panel-text')},
+        }`;
+        expect(await waitFor(send, need)).toEqual({ marks: ['pill tone-danger Rejected'], sections: ['Prompt', 'Given', 'Why not'], why: ['Nobody sends the shop a fax.'] });
+        // Its Records bears the pill too, and asks for no records it will never have.
+        await click(send, await centreOf(send, 'nav[aria-label="Change sections"] a[href="/changes/orders-by-fax/records"]'));
+        const records = `location.pathname === '/changes/orders-by-fax/records' && document.querySelector('.empty-state') !== null && { marks: ${pills('main .record-marks .pill')}, says: ${texts('.empty-state')}[0] }`;
+        expect(await waitFor(send, records)).toEqual({ marks: ['pill tone-danger Rejected'], says: 'No records. This change is rejected: it adds, updates and removes nothing.' });
+        // An open change has its name alone as its title, and no section Why not.
+        await send('Page.navigate', { url: `${address}/changes/orders-by-post` });
+        const open = `(() => { const read = ${onChange('/changes/orders-by-post')}; return read && read.change !== null && document.querySelector('main .section-label') !== null && { pills: document.querySelectorAll('main .pill').length, sections: ${texts('main .section-label')} }; })()`;
+        expect(await waitFor(send, open)).toEqual({ pills: 0, sections: ['Prompt', 'Given'] });
+      }, folder);
+    } finally {
+      await rm(folder, { recursive: true, force: true });
+    }
+  },
+  20_000,
+);
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME ? "Records of an applied change says the model has its records, and a row leads to the record's page in the model where the model has it; a record under it says the same; a settled point is Settled" : `skipped: there is no Chrome at ${CHROME}`,
+  async () => {
+    const folder = await decidedShop();
+    try {
+      await inChrome(async (send, address) => {
+        await send('Page.navigate', { url: `${address}/changes/a-clerk-in-the-shop/records` });
+        const records = `location.pathname === '/changes/a-clerk-in-the-shop/records' && document.querySelector('main .row') !== null && {
+          marks: ${pills('main .record-marks .pill')},
+          note: ${texts('.change-note')},
+          sections: ${texts('main .section-label')},
+          rows: ${texts('main .row')},
+          links: ${hrefs('main .row a')},
+        }`;
+        expect(await waitFor(send, records)).toEqual({
+          marks: ['pill tone-success Applied'],
+          note: ['This change is applied: its records are in the model.'],
+          sections: ['Actors', 'Technologies'],
+          rows: ['Clerk Added', 'tech-rust Removed'],
+          // The clerk is in the model; the technology the change removed is not, so its row leads nowhere.
+          links: ['/actors/person-clerk'],
+        });
+        await click(send, await centreOf(send, 'main a[href="/actors/person-clerk"]'));
+        expect(await waitFor(send, `location.pathname === '/actors/person-clerk' && document.title === 'Clerk · seefore' && ${SIDEBAR}`)).toEqual({ main: 'Architecture Context Features Models Rules Changes', change: null, current: null });
+        // A record under it, opened by its address: the same line, and the way back.
+        await send('Page.navigate', { url: `${address}/changes/a-clerk-in-the-shop/records/people/person-clerk` });
+        const record = `location.pathname === '/changes/a-clerk-in-the-shop/records/people/person-clerk' && document.querySelector('.empty-state') !== null && { says: ${texts('.empty-state')}[0], back: ${hrefs('.empty-state a')} }`;
+        expect(await waitFor(send, record)).toEqual({ says: 'This change is applied: its records are in the model. Back to Records', back: ['/changes/a-clerk-in-the-shop/records'] });
+        // Review bears the pill beside the title; the settled point's pill is blue, in its row and on its page.
+        await send('Page.navigate', { url: `${address}/changes/a-clerk-in-the-shop/review` });
+        const review = `location.pathname === '/changes/a-clerk-in-the-shop/review' && document.querySelector('ul[aria-label="Points"] > li') !== null && { marks: ${pills('main .record-marks .pill')}, rows: ${texts('ul[aria-label="Points"] > li')}, pills: ${pills('ul[aria-label="Points"] .pill')} }`;
+        expect(await waitFor(send, review)).toEqual({ marks: ['pill tone-success Applied'], rows: ['Nothing says what the clerk works in Settled'], pills: ['pill tone-info Settled'] });
+        await click(send, await centreOf(send, 'ul[aria-label="Points"] a[href="/changes/a-clerk-in-the-shop/review/clerk-works-in-nothing"]'));
+        const point = `location.pathname === '/changes/a-clerk-in-the-shop/review/clerk-works-in-nothing' && document.querySelector('main h1')?.textContent === 'Nothing says what the clerk works in' && ${pills('.record-title .pill')}`;
+        expect(await waitFor(send, point)).toEqual(['pill Note', 'pill tone-info Settled']);
+      }, folder);
+    } finally {
+      await rm(folder, { recursive: true, force: true });
+    }
+  },
+  20_000,
+);
+

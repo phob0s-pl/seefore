@@ -135,3 +135,34 @@ test('a change and its review that bear the id of a record shadow nothing of the
   expect(changes.review('store-orders')?.points[0]?.about).toMatchObject([{ label: 'Orders', to: '/changes/store-orders/records/stores/store-orders' }]);
   expect(changes.review('flow-placing')).toEqual({ read: '4c1d9a70', points: [] });
 });
+
+test('the review of a decided change leads to each record on its own page, where the model has it, and settled is a status', () => {
+  // The same change, rejected: the check lays it no more, so nothing leads under it.
+  const rejected = MODEL.map((each) => (each.path === 'changes/post.yaml' ? { ...each, text: `${each.text}status: rejected\nwhy: Nobody sends an order by post.\n` } : each));
+  const model = readModel([
+    ...rejected,
+    review('post', [
+      'read: "4c1d9a70"',
+      'points:',
+      '  never-saved:',
+      '    name: An order is never saved',
+      '    severity: block',
+      '    about: [flows/flow-placing#saves, apps/app-api, apps/app-ledger]',
+      '    finding: No step writes the store.',
+      '    recommendation: The flow says where an order is written.',
+      '    status: settled',
+      '    comments: [Declined, since the store is written elsewhere., The person said it stands.]',
+    ]),
+  ]);
+  expect(model.problems).toEqual([]);
+  expect(model.laid).toEqual([]);
+  const [point] = changesOf(model.records, model.laid).review('post')?.points ?? [];
+  expect(point?.status).toBe('settled');
+  expect(point?.about.map((each) => [each.address, each.label, each.step ?? null, each.to ?? null])).toEqual([
+    // A step of a flow the change would have rewritten: the flow as it is, on that step.
+    ['flows/flow-placing#saves', 'Placing an order', 'Saves the order', '/flows/flow-placing#saves'],
+    ['apps/app-api', 'API', null, '/models/app-api'],
+    // What the model does not have leads nowhere.
+    ['apps/app-ledger', 'apps/app-ledger', null, null],
+  ]);
+});

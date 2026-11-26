@@ -279,6 +279,21 @@
       },
       "description": "The records the change removes: the path of each, `folder/id`. What still names one of them is told by the check.",
       "uniqueItems": true
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "applied",
+        "rejected"
+      ],
+      "description": "Whether the change is decided. Left out while it is open. `applied`: its records are in the model's files; written by `seefore apply` alone, never by hand. `rejected`: the person said no, and `why` says why. A decided change is history: the check holds its form alone and lays it over the model no more."
+    },
+    "why": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 300,
+      "pattern": "^\\S(?:[^\\n\\r\\u0085\\u2028\\u2029]*\\S)?$",
+      "description": "With `status: rejected` alone: the person's reason for the no, in one line of 1 to 300 characters."
     }
   },
   "required": [
@@ -286,5 +301,27 @@
     "prompt"
   ],
   "additionalProperties": false,
-  "description": "A change: its input (the prompt a person gave, what they answered when asked, and a name written last), and its body, the records it adds, updates and removes. With no body it is an input alone."
+  "description": "A change: its input (the prompt a person gave, what they answered when asked, and a name written last), and its body, the records it adds, updates and removes. With no body it is an input alone. Once it is decided it bears `status`.",
+  "if": {
+    "properties": {
+      "status": {
+        "const": "rejected"
+      }
+    },
+    "required": [
+      "status"
+    ]
+  },
+  "then": {
+    "required": [
+      "why"
+    ]
+  },
+  "else": {
+    "not": {
+      "required": [
+        "why"
+      ]
+    }
+  }
 }

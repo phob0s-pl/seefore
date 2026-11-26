@@ -53,8 +53,8 @@ export function SectionStack({ children }: { children: ReactNode }) {
   return <div className="section-stack">{children}</div>;
 }
 
-/** The tone of a state, beside the colour of a kind: danger, warning, caution or success. */
-export type Tone = 'danger' | 'warning' | 'caution' | 'success';
+/** The tone of a state, beside the colour of a kind: danger, warning, caution, success or info. */
+export type Tone = 'danger' | 'warning' | 'caution' | 'success' | 'info';
 
 /** The small tinted square that leads a row, in the colour of a kind of thing or the tone of a state, or neutral. */
 export function IconTile({ icon: Icon, kind, tone, size }: { icon: LucideIcon; kind?: string; tone?: Tone; size?: 'sm' | 'lg' }) {
