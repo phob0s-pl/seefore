@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest';
 import { changesOf, fieldRows } from '../src/model/changes.ts';
-import { orderOfBoth } from '../src/model/flow.ts';
-import type { FlowUnder } from '../src/model/flow.ts';
+import { itemAt, orderOfBoth } from '../src/model/flow.ts';
+import type { FlowUnder, Item, ItemPlace } from '../src/model/flow.ts';
 import { readModel } from '../src/model/read.ts';
 import type { SourceFile } from '../src/model/read.ts';
 
@@ -381,10 +381,10 @@ const KEEPS = [
 const rewrite = (steps: readonly string[]) => `  flows/flow-keeping:\n    steps:\n${steps.map((step) => `      - ${step}\n`).join('')}`;
 /** A change that leaves the steps and only rewrites the flow's description, so that the flow has a page under it. */
 const DESCRIBED = '  flows/flow-keeping: {description: Kept otherwise.}\n';
-/** The flow `flow-keeping`, with today's steps given, under one change of the body given. */
-const keeping = (body: string, steps: readonly string[] = KEEPS) => {
+/** The flow `flow-keeping`, with today's steps given and any more files, under one change of the body given. */
+const keeping = (body: string, steps: readonly string[] = KEEPS, ...more: SourceFile[]) => {
   const flow = file('flows/flow-keeping', ['name: Keeping an order', 'starts: An order comes', 'ends: The order is kept', 'feature: feature-ordering', 'steps:', ...steps.map((step) => `  - ${step}`), ''].join('\n'));
-  const read = readModel([...KEEPING, flow, file('changes/more', `name: More\nprompt: Make it so.\n${body}`)]);
+  const read = readModel([...KEEPING, ...more, flow, file('changes/more', `name: More\nprompt: Make it so.\n${body}`)]);
   expect(read.problems).toEqual([]);
   return changesOf(read.records, read.laid).flow('more', 'flow-keeping');
 };
@@ -419,8 +419,77 @@ test('an item that only today has is removed, with today acts, at the row of the
   expect(itemsOf(flow)).toEqual(['Order in Orders, same: put 1@1, read 2@2', 'Entry in Audit, removed: put 4@4']);
   expect(flow?.items[1]).toMatchObject({ acts: [{ step: 'notes', part: { id: 'app-worker', name: 'Worker' } }] });
   expect(flow?.items[1]?.today).toBeUndefined();
-  // The flow as it would be alone keeps no entry, and bears no mark.
+  // The flow as it would be alone keeps no entry, and bears no mark; its boxes hold its own rows, as any flow's.
   expect(itemsOf(flow?.result)).toEqual(['Order in Orders, same: put 1@-, read 2@-']);
+  expect(flow?.result?.view.boxes.filter((box) => box.rows !== undefined).map((box) => [box.id, box.rows])).toEqual([['store-orders', 1]]);
+});
+
+/** What an item is at each place given, with the step's word where it has one. */
+const lifeAt = (item: Item | undefined, places: readonly ItemPlace[]): string[] =>
+  places.map((place) => {
+    if (item === undefined) return '';
+    const { is, word } = itemAt(item, place);
+    return `${is}${word !== undefined ? ` ${word}` : ''}`;
+  });
+
+test('where a step moves, the acts of a removed item and of today stand down the one list, and a removed row is counted down it', () => {
+  // The order is read before it is put, and the two steps of the entry change places and name nothing.
+  const today = [...KEEPS.slice(0, 2), KEEPS[3] as string, '{id: clears, does: connection-api-keeps-audit, access: write, removes: [data-entry]}'];
+  const flow = keeping(`update:\n${rewrite(['reads', 'saves', '{id: clears, does: connection-api-keeps-audit, access: write}', '{id: notes, does: connection-worker-writes-audit}'])}`, today);
+  expect(flow?.steps.map((step) => [step.id, step.number])).toEqual([
+    ['reads', 1],
+    ['saves', 2],
+    ['clears', 3],
+    ['notes', 4],
+  ]);
+  expect(itemsOf(flow)).toEqual(['Order in Orders, updated: read 1@1, put 2@2 | today read 1@1, put 2@2', 'Entry in Audit, removed: take 3@3, put 4@4']);
+  // Taken out at row 3, then put again at row 4, where it is kept.
+  expect(lifeAt(flow?.items[1], ['starts', 1, 2, 3, 4, 'ends'])).toEqual(['hollow', 'hollow', 'hollow', 'gone Gone', 'kept Put', 'kept']);
+});
+
+test("today's acts say what happens in their steps today, their descriptions today, and which of the steps go", () => {
+  const today = ['{id: saves, does: connection-api-writes-orders, data: [data-order], description: Saves it at once.}', '{id: reads, does: connection-api-reads-orders, data: [data-order], description: Reads it back.}', KEEPS[3] as string];
+  // `saves` goes; `reads` is renamed and loses its description; `notes` is renamed and names nothing.
+  const flow = keeping(`update:\n${rewrite(['{id: reads, does: connection-api-reads-orders, data: [data-order], name: Looks the order up}', '{id: notes, does: connection-worker-writes-audit, name: Notes nothing}'])}`, today);
+  expect(flow?.steps.map((step) => [step.id, step.number, step.mark, step.happens])).toEqual([
+    ['saves', 1, 'removed', 'Saves the order'],
+    ['reads', 1, 'updated', 'Looks the order up'],
+    ['notes', 2, 'updated', 'Notes nothing'],
+  ]);
+  const api = { id: 'app-api', name: 'API' };
+  const [order, entry] = flow?.items ?? [];
+  // The step that goes bears its number of today, as the list shows it, and says that it goes.
+  expect(order?.today).toEqual([
+    { number: 1, step: 'saves', does: 'put', part: api, byRun: false, order: 0, row: 1, happens: 'Saves the order', description: 'Saves it at once.', goes: true },
+    { number: 1, step: 'reads', does: 'read', part: api, byRun: false, order: 1, row: 2, happens: 'Reads the order', description: 'Reads it back.' },
+  ]);
+  // The acts as they would be say none of it: their steps are on the list.
+  expect(order?.acts).toEqual([{ number: 1, step: 'reads', does: 'read', part: api, byRun: false, order: 0, row: 2 }]);
+  expect(entry).toMatchObject({ mark: 'removed', acts: [{ step: 'notes', number: 2, row: 3, happens: 'Notes it' }] });
+  expect(entry?.acts[0]?.goes).toBeUndefined();
+});
+
+test('a step that ran a flow and now acts itself updates its item', () => {
+  // Today the entry is put by the flow that `notes` runs; with the change, by `notes` itself.
+  const noting = file('flows/flow-noting', 'name: Noting an order\nstarts: An order is kept\nends: It is noted\nfeature: feature-ordering\nsteps:\n  - {id: writes, does: connection-worker-writes-audit, data: [data-entry]}\n');
+  const today = [KEEPS[0] as string, '{id: notes, does: flow-noting}', KEEPS[4] as string];
+  const flow = keeping(`update:\n${rewrite(['saves', KEEPS[3] as string, 'marks'])}`, today, noting);
+  expect(itemsOf(flow)).toEqual(['Order in Orders, same: put 1@1', 'Entry in Audit, updated: put 2@2 | today put 2@2']);
+  expect([flow?.items[1]?.acts[0]?.byRun, flow?.items[1]?.today?.[0]?.byRun]).toEqual([false, true]);
+});
+
+test('a connection whose `from` moves updates the item: the part that acts differs', () => {
+  const flow = keeping(`update:\n${DESCRIBED}  connections/connection-worker-writes-audit: {from: app-api}\n`);
+  expect(itemsOf(flow)).toEqual(['Order in Orders, same: put 1@1, read 2@2', 'Entry in Audit, updated: put 4@4 | today put 4@4']);
+  expect([flow?.items[1]?.acts[0]?.part.name, flow?.items[1]?.today?.[0]?.part.name]).toEqual(['API', 'Worker']);
+});
+
+test('a removed row stands where it stood today in its own box, whatever the turns of the boxes', () => {
+  // Today the entry comes first, in the audit trail, then the note and the order; the note goes, and the order comes first.
+  const puts = (id: string, data: string) => `{id: ${id}, does: connection-api-writes-orders, data: [${data}]}`;
+  const flow = keeping(`update:\n${rewrite(['saves', 'notes'])}`, [KEEPS[3] as string, puts('keeps', 'data-note'), puts('saves', 'data-order')]);
+  expect(itemsOf(flow)).toEqual(['Note in Orders, removed: put 2@3', 'Entry in Audit, same: put 2@2', 'Order in Orders, same: put 1@1']);
+  expect(flow?.items.filter((item) => item.store.id === 'store-orders').map((item) => item.data.name)).toEqual(['Note', 'Order']);
 });
 
 test('acts that differ update an item, with today acts; a number that shifts differs nothing', () => {

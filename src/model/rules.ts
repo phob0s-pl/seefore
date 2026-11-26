@@ -644,13 +644,15 @@ const stepShape: Rule = {
 
 /**
  * Why a step is at no store, in words that follow "but": "it is a reply", "it runs the flow
- * `flow-x`", "its connection `connection-x` ends at `app-y`, which is an app". Nothing where
- * what `does` names is not sure: that is a problem of its own.
+ * `flow-x`", "its connection `connection-x` ends at `app-y`, which is an app", "it names the
+ * store `store-x` itself, and no connection that ends at it". Nothing where what `does` names is
+ * not sure: that is a problem of its own.
  */
 function notAtStore(model: Model, step: Step, found: ReturnType<typeof onWhat>): string | undefined {
   if (step.reply !== undefined) return 'it is a reply';
   if (step.does === undefined) return 'neither `does` nor `reply`: nothing says where it happens';
   if (found === undefined) return undefined;
+  if (found.on === 'part' && found.entry.kind === 'stores') return `it names the store ${quote(found.entry.id)} itself, and no connection that ends at it`;
   if (found.on === 'part') return `it happens at ${quote(found.entry.id)}, which is ${NOUNS[found.entry.kind]}`;
   if (found.on === 'flow') return `it runs the flow ${quote(found.entry.id)}`;
   const to = found.entry.ok ? textOf(found.entry, 'to') : undefined;
@@ -671,6 +673,9 @@ const stepAccess: Rule = {
       const which = stepWords(step.index);
       const at = `steps[${step.index}]`;
       const access = textOf(model.record(store.connection) as Entry, 'access');
+      // A step that says its own way on a connection that says none is told that alone: the mend
+      // of it, `read-write` on the connection, gives the step its way.
+      const ownWay = step.access !== undefined && access === undefined;
       if (step.access !== undefined && access !== 'read-write')
         findings.push({
           entry,
@@ -692,8 +697,8 @@ const stepAccess: Rule = {
           fix: 'If the step deletes, it writes: say `access: write` on it where its connection says `read-write`, or name in `does` a connection that writes. If the store is a queue, say `kind: queue` on it.',
         });
       // One id in both lists is a take, which only a read makes. On a read of a store that is no queue it is told above, once, at `removes`;
-      // an id that names no data record is told by the references alone.
-      if (store.way === 'read') continue;
+      // on a step whose own way is told above, not at all; an id that names no data record is told by the references alone.
+      if (store.way === 'read' || ownWay) continue;
       step.removes.forEach((id, index) => {
         if (!step.data.includes(id) || model.record(id)?.kind !== 'data') return;
         findings.push({
@@ -927,9 +932,9 @@ const stepUnplaced: Rule = {
 };
 
 /**
- * Each step at a store, with its way there and its address, `flow#step`, for the counts of what a
- * step leaves unsaid of its store. A reply is at no store, nor a step that has both `does` and
- * `reply`, which is a problem of `step-shape`.
+ * Each step at a store, with its way there and its address, `flow#step`: for `step-access`, and
+ * for the counts of what a step leaves unsaid of its store. A reply is at no store, nor a step
+ * that has both `does` and `reply`, which is a problem of `step-shape`.
  */
 function atStores(model: Model): { entry: Entry; step: Step; store: AtStore; address: string }[] {
   const record = (id: string) => model.record(id);

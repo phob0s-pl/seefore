@@ -249,6 +249,13 @@ test('an item is hollow before its first act, and at Ends what all its acts make
   expect(at(records, 'flow-plain', 6)).toEqual(['Order kept', 'Note only-read', 'Job gone']);
 });
 
+test('`removes` is a take whatever the way, also on a step that says none', () => {
+  // The worker's line says `read-write`, and the step says no way of its own.
+  const records = kept(flowOf('flow-clears', ['{id: keeps, does: connection-web-writes-orders, data: [data-order]}', '{id: clears, does: connection-worker-changes-orders, removes: [data-order]}']));
+  expect(items(records, 'flow-clears')).toEqual(['Order in Orders: put 1, take 2']);
+  expect(at(records, 'flow-clears', 'ends')).toEqual(['Order gone']);
+});
+
 test('one id in both lists is a read and then a take: the step says "Gone"', () => {
   const records = kept(flowOf('flow-job', ['{id: queues, does: connection-web-queues-jobs, data: [data-job]}', '{id: takes, does: connection-worker-takes-jobs, data: [data-job], removes: [data-job]}']));
   expect(items(records, 'flow-job')).toEqual(['Job in Jobs: put 1, read 2, take 2']);
@@ -346,6 +353,15 @@ test("an item is under a condition only when every act on it is; a run step's `o
     'Job in Jobs: put 3, read 4, take 4',
     'Note in Orders: put 5* | Only when asked',
   ]);
+});
+
+test('a step whose flow puts an item and takes it says "Gone", not "Put"', () => {
+  const records = kept(
+    flowOf('flow-passes', ['{id: queues, does: connection-web-queues-jobs, data: [data-job]}', '{id: takes, does: connection-worker-takes-jobs, data: [data-job], removes: [data-job]}']),
+    flowOf('flow-passing', ['{id: queues, does: connection-web-queues-jobs, data: [data-job]}', '{id: passes, does: flow-passes}']),
+  );
+  expect(items(records, 'flow-passing')).toEqual(['Job in Jobs: put 1, put 2*, read 2*, take 2*']);
+  expect(at(records, 'flow-passing', 2)).toEqual(['Job gone Gone']);
 });
 
 test('one step that reads and puts one item says "Put"', () => {

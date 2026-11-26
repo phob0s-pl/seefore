@@ -217,8 +217,20 @@ test('an act that a flow it runs does stands under the flow it runs alone, once'
 });
 
 test("a read and a take of one step are two acts, the read first; a data record's acts stand by the store's name", () => {
-  const kept = travel(...KEPT);
+  // A refund that a step passes between two parts, and that no step names at a store.
+  const kept = travel(
+    ...KEPT,
+    file('data/data-refund.yaml', 'name: Refund\n'),
+    file('flows/flow-asks.yaml', 'name: Asking for a refund\nstarts: A fan asks\nends: The API knows\nfeature: feature-refunds\nsteps:\n  - {id: asks, does: connection-web-calls-api, data: [data-refund]}\n'),
+  );
   expect(said(kept.keptHere('store-jobs'), 'data')).toEqual(['data-job: put by app-api, Queuing a job 2', 'data-job: read by app-web, Queuing a job 3', 'data-job: take by app-web, Queuing a job 3', 'data-payment: put by app-api, Queuing a job 2']);
   expect(said(kept.keptIn('data-payment'), 'store')).toEqual(['store-jobs: put by app-api, Queuing a job 2', 'store-orders: read by app-web, Answering 2', 'store-orders: put by app-api, Queuing a job 1']);
+  expect(kept.stepsWith('data-refund').map((step) => `${step.flow}#${step.step}`)).toEqual(['flow-asks#asks']);
   expect(kept.keptIn('data-refund')).toEqual([]);
+});
+
+test('a take stands in Kept here whatever the way, also on a step that says none', () => {
+  // The API's line to the orders says no `access`, and the step no way of its own.
+  const kept = travel(file('flows/flow-clears.yaml', 'name: Clearing an order\nstarts: An order is old\nends: It is gone\nfeature: feature-stock\nsteps:\n  - {id: clears, does: connection-api-keeps-orders, removes: [data-order]}\n'));
+  expect(said(kept.keptHere('store-orders'), 'data')).toEqual(['data-order: take by app-api, Clearing an order 1', 'data-order: read by app-web, Saving an order 2']);
 });

@@ -2,9 +2,8 @@ import type { ModelRecord } from './answer.ts';
 import { byName, catalogueOf } from './catalogue.ts';
 import type { Catalogue } from './catalogue.ts';
 import { flowSteps } from './flow.ts';
-import type { ActDoes } from './flow.ts';
-import { stepsOf, wayOf } from './model.ts';
-import type { Step } from './model.ts';
+import { actsOf, stepsOf, wayOf } from './model.ts';
+import type { ActDoes, Step } from './model.ts';
 
 /**
  * What the pages of features, data, parts and connections ask of the flows, worked out from the
@@ -136,11 +135,8 @@ export function travelOf(records: readonly ModelRecord[], catalogue: Catalogue =
         const reads = way !== undefined ? way === 'read' : connection?.fields.access === 'read';
         const forward = reads ? { from: end, to: start } : { from: start, to: end };
         const part = step.kind === 'part' && own?.does !== undefined && things.has(catalogue.record(own.does)?.kind ?? '') ? own.does : undefined;
-        // What the step does at its store: of `data` a put or a read by its way, none where that is not said; of `removes` a take. A reply does nothing there.
-        const done: [string, ActDoes][] =
-          step.kind === 'connection' && own !== undefined && store !== undefined
-            ? [...(way === undefined ? [] : own.data.map((id): [string, ActDoes] => [id, way === 'write' ? 'put' : 'read'])), ...own.removes.map((id): [string, ActDoes] => [id, 'take'])]
-            : [];
+        // What the step does at its store, as the items of a flow have it. A reply does nothing there.
+        const done = step.kind === 'connection' && own !== undefined && store !== undefined ? actsOf(own, way) : [];
         const kept = once(
           done.filter(([id]) => catalogue.record(id)?.kind === 'data'),
           ([id, does]) => `${id} ${does}`,

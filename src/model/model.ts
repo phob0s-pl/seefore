@@ -110,6 +110,21 @@ export function wayOf(step: Step, record: (id: string) => Held | undefined): AtS
   return { connection: step.does, store: to, ...(way !== undefined ? { way } : {}) };
 }
 
+/** What an act does to its item: puts it into the store, reads it there, or takes it out. */
+export type ActDoes = 'put' | 'read' | 'take';
+
+/**
+ * What a step at a store does there to each id it names, by its way, as `wayOf` says it (C5b): of
+ * `data` a put where it writes and a read where it reads, none where its way is not said; of
+ * `removes` a take, whatever the way. Those of `data` come first, in its order, then those of
+ * `removes`. The items of a flow, the acts at a store and on a data record that their pages show,
+ * and today's words under a change all ask this one function.
+ */
+export function actsOf(step: Step, way: AtStore['way']): [string, ActDoes][] {
+  const kept = way === undefined ? [] : step.data.map((id): [string, ActDoes] => [id, way === 'write' ? 'put' : 'read']);
+  return [...kept, ...step.removes.map((id): [string, ActDoes] => [id, 'take'])];
+}
+
 /** Builds the model once from the entries. */
 export function buildModel(entries: readonly Entry[]): Model {
   const claimed = new Map<string, Entry[]>();
