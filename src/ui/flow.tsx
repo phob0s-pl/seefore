@@ -5,11 +5,13 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Link, useLocation, useNavigate, useOutletContext, useParams } from 'react-router-dom';
 import type { Catalogue } from '../model/catalogue.ts';
 import type { Verb } from '../model/changes.ts';
-import { flowSteps, flowView } from '../model/flow.ts';
-import type { FlowRead, FlowStep, Mark, Was } from '../model/flow.ts';
+import { flowItems, flowSteps, flowView, itemAt } from '../model/flow.ts';
+import type { ActDoes, FlowRead, FlowStep, Item, ItemPlace, Mark, Was } from '../model/flow.ts';
 import type { View } from '../model/view.ts';
 import { Diagram } from './diagram.tsx';
+import type { Row } from './diagram.tsx';
 import { Inspector } from './inspector.tsx';
+import type { Life } from './inspector.tsx';
 import { addressOf } from './models.tsx';
 import type { ModelState, Slots } from './shell.tsx';
 import { Button, CanvasFrame, EmptyState, MarkPill, useTitle } from './ui.tsx';
@@ -46,6 +48,7 @@ export function FlowPage() {
   const { answer, catalogue, failed, slots } = useOutletContext<ModelState>();
   const flow = useMemo(() => (answer ? flowSteps(answer.records, id) : undefined), [answer, id]);
   const view = useMemo(() => (answer ? flowView(answer.records, id) : undefined), [answer, id]);
+  const items = useMemo(() => (answer ? flowItems(answer.records, id) : NO_ITEMS), [answer, id]);
   useTitle(flow?.name ?? 'Flows');
   if (failed !== undefined) return <p className="page-line failed">{failed}</p>;
   if (answer === undefined || catalogue === undefined) return <p className="page-line">Reading…</p>;
@@ -59,7 +62,7 @@ export function FlowPage() {
     );
   }
   // Another flow is a page of its own: what was picked and laid out is let go.
-  return <FlowBody key={flow.id} flow={flow} steps={flow.steps} count={flow.steps.length} view={view} catalogue={catalogue} slots={slots} crumbs={<FeatureCrumbs flow={flow} catalogue={catalogue} />} />;
+  return <FlowBody key={flow.id} flow={flow} steps={flow.steps} count={flow.steps.length} view={view} items={items} catalogue={catalogue} slots={slots} crumbs={<FeatureCrumbs flow={flow} catalogue={catalogue} />} />;
 }
 
 /** The way out of a flow in the system, in the top bar: Features, the feature, the flow. */
@@ -101,6 +104,9 @@ const MARK_VERBS: Partial<Record<Mark, Verb>> = { added: 'add', removed: 'remove
 /** No words of today: the flow's own page, and a flow a change adds or removes. */
 const NONE: readonly Was[] = [];
 
+/** No items: a flow that keeps nothing in a store it draws. */
+const NO_ITEMS: readonly Item[] = [];
+
 /** A thing worth a line: not nothing, and not the `false` of a condition that does not hold. */
 const something = (node: ReactNode): boolean => node !== undefined && node !== null && node !== false && node !== '';
 
@@ -129,19 +135,93 @@ function runsOf(steps: readonly StepShown[]): (StepShown | Run)[] {
 }
 
 /**
+ * Where the items stand at a place of the list, as `itemAt` reads it: a step by the number it has
+ * in the flow the items are of, and whether the step's word is said. Under a change a step that
+ * goes is none of that flow: there the items are as after the step before it that stays, and none
+ * bears a word.
+ */
+function itemPlaceOf(steps: readonly StepShown[], place: Place): { at: ItemPlace; said: boolean } {
+  if (typeof place !== 'number') return { at: place, said: false };
+  for (let at = place; at >= 0; at--) {
+    const step = steps[at];
+    if (step !== undefined && step.mark !== 'removed') return { at: step.number, said: at === place };
+  }
+  return { at: 'starts', said: false };
+}
+
+/** An item picked in its store's box: the store's id and the data's. */
+type Picked = { store: string; data: string };
+
+/** The rows of each store's box at a place, by the store's id, in the order of the items; the row of the picked item says so. */
+function rowsAt(items: readonly Item[], steps: readonly StepShown[], place: Place, picked: Picked | undefined): Map<string, Row[]> {
+  const { at, said } = itemPlaceOf(steps, place);
+  const rows = new Map<string, Row[]>();
+  for (const item of items) {
+    const { is, word } = itemAt(item, at);
+    const row: Row = {
+      data: item.data.id,
+      name: item.data.name,
+      is,
+      ...(said && word !== undefined ? { word } : {}),
+      ...(item.condition !== undefined ? { condition: item.condition } : {}),
+      ...(picked?.store === item.store.id && picked.data === item.data.id ? { picked: true as const } : {}),
+    };
+    rows.set(item.store.id, [...(rows.get(item.store.id) ?? []), row]);
+  }
+  return rows;
+}
+
+/** What an act does to its item, as its life says it. */
+const DONE: Record<ActDoes, string> = { put: 'Put', read: 'Read', take: 'Taken out' };
+
+/**
+ * An item's life as its panel reads it: an act a row, by the step of this flow it stands at, and
+ * where that step stands in the list. A step's description stands once, under its last act.
+ */
+function lifeOf(item: Item, steps: readonly StepShown[]): Life {
+  return {
+    store: item.store.name,
+    acts: item.acts.map((act, index) => {
+      const at = steps.findIndex((step) => step.mark !== 'removed' && step.number === act.number);
+      const step = steps[at];
+      const last = item.acts[index + 1]?.number !== act.number;
+      return {
+        does: DONE[act.does],
+        number: act.number,
+        at,
+        by: act.byRun ? 'the flow it runs' : act.part.name,
+        happens: step?.happens ?? '',
+        ...(act.only !== undefined ? { only: `Only ${act.only}` } : {}),
+        ...(last && step?.description !== undefined ? { description: step.description } : {}),
+      };
+    }),
+    put: item.acts.some((act) => act.does === 'put'),
+  };
+}
+
+/** What the panel says: a box or a line picked on the diagram, a data record of the step, or an item picked in its store's box. */
+type Panel = { kind: 'picked' | 'data'; id: string } | ({ kind: 'item' } & Picked);
+
+/**
  * The page of a flow, drawn from what is handed to it: the flow's head; its steps, in the order the
  * list stands them; how many steps the flow has, for "4 of 12"; the view of the diagram, laid out
- * once; the catalogue its links and its panel are made with; and the way back for the top bar.
- * Under a change, the steps bear their marks, `was` holds today's words of the flow's own keys
- * that the change writes otherwise, `marks` what the change does to each box, arrow and connection
- * of the view, `verbs` what it does to each record it names, by its path, and `system`, for a
- * flow the change removes, its address in the system.
+ * once; the items its stores hold, a row each in its store's box; the catalogue its links and its
+ * panel are made with; and the way back for the top bar. Under a change, the steps bear their
+ * marks, `was` holds today's words of the flow's own keys that the change writes otherwise, `marks`
+ * what the change does to each box, arrow and connection of the view, `verbs` what it does to each
+ * record it names, by its path, and `system`, for a flow the change removes, its address in the
+ * system.
+ *
+ * A row is what its item is at the place the page stands at: hollow before the first step, as
+ * after the last at Ends, and lit with the step's word where the current step touches it. A click
+ * on a row opens its item's panel, with its life first; the step stays.
  */
 export function FlowBody({
   flow,
   steps,
   count,
   view,
+  items = NO_ITEMS,
   was = NONE,
   marks,
   verbs,
@@ -154,6 +234,7 @@ export function FlowBody({
   steps: readonly StepShown[];
   count: number;
   view: View;
+  items?: readonly Item[];
   was?: readonly Was[];
   marks?: ReadonlyMap<string, Mark>;
   verbs?: ReadonlyMap<string, Verb>;
@@ -227,10 +308,17 @@ export function FlowBody({
     // Only a move scrolls: `current` says where the reader stands, and the rest follows from it.
   }, [current]);
 
-  // The panel: of a box or a line picked on the diagram, or of a data record of the step.
-  const [panel, setPanel] = useState<{ id: string; data: boolean }>();
-  const onPick = useCallback((id?: string) => setPanel(id === undefined ? undefined : { id, data: false }), []);
+  // The panel: of a box or a line picked on the diagram, of a data record of the step, or of an item picked in its store's box.
+  const [panel, setPanel] = useState<Panel>();
+  const onPick = useCallback((id?: string) => setPanel(id === undefined ? undefined : { kind: 'picked', id }), []);
+  const onItem = useCallback((store: string, data: string) => setPanel({ kind: 'item', store, data }), []);
   const close = useCallback(() => setPanel(undefined), []);
+
+  // The rows of the stores' boxes at this place, and the life of the item picked.
+  const item = panel?.kind === 'item' ? items.find((each) => each.store.id === panel.store && each.data.id === panel.data) : undefined;
+  const pickedItem = item && panel?.kind === 'item' ? panel : undefined;
+  const kept = useMemo(() => rowsAt(items, steps, place, pickedItem), [items, steps, place, pickedItem]);
+  const life = useMemo(() => (item !== undefined ? lifeOf(item, steps) : undefined), [item, steps]);
 
   // A row's place in the list, which a step's number is not under a change: a step that goes keeps today's.
   const places = useMemo(() => new Map(steps.map((each, at) => [each, at])), [steps]);
@@ -324,7 +412,7 @@ export function FlowBody({
         </div>
         <div className="flow-bar-lines">
           {named !== undefined && <Today was={named} />}
-          {step !== undefined ? <StepLines step={step} catalogue={catalogue} onData={(id) => setPanel({ id, data: true })} /> : <FlowLines flow={flow} was={head} catalogue={catalogue} system={system} />}
+          {step !== undefined ? <StepLines step={step} catalogue={catalogue} onData={(id) => setPanel({ kind: 'data', id })} /> : <FlowLines flow={flow} was={head} catalogue={catalogue} system={system} />}
         </div>
       </section>
       {view.boxes.length === 0 ? (
@@ -334,8 +422,10 @@ export function FlowBody({
           </div>
         </CanvasFrame>
       ) : (
-        <Diagram view={view} depth="components" shape="flow" picked={panel !== undefined && !panel.data ? panel.id : undefined} onPick={onPick} step={step?.lights} marks={marks}>
-          {panel !== undefined && <Inspector picked={panel.id} view={view} catalogue={catalogue} onClose={close} marks={marks} verbs={verbs} />}
+        <Diagram view={view} depth="components" shape="flow" picked={panel?.kind === 'picked' ? panel.id : undefined} onPick={onPick} step={step?.lights} marks={marks} rows={kept} onItem={onItem}>
+          {panel !== undefined && (
+            <Inspector picked={panel.kind === 'item' ? panel.data : panel.id} view={view} catalogue={catalogue} onClose={close} marks={marks} verbs={verbs} life={life} onStep={go} />
+          )}
         </Diagram>
       )}
     </div>

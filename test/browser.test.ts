@@ -787,6 +787,210 @@ test.skipIf(!HAS_CHROME).concurrent(
   20_000,
 );
 
+/**
+ * A copy of the shop with a flow that keeps things in its stores: the Order API puts a receipt in
+ * an outbox, runs the flow of placing an order, which puts the order's details in the store of
+ * orders when the customer has paid, only reads the customer there, and takes the receipt out of
+ * the outbox again.
+ */
+async function keptShop(): Promise<string> {
+  const folder = await mkdtemp(join(tmpdir(), 'seefore-shop-'));
+  await cp(SHOP, folder, { recursive: true });
+  const files: Record<string, string> = {
+    'stores/store-outbox.yaml': 'name: Outbox\nin: system-shop\nkind: queue\n',
+    'data/data-receipt.yaml': 'name: Receipt\ndescription: What the customer is sent once the order is kept.\n',
+    'data/data-customer.yaml': 'name: Customer\ndescription: Who orders.\n',
+    'connections/connection-api-reads-orders.yaml': 'from: app-order-api\nto: store-orders\naccess: read\n',
+    'connections/connection-api-uses-outbox.yaml': 'from: app-order-api\nto: store-outbox\naccess: read-write\n',
+    'flows/flow-sending-a-receipt.yaml': [
+      'name: Sending a receipt',
+      'starts: A customer asks for a receipt',
+      'ends: The receipt is sent',
+      'feature: feature-ordering',
+      'steps:',
+      '  - {id: asks, does: connection-customer-orders, name: Asks for a receipt}',
+      '  - {id: writes, does: connection-api-uses-outbox, name: Puts the receipt in the outbox, data: [data-receipt], access: write}',
+      '  - {id: places, does: flow-placing-an-order}',
+      '  - {id: looks-up, does: connection-api-reads-orders, name: Looks up the customer, data: [data-customer]}',
+      '  - {id: takes, does: connection-api-uses-outbox, name: Takes the receipt out, data: [data-receipt], access: read, removes: [data-receipt], description: The receipt leaves the outbox as it is sent.}',
+      '  - {id: answers, reply: asks, name: Sends the receipt}',
+      '',
+    ].join('\n'),
+  };
+  for (const [path, text] of Object.entries(files)) await writeFile(join(folder, path), text);
+  return folder;
+}
+
+/** The page of the flow that keeps things, in a copy of the shop, once Chrome shows it. */
+async function inKeptShop(run: (send: Send, address: string) => Promise<void>) {
+  const folder = await keptShop();
+  try {
+    await inChrome(async (send, address) => {
+      await send('Page.navigate', { url: `${address}/flows/flow-sending-a-receipt` });
+      await flowAt(send, '');
+      await run(send, address);
+    }, folder);
+  } finally {
+    await rm(folder, { recursive: true, force: true });
+  }
+}
+
+/** Each row in a store's box: the box, the data's name, what the item is, whether the step lights it, and its word. */
+const ROWS = `[...document.querySelectorAll('.diagram-row')].map((row) => [row.closest('.react-flow__node').getAttribute('data-id'), row.querySelector('.diagram-row-name').textContent, row.getAttribute('data-is'), row.hasAttribute('data-lit'), row.querySelector('.diagram-row-word')?.textContent ?? null])`;
+type RowRead = [string, string, string, boolean, string | null];
+/** The rows once the page stands at a place, the step of the hash or none, and three rows are drawn. */
+async function rowsAt(send: Send, hash: string): Promise<RowRead[]> {
+  await flowAt(send, hash);
+  return (await waitFor(send, `document.querySelectorAll('.diagram-row').length === 3 && ${ROWS}`)) as RowRead[];
+}
+/** A step of the flow, picked with a click on its row. */
+const stepTo = async (send: Send, step: string) => click(send, await centreOf(send, `[data-row="step"][data-step="${step}"]`));
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME ? "before the first step every row of a store's box is hollow, with no word, and the sign of a condition says it in its title" : `skipped: there is no Chrome at ${CHROME}`,
+  () =>
+    inKeptShop(async (send) => {
+      // The rows stand by their first act; the order's details are put by the flow the third step runs.
+      expect(await rowsAt(send, '')).toEqual([
+        ['store-orders', 'Order details', 'hollow', false, null],
+        ['store-orders', 'Customer', 'hollow', false, null],
+        ['store-outbox', 'Receipt', 'hollow', false, null],
+      ]);
+      const signs = `[...document.querySelectorAll('.diagram-row-sign')].map((sign) => [sign.closest('.diagram-row').getAttribute('data-item'), sign.getAttribute('title'), sign.getAttribute('aria-label')])`;
+      expect(await waitFor(send, signs)).toEqual([['data-order-details', 'Only when the customer has paid', 'Only when the customer has paid']]);
+    }),
+  20_000,
+);
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME ? 'a put lights its row with "Put", and the row is kept after' : `skipped: there is no Chrome at ${CHROME}`,
+  () =>
+    inKeptShop(async (send) => {
+      await stepTo(send, 'writes');
+      expect(await rowsAt(send, '#writes')).toContainEqual(['store-outbox', 'Receipt', 'kept', true, 'Put']);
+      await press(send, 'ArrowDown', 40);
+      expect(await rowsAt(send, '#places')).toContainEqual(['store-outbox', 'Receipt', 'kept', false, null]);
+    }),
+  20_000,
+);
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME ? 'a take strikes the name through, with "Gone" at its step; an item only read says "only read"; Ends shows the whole, none lit' : `skipped: there is no Chrome at ${CHROME}`,
+  () =>
+    inKeptShop(async (send) => {
+      const struck = `getComputedStyle(document.querySelector('.diagram-row[data-item="data-receipt"] .diagram-row-name')).textDecorationLine`;
+      await stepTo(send, 'takes');
+      expect(await rowsAt(send, '#takes')).toEqual([
+        ['store-orders', 'Order details', 'kept', false, null],
+        ['store-orders', 'Customer', 'only-read', false, 'only read'],
+        ['store-outbox', 'Receipt', 'gone', true, 'Gone'],
+      ]);
+      expect(await waitFor(send, struck)).toBe('line-through');
+      await press(send, 'End', 35);
+      await waitFor(send, `document.querySelector('[data-row="ends"].current') !== null`);
+      expect(await rowsAt(send, '')).toEqual([
+        ['store-orders', 'Order details', 'kept', false, null],
+        ['store-orders', 'Customer', 'only-read', false, 'only read'],
+        ['store-outbox', 'Receipt', 'gone', false, null],
+      ]);
+      expect(await waitFor(send, struck)).toBe('line-through');
+    }),
+  20_000,
+);
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME ? 'a step that runs a flow lights the row it touches and fades nothing; in a faded box a row the flow has touched stands at 0.72, and a hollow one keeps its look' : `skipped: there is no Chrome at ${CHROME}`,
+  () =>
+    inKeptShop(async (send) => {
+      // A box, its card and a row of it: whether the box is faded, and the opacity of each.
+      const looks = (store: string, data: string) =>
+        `(() => { const node = document.querySelector('.react-flow__node[data-id="${store}"]'); const row = node?.querySelector('.diagram-row[data-item="${data}"]'); return node && row && [node.classList.contains('faded'), getComputedStyle(node).opacity, getComputedStyle(node.querySelector('.architecture-node')).opacity, getComputedStyle(row).opacity]; })()`;
+      // The put into the outbox fades the store of orders, whose rows are hollow yet.
+      await stepTo(send, 'writes');
+      expect((await flowAt(send, '#writes')).faded).toContain('store-orders');
+      expect(await waitFor(send, looks('store-orders', 'data-customer'))).toEqual([true, '1', '0.25', '1']);
+      // The flow it runs puts the order's details: the row is lit, no line is, and nothing fades.
+      await press(send, 'ArrowDown', 40);
+      const places = await flowAt(send, '#places');
+      expect([places.stepped, places.faded]).toEqual([[], []]);
+      expect(await rowsAt(send, '#places')).toContainEqual(['store-orders', 'Order details', 'kept', true, 'Put']);
+      // Reading the customer fades the outbox, and its receipt, put before, stands at 0.72.
+      await press(send, 'ArrowDown', 40);
+      expect((await flowAt(send, '#looks-up')).faded).toContain('store-outbox');
+      expect(await waitFor(send, looks('store-outbox', 'data-receipt'))).toEqual([true, '1', '0.25', '0.72']);
+    }),
+  20_000,
+);
+
+/** The panel of an item: its small line, its name, its heading, its life row by row, its description, and the rows picked. */
+const LIFE = `(() => {
+  const panel = document.querySelector('aside[aria-label="Diagram inspector"]');
+  return panel !== null && panel.querySelector('ol[aria-label="Life"]') !== null && {
+    kind: panel.querySelector('.eyebrow')?.textContent,
+    name: panel.querySelector('h2')?.textContent,
+    heading: panel.querySelector('h3')?.textContent,
+    life: [...panel.querySelectorAll('ol[aria-label="Life"] > li')].map((row) => row.innerText.replace(/\\s+/g, ' ').trim()),
+    text: panel.querySelector('p')?.textContent,
+    picked: [...document.querySelectorAll('.diagram-row[data-picked]')].map((row) => row.getAttribute('data-item')),
+    boxes: document.querySelectorAll('.react-flow__node.picked').length,
+  };
+})()`;
+/** The panel of an item once it names the data waited for. */
+const lifeOf = (send: Send, name: string) => waitFor(send, `(() => { const read = ${LIFE}; return read && read.name === ${JSON.stringify(name)} && read; })()`);
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME ? 'a click on a row opens the panel of its item with its life first, and a number there moves the page to that step and keeps the panel' : `skipped: there is no Chrome at ${CHROME}`,
+  () =>
+    inKeptShop(async (send) => {
+      await click(send, await centreOf(send, '.diagram-row[data-item="data-receipt"]'));
+      expect(await lifeOf(send, 'Receipt')).toEqual({
+        kind: 'Data · in Outbox',
+        name: 'Receipt',
+        heading: 'In Outbox, in this flow',
+        life: ['Put at 2 by Order API: Puts the receipt in the outbox', 'Read at 5 by Order API: Takes the receipt out', 'Taken out at 5 by Order API: Takes the receipt out The receipt leaves the outbox as it is sent.'],
+        text: 'What the customer is sent once the order is kept.',
+        picked: ['data-receipt'],
+        boxes: 0,
+      });
+      // The step stays where it was: before the first.
+      expect((await flowAt(send, '')).current).toBeNull();
+      await click(send, await centreOf(send, 'ol[aria-label="Life"] > li:nth-child(2) .item-life-step'));
+      expect((await flowAt(send, '#takes')).current).toBe('takes');
+      expect(await lifeOf(send, 'Receipt')).toMatchObject({ picked: ['data-receipt'] });
+      // What the flow it runs does, under its condition; and what no act puts. The panel is closed
+      // first, so that it covers no row.
+      await press(send, 'Escape', 27);
+      expect(await closed(send)).toBe(true);
+      await click(send, await centreOf(send, '.diagram-row[data-item="data-order-details"]'));
+      expect(await lifeOf(send, 'Order details')).toMatchObject({ kind: 'Data · in Orders', life: ['Put at 3 by the flow it runs: Placing an order Only when the customer has paid'], picked: ['data-order-details'] });
+      await press(send, 'Escape', 27);
+      expect(await closed(send)).toBe(true);
+      await click(send, await centreOf(send, '.diagram-row[data-item="data-customer"]'));
+      expect(await lifeOf(send, 'Customer')).toMatchObject({ life: ['Read at 4 by Order API: Looks up the customer', 'Not put in this flow.'] });
+      expect((await flowAt(send, '#takes')).current).toBe('takes');
+    }),
+  20_000,
+);
+
+test.skipIf(!HAS_CHROME).concurrent(
+  HAS_CHROME ? 'a double click on a row brings its box to the zoom of reading beside the panel, and picks the item, not the box' : `skipped: there is no Chrome at ${CHROME}`,
+  () =>
+    inKeptShop(async (send) => {
+      const OUTBOX = '.react-flow__node[data-id="store-outbox"]';
+      const frame = (await waitFor(send, `(() => { const box = document.querySelector('.react-flow')?.getBoundingClientRect(); return box && box.width > 0 && { x: box.x, y: box.y, width: box.width, height: box.height }; })()`)) as { x: number; y: number; width: number; height: number };
+      // Far out first, so that the zoom of reading is closer than the field is.
+      const empty = await settled(send, EMPTY);
+      for (let turns = 0; turns < 30 && (await fieldOf(send)).zoom > 0.5; turns++) await send('Input.dispatchMouseEvent', { type: 'mouseWheel', x: empty.x, y: empty.y, deltaX: 0, deltaY: 100 });
+      expect((await rested(send)).zoom).toBeLessThan(0.8);
+      await doubleClick(send, await centreOf(send, '.diagram-row[data-item="data-receipt"]'));
+      expect(await lifeOf(send, 'Receipt')).toMatchObject({ picked: ['data-receipt'], boxes: 0 });
+      expect((await rested(send)).zoom).toBeCloseTo(0.8, 3);
+      const box = await centreOf(send, OUTBOX);
+      expect([Math.round(box.x - frame.x), Math.round(box.y - frame.y)]).toEqual([Math.round((frame.width - 392) / 2), Math.round(frame.height / 2)]);
+    }),
+  20_000,
+);
+
 /** The text of what a selector finds, each with its spaces made one. */
 const texts = (selector: string) => `[...document.querySelectorAll(${JSON.stringify(selector)})].map((each) => each.innerText.replace(/\\s+/g, ' ').trim())`;
 

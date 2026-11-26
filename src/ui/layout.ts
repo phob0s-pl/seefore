@@ -23,6 +23,13 @@ const SIZES: Record<string, { width: number; height: number }> = {
   infrastructure: { width: 200, height: 84 },
 };
 
+/**
+ * What a store's box grows by for each item of a flow it holds, on the page of the flow: a row
+ * 22 pixels high and a gap of 2. diagram.css draws the rows from 76 pixels below the box's top,
+ * which leaves 10 at its foot.
+ */
+const ROW = 24;
+
 /** Set on the diagram and on every frame: tight gaps, a thorough search, the same answer each time. */
 const COMMON: LayoutOptions = {
   'elk.spacing.nodeNode': '8',
@@ -94,7 +101,10 @@ function turnedOf(view: View, partition: Partition): Set<string> {
   return turned;
 }
 
-/** The ELK graph of a view: frames inside frames, each box at least its size, one edge per arrow, those of `turned` from their end to their start. */
+/**
+ * The ELK graph of a view: frames inside frames, each box at least its size and a store's taller
+ * by its rows, one edge per arrow, those of `turned` from their end to their start.
+ */
 function graphOf(view: View, partition: Partition, turned: Set<string>, shape: Shape): ElkNode {
   const common: LayoutOptions = shape === 'flow' ? { ...COMMON, ...FLOW } : COMMON;
   const sides = shape === 'flow' ? 20 : 60;
@@ -110,7 +120,8 @@ function graphOf(view: View, partition: Partition, turned: Set<string>, shape: S
         children: (inside.get(box.id) ?? []).map(node),
       };
     }
-    const size = SIZES[box.kind] ?? { width: 200, height: 84 };
+    const least = SIZES[box.kind] ?? { width: 200, height: 84 };
+    const size = { width: least.width, height: least.height + ROW * (box.rows ?? 0) };
     return {
       id: box.id,
       ...size,
@@ -299,7 +310,9 @@ export async function layOut(view: View, depth: Depth, elk: Engine, shape: Shape
 /**
  * A layout is kept by what it was made from, so that a view seen before is not laid out again: its
  * view, its depth and its shape, which is all a layout is made from, ELK's answer being the same
- * each time. `get` gives a layout that is ready, at once; `lay` gives it when it is, and starts the
+ * each time. How many rows a store's box holds is in the view, so it is in the key too; what each
+ * row shows is not, and a change of step finds the layout kept. `get` gives a layout that is
+ * ready, at once; `lay` gives it when it is, and starts the
  * work once however often it is asked. The last `most` are kept, and one that failed is not.
  */
 export function keeper(most = 24): {

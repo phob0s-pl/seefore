@@ -200,6 +200,7 @@ function FlowUnderPage({ change, changes, under, label, system, slots }: { chang
       steps={shown.steps}
       count={shown.count}
       view={shown.view}
+      items={shown.items}
       was={shown.was}
       marks={shown.marks}
       verbs={verbs}

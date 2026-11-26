@@ -1,5 +1,6 @@
 import ELK from 'elkjs/lib/elk.bundled.js';
 import { expect, test } from 'vitest';
+import { flowView } from '../src/model/flow.ts';
 import { readModel } from '../src/model/read.ts';
 import type { SourceFile } from '../src/model/read.ts';
 import { viewOf } from '../src/model/view.ts';
@@ -226,6 +227,58 @@ test('a person who reads a queue stays on the left, and that line is not turned 
   expect(Math.max(...route.map((point) => point.x))).toBeLessThanOrEqual(frame.x + jobs.x + 0.001);
   // The app that reads the queue is still laid out after it.
   expect(centre(layout, 'store-jobs')).toBeLessThan(centre(layout, 'app-reader'));
+});
+
+/** A flow that keeps the data it names in the ledger, and reads the archive naming none. */
+const keeps = (id: string, data: string[]): SourceFile => ({
+  path: `flows/${id}.yaml`,
+  text: `name: ${id}\nstarts: A clock\nends: It is kept\nfeature: feature-keeping\nsteps:\n  - id: keeps\n    does: connection-writer-keeps-ledger\n    data: [${data.join(', ')}]\n  - id: looks\n    does: connection-writer-reads-archive\n`,
+});
+
+/** A writer that keeps a ledger and reads an archive, and three flows: one keeps two things in the ledger, two keep one thing each. */
+const KEEPS: SourceFile[] = [
+  system('system-works'),
+  { path: 'apps/app-writer.yaml', text: 'name: Writer\nin: system-works\n' },
+  { path: 'stores/store-ledger.yaml', text: 'name: Ledger\nin: system-works\nkind: database\n' },
+  { path: 'stores/store-archive.yaml', text: 'name: Archive\nin: system-works\nkind: database\n' },
+  { path: 'connections/connection-writer-keeps-ledger.yaml', text: 'from: app-writer\nto: store-ledger\nname: Keeps the ledger\naccess: write\n' },
+  { path: 'connections/connection-writer-reads-archive.yaml', text: 'from: app-writer\nto: store-archive\nname: Reads the archive\naccess: read\n' },
+  { path: 'features/feature-keeping.yaml', text: 'name: Keeping\n' },
+  { path: 'data/data-entry.yaml', text: 'name: Entry\n' },
+  { path: 'data/data-total.yaml', text: 'name: Total\n' },
+  { path: 'data/data-note.yaml', text: 'name: Note\n' },
+  keeps('flow-two', ['data-entry', 'data-total']),
+  keeps('flow-one', ['data-entry']),
+  keeps('flow-another-one', ['data-note']),
+];
+
+test("a store's box is 24 pixels taller for each row it holds, and one with none keeps its size", async () => {
+  const read = readModel([{ path: 'seefore.yaml', text: 'format: 1\nname: Test\n' }, ...KEEPS]);
+  expect(read.problems).toEqual([]);
+  const sizes = async (flow: string) => {
+    const layout = await layOut(flowView(read.records, flow), 'components', elk, 'flow');
+    return [placeOf(layout, 'store-ledger')?.height, placeOf(layout, 'store-archive')?.height, placeOf(layout, 'app-writer')?.height];
+  };
+  expect(await sizes('flow-two')).toEqual([84 + 2 * 24, 84, 84]);
+  expect(await sizes('flow-one')).toEqual([84 + 24, 84, 84]);
+});
+
+test('two views of a flow that differ in their rows alone are two layouts, and two alike in rows share one', async () => {
+  const read = readModel([{ path: 'seefore.yaml', text: 'format: 1\nname: Test\n' }, ...KEEPS]);
+  const [two, one, another] = ['flow-two', 'flow-one', 'flow-another-one'].map((id) => flowView(read.records, id));
+  if (two === undefined || one === undefined || another === undefined) throw new Error('no view');
+  // The same boxes and lines; only the number of rows in the ledger differs.
+  const without = (view: typeof two) => ({ ...view, boxes: view.boxes.map(({ rows: _rows, ...box }) => box) });
+  expect(without(two)).toEqual(without(one));
+  const engine = counting();
+  const kept = keeper();
+  const first = await kept.lay(two, 'components', engine, 'flow');
+  expect(kept.get(one, 'components', 'flow')).toBeUndefined();
+  const second = await kept.lay(one, 'components', engine, 'flow');
+  expect(engine.asked).toBe(2);
+  expect(second).not.toEqual(first);
+  // Another flow that keeps other data, one row in the same box, finds the layout kept: a row's words are not in it.
+  expect(kept.get(another, 'components', 'flow')).toBe(second);
 });
 
 test("a flow's own diagram is read top to bottom, with tight gaps, and the model's stays as it is", async () => {

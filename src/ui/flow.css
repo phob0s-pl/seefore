@@ -432,6 +432,40 @@
   color: var(--text-secondary);
 }
 
+/* An item's life in the panel, before its data: a row an act, its step's number a link, and
+   quiet under it the act's condition and the step's description. */
+.item-life {
+  margin: 0 0 14px;
+  border-top: var(--divider);
+}
+.item-life > li {
+  padding: 7px 0;
+  border-bottom: var(--divider);
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+.item-life small {
+  display: block;
+  margin-top: 1px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+.item-life > .item-life-quiet {
+  color: var(--text-tertiary);
+}
+.item-life-step {
+  padding: 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--link);
+  text-decoration: underline;
+  text-decoration-color: var(--info-border);
+  text-underline-offset: 2px;
+}
+.item-life-step:hover {
+  color: var(--link-hover);
+}
+
 /* The step's line on the diagram: lit as a picked line is; its box: outlined as a picked box. */
 .canvas-frame .react-flow__edge.stepped .react-flow__edge-path {
   stroke: var(--accent);

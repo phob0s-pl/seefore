@@ -129,8 +129,57 @@ function Thing({ record, catalogue, under, opens, steps }: { record: ModelRecord
   );
 }
 
-/** A data record: the small line, its name, its description, each field with its own, and its page. */
-function Data({ record, catalogue }: { record: ModelRecord; catalogue: Catalogue }) {
+/**
+ * An item's life in its store, in this flow, as the panel of its data reads it: the store's name;
+ * a row for each act, in the order of the flow, with what it does ("Put", "Read", "Taken out"),
+ * the number of the step of this flow it stands at and that step's place in the list, who acts,
+ * what happens in that step, and quiet under it the act's condition and the step's description;
+ * and whether an act puts it.
+ */
+export type Life = {
+  store: string;
+  acts: { does: string; number: number; at: number; by: string; happens: string; only?: string; description?: string }[];
+  put: boolean;
+};
+
+/**
+ * An item's life: "Put at 11 by Orders: Keeps the basket", a row an act, its number a link that
+ * moves the page to that step and keeps the panel; quiet under an act its condition and its step's
+ * description; and a last row when no act puts it. The steps of an item stand nowhere else.
+ */
+function LifeOf({ life, onStep }: { life: Life; onStep: ((at: number) => void) | undefined }) {
+  return (
+    <>
+      <h3>In {life.store}, in this flow</h3>
+      <ol className="item-life" aria-label="Life">
+        {life.acts.map((act, index) => (
+          <li key={index}>
+            <span>
+              {act.does} at{' '}
+              {onStep !== undefined && act.at >= 0 ? (
+                <button type="button" className="item-life-step" onClick={() => onStep(act.at)}>
+                  {act.number}
+                </button>
+              ) : (
+                act.number
+              )}{' '}
+              by {act.by}: {act.happens}
+            </span>
+            {act.only !== undefined && <small>{act.only}</small>}
+            {act.description !== undefined && <small>{act.description}</small>}
+          </li>
+        ))}
+        {!life.put && <li className="item-life-quiet">Not put in this flow.</li>}
+      </ol>
+    </>
+  );
+}
+
+/**
+ * A data record: the small line, its name, its description, each field with its own, and its page.
+ * Of an item picked in a store's box, the small line names the store, and its life stands first.
+ */
+function Data({ record, catalogue, life, onStep }: { record: ModelRecord; catalogue: Catalogue; life: Life | undefined; onStep: ((at: number) => void) | undefined }) {
   const fields = (Array.isArray(record.fields.fields) ? (record.fields.fields as unknown[]) : []).flatMap((field) => {
     const { name, description } = (typeof field === 'object' && field !== null ? field : {}) as Record<string, unknown>;
     return typeof name === 'string' ? [{ name, description: typeof description === 'string' ? description : undefined }] : [];
@@ -138,11 +187,12 @@ function Data({ record, catalogue }: { record: ModelRecord; catalogue: Catalogue
   return (
     <>
       <div className="diagram-inspector-kind">
-        <span className="eyebrow">Data</span>
+        <span className="eyebrow">{life !== undefined ? `Data · in ${life.store}` : 'Data'}</span>
       </div>
       <h2>
         <NameOf record={record} />
       </h2>
+      {life !== undefined && <LifeOf life={life} onStep={onStep} />}
       <Description record={record} />
       {fields.length > 0 && (
         <dl className="data-fields" aria-label="Fields">
@@ -233,7 +283,9 @@ function Connections({ arrow, records, catalogue, under }: { arrow: Arrow; recor
  * and the way to its page. Its button, and Escape, close it. On an updated flow under a change,
  * `marks` and `verbs` say what the change does; on any other page, and on a flow the change adds
  * or removes, the marks are none and the panel is as it is anywhere. With `travel`, on the
- * Architecture page, a part's panel lists the steps of flows that happen in it.
+ * Architecture page, a part's panel lists the steps of flows that happen in it. With `life`, on
+ * the page of a flow, the data record is an item picked in its store's box, and `onStep` moves
+ * the page to a step of it.
  */
 export function Inspector({
   picked,
@@ -243,6 +295,8 @@ export function Inspector({
   travel,
   marks,
   verbs,
+  life,
+  onStep,
 }: {
   picked: string;
   view: View;
@@ -251,6 +305,8 @@ export function Inspector({
   travel?: Travel | undefined;
   marks?: ReadonlyMap<string, Mark> | undefined;
   verbs?: ReadonlyMap<string, Verb> | undefined;
+  life?: Life | undefined;
+  onStep?: (at: number) => void;
 }) {
   useEffect(() => {
     const close = (event: KeyboardEvent) => {
@@ -271,7 +327,7 @@ export function Inspector({
   const body =
     arrow === undefined ? (
       record.kind === 'data' ? (
-        <Data record={record} catalogue={catalogue} />
+        <Data record={record} catalogue={catalogue} life={life} onStep={onStep} />
       ) : (
         <Thing record={record} catalogue={catalogue} under={under} opens={view.boxes.find((box) => box.id === picked)?.opens} steps={travel?.stepsIn(record.id) ?? []} />
       )

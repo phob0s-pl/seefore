@@ -387,8 +387,9 @@ export type StepUnder = FlowStep & { mark: Mark; was: Was[]; moved?: true };
  * A flow under a change, all the page asks: what the change does to the flow; the flow's head as
  * it would be, or as it is for one that goes; today's words for its own keys that change; its
  * steps in one list; how many steps it would have; the view of what it passes today and of what
- * it would pass, as one; a mark for every box, arrow and connection of that view; and the records
- * the view is drawn from, those as they would be and today's of what the change removes.
+ * it would pass, as one; the items its stores hold; a mark for every box, arrow and connection of
+ * that view; and the records the view is drawn from, those as they would be and today's of what
+ * the change removes.
  */
 export type FlowUnder = {
   verb: 'add' | 'update' | 'remove';
@@ -397,6 +398,8 @@ export type FlowUnder = {
   steps: StepUnder[];
   count: number;
   view: View;
+  /** The items of the flow as it would be, or as it is for one that goes, with no mark: their acts are numbered as its steps are. */
+  items: Item[];
   marks: Map<string, Mark>;
   records: ModelRecord[];
   /** Of a flow the change updates: the flow as it would be alone, with no mark, as a flow the change adds is read. */
@@ -493,7 +496,7 @@ export function flowUnder(
   const plain = (records: readonly ModelRecord[]): FlowUnder | undefined => {
     const flow = flowSteps(records, flowId);
     if (flow === undefined) return undefined;
-    return { verb, flow, was: [], steps: flow.steps.map((step) => ({ ...step, mark: 'same', was: [] })), count: flow.steps.length, view: flowView(records, flowId), marks: new Map(), records: [...records] };
+    return { verb, flow, was: [], steps: flow.steps.map((step) => ({ ...step, mark: 'same', was: [] })), count: flow.steps.length, view: flowView(records, flowId), items: flowItems(records, flowId), marks: new Map(), records: [...records] };
   };
   if (verb === 'add') return plain(after);
   if (verb === 'remove') return plain(today);
@@ -637,6 +640,6 @@ export function flowUnder(
     marks.set(arrow.id, each.every((mark) => mark === each[0]) ? (each[0] ?? 'same') : 'updated');
   }
   // The flow as it would be alone, which the page shows in place of the difference when asked.
-  const result: FlowUnder = { verb, flow: readAfter, was: [], steps: readAfter.steps.map((step) => ({ ...step, mark: 'same', was: [] })), count: readAfter.steps.length, view: viewAfter, marks: new Map(), records: [...after] };
-  return { verb, flow: { ...readAfter, steps }, was: head, steps, count: readAfter.steps.length, view, marks, records, result };
+  const result: FlowUnder = { verb, flow: readAfter, was: [], steps: readAfter.steps.map((step) => ({ ...step, mark: 'same', was: [] })), count: readAfter.steps.length, view: viewAfter, items: itemsAfter, marks: new Map(), records: [...after] };
+  return { verb, flow: { ...readAfter, steps }, was: head, steps, count: readAfter.steps.length, view, items: itemsAfter, marks, records, result };
 }
