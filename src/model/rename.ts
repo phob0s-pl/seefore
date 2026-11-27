@@ -165,10 +165,9 @@ export function renameRecords(files: readonly SourceFile[], renames: readonly Re
   const left: RenameAccount['left'] = [];
   if (refusals.length === 0) {
     const ids = new Set(claims.keys());
-    for (const target of targets) {
-      if (claimsOf(target.old).length === 1) ids.delete(target.old);
-      ids.add(target.new);
-    }
+    // Every id that is left first, then every id that is taken: else `x b` with `b c` would free `b` again.
+    for (const target of targets) if (claimsOf(target.old).length === 1) ids.delete(target.old);
+    for (const target of targets) ids.add(target.new);
     const connections: { id: string; file?: string; ends: string[] }[] = [];
     const endsOf = (map: YAMLMap): string[] => ['from', 'to'].flatMap((key) => {
       const node = map.get(key, true);
@@ -295,6 +294,11 @@ export function renameRecords(files: readonly SourceFile[], renames: readonly Re
     for (const edit of [...edits].sort((a, b) => b.start - a.start)) text = text.slice(0, edit.start) + edit.text + text.slice(edit.end);
     out.push({ path: to, text });
     if (to !== file.path || edits.length > 0) done.push({ from: file.path, to, places: edits.length });
+  }
+  // Two files written to one path would leave one text: held here whatever led to it.
+  for (const [index, file] of done.entries()) {
+    const first = done.findIndex((each) => each.to === file.to);
+    if (first !== index) refusals.push(`${quote((done[first] as { from: string }).from)} and ${quote(file.from)} would both be written to ${quote(file.to)}. Give each its own id.`);
   }
   if (refusals.length > 0) return { refusals };
 

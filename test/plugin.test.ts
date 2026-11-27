@@ -59,6 +59,14 @@ test.each(SKILLS)('the skill %s has its front matter, no more lines than its lim
   expect(matter.context).toBe(skill === 'review' ? 'fork' : undefined);
 });
 
+test('the skill model removes only records of its own folders, and stops where another skill\'s work names one', async () => {
+  const text = (await readFile(root('plugin/skills/model/SKILL.md'), 'utf8')).replace(/\s+/g, ' ');
+  // What is another skill's work is said at the top, and the sentence of a removal leans on it.
+  expect(text).toContain("A feature, a flow, data, context, a rule or a change is another skill's work.");
+  expect(text).toContain('a record that is no longer true goes by `seefore remove <id>`, never by another way, and only from a folder that step 4 names, with the records there that name it.');
+  expect(text).toContain("Where it still refuses, another skill's work names the record: touch neither, and say so at the end.");
+});
+
 /** The readers that the skill `review` starts, each an agent of the plugin with a fresh context. */
 const READERS = ['plain', 'assumed', 'failure', 'trust'];
 

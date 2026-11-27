@@ -62,6 +62,13 @@ test('the shop reads with no problem', () => {
   expect(readModel(SHOP).problems).toEqual([]);
 });
 
+test('an apply names the files of the records it adds, which must be new, and no other file it writes or takes away', () => {
+  const done = applied(withChange('add:\n  apps/app-worker: {name: Worker, in: system-shop}\n  technologies/tech-redis: {name: Redis}\nupdate:\n  systems/system-shop: {description: Sells things.}\nremove:\n  - stores/store-old\n'));
+  expect(done.fresh).toEqual(['apps/app-worker.yaml', 'technologies/tech-redis.yaml']);
+  expect(done.written.map((each) => each.path)).toEqual(['apps/app-worker.yaml', 'technologies/tech-redis.yaml', 'systems/system-shop.yaml']);
+  expect(done.gone).toEqual(['stores/store-old.yaml']);
+});
+
 test('a new record is its lines in the change, moved left to the first column, with folded text as it is folded', () => {
   const body = [
     'add:',

@@ -5,10 +5,9 @@ disable-model-invocation: true
 allowed-tools: Bash(seefore check *) Bash(seefore list *) Bash(seefore guide *) Bash(seefore rename *) Bash(seefore remove *)
 ---
 
-You write the seefore model of the system in this repository **from its code**: what runs, what
-holds data, and what acts on what. You write at once and ask nothing first. The person reads
-the result as a diagram, not as files. A feature, a flow, data, context, a rule or a change
-is another skill's work.
+You write the seefore model of this repository's system **from its code**: what runs, what holds
+data, and what acts on what. Write at once and ask nothing first. The person reads it as a
+diagram, not files. A feature, a flow, data, context, a rule or a change is another skill's work.
 
 What the person typed after the skill's name: "$ARGUMENTS". When it names a folder, model only
 what lies in it, and leave every other record as it is. When it holds `--parallel-agents=<n>`,
@@ -44,7 +43,9 @@ work as "With several agents" says below.
    `seefore init --name=<the system's name>` and stop. "No records yet." is a new model. If
    records are there, this is a mend: keep every record that is still true, with its id, and
    change only what the code shows otherwise. An id changes by `seefore rename <old> <new>`,
-   and a record that is no longer true goes by `seefore remove <id>`, never by another way.
+   and a record that is no longer true goes by `seefore remove <id>`, never by another way,
+   and only from a folder that step 4 names, with the records there that name it. Where it
+   still refuses, another skill's work names the record: touch neither, and say so at the end.
 2. **Find what runs.** Read with the file tools: Glob lists, Grep searches, Read opens. The shell
    is for `seefore` alone, one command a call: anything else may be refused. List the tree first,
    with Glob; search freely, a search opens no file. Where a clone script or a manifest names
@@ -86,8 +87,7 @@ work as "With several agents" says below.
 
 ## With several agents
 
-Only when the person typed `--parallel-agents=<n>`. An agent you start sees neither this text
-nor the conversation: it knows only what you tell it.
+Only when the person typed `--parallel-agents=<n>`. An agent knows only what you tell it.
 1. **The frame.** Do steps 1, 2 and 4, and write every record but connections. Then run
    `seefore check` and mend it: a record that does not parse is in no agent's list.
 2. **The parts.** Cut the apps whose code is in this tree into at most <n> groups,
