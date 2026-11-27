@@ -314,9 +314,9 @@ test('while a mistyped id leaves the rules unjudged, a removal is held against t
   // The record with the mistyped id goes, though the rules are judged once it has gone and one is broken then.
   expect(removeRecords(model, ['connection-worker-calls-api'])).toEqual({ files: ['connections/connection-worker-calls-api.yaml'] });
   expect(problems(model.filter((each) => each.path !== 'connections/connection-worker-calls-api.yaml')).map((line) => line.split(': ')[1])).toEqual(['rules/rule-only-api']);
-  // A removal that breaks a rule anew is refused, while the id is still mistyped.
+  // A removal that breaks a rule anew is refused, while the id is still mistyped. Nothing names the connection, so no hint says to remove more.
   expect(removeRecords(model, ['connection-api-writes-orders'])).toEqual({
-    refusals: ['stores/store-orders.yaml:1:1: `store-orders` breaks the rule `rule-written`: Every database is written by the API.', 'remove what names it in the same call, or change it first'],
+    refusals: ['stores/store-orders.yaml:1:1: `store-orders` breaks the rule `rule-written`: Every database is written by the API.'],
   });
 });
 

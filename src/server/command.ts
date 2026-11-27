@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import type { ModelAnswer, ModelRead, Problem } from '../model/answer.ts';
 import { fileURLToPath } from 'node:url';
-import { readFolder, readTexts, removeFiles, writeApplied, writeRenamed } from './files.ts';
+import { blockedWrites, newOfRename, readFolder, readTexts, removeFiles, writeApplied, writeRenamed } from './files.ts';
 import { guideText } from '../model/guide.ts';
 import { listLines } from '../model/list.ts';
 import { HOST, startServer } from './server.ts';
@@ -380,6 +380,18 @@ async function apply(args: readonly string[], cwd: string, io: Io, fail: (messag
     io.err('seefore: nothing is applied');
     return 1;
   }
+  // A record the change adds is a new file: looked at before anything is written, and on a dry run too.
+  let blocked: string[];
+  try {
+    blocked = await blockedWrites(folder, done.fresh);
+  } catch {
+    return fail(`cannot read the folder "${folder}"`);
+  }
+  if (blocked.length > 0) {
+    for (const line of blocked) io.err(`seefore: ${line}`);
+    io.err('seefore: nothing is applied');
+    return 1;
+  }
   for (const line of done.lines) io.out(line);
   for (const problem of done.warnings) for (const line of problemLines(problem)) io.out(line);
   for (const line of done.said) io.out(line);
@@ -391,7 +403,7 @@ async function apply(args: readonly string[], cwd: string, io: Io, fail: (messag
     return 0;
   }
   try {
-    await writeApplied(folder, done.written, done.gone, done.change);
+    await writeApplied(folder, done.written, done.gone, done.change, done.fresh);
   } catch {
     // The change's own file is written last, so whatever was stopped, it is still open.
     return fail(`cannot write the files in "${folder}"; the change is still open, and \`seefore check\` tells what is in`);
@@ -430,6 +442,13 @@ async function rename(args: readonly string[], cwd: string, io: Io, fail: (messa
   if (!existsSync(join(options.workdir, 'seefore.yaml'))) return fail(`"${options.workdir}" is not a model: it has no seefore.yaml`);
   const done = renameRecords(files, renames);
   if ('refusals' in done) return refuse(done.refusals, io);
+  let blocked: string[];
+  try {
+    blocked = await blockedWrites(options.workdir, newOfRename(done.account.files));
+  } catch {
+    return fail(`cannot read the folder "${options.workdir}"`);
+  }
+  if (blocked.length > 0) return refuse(blocked, io);
   for (const line of renameLines(done.account)) io.out(line);
   if (options.dryRun) {
     io.out('A dry run: nothing is written.');

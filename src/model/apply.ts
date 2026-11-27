@@ -37,6 +37,8 @@ export type Applied = {
   said: string[];
   /** The files of the records added and rewritten, in the change's order. */
   written: SourceFile[];
+  /** Of `written`, the paths of the records the change adds: files that must be new. */
+  fresh: string[];
   /** The files taken away, in the change's order. */
   gone: string[];
   /** The change's own file, with `status: applied` as its last line. */
@@ -279,6 +281,7 @@ export function applyChange(files: readonly SourceFile[], asked: string): Applie
   const lines: string[] = [];
   const moved = new Map<string, string | undefined>();
   const gone: string[] = [];
+  const fresh: string[] = [];
   const counts = { added: 0, updated: 0, removed: 0 };
   for (const section of top.items) {
     const verb = isScalar(section.key) ? section.key.value : undefined;
@@ -301,6 +304,7 @@ export function applyChange(files: readonly SourceFile[], asked: string): Applie
       if (verb === 'add') {
         lines.push(`+ ${each}`);
         counts.added++;
+        fresh.push(file);
         moved.set(file, at === undefined ? undefined : attempt(() => addedText(own.text, at)));
         continue;
       }
@@ -374,6 +378,7 @@ export function applyChange(files: readonly SourceFile[], asked: string): Applie
       const text = texts.get(file) as string;
       return text === files.find((source) => source.path === file)?.text ? [] : [{ path: file, text }];
     }),
+    fresh,
     gone,
     change: { path, text: texts.get(path) as string },
     whole: [...moved.keys(), path].filter((file) => whole.has(file)),
