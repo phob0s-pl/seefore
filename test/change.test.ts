@@ -127,6 +127,23 @@ test('the model as it would be is read by the whole check, and what it finds is 
   ]);
 });
 
+test('while a mistyped id leaves the rule unjudged, a change is told the break it makes, and not one that was there', () => {
+  const atChange = (body: string, model: SourceFile[]) => read(body, model).problems.filter((problem) => problem.file.startsWith('changes/')).map((problem) => [problem.rule, problem.severity, problem.line, problem.message]);
+  const worker = file('apps/app-worker', 'name: Worker\nin: system-shop\n');
+  // The worker writes the orders, which breaks the rule, and another connection of its names an app that is not there.
+  const broken = [...SHOP, worker, file('connections/connection-worker-writes-orders', 'from: app-worker\nto: store-orders\naccess: write\n'), file('connections/connection-worker-calls-api', 'from: app-worker\nto: app-apii\n')];
+  expect(readModel(broken).problems.map((problem) => problem.rule)).toEqual(['reference-unknown']);
+  expect(readModel(broken).rulings.map((ruling) => ruling.state)).toEqual(['not-judged']);
+  // The change that mends the id is told nothing: the worker's write was there before it.
+  expect(atChange('update:\n  connections/connection-worker-calls-api: {to: app-api}\n', broken)).toEqual([]);
+  // Here the mistyped id is in the write itself, so the change that mends it makes the break, and is told it.
+  const hidden = [...SHOP, worker, file('connections/connection-worker-writes-orders', 'from: app-worker\nto: store-ordres\naccess: write\n')];
+  expect(readModel(hidden).rulings.map((ruling) => ruling.state)).toEqual(['not-judged']);
+  expect(atChange('update:\n  connections/connection-worker-writes-orders: {to: store-orders}\n', hidden)).toEqual([
+    ['rules/rule-orders-by-the-api', 'error', 4, 'With this change, `connections/connection-worker-writes-orders`: `connection-worker-writes-orders` breaks the rule `rule-orders-by-the-api`: The orders are written only by the API.'],
+  ]);
+});
+
 test('a flow gains a step, loses one and keeps the rest by their ids', () => {
   // The step that named the connection goes with it, and the reply still finds the step it answers.
   const gone = 'remove:\n  - connections/connection-api-writes-orders\n  - rules/rule-orders-by-the-api\nupdate:\n  flows/flow-placing:\n    steps:\n      - places\n      - {id: checks, does: app-api, name: Checks the stock}\n      - confirms\n';

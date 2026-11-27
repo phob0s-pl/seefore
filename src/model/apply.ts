@@ -352,7 +352,7 @@ export function applyChange(files: readonly SourceFile[], asked: string): Applie
   const ownErrors = before.problems.filter((problem) => problem.severity === 'error' && !problem.file.startsWith('changes/') && !problem.file.startsWith('reviews/')).length;
   if (ownErrors > 0) {
     said.push(`The model has ${many(ownErrors, 'error')} of its own: \`seefore check\` lists ${ownErrors === 1 ? 'it' : 'them'}.`);
-    // A count is left uncounted, and a rule unjudged, only where a file outside `rules/` and `context/` does not read: as the check read the model with this change.
+    // A count is left uncounted, and no rule held against a change, only where a file of the architecture does not read: as the check read the model with this change.
     if (after.rulings.length > 0 && after.counts.some((count) => count.checked === null)) said.push('With them, no rule of `rules/` was judged with this change.');
   }
   // A file that was there and that the library wrote is a larger diff than the change: say which, so that nobody takes it for a fault.

@@ -1,6 +1,6 @@
 import type { Count, Found, Place, Problem, Ruling } from './answer.ts';
-import { judgeRules, ruleReferences, ruleShape } from './judge.ts';
-import { NOUNS, WORDS, folderOfId } from './kinds.ts';
+import { judgeRules, notJudged, ruleReferences, ruleShape } from './judge.ts';
+import { NOUNS, WORDS, fileOfArchitecture, folderOfId } from './kinds.ts';
 import { buildModel, listOf, stepsOf, textOf, wayOf } from './model.ts';
 import type { AtStore, Entry, Model, Step } from './model.ts';
 import { START, capital, list, quote } from './problem.ts';
@@ -1030,9 +1030,11 @@ export const RULES: readonly Rule[] = [
 
 /**
  * Runs the rules over the entries, then judges the rules of the team's own. Counts are given, and
- * those rules judged, only when `whole`: every file outside `rules/` read.
+ * those rules judged, only when `whole`: every file outside `rules/` read. Their rulings are given
+ * only of an architecture with no error of a rule here either. What they found of another is
+ * `withheld`: no problem of the model, and kept for whoever holds two readings against each other.
  */
-export function runRules(entries: readonly Entry[], whole: boolean, run: boolean): { problems: Problem[]; counts: Count[]; rulings: Ruling[] } {
+export function runRules(entries: readonly Entry[], whole: boolean, run: boolean): { problems: Problem[]; counts: Count[]; rulings: Ruling[]; withheld: Problem[] } {
   const model = buildModel(entries);
   const problems: Problem[] = [];
   const counts: Count[] = [];
@@ -1052,5 +1054,9 @@ export function runRules(entries: readonly Entry[], whole: boolean, run: boolean
   // A rule whose own file has an error is not judged; nor is any, when a file outside `rules/` did not read.
   const faulty = new Set(problems.filter((problem) => problem.severity === 'error').map((problem) => problem.file));
   const judged = judgeRules(model, run && whole, faulty);
-  return { problems: [...problems, ...judged.problems], counts, rulings: judged.rulings };
+  // Nor is a ruling given while a file of the architecture has an error of a rule here, or an id of its own that
+  // another file holds too, which then names no record: a selector would look at a model that nobody meant.
+  const sound = ![...faulty].some(fileOfArchitecture) && !entries.some((entry) => fileOfArchitecture(entry.file) && model.claims(entry.id).length > 1);
+  if (sound) return { problems: [...problems, ...judged.problems], counts, rulings: judged.rulings, withheld: [] };
+  return { problems, counts, rulings: judged.rulings.map((ruling) => notJudged(ruling.rule)), withheld: judged.problems };
 }

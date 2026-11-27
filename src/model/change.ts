@@ -25,7 +25,7 @@ import type { YamlFile } from './yaml.ts';
 /** A change whose file reads: its file, and the YAML of it. */
 export type ReadChange = { file: string; yaml: YamlFile };
 
-/** The model a change is held against: its files, its records, its problems today, and the check that reads a model. */
+/** The model a change is held against: its files, its records, its problems today, and the check that reads a model. Both give what the rules found while their rulings were withheld, too. */
 export type Held = {
   files: readonly SourceFile[];
   entries: readonly Entry[];

@@ -146,6 +146,16 @@ test('the problems of a rule are those of its own file but its breaks; a debt st
   expect(elsewhere.rule('rule-only-api')?.where).toBeUndefined();
 });
 
+test('a mistyped id in a record leaves a rule not judged, with the dot and no debt said; a way back passes its start twice', () => {
+  const typo = book(rule('rule-only-api', `${ONLY_API}debt: [connection-worker-writes-orders]\n`), file('connections/connection-web-reads-orders.yaml', 'from: app-web\nto: store-ordres\naccess: read\n'));
+  expect(typo.rows).toEqual([{ id: 'rule-only-api', name: 'Only the API writes orders', state: 'not-judged' }]);
+  expect(typo.dot).toBe('not-judged');
+  expect(typo.rule('rule-only-api')).toMatchObject({ problems: [], elsewhere: true, debt: [] });
+  expect(typo.rule('rule-only-api')?.where).toBeUndefined();
+  const ring = book(file('connections/connection-api-calls-web.yaml', 'from: app-api\nto: app-web\n'), rule('rule-no-way-back', 'name: Nothing the API calls calls the API\nnever: {way: {from: {id: app-api}, to: {id: app-api}}}\n'));
+  expect(ring.rule('rule-no-way-back')?.ways).toEqual([{ things: ['app-api', 'app-web', 'app-api'], by: ['connection-api-calls-web', 'connection-web-calls-api'], more: 0 }]);
+});
+
 test('the things a way passes: the start of its first connection, then the end of each it goes by', () => {
   const rules = book(
     CLERK_CALLS_API,

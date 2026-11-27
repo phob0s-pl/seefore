@@ -1,5 +1,5 @@
 import { MARKER_FILE } from './marker.ts';
-import { readModel } from './read.ts';
+import { problemsToCompare } from './read.ts';
 import type { SourceFile } from './read.ts';
 import { quote } from './problem.ts';
 
@@ -27,7 +27,7 @@ export function removeRecords(files: readonly SourceFile[], asked: readonly stri
   }
   if (refusals.length > 0) return { refusals };
   // The model without them may have no error that it did not have with them.
-  const errors = (read: readonly SourceFile[]) => readModel(read).problems.filter((problem) => problem.severity === 'error');
+  const errors = (read: readonly SourceFile[]) => problemsToCompare(read).filter((problem) => problem.severity === 'error');
   const before = new Set(errors(files).map((problem) => `${problem.file}\n${problem.rule}\n${problem.message}`));
   const fresh = errors(files.filter((file) => !gone.has(file.path))).filter((problem) => !before.has(`${problem.file}\n${problem.rule}\n${problem.message}`));
   if (fresh.length > 0) {
