@@ -104,6 +104,73 @@ test('a way goes on from its start but stops at a person, and never turns at a h
   ]);
 });
 
+const NO_WAY_BACK = 'name: Nothing the API calls calls the API\nnever: {way: {from: {id: app-api}, to: {id: app-api}}}\n';
+const RING = file('connections/connection-api-calls-web.yaml', 'from: app-api\nto: app-web\n');
+const SELF = file('connections/connection-api-calls-api.yaml', 'from: app-api\nto: app-api\nname: Calls its copies\n');
+
+test('a way may end where it began: a ring and a connection from a thing to itself break `never`, with the shortest way back', () => {
+  // A way has a connection or more, so a thing that nothing leads back to does not reach itself.
+  expect(read(rule('rule-no-way-back', NO_WAY_BACK)).rulings[0]).toMatchObject({ state: 'holds', pairs: 0, ways: [] });
+  const ring = read(RING, rule('rule-no-way-back', NO_WAY_BACK));
+  expect(ring.problems.map((problem) => problem.message)).toEqual([
+    'A way from `app-api` to `app-api` breaks the rule: Nothing the API calls calls the API. It goes by `connection-api-calls-web` and `connection-web-calls-api`.',
+  ]);
+  expect(ring.rulings[0]).toMatchObject({ state: 'broken', pairs: 1, ways: [{ from: 'app-api', to: 'app-api', by: ['connection-api-calls-web', 'connection-web-calls-api'], more: 0 }] });
+  // Of two ways back the shortest is told, and both are one pair. A way that goes on from the start is as it was.
+  const both = read(RING, SELF, rule('rule-no-way-back', NO_WAY_BACK), rule('rule-api-not-at-orders', 'name: The API does not reach the orders\nnever: {way: {from: {id: app-api}, to: {id: store-orders}}}\n'));
+  expect(both.rulings.map((ruling) => [ruling.rule, ruling.state, ruling.pairs, ruling.ways?.[0]?.by])).toEqual([
+    ['rule-api-not-at-orders', 'broken', 1, ['connection-api-writes-orders']],
+    ['rule-no-way-back', 'broken', 1, ['connection-api-calls-api']],
+  ]);
+});
+
+test('a way back passes `through` or breaks the rule, and is seen where the ends overlap and where one is left out', () => {
+  const back = (through: string) => rule('rule-back', `name: A way from the API back to it passes this\neach: {way: {from: {id: app-api}, to: {id: app-api}}}\nmust: {through: {id: ${through}}}\n`);
+  // The ring closes by `connection-web-calls-api`, which passes the gateway by a hop.
+  expect(read(RING, back('infra-gateway')).rulings[0]).toMatchObject({ state: 'holds', pairs: 1, ways: [] });
+  expect(read(RING, back('person-clerk')).rulings[0]).toMatchObject({ state: 'broken', pairs: 1, ways: [{ from: 'app-api', to: 'app-api', by: ['connection-api-calls-web', 'connection-web-calls-api'], more: 0 }] });
+  // The API is an app and a service: both ends choose it, with nothing in the rule that names it twice.
+  const overlap = read(RING, rule('rule-no-app-at-service', 'name: No way leads from an app to a service\nnever: {way: {from: {kind: apps}, to: {kind: service}}}\n'));
+  expect(overlap.rulings[0]).toMatchObject({
+    state: 'broken',
+    pairs: 2,
+    ways: [
+      { from: 'app-api', to: 'app-api', by: ['connection-api-calls-web', 'connection-web-calls-api'], more: 0 },
+      { from: 'app-web', to: 'app-api', by: ['connection-web-calls-api'], more: 0 },
+    ],
+  });
+  // An end left out is any thing, the start among them.
+  const open = read(SELF, rule('rule-from-api', 'name: Every way from the API passes the gateway\neach: {way: {from: {id: app-api}}}\nmust: {through: {id: infra-gateway}}\n'));
+  expect(open.rulings[0]).toMatchObject({ state: 'broken', pairs: 2, ways: [{ from: 'app-api', to: 'app-api', by: ['connection-api-calls-api'], more: 1 }] });
+});
+
+test('a person and an outside system may begin a way back, and no way comes back by going on past one', () => {
+  const back = (id: string, of: string) => rule(id, `name: Nothing comes back to ${of}\nnever: {way: {from: {id: ${of}}, to: {id: ${of}}}}\n`);
+  const model = read(
+    file('connections/connection-web-tells-clerk.yaml', 'from: app-web\nto: person-clerk\n'),
+    file('connections/connection-api-pays-at-bank.yaml', 'from: app-api\nto: system-bank\n'),
+    file('connections/connection-bank-tells-api.yaml', 'from: system-bank\nto: app-api\n'),
+    back('rule-back-to-api', 'app-api'),
+    back('rule-back-to-bank', 'system-bank'),
+    back('rule-back-to-clerk', 'person-clerk'),
+  );
+  // From the API the way ends at the bank, so the bank's own connection does not bring it back.
+  expect(model.rulings.map((ruling) => [ruling.rule, ruling.state, ruling.ways?.[0]?.by])).toEqual([
+    ['rule-back-to-api', 'holds', undefined],
+    ['rule-back-to-bank', 'broken', ['connection-bank-tells-api', 'connection-api-pays-at-bank']],
+    ['rule-back-to-clerk', 'broken', ['connection-clerk-uses-web', 'connection-web-tells-clerk']],
+  ]);
+});
+
+test('a connection of a way back may be in debt, and the debt stands while the way is there', () => {
+  const model = read(RING, rule('rule-no-way-back', `${NO_WAY_BACK}debt: [connection-api-calls-web]\n`));
+  expect(model.problems).toEqual([]);
+  expect(model.rulings[0]).toMatchObject({ state: 'holds', pairs: 1, ways: [], debt: ['connection-api-calls-web'] });
+  // With no way back the debt is paid.
+  const paid = read(rule('rule-no-way-back', `${NO_WAY_BACK}debt: [connection-api-writes-orders]\n`));
+  expect(paid.problems.map((problem) => problem.rule)).toEqual(['debt-paid']);
+});
+
 test('connection in must asks that a connection is there, at the end it leaves open', () => {
   const rules = rule('rule-written', 'name: Every database is written by a service\neach: {kind: database}\nmust: {connection: {from: {kind: service}, access: write}}\n');
   expect(read(rules).problems).toEqual([]);
@@ -228,6 +295,66 @@ test('no rule is judged when another file does not read; a faulty rule leaves th
     ['rule-only-api', 'broken'],
   ]);
   expect(faultyRule.counts[0]?.checked).not.toBeNull();
+});
+
+const NO_BROWSER_AT_DATABASE = rule('rule-no-browser-database', 'name: No browser reaches a database\nnever: {from: {kind: browser}, to: {kind: database}}\n');
+const WEB_READS = (to: string) => file('connections/connection-web-reads-orders.yaml', `from: app-web\nto: ${to}\naccess: read\n`);
+
+test('no rule is judged while a file of the architecture has an error of a rule of the check: a mistyped id would hide a break', () => {
+  // The connection names a store that is not there, so the rule would see no browser at a database.
+  const typo = read(NO_BROWSER_AT_DATABASE, rule('rule-only-api', ONLY_API), WEB_READS('store-ordres'));
+  expect(typo.problems.map((problem) => [problem.rule, problem.file])).toEqual([['reference-unknown', 'connections/connection-web-reads-orders.yaml']]);
+  expect(typo.rulings).toEqual([
+    { rule: 'rule-no-browser-database', state: 'not-judged', chosen: [], breaks: [], debt: [] },
+    { rule: 'rule-only-api', state: 'not-judged', chosen: [], breaks: [], debt: [] },
+  ]);
+  // Every file reads, so the counts are given.
+  expect(typo.counts.every((count) => count.checked !== null)).toBe(true);
+  // With the id right, both rules say what they find.
+  const right = read(NO_BROWSER_AT_DATABASE, rule('rule-only-api', ONLY_API), WEB_READS('store-orders'));
+  expect(right.rulings.map((ruling) => [ruling.rule, ruling.state, ruling.breaks])).toEqual([
+    ['rule-no-browser-database', 'broken', ['connection-web-reads-orders']],
+    ['rule-only-api', 'broken', ['connection-worker-writes-orders']],
+  ]);
+});
+
+test('a warning of the check and a faulty line of context leave the rules judged', () => {
+  const model = read(
+    NO_BROWSER_AT_DATABASE,
+    WEB_READS('store-orders'),
+    file('connections/connection-web-calls-api-too.yaml', 'from: app-web\nto: app-api\nvia: [app-api]\n'),
+    file('context/context-kept.yaml', 'must: The orders are kept for ten years.\nwhy: The law asks it.\nsystem: system-shopp\n'),
+  );
+  expect(model.problems.map((problem) => [problem.rule, problem.severity, problem.file])).toEqual([
+    ['via-end', 'warning', 'connections/connection-web-calls-api-too.yaml'],
+    ['rules/rule-no-browser-database', 'error', 'connections/connection-web-reads-orders.yaml'],
+    ['reference-unknown', 'error', 'context/context-kept.yaml'],
+  ]);
+  expect(stateOf(model, 'rule-no-browser-database')).toBe('broken');
+});
+
+test("an id that a rule's file and an app's file both hold names no record, so no rule is judged", () => {
+  const ban = rule('rule-web-not-at-api', 'name: The web app does not call the API\nnever: {from: {id: app-web}, to: {id: app-api}}\n');
+  expect(stateOf(read(ban), 'rule-web-not-at-api')).toBe('broken');
+  // The only error is at the rule's file, and `app-api` now names neither file: the ban would find no connection to it.
+  const twice = read(ban, rule('app-api', 'name: Named as the app is\nnever: {from: {kind: topic}}\n'));
+  expect(twice.problems.map((problem) => [problem.rule, problem.file])).toEqual([['id-kind', 'rules/app-api.yaml']]);
+  expect(twice.rulings.map((ruling) => [ruling.rule, ruling.state])).toEqual([
+    ['app-api', 'not-judged'],
+    ['rule-web-not-at-api', 'not-judged'],
+  ]);
+});
+
+test('seefore check says of a model with a mistyped id that its rules are not judged', async () => {
+  const folder = await mkdtemp(join(tmpdir(), 'seefore-'));
+  for (const { path, text } of [...BASE, NO_BROWSER_AT_DATABASE, WEB_READS('store-ordres')]) {
+    await mkdir(dirname(join(folder, path)), { recursive: true });
+    await writeFile(join(folder, path), text);
+  }
+  const lines: string[] = [];
+  const io = { out: (line: string) => lines.push(line), err: (line: string) => lines.push(line) };
+  expect(await run(['check', `--workdir=${folder}`], '/here', io)).toBe(1);
+  expect(lines.at(-1)).toBe('1 rule of your own: 1 not judged.');
 });
 
 test('seefore check ends with the line of the rules, and --json gives each ruling', async () => {

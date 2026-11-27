@@ -42,6 +42,9 @@ export function folderOfId(id: string): string | undefined {
 /** Whether a folder holds records of the architecture: every folder but `rules`, `context`, `changes` and `reviews`. */
 export const ofArchitecture = (kind: string): boolean => kind !== 'rules' && kind !== 'context' && kind !== 'changes' && kind !== 'reviews';
 
+/** The same of a file, by its path from the model's folder. A file in no folder, as the marker, is of the architecture. */
+export const fileOfArchitecture = (path: string): boolean => ofArchitecture(path.slice(0, Math.max(0, path.indexOf('/'))));
+
 /** Whether a rule of a team's own chooses among a folder's records: the twelve folders of the architecture that are not `repositories`. */
 export const chosenByRules = (kind: string): boolean => ofArchitecture(kind) && kind !== 'repositories';
 

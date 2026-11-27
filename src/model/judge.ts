@@ -313,26 +313,36 @@ function atConnection(ground: Ground, entry: Entry, wanted: Selector | 'any' | '
 type Reached = Map<string, string[]>;
 
 /**
- * The things a way reaches from a start, each with the shortest way to it. A way is never continued
- * from a person or an outside thing other than its start. With `through`, it never steps onto a
- * thing `through` chooses, nor along a connection with a hop that `through` chooses. The
- * connections in `skip` are not walked.
+ * The things a way reaches from a start, each with the shortest way to it. A way has one connection
+ * or more, so the start is among them only when a way comes back to it. A way is never continued
+ * from a person or an outside thing other than its start, nor from the start once it has come back.
+ * With `through`, it never steps onto a thing `through` chooses, nor along a connection with a hop
+ * that `through` chooses. The connections in `skip` are not walked.
  */
 function reach(ground: Ground, start: Entry, through: Selector | undefined, skip: ReadonlySet<string>): Reached {
   const reached: Reached = new Map([[start.id, []]]);
   const queue: Entry[] = [start];
+  // The shortest way back to the start, which is kept apart: `reached` holds the start with no way, for the ways that go on from it.
+  let back: string[] | undefined;
   const stops = (entry: Entry) => entry.kind === 'people' || [entry, ...ground.up(entry)].some((each) => each.fields['external'] === true);
   for (let at = queue.shift(); at !== undefined; at = queue.shift()) {
     if (at !== start && stops(at)) continue;
     for (const connection of ground.starting.get(at.id) ?? []) {
       const next = ground.get(textOf(connection, 'to'));
-      if (skip.has(connection.id) || next === undefined || !THINGS.includes(next.kind) || reached.has(next.id)) continue;
+      if (skip.has(connection.id) || next === undefined || !THINGS.includes(next.kind)) continue;
+      const home = next.id === start.id;
+      if (home ? back !== undefined : reached.has(next.id)) continue;
       if (through !== undefined && (matches(ground, next, through) || listOf(connection, 'via').some((hop) => matches(ground, ground.get(hop), through)))) continue;
-      reached.set(next.id, [...(reached.get(at.id) as string[]), connection.id]);
-      queue.push(next);
+      const way = [...(reached.get(at.id) as string[]), connection.id];
+      if (home) back = way;
+      else {
+        reached.set(next.id, way);
+        queue.push(next);
+      }
     }
   }
   reached.delete(start.id);
+  if (back !== undefined) reached.set(start.id, back);
   return reached;
 }
 
@@ -527,6 +537,9 @@ function judgeWays(ground: Ground, entry: Entry): Judged {
   return { ruling: { rule: entry.id, state: 'holds', chosen: [], breaks: [], pairs: pairsOf(all).size, ways, debt: standing }, problems };
 }
 
+/** The ruling of a rule that is not judged: it looked at nothing, and says nothing of what it would find. */
+export const notJudged = (rule: string): Ruling => ({ rule, state: 'not-judged', chosen: [], breaks: [], debt: [] });
+
 /**
  * Judges every rule in `rules/`, in order of id. A rule is judged only when `judged` (every other
  * file of the model read) and its own file has no error, of which `faulty` names the files.
@@ -539,7 +552,7 @@ export function judgeRules(model: Model, judged: boolean, faulty: ReadonlySet<st
   const rulings: Ruling[] = [];
   for (const entry of rules) {
     if (!judged || !entry.ok || faulty.has(entry.file)) {
-      rulings.push({ rule: entry.id, state: 'not-judged', chosen: [], breaks: [], debt: [] });
+      rulings.push(notJudged(entry.id));
       continue;
     }
     const { ruling, problems: found } = ofWays(entry) ? judgeWays(ground, entry) : judgeRecords(ground, entry);

@@ -295,6 +295,31 @@ test("an id in a step's `removes` is renamed, and a data record that a step name
   expect(removeRecords(alone, ['data-job'])).toEqual({ refusals: ['`data-job` stays: flows/flow-taking.yaml:6:60 names it', 'remove what names it in the same call, or change it first'] });
 });
 
+test('while a mistyped id leaves the rules unjudged, a removal is held against them all the same, and a break that was there is not laid on it', () => {
+  const model = [
+    MARKER,
+    file('systems/system-shop', 'name: Shop\n'),
+    file('apps/app-api', 'name: API\nin: system-shop\n'),
+    file('apps/app-worker', 'name: Worker\nin: system-shop\n'),
+    file('stores/store-orders', 'name: Orders\nin: system-shop\nkind: database\n'),
+    file('connections/connection-api-writes-orders', 'from: app-api\nto: store-orders\naccess: write\n'),
+    file('connections/connection-worker-writes-orders', 'from: app-worker\nto: store-orders\naccess: write\n'),
+    file('connections/connection-worker-calls-api', 'from: app-worker\nto: app-apii\n'),
+    file('rules/rule-only-api', 'name: Only the API writes the orders\neach: {to: {id: store-orders}, access: [write, read-write]}\nmust: {from: {id: app-api}}\n'),
+    file('rules/rule-written', 'name: Every database is written by the API\neach: {kind: database}\nmust: {connection: {from: {id: app-api}, access: write}}\n'),
+  ];
+  // The check tells the mistyped id alone: the worker's write breaks a rule, which is not said while no rule is judged.
+  expect(problems(model)).toEqual(['connections/connection-worker-calls-api.yaml:2: reference-unknown: `to` names `app-apii`, but no record has that id. The nearest id is `app-api`.']);
+  expect(readModel(model).rulings.map((ruling) => ruling.state)).toEqual(['not-judged', 'not-judged']);
+  // The record with the mistyped id goes, though the rules are judged once it has gone and one is broken then.
+  expect(removeRecords(model, ['connection-worker-calls-api'])).toEqual({ files: ['connections/connection-worker-calls-api.yaml'] });
+  expect(problems(model.filter((each) => each.path !== 'connections/connection-worker-calls-api.yaml')).map((line) => line.split(': ')[1])).toEqual(['rules/rule-only-api']);
+  // A removal that breaks a rule anew is refused, while the id is still mistyped.
+  expect(removeRecords(model, ['connection-api-writes-orders'])).toEqual({
+    refusals: ['stores/store-orders.yaml:1:1: `store-orders` breaks the rule `rule-written`: Every database is written by the API.', 'remove what names it in the same call, or change it first'],
+  });
+});
+
 test('a new word moves the file to its folder, its text as it was', () => {
   const model = [
     MARKER,

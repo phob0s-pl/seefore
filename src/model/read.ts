@@ -1,7 +1,7 @@
 import type { z } from 'zod';
 import type { Laid, ModelRead, ModelRecord, Problem } from './answer.ts';
 import { idProblem } from './id.ts';
-import { KINDS, RECORD_NOUNS, ofModel } from './kinds.ts';
+import { KINDS, RECORD_NOUNS, fileOfArchitecture, ofModel } from './kinds.ts';
 import type { Entry } from './model.ts';
 import { runRules } from './rules.ts';
 import { MARKER_FILE, readMarker } from './marker.ts';
@@ -25,6 +25,22 @@ export type SourceFile = { path: string; text: string };
  * file leaves the others read. With a marker that does not say format 1, no record is read.
  */
 export function readModel(files: readonly SourceFile[]): ModelRead {
+  const { withheld: _withheld, ...model } = readWithheld(files);
+  return model;
+}
+
+/**
+ * The problems of a model for holding two readings of it against each other, as a removal and a
+ * change do: those the check gives, and what the rules of `rules/` found while their rulings were
+ * withheld. So a break that is there already is not taken for new once the rules are judged again.
+ */
+export function problemsToCompare(files: readonly SourceFile[]): Problem[] {
+  const { problems, withheld } = readWithheld(files);
+  return [...problems, ...withheld];
+}
+
+/** What the model reads as, and beside it what its rules found while their rulings were withheld, which is no problem of the model. */
+function readWithheld(files: readonly SourceFile[]): ModelRead & { withheld: Problem[] } {
   const problems: Problem[] = [];
   const records: ModelRecord[] = [];
   const entries: Entry[] = [];
@@ -35,21 +51,26 @@ export function readModel(files: readonly SourceFile[]): ModelRead {
   const marker = sorted.find((file) => file.path === MARKER_FILE);
   if (!marker) {
     problems.push(error(MARKER_FILE, START, 'marker-missing', `There is no ${quote(MARKER_FILE)} here, so this is not a seefore model.`));
-    return { records, problems, counts: runRules([], false, false).counts, rulings: [], laid: [] };
+    return { records, problems, counts: runRules([], false, false).counts, rulings: [], laid: [], withheld: [] };
   }
   const read = readMarker(marker.text);
   problems.push(...read.problems);
-  const result = (): ModelRead => {
+  const result = (): ModelRead & { withheld: Problem[] } => {
     // The rules run only on a model that has been read as format 1. A count, and the judging of
     // the rules in `rules/`, need every file of the architecture read: a faulty rule, or a faulty
     // line of context, leaves the rest judged.
-    const outside = (file: string) => !file.startsWith('rules/') && !file.startsWith('context/') && !file.startsWith('changes/') && !file.startsWith('reviews/');
-    const whole = !problems.some((problem) => problem.severity === 'error' && outside(problem.file)) && entries.every((entry) => entry.ok || !outside(entry.file));
+    const whole = !problems.some((problem) => problem.severity === 'error' && fileOfArchitecture(problem.file)) && entries.every((entry) => entry.ok || !fileOfArchitecture(entry.file));
     const ruled = runRules(entries, whole, read.readable);
     // Each change that reads is held alone: against the model as it is today, and with the model as it would be. A decided one, in its form alone.
     // The model as it would be is read with no review: it has no change, and a review there would be one with none.
     const today = [...problems, ...ruled.problems];
-    const held = { files: sorted.filter((file) => !file.path.startsWith('reviews/')), entries, problems: today, read: readModel };
+    // Two readings are held against each other, so each with what its rules found while their rulings were withheld:
+    // else a break that is there already would be laid on the change that mends the error which withheld it.
+    const compared = (laid: readonly SourceFile[]) => {
+      const read = readWithheld(laid);
+      return { problems: [...read.problems, ...read.withheld], records: read.records };
+    };
+    const held = { files: sorted.filter((file) => !file.path.startsWith('reviews/')), entries, problems: [...today, ...ruled.withheld], read: compared };
     const changed: Problem[] = [];
     const laid: Laid[] = [];
     for (const change of changes) {
@@ -68,6 +89,7 @@ export function readModel(files: readonly SourceFile[]): ModelRead {
       counts: ruled.counts,
       rulings: ruled.rulings,
       laid,
+      withheld: ruled.withheld,
     };
   };
   if (!read.readable) return result();
